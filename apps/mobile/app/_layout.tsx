@@ -1,0 +1,124 @@
+// apps/mobile/app/_layout.tsx
+// Root layout: Providers + Route guards (spec v8.1)
+
+import React, { useCallback, useEffect, useState } from "react";
+import { View, ActivityIndicator, LogBox } from "react-native";
+import { Stack, useSegments } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { useFonts } from "@expo-google-fonts/poppins/useFonts";
+import {
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+} from "@expo-google-fonts/poppins";
+import * as SplashScreen from "expo-splash-screen";
+import { PostHogProvider } from "posthog-react-native";
+import { AuthProvider, ModeContextProvider, ThemeProvider } from "@/providers";
+import { RouteGuard } from "@/components/RouteGuard";
+import { ScreenTopSpacer } from "@/components/ScreenTopSpacer";
+import { PostHogIdentitySync, PostHogScreenTracker } from "@/components/PostHogAnalytics";
+import { Colors } from "@/constants/tokens";
+import { POSTHOG_API_KEY, POSTHOG_HOST } from "@/constants/config";
+
+SplashScreen.preventAutoHideAsync();
+
+/** If fonts hang (common on Expo Go), proceed after 5s to avoid blank screen */
+const FONT_LOAD_TIMEOUT_MS = 5000;
+
+// Show errors only in terminal, not in-app overlay
+if (typeof console !== "undefined" && "reportErrorsAsExceptions" in console) {
+  (console as { reportErrorsAsExceptions?: boolean }).reportErrorsAsExceptions = false;
+}
+LogBox.ignoreAllLogs();
+
+// Suppress VirtualizedLists nesting warning (we fix root causes; this hides any edge-case remnants)
+LogBox.ignoreLogs(["VirtualizedLists should never be nested"]);
+
+// Suppress known non-fatal Expo keep-awake error (common on Android/Expo Go)
+LogBox.ignoreLogs([
+  "Unable to activate keep awake",
+  "Unable to deactivate keep awake",
+  "Network request failed",
+]);
+
+export default function RootLayout() {
+  const segments = useSegments();
+  const isSplash = (segments as string[]).includes("splash") || segments.some((s) => String(s).endsWith("splash"));
+
+  const [fontsLoaded] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+  });
+
+  const [fontsTimedOut, setFontsTimedOut] = useState(false);
+  const readyToRender = fontsLoaded || fontsTimedOut;
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (!fontsLoaded) setFontsTimedOut(true);
+    }, FONT_LOAD_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [fontsLoaded]);
+
+  const onLayoutRootView = useCallback(async () => {
+    if (readyToRender) await SplashScreen.hideAsync();
+  }, [readyToRender]);
+
+  if (!readyToRender) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: Colors.primaryViolet }}>
+        <ActivityIndicator size="large" color="#FFFFFF" />
+      </View>
+    );
+  }
+
+  const posthogOptions = {
+    host: POSTHOG_HOST,
+    captureAppLifecycleEvents: true,
+    disabled: !POSTHOG_API_KEY,
+  };
+
+  const content = (
+    <AuthProvider>
+      <ModeContextProvider>
+        <ThemeProvider>
+          {POSTHOG_API_KEY ? <PostHogIdentitySync /> : null}
+          <RouteGuard>
+            {POSTHOG_API_KEY ? <PostHogScreenTracker /> : null}
+            <StatusBar style="dark" backgroundColor={Colors.backgroundMuted} />
+            <Stack
+              screenOptions={() => ({
+                headerShown: !isSplash,
+                header: () => <ScreenTopSpacer />,
+                headerShadowVisible: false,
+                headerTitle: "",
+                contentStyle: {
+                  backgroundColor: isSplash ? Colors.primaryViolet : Colors.backgroundMuted,
+                },
+                animation: "fade",
+              })}
+            />
+          </RouteGuard>
+        </ThemeProvider>
+      </ModeContextProvider>
+    </AuthProvider>
+  );
+
+  return (
+    <SafeAreaProvider>
+      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        {POSTHOG_API_KEY ? (
+          <PostHogProvider apiKey={POSTHOG_API_KEY} options={posthogOptions}>
+            {content}
+          </PostHogProvider>
+        ) : (
+          content
+        )}
+      </View>
+    </SafeAreaProvider>
+  );
+}

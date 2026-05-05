@@ -1,0 +1,28 @@
+---
+description: Keep Winkly product documentation in sync with code and schema changes
+alwaysApply: true
+---
+
+# Winkly — Update Product Documentation
+
+**Single source of truth:** `docs/PRODUCT_DOCUMENTATION.md`
+
+When you change the Winkly app or backend in a way that affects product behavior, data model, or design, update this doc in the same change set.
+
+## When to update
+
+- **Schema/RLS/migrations** → Section 4 (Data model), Section 10 if integrations change.
+- **New or removed screens/routes** → Section 7 (Navigation), Section 8 (Features).
+- **Mode rules, chat rules, or account types** → Section 1 (Product overview), Section 2 (Modes).
+- **Design tokens, layout constants, or shared components** → Section 9 (Design system).
+- **Auth flow, session, or redirect behavior** → Section 5 (Authentication).
+- **New env vars, scripts, or deploy steps** → Section 3 (Architecture), Section 11 (Scripts and deployment).
+- **New integrations (e.g. calendar, maps, third-party APIs)** → Section 10 (External integrations).
+
+## How to update
+
+1. Edit `docs/PRODUCT_DOCUMENTATION.md` in the same PR/commit as the code change.
+2. Bump the **Last updated** date at the top (format: YYYY-MM-DD).
+3. Keep sections accurate and concise; add a one-line changelog under Document metadata if helpful.
+
+Do not duplicate long spec text inside the doc; reference code or migrations where appropriate.
