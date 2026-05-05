@@ -30,6 +30,7 @@ import { hasAnyAIAccess } from "@/lib/ai/aiFeatureGate";
 import { supabase } from "@/lib/supabase";
 import { SuperLikeInviteModal } from "@/components/romance/SuperLikeInviteModal";
 import { blockUser, recordSwipe, reportUser } from "@/lib/matching/actions";
+import { buildRomanceSuperLikeIcebreaker } from "@/lib/matching/romanceIcebreaker";
 import { fetchRomanceSwipeDeckProfiles } from "@/lib/discover/romanceSwipeDeck";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -73,7 +74,6 @@ export default function RomanceHome() {
   const [intentModalVisible, setIntentModalVisible] = useState(false);
   const [superLikeInviteModalVisible, setSuperLikeInviteModalVisible] = useState(false);
   const [intentMessage, setIntentMessage] = useState("");
-  const [intentAiIcebreaker] = useState("Your taste in coffee is *chef's kiss* — same!"); // TODO: AI-generated, user-confirmed
 
   const cardAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const pendingIntentMessage = useRef<string | undefined>(undefined);
@@ -139,6 +139,23 @@ export default function RomanceHome() {
   );
 
   const currentProfile = profiles[currentIndex];
+
+  const intentAiIcebreaker = React.useMemo(
+    () =>
+      buildRomanceSuperLikeIcebreaker(
+        selfProfile
+          ? { interests: selfProfile.interests, city: selfProfile.city }
+          : null,
+        currentProfile
+          ? {
+              name: currentProfile.name,
+              chipItems: currentProfile.chipItems,
+              city: currentProfile.city,
+            }
+          : null,
+      ),
+    [selfProfile, currentProfile],
+  );
 
   const romanceAiHint = React.useMemo(() => {
     if (!showAiHints || !selfProfile || !currentProfile) return null;
@@ -589,14 +606,14 @@ export default function RomanceHome() {
                 <Pressable style={styles.intentModalCard} onPress={(e) => e.stopPropagation()}>
                   <Text style={styles.intentModalTitle}>Add a message? (optional)</Text>
                   <Text style={styles.intentModalHint}>
-                    They&apos;ll see it when they see your profile. Use an AI icebreaker or write your own.
+                    They&apos;ll see it when they see your profile. Start from a suggested opener or write your own.
                   </Text>
                   <Pressable
                     style={styles.icebreakerChip}
                     onPress={() => setIntentMessage(intentAiIcebreaker)}
                   >
                     <SparklesIcon size={16} color={Colors.primaryViolet} />
-                    <Text style={styles.icebreakerChipText}>Use AI icebreaker</Text>
+                    <Text style={styles.icebreakerChipText}>Use suggested opener</Text>
                   </Pressable>
                   <TextInput
                     style={styles.intentMessageInput}

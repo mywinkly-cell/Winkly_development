@@ -1,24 +1,59 @@
 // apps/mobile/lib/integrations/payments.ts
-// Subscription/payment facade (currently placeholder until billing integration).
+// Subscription/payment facade: tier is read from Supabase; store billing still TODO.
 
 import { Linking } from "react-native";
+import { supabase } from "@/lib/supabase";
+import { normalizeSubscriptionTier } from "@/lib/billing/subscriptionTier";
+import type { SubscriptionTier } from "@/types";
 
-export type SubscriptionTier = "free" | "super" | "premium";
+export type { SubscriptionTier };
 
 export type SubscriptionStatus = {
   tier: SubscriptionTier;
   isActive: boolean;
   /** ISO date string when available */
   activeUntil?: string | null;
-  /** True when billing integration is wired */
+  /** True when App Store / Play / Stripe purchase flow is wired */
   isBillingConfigured: boolean;
 };
 
 export async function getSubscriptionStatus(): Promise<SubscriptionStatus> {
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) {
+    return {
+      tier: "free",
+      isActive: false,
+      activeUntil: null,
+      isBillingConfigured: false,
+    };
+  }
+
+  let row: {
+    subscription_tier?: string | null;
+    is_premium?: boolean | null;
+    premium_until?: string | null;
+  } | null = null;
+
+  const full = await supabase
+    .from("users")
+    .select("subscription_tier, is_premium, premium_until")
+    .eq("id", uid)
+    .maybeSingle();
+
+  row = full.data;
+  const err = full.error as { code?: string } | null;
+  if (err?.code === "42703") {
+    const fb = await supabase.from("users").select("is_premium, premium_until").eq("id", uid).maybeSingle();
+    row = fb.data as typeof row;
+  }
+
+  const tier = normalizeSubscriptionTier(row?.subscription_tier ?? undefined, !!row?.is_premium);
+
   return {
-    tier: "free",
-    isActive: true,
-    activeUntil: null,
+    tier,
+    isActive: tier !== "free",
+    activeUntil: row?.premium_until ?? null,
     isBillingConfigured: false,
   };
 }

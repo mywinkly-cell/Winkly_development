@@ -27,7 +27,13 @@ import { supabase } from "@/lib/supabase";
 import { buildFriendsMatchTags, computeFriendsCompatibility, type FriendsProfile } from "@/lib/ai/friendsInsights";
 import { hasAnyAIAccess } from "@/lib/ai/aiFeatureGate";
 import { useModeContext } from "@/providers/ModeContextProvider";
-import { blockUser, recordSwipe, reportUser, sendFriendsRequest } from "@/lib/matching/actions";
+import {
+  blockUser,
+  countIncomingFriendsRequests,
+  recordSwipe,
+  reportUser,
+  sendFriendsRequest,
+} from "@/lib/matching/actions";
 import { fetchFriendsSwipeDeckProfiles } from "@/lib/discover/friendsSwipeDeck";
 import { friendsFollowProfile } from "@/lib/access/connections";
 
@@ -65,8 +71,18 @@ export default function FriendsHome() {
   const [transitioning, setTransitioning] = useState(false);
   const [selfProfile, setSelfProfile] = useState<FriendsProfile | null>(null);
   const [superLikeRemainingToday, setSuperLikeRemainingToday] = useState(SUPER_LIKE_PER_DAY);
+  const [incomingRequestCount, setIncomingRequestCount] = useState(0);
 
   const cardAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+
+  const refreshIncomingRequestCount = useCallback(async () => {
+    try {
+      const n = await countIncomingFriendsRequests();
+      setIncomingRequestCount(n);
+    } catch {
+      setIncomingRequestCount(0);
+    }
+  }, []);
 
   const loadDeck = useCallback(async () => {
     setDeckLoading(true);
@@ -125,7 +141,8 @@ export default function FriendsHome() {
   useFocusEffect(
     useCallback(() => {
       void loadDeck();
-    }, [loadDeck]),
+      void refreshIncomingRequestCount();
+    }, [loadDeck, refreshIncomingRequestCount]),
   );
 
   const currentProfile = profiles[currentIndex];
@@ -362,6 +379,23 @@ export default function FriendsHome() {
         onFilterPress={() => router.push("/(modes)/friends/filters")}
       />
 
+      {incomingRequestCount > 0 ? (
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync();
+            router.push("/(modes)/friends/friend-requests");
+          }}
+          style={styles.requestsBanner}
+          accessibilityLabel="Open connection requests"
+        >
+          <Ionicons name="people" size={22} color={Colors.friends.primary} />
+          <Text style={styles.requestsBannerText}>
+            {incomingRequestCount} connection request{incomingRequestCount === 1 ? "" : "s"}
+          </Text>
+          <Ionicons name="chevron-forward" size={20} color={Colors.friends.primary} />
+        </Pressable>
+      ) : null}
+
       {deckLoading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={Colors.friends.primary} />
@@ -515,6 +549,25 @@ export default function FriendsHome() {
 }
 
 const styles = StyleSheet.create({
+  requestsBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.friends.primary,
+  },
+  requestsBannerText: {
+    flex: 1,
+    ...Typography.button,
+    fontFamily: FontFamily.heading,
+    color: Colors.textPrimary,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.backgroundMuted,
