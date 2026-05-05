@@ -17,6 +17,7 @@ import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 
 import { Ionicons } from "@expo/vector-icons";
+import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { supabase } from "@/lib/supabase";
 import { ModeHeader } from "@/components/layout/ModeHeader";
@@ -26,9 +27,11 @@ import {
   buildMatchTags,
   type RomanceProfile,
 } from "@/lib/ai/romanceInsights";
+import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 
 export default function RomanceLiked() {
   const router = useRouter();
+  const fmtLoc = useFormatLocationDisplay();
 
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<any[]>([]);
@@ -158,7 +161,7 @@ export default function RomanceLiked() {
           </Text>
 
           <Text style={{ ...Typography.caption, color: Colors.gray700 }}>
-            {item.city}
+            {fmtLoc(item.city)}
           </Text>
 
           <Text
@@ -243,7 +246,7 @@ export default function RomanceLiked() {
           </Text>
 
           <Text style={{ ...Typography.body, color: Colors.gray700 }}>
-            {item.city}
+            {fmtLoc(item.city)}
           </Text>
 
           <Text
@@ -276,7 +279,7 @@ export default function RomanceLiked() {
           Liked
         </Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
-          <Ionicons name="sparkles" size={14} color={Colors.primaryViolet} />
+          <SparklesIcon size={14} color={Colors.primaryViolet} />
           <Text style={{ ...Typography.caption, color: Colors.gray700 }}>
             People you’ve liked — sorted by AI affinity
         </Text>

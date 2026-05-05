@@ -24,10 +24,13 @@ import {
 } from "react-native";
 import * as Linking from "expo-linking";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
+import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { supabase } from "@/lib/supabase";
 import {
   computeCompatibilityScore,
@@ -47,6 +50,7 @@ type ProfileRow = {
   languages?: string[] | null;
   occupation?: string | null;
   bio_romance?: string | null;
+  night_owl?: boolean | null;
   // Optional lifestyle / extra fields:
   lifestyle_smoking?: string | null;
   lifestyle_drinking?: string | null;
@@ -61,7 +65,13 @@ type ProfileRow = {
   instagram?: string | null;
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function isValidUUID(s: string | undefined): boolean {
+  return typeof s === "string" && UUID_REGEX.test(s.trim());
+}
+
 export default function RomanceProfileView() {
+  const { i18n } = useTranslation();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
 
@@ -73,7 +83,7 @@ export default function RomanceProfileView() {
   // Load self + target profile from public_profile_view
   // ────────────────────────────────────────────────
   const loadData = async () => {
-    if (!id) {
+    if (!id || !isValidUUID(id)) {
       setLoading(false);
       return;
     }
@@ -209,7 +219,7 @@ export default function RomanceProfileView() {
       if (result?.is_match && result?.chat_id) {
         Alert.alert("It's a match! 💖", "You both liked each other. Start chatting?", [
           { text: "Later" },
-          { text: "Chat", onPress: () => router.push(`/chats/${result.chat_id}`) },
+          { text: "Chat", onPress: () => router.push(`/chats/${result.chat_id}?matchBridge=1`) },
         ]);
       }
     } catch (err) {
@@ -229,6 +239,8 @@ export default function RomanceProfileView() {
     if (!targetProfile) return [] as string[];
 
     const chips: string[] = [];
+    if (typeof targetProfile.night_owl === "boolean")
+      chips.push(targetProfile.night_owl ? "Night owl" : "Early bird");
     if (targetProfile.lifestyle_smoking)
       chips.push(`Smoking: ${targetProfile.lifestyle_smoking}`);
     if (targetProfile.lifestyle_drinking)
@@ -461,7 +473,9 @@ export default function RomanceProfileView() {
                 }}
                 numberOfLines={1}
               >
-                {targetProfile.city || "Somewhere nearby"}
+                {targetProfile.city?.trim()
+                  ? normalizeLocationDisplayString(targetProfile.city, i18n?.language ?? "en")
+                  : "Somewhere nearby"}
               </Text>
               {targetProfile.occupation && (
                 <Text
@@ -491,7 +505,7 @@ export default function RomanceProfileView() {
                 paddingHorizontal: 10,
               }}
             >
-              <Ionicons name="sparkles" size={14} color="#003329" />
+              <SparklesIcon size={14} color="#003329" />
               <Text
                 style={{
                   ...Typography.caption,

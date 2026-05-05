@@ -18,16 +18,35 @@ import {
   KeyboardAvoidingView,
   Image,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { supabase } from "@/lib/supabase";
-import { EventParticipantCard, type ParticipantInfo } from "@/components/ui/EventParticipantCard";
+import { getSavedIdeas } from "@/lib/ai/conciergeStorage";
+import {
+  getProactiveSuggestion,
+  getWeeklyWeekendSuggestion,
+  shouldShowProactiveSuggestion,
+  dismissSuggestion,
+  dismissWeeklyWeekend,
+  isWeekendIdeasPeriod,
+  getWeeklyWeekendDismissedUntil,
+  type ProactiveSuggestion,
+  type WeeklyWeekendSuggestion,
+  type PlannerTabKey,
+} from "@/lib/ai/proactiveSuggestion";
+import { ProactiveSuggestionCard } from "@/components/planner/ProactiveSuggestionCard";
+import { ProactiveSuggestionDetailModal } from "@/components/planner/ProactiveSuggestionDetailModal";
+import { WeeklyWeekendCard } from "@/components/planner/WeeklyWeekendCard";
+import { EventParticipantCard } from "@/components/ui/EventParticipantCard";
 import { PlannerHeader } from "@/components/layout/PlannerHeader";
+import { EventReminderModal } from "@/components/planner/EventReminderModal";
+import type { Mode } from "@/types";
+import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 
 type TabKey = "all" | "dates" | "meetups" | "business" | "events" | "archive";
 type TimeRange =
@@ -72,7 +91,6 @@ type PlannerItem = {
 };
 
 const AVATAR_SIZE = 40;
-const PLACEHOLDER_AVATAR = "https://i.pravatar.cc/100?u=placeholder";
 /** Icon display sizes on list cards (44px button). Cancel = baseline; Confirm/Reschedule larger if assets have more padding. */
 const CARD_ACTION_ICON_CONFIRM = 38;
 const CARD_ACTION_ICON_RESCHEDULE = 36;
@@ -382,12 +400,14 @@ type PlannerIndexProps = {
 
 export type PlannerIndexHandle = {
   openFilter: () => void;
+  openConcierge: () => void;
 };
 
 const BOTTOM_BAR_HEIGHT = Layout.bottomBarHeight ?? 76;
 
 const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function PlannerIndex({ embedded, initialTab }, ref) {
   const router = useRouter();
+  const fmtLocationLine = useFormatLocationDisplay();
   const insets = useSafeAreaInsets();
   const filterModalBottomPadding = BOTTOM_BAR_HEIGHT + insets.bottom;
   const [itemsState, setItemsState] = useState<PlannerItem[]>(() =>
@@ -405,6 +425,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedItem, setSelectedItem] = useState<PlannerItem | null>(null);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
+  const [reminderModalVisible, setReminderModalVisible] = useState(false);
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [cancelCustomMessage, setCancelCustomMessage] = useState("");
   const [selectedCancelResponse, setSelectedCancelResponse] = useState<string | null>(null);
@@ -414,10 +435,53 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   const [viewedWeekStart, setViewedWeekStart] = useState<Date>(() => getWeekStart(new Date()));
   const [viewedMonth, setViewedMonth] = useState<Date>(() => new Date());
   const [selectedMonthDay, setSelectedMonthDay] = useState<string | null>(null);
+  const [savedIdeasCount, setSavedIdeasCount] = useState(0);
+  const [proactiveSuggestion, setProactiveSuggestion] = useState<ProactiveSuggestion | null>(null);
+  const [showProactiveCard, setShowProactiveCard] = useState(false);
+  const [suggestionDetailModalVisible, setSuggestionDetailModalVisible] = useState(false);
+  const [suggestionForDetail, setSuggestionForDetail] = useState<ProactiveSuggestion | null>(null);
+  const [weeklySuggestion, setWeeklySuggestion] = useState<WeeklyWeekendSuggestion | null>(null);
+  const [showWeeklyCard, setShowWeeklyCard] = useState(false);
 
   useEffect(() => {
     setSelectedMonthDay(null);
   }, [viewedMonth]);
+
+  useEffect(() => {
+    getSavedIdeas().then((ideas) => setSavedIdeasCount(ideas.length));
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      getSavedIdeas().then((ideas) => setSavedIdeasCount(ideas.length));
+      (async () => {
+        if (activeTab === "archive") return;
+        const [showProactive, weeklyDismissed] = await Promise.all([
+          shouldShowProactiveSuggestion(),
+          getWeeklyWeekendDismissedUntil(),
+        ]);
+        const now = Date.now();
+        const inWeekendPeriod = isWeekendIdeasPeriod();
+        if (inWeekendPeriod && (weeklyDismissed == null || now > weeklyDismissed)) {
+          setWeeklySuggestion(getWeeklyWeekendSuggestion());
+          setShowWeeklyCard(true);
+          setProactiveSuggestion(null);
+          setShowProactiveCard(false);
+        } else if (showProactive) {
+          const suggestion = getProactiveSuggestion(activeTab as PlannerTabKey);
+          setProactiveSuggestion(suggestion);
+          setShowProactiveCard(!!suggestion);
+          setWeeklySuggestion(null);
+          setShowWeeklyCard(false);
+        } else {
+          setProactiveSuggestion(null);
+          setShowProactiveCard(false);
+          setWeeklySuggestion(null);
+          setShowWeeklyCard(false);
+        }
+      })();
+    }, [activeTab])
+  );
 
   useEffect(() => {
     (async () => {
@@ -465,17 +529,50 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     setActiveTab(key);
   };
 
-  const onSettingsPress = () => {
-    Haptics.selectionAsync();
-    router.push("/planner/settings");
-  };
-
   const onFiltersPress = useCallback(() => {
     Haptics.selectionAsync();
     setFilterModalVisible(true);
   }, []);
 
-  useImperativeHandle(ref, () => ({ openFilter: onFiltersPress }), [onFiltersPress]);
+  const openConcierge = useCallback(() => {
+    const modeParam = activeTab === "dates" ? "romance" : activeTab === "meetups" ? "friends" : activeTab === "business" ? "business" : "events";
+    const tabParam = activeTab === "archive" ? "all" : activeTab;
+    router.push({ pathname: "/concierge", params: { source_screen: "planner", mode: modeParam, source_planner_tab: tabParam } });
+  }, [activeTab, router]);
+
+  const openConciergeWithProactive = useCallback(
+    (suggestion: ProactiveSuggestion, step: "activity" | "social") => {
+      const modeParam = activeTab === "dates" ? "romance" : activeTab === "meetups" ? "friends" : activeTab === "business" ? "business" : "events";
+      const tabParam = activeTab === "archive" ? "all" : activeTab;
+      router.push({
+        pathname: "/concierge",
+        params: {
+          source_screen: "planner",
+          mode: modeParam,
+          source_planner_tab: tabParam,
+          initial_step: step,
+          proactive_activity_label: suggestion.activityHint ?? suggestion.title,
+          proactive_date_preset: suggestion.datePreset ?? "today",
+          proactive_time_of_day: suggestion.timeOfDay ?? undefined,
+        },
+      });
+    },
+    [activeTab, router]
+  );
+
+  const handleProactiveDismiss = useCallback(async () => {
+    await dismissSuggestion();
+    setShowProactiveCard(false);
+    setProactiveSuggestion(null);
+  }, []);
+
+  const handleWeeklyDismiss = useCallback(async () => {
+    await dismissWeeklyWeekend();
+    setShowWeeklyCard(false);
+    setWeeklySuggestion(null);
+  }, []);
+
+  useImperativeHandle(ref, () => ({ openFilter: onFiltersPress, openConcierge }), [onFiltersPress, openConcierge]);
 
   const applyFilters = () => {
     Haptics.selectionAsync();
@@ -580,6 +677,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     const isArchiveTab = activeTab === "archive";
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - ARCHIVE_DAYS);
+    // All tab: show every active item from dates, meetups, business, events. Other tabs: filter by source.
     let list: PlannerItem[] = isArchiveTab
       ? itemsState.filter((it) => {
           if (it.status !== "archived") return false;
@@ -602,6 +700,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
       });
     }
 
+    // Same sort for All and single-mode tabs: by date (sortKey) earliest or latest first.
     return list.sort((a, b) =>
       isArchiveTab
         ? (b.archivedAt ?? "").localeCompare(a.archivedAt ?? "")
@@ -673,7 +772,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     return map;
   }, [items, viewedMonth]);
 
-  const accentColor = TAB_CONFIG.find((t) => t.key === activeTab)?.accent ?? Colors.primaryViolet;
+  const _accentColor = TAB_CONFIG.find((t) => t.key === activeTab)?.accent ?? Colors.primaryViolet;
 
   const renderItemCard = useCallback((it: PlannerItem) => {
     const past = isItemPast(it.dateStr);
@@ -690,6 +789,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
               )}
             </View>
             <View style={styles.itemTitleRow}>
+              {/* Color by item's mode (source) so All tab shows dates/meetups/business/events each with their own color */}
               <View style={[styles.sourceDot, { backgroundColor: TAB_CONFIG.find((t) => t.key === it.source)?.accent ?? Colors.primaryViolet }]} />
               <Text style={[styles.itemTitle, past && styles.itemTitlePast]}>{it.title}</Text>
             </View>
@@ -731,12 +831,9 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
 
   return (
     <View style={styles.screen}>
-      {/* TOP HEADER — Profile | Winkly | Filter + Settings (same as all Planner views) */}
+      {/* TOP HEADER — Filter | Winkly | optional AI Spark (no profile/settings; those only at Mode Selection) */}
       {!embedded && (
-        <PlannerHeader
-          onFilterPress={onFiltersPress}
-          onSettingsPress={onSettingsPress}
-        />
+        <PlannerHeader onFilterPress={onFiltersPress} onAIPress={openConcierge} />
       )}
 
       {/* CONTENT WRAPPER — tabs + scroll (filter overlay covers only this so header & bottom bar stay visible) */}
@@ -784,6 +881,49 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + filterModalBottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
+        {activeTab !== "archive" && showWeeklyCard && weeklySuggestion && (
+          <WeeklyWeekendCard
+            suggestion={weeklySuggestion}
+            onViewPlans={openConcierge}
+            onDismiss={handleWeeklyDismiss}
+          />
+        )}
+        {activeTab !== "archive" && showProactiveCard && proactiveSuggestion && (
+          <ProactiveSuggestionCard
+            suggestion={proactiveSuggestion}
+            accentColor={TAB_CONFIG.find((t) => t.key === activeTab)?.accent ?? Colors.primaryViolet}
+            onViewPlan={() => {
+              setSuggestionForDetail(proactiveSuggestion);
+              setSuggestionDetailModalVisible(true);
+            }}
+            onInviteSomeone={() => openConciergeWithProactive(proactiveSuggestion, "social")}
+            onDismiss={handleProactiveDismiss}
+          />
+        )}
+        {suggestionForDetail && (
+          <ProactiveSuggestionDetailModal
+            visible={suggestionDetailModalVisible}
+            suggestion={suggestionForDetail}
+            accentColor={TAB_CONFIG.find((t) => t.key === activeTab)?.accent ?? Colors.primaryViolet}
+            onAddToPlanner={(s) => openConciergeWithProactive(s, "activity")}
+            onInviteSomeone={(s) => openConciergeWithProactive(s, "social")}
+            onDismiss={() => {
+              setSuggestionDetailModalVisible(false);
+              setSuggestionForDetail(null);
+            }}
+          />
+        )}
+        {savedIdeasCount > 0 && (
+          <TouchableOpacity
+            style={styles.savedIdeasRow}
+            onPress={() => { Haptics.selectionAsync(); openConcierge(); }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="bookmark" size={20} color={Colors.primaryViolet} />
+            <Text style={styles.savedIdeasRowText}>Saved ideas ({savedIdeasCount})</Text>
+            <Ionicons name="chevron-forward" size={20} color={Colors.gray500} />
+          </TouchableOpacity>
+        )}
         {overviewMode === "list" && (
           <>
             {items.length === 0 ? (
@@ -899,7 +1039,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                 <View style={styles.emptyState}>
                   <Ionicons name="calendar-outline" size={48} color={Colors.gray400} style={{ marginBottom: 12 }} />
                   <Text style={styles.emptyTitle}>No plans this month</Text>
-                  <Text style={styles.emptySub}>Nothing planned yet.{"\n"}Let's turn this date into something worth remembering.</Text>
+                  <Text style={styles.emptySub}>Nothing planned yet.{"\n"}Let&apos;s turn this date into something worth remembering.</Text>
                 </View>
               </View>
             ) : (
@@ -916,7 +1056,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                           <View style={styles.emptyState}>
                             <Ionicons name="calendar-outline" size={48} color={Colors.gray400} style={{ marginBottom: 12 }} />
                             <Text style={styles.emptyTitle}>Nothing planned yet.</Text>
-                            <Text style={styles.emptySub}>Let's turn this date into something worth remembering.</Text>
+                            <Text style={styles.emptySub}>Let&apos;s turn this date into something worth remembering.</Text>
                           </View>
                         ) : (
                           dayItems.map((it) => renderItemCard(it))
@@ -962,7 +1102,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
               onPress={() => setFilterModalVisible(false)}
             />
             <View style={styles.filterSheetWrapper}>
-              <Pressable style={[styles.modalContent, styles.sheetPanel]} onPress={(e) => e.stopPropagation()}>
+              <View style={[styles.modalContent, styles.sheetPanel]} onStartShouldSetResponder={() => true}>
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>Filters & Views</Text>
                   <TouchableOpacity onPress={() => setFilterModalVisible(false)} hitSlop={12}>
@@ -970,62 +1110,69 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                   </TouchableOpacity>
                 </View>
 
-                <Text style={styles.filterSection}>Overview</Text>
-                <View style={styles.overviewRow}>
-                  {(["list", "week", "month"] as const).map((mode) => (
-                    <TouchableOpacity
-                      key={mode}
-                      onPress={() => { Haptics.selectionAsync(); setOverviewMode(mode); }}
-                      style={[styles.overviewChip, overviewMode === mode && styles.filterChipActive]}
-                    >
-                      <Text style={[styles.filterChipText, overviewMode === mode && styles.filterChipTextActive]}>
-                        {mode === "list" ? "List" : mode === "week" ? "Week" : "Month"}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <Text style={styles.filterSection}>Sort (list)</Text>
-                <View style={styles.overviewRow}>
-                  {(["earliest", "latest"] as const).map((order) => (
-                    <TouchableOpacity
-                      key={order}
-                      onPress={() => { Haptics.selectionAsync(); setListSortOrder(order); }}
-                      style={[styles.overviewChip, listSortOrder === order && styles.filterChipActive]}
-                    >
-                      <Text style={[styles.filterChipText, listSortOrder === order && styles.filterChipTextActive]}>
-                        {order === "earliest" ? "Earliest first" : "Latest first"}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <Text style={styles.filterSection}>Time range</Text>
                 <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.filterRow}
-                  contentContainerStyle={styles.filterRowContent}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled
+                  contentContainerStyle={{ paddingBottom: 16 }}
                 >
-                  {TIME_RANGE_OPTIONS.map((opt) => (
-                    <TouchableOpacity
-                      key={opt.key}
-                      onPress={() => {
-                        Haptics.selectionAsync();
-                        setTimeRange(opt.key);
-                        if (opt.key !== "specific_week") setSelectedWeek(null);
-                        if (opt.key !== "specific_month") setSelectedMonth(null);
-                        if (opt.key !== "specific_day") setShowDatePicker(false);
-                      }}
-                      style={[styles.filterChip, timeRange === opt.key && styles.filterChipActive]}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[styles.filterChipText, timeRange === opt.key && styles.filterChipTextActive]} numberOfLines={1}>
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                  <Text style={styles.filterSection}>Overview</Text>
+                  <View style={styles.overviewRow}>
+                    {(["list", "week", "month"] as const).map((mode) => (
+                      <TouchableOpacity
+                        key={mode}
+                        onPress={() => { Haptics.selectionAsync(); setOverviewMode(mode); }}
+                        style={[styles.overviewChip, overviewMode === mode && styles.filterChipActive]}
+                      >
+                        <Text style={[styles.filterChipText, overviewMode === mode && styles.filterChipTextActive]}>
+                          {mode === "list" ? "List" : mode === "week" ? "Week" : "Month"}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={styles.filterSection}>Sort (list)</Text>
+                  <View style={styles.overviewRow}>
+                    {(["earliest", "latest"] as const).map((order) => (
+                      <TouchableOpacity
+                        key={order}
+                        onPress={() => { Haptics.selectionAsync(); setListSortOrder(order); }}
+                        style={[styles.overviewChip, listSortOrder === order && styles.filterChipActive]}
+                      >
+                        <Text style={[styles.filterChipText, listSortOrder === order && styles.filterChipTextActive]}>
+                          {order === "earliest" ? "Earliest first" : "Latest first"}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={styles.filterSection}>Time range</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.filterRow}
+                    contentContainerStyle={styles.filterRowContent}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {TIME_RANGE_OPTIONS.map((opt) => (
+                      <TouchableOpacity
+                        key={opt.key}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setTimeRange(opt.key);
+                          if (opt.key !== "specific_week") setSelectedWeek(null);
+                          if (opt.key !== "specific_month") setSelectedMonth(null);
+                          if (opt.key !== "specific_day") setShowDatePicker(false);
+                        }}
+                        style={[styles.filterChip, timeRange === opt.key && styles.filterChipActive]}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.filterChipText, timeRange === opt.key && styles.filterChipTextActive]} numberOfLines={1}>
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
 
                 {timeRange === "specific_day" && (
                   <View style={styles.pickerSection}>
@@ -1123,6 +1270,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                   style={styles.topicList}
                   showsVerticalScrollIndicator={false}
                   nestedScrollEnabled
+                  keyboardShouldPersistTaps="handled"
                 >
                   {TOPIC_OPTIONS.map((t) => (
                     <TouchableOpacity
@@ -1137,11 +1285,12 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
+                </ScrollView>
 
                 <TouchableOpacity onPress={applyFilters} style={styles.applyBtn} activeOpacity={0.9}>
                   <Text style={styles.applyBtnText}>Apply filters</Text>
                 </TouchableOpacity>
-              </Pressable>
+              </View>
             </View>
           </View>
         )}
@@ -1163,9 +1312,19 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                 <>
                   <View style={styles.detailsHeader}>
                     <Text style={styles.detailsTitle}>{selectedItem.title}</Text>
-                    <TouchableOpacity onPress={closeDetails} hitSlop={12} accessibilityLabel="Close">
-                      <Ionicons name="close" size={24} color={Colors.textPrimary} />
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => { Haptics.selectionAsync(); setReminderModalVisible(true); }}
+                        style={styles.detailsHeaderIconBtn}
+                        hitSlop={12}
+                        accessibilityLabel="Set reminders"
+                      >
+                        <Ionicons name="notifications-outline" size={22} color={Colors.primaryViolet} />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={closeDetails} hitSlop={12} accessibilityLabel="Close">
+                        <Ionicons name="close" size={24} color={Colors.textPrimary} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
                   <ScrollView style={styles.detailsScroll} showsVerticalScrollIndicator={false}>
                     <View style={[styles.topicChip, { marginBottom: 12 }]}>
@@ -1175,7 +1334,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                     {selectedItem.location && (
                       <View style={styles.detailsRow}>
                         <Ionicons name="location-outline" size={18} color={Colors.gray600} style={{ marginRight: 8 }} />
-                        <Text style={styles.detailsText}>{selectedItem.location}</Text>
+                        <Text style={styles.detailsText}>{fmtLocationLine(selectedItem.location)}</Text>
                       </View>
                     )}
                     {selectedItem.description && (
@@ -1185,7 +1344,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                       selectedItem.participants &&
                       selectedItem.participants.filter((p) => p.id !== "me" && (p.firstName || p.occupation || p.city)).length > 0 && (
                       <View style={{ marginTop: 16 }}>
-                        <Text style={styles.detailsSectionTitle}>Who's joining</Text>
+                        <Text style={styles.detailsSectionTitle}>Who&apos;s joining</Text>
                         {selectedItem.participants
                           .filter((p) => p.id !== "me")
                           .map((p) => ({
@@ -1198,7 +1357,22 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                             isOrganizer: p.isOrganizer,
                           }))
                           .map((info) => (
-                            <EventParticipantCard key={info.id} participant={info} />
+                            <EventParticipantCard
+                              key={info.id}
+                              participant={info}
+                              onPress={() => {
+                                const mode =
+                                  selectedItem.source === "dates"
+                                    ? "romance"
+                                    : selectedItem.source === "meetups"
+                                      ? "friends"
+                                      : selectedItem.source === "business"
+                                        ? "business"
+                                        : "friends";
+                                if (mode === "romance") router.push(`/(modes)/romance/profile-view?id=${info.id}`);
+                                else router.push(`/(modes)/${mode}/profile-view?user_id=${info.id}`);
+                              }}
+                            />
                           ))}
                       </View>
                     )}
@@ -1267,8 +1441,8 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
       <Modal visible={cancelModalVisible} animationType="slide" transparent onRequestClose={closeCancelModal}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalOverlay}>
           <Pressable style={styles.modalOverlay} onPress={closeCancelModal}>
-            <Pressable style={styles.cancelModalContent} onPress={(e) => e.stopPropagation()}>
-              <Text style={styles.cancelModalTitle}>Cancel this plan?</Text>
+          <Pressable style={styles.cancelModalContent} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.cancelModalTitle}>Cancel this plan?</Text>
               <Text style={styles.cancelModalSub}>
                 The other party will be notified. You can add a message (optional). Canceled items are kept in Archive for 2 weeks.
               </Text>
@@ -1310,6 +1484,15 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
+
+      {selectedItem && (
+        <EventReminderModal
+          visible={reminderModalVisible}
+          onClose={() => setReminderModalVisible(false)}
+          itemId={selectedItem.id}
+          title={selectedItem.title}
+        />
+      )}
 
     </View>
   );
@@ -1360,6 +1543,23 @@ const styles = StyleSheet.create({
   },
   scroll: { flex: 1 },
   scrollContent: { padding: 20, paddingBottom: 40 },
+  savedIdeasRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: Colors.white,
+    borderRadius: Layout.radii.card,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+  },
+  savedIdeasRowText: {
+    ...Typography.body,
+    flex: 1,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+  },
   itemCard: {
     backgroundColor: Colors.white,
     borderRadius: Layout.radii.card,
@@ -1494,6 +1694,14 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.heading,
     flex: 1,
     paddingRight: 12,
+  },
+  detailsHeaderIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.gray100,
+    alignItems: "center",
+    justifyContent: "center",
   },
   detailsScroll: { maxHeight: 200, marginBottom: 20 },
   detailsMeta: {

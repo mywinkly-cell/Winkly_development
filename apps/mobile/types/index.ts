@@ -5,7 +5,8 @@ export type AccountType = "personal" | "business";
 
 export type Mode = "romance" | "friends" | "business" | "events";
 
-export type SubscriptionTier = "free" | "premium" | "enterprise";
+/** Free = basic Winkly, no AI. Super = limited AI (matching, event suggestions, planning ideas, chat opener). Premium = full AI + concierge. */
+export type SubscriptionTier = "free" | "super" | "premium" | "enterprise";
 
 /** Single source of truth for authorization across the app */
 export type ActiveModeContext = {

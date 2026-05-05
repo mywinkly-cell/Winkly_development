@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  headerTitle: { ...Typography.h3, color: Colors.textPrimary },
+  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
 
   ghostBtn: {
     width: 70,

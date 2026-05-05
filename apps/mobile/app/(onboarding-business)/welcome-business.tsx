@@ -14,7 +14,7 @@ import { Colors, Typography, Layout } from "@/constants/tokens";
 import { supabase } from "@/lib/supabase";
 
 export default function WelcomeBusiness() {
-  const router = useRouter();
+  useRouter(); // router available for future nav
   const { setActiveMode } = useModeContext();
   const [businessName, setBusinessName] = useState<string | null>(null);
 

@@ -20,7 +20,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { Colors } from "@/constants/tokens";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import {
   sendMessage,
@@ -44,12 +44,51 @@ import {
 } from "@/lib/chats/hooks";
 import type { Message, MessageAttachment, UserMini } from "@/lib/chats/types";
 import { pickAndUploadChatImages as pickImages } from "@/lib/uploadMedia";
+import { InviteToPlanModal } from "@/components/chats/InviteToPlanModal";
+import type { InviteFormValues } from "@/components/chats/InviteToPlanModal";
+import { buildIcebreakerPayload, pickRandomIcebreaker } from "@/lib/communications/icebreakers";
+import { openVideoCallRoom, startVideoCallForConversation } from "@/lib/communications/videoCall";
+import {
+  createPlannerInvite,
+  acceptPlannerInvite,
+  declinePlannerInvite,
+  reschedulePlannerInvite,
+  getPlannerInvitationsForUser,
+} from "@/lib/plannerInvitations";
+import { confirmPendingPlan } from "@/lib/ai/conciergeClient";
+import type { Mode } from "@/types";
+import { useModeContext } from "@/providers";
+import { hasAnyAIAccess } from "@/lib/ai/aiFeatureGate";
+import { getExperienceSuggestionForChat } from "@/lib/ai/chatExperienceSuggestion";
+import type { ChatExperienceSuggestion } from "@/lib/ai/chatExperienceSuggestion";
+import { ChatExperienceSuggestionCard } from "@/components/chats/ChatExperienceSuggestionCard";
+import { postMatchBridgeCtaMessage } from "@/lib/ai/matchBridgeClient";
+import {
+  postMatchAgentCtaMessage,
+  recordMatchAgentApproval,
+  type MatchAgentCtaPayload,
+} from "@/lib/ai/matchAgentClient";
+import { SparklesIcon } from "@/components/ui/WinklyAISpark";
+import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
+import {
+  isConversationEligibleForStaleNudge,
+  dismissStaleConciergeNudge,
+} from "@/lib/chats/conciergeNudge";
+import { getSharedInterestHintForPair } from "@/lib/ai/preferenceEngine";
+import { callWinklyPlan } from "@/lib/ai/conciergeClient";
+import {
+  getChatStrategicHostTopics,
+  getPlannerThemePlans,
+  type PlannerThemePlanOption,
+  type StrategicHostTopic,
+} from "@/lib/ai/strategicHost";
 
 type ConversationRow = {
   id: string;
   type: string;
   mode: string;
   related_event_id: string | null;
+  dm_source: string | null;
 };
 
 type Props = { conversationId: string };
@@ -63,7 +102,7 @@ function formatName(u?: UserMini | null) {
 
 const QUICK_REACTIONS = ["❤️", "👍", "😊", "😂", "😮", "🔥"];
 
-const REPORT_REASONS: Array<{ key: string; label: string }> = [
+const REPORT_REASONS: { key: string; label: string }[] = [
   { key: "spam", label: "Spam" },
   { key: "harassment", label: "Harassment" },
   { key: "inappropriate", label: "Inappropriate content" },
@@ -73,6 +112,8 @@ const REPORT_REASONS: Array<{ key: string; label: string }> = [
 
 export default function ChatView({ conversationId }: Props) {
   const router = useRouter();
+  const { matchBridge: matchBridgeParam } = useLocalSearchParams<{ matchBridge?: string }>();
+  const fmtLocationLine = useFormatLocationDisplay();
   const convId = useMemo(() => String(conversationId), [conversationId]);
 
   const [meId, setMeId] = useState<string | null>(null);
@@ -85,8 +126,28 @@ export default function ChatView({ conversationId }: Props) {
   const [readReceiptsOn, setReadReceiptsOn] = useState(true);
   const [muted, setMuted] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [invitationStatusMap, setInvitationStatusMap] = useState<Record<string, string>>({});
+  const [pendingPlanStatusMap, setPendingPlanStatusMap] = useState<Record<string, string>>({});
+  const [chatExperienceSuggestion, setChatExperienceSuggestion] = useState<ChatExperienceSuggestion | null>(null);
+  const [loadingExperienceSuggestion, setLoadingExperienceSuggestion] = useState(false);
+  const [videoCallLoading, setVideoCallLoading] = useState(false);
+  const [matchAgentLoading, setMatchAgentLoading] = useState(false);
+  /** proposal_id → local UI stage after opt-in tap */
+  const [matchAgentApprovalStage, setMatchAgentApprovalStage] = useState<Record<string, string>>({});
+  const [matchBridgeHandled, setMatchBridgeHandled] = useState(false);
+  const matchBridgeOnceRef = useRef(false);
+  const [staleNudgeVisible, setStaleNudgeVisible] = useState(false);
+  const [staleNudgeHint, setStaleNudgeHint] = useState<string | null>(null);
+  const [showStrategicHost, setShowStrategicHost] = useState(false);
+  const [strategicTopics, setStrategicTopics] = useState<StrategicHostTopic[] | null>(null);
+  const [strategicLoading, setStrategicLoading] = useState(false);
+  const [strategicSelectedTopic, setStrategicSelectedTopic] = useState<StrategicHostTopic | null>(null);
+  const [strategicPlanOptions, setStrategicPlanOptions] = useState<PlannerThemePlanOption[] | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
   const inputRef = useRef<TextInput>(null);
+
+  const { context: modeContext } = useModeContext();
 
   const { messages, loading, error: loadErr, refetch, loadMore } = useMessages(convId);
   const { typingUserIds, setTyping } = useTypingIndicator(convId, meId);
@@ -101,6 +162,24 @@ export default function ChatView({ conversationId }: Props) {
   const otherPartyLabel = formatName(otherUser) || "Chat";
   const isRomance = conversation?.mode === "romance";
   const accentColor = isRomance ? Colors.romance.primary : Colors.primaryViolet;
+  const conversationMode = (conversation?.mode ?? "romance") as Mode;
+  const isDm = conversation?.type === "dm";
+
+  const showChatExperienceCard =
+    isDm &&
+    !!otherUser &&
+    !!conversation &&
+    !conversation.related_event_id &&
+    ["romance", "friends", "business"].includes(conversationMode) &&
+    hasAnyAIAccess(modeContext.subscription_tier ?? "free");
+
+  const showMatchAgentButton =
+    isDm &&
+    !!otherUser &&
+    !!conversation &&
+    !conversation.related_event_id &&
+    (conversationMode === "romance" || conversationMode === "friends") &&
+    hasAnyAIAccess(modeContext.subscription_tier ?? "free");
 
   useEffect(() => {
     (async () => {
@@ -111,10 +190,285 @@ export default function ChatView({ conversationId }: Props) {
     })();
   }, []);
 
+  useEffect(() => {
+    if (!meId) return;
+    getPlannerInvitationsForUser().then((list) => {
+      const map: Record<string, string> = {};
+      list.forEach((inv) => {
+        map[inv.id] = inv.status;
+      });
+      setInvitationStatusMap(map);
+    });
+  }, [meId, messages.length]);
+
+  const fetchChatExperienceSuggestion = useCallback(async () => {
+    if (!meId || !otherUser || !showChatExperienceCard || conversationMode === "events") return;
+    setLoadingExperienceSuggestion(true);
+    setChatExperienceSuggestion(null);
+    try {
+      const suggestion = await getExperienceSuggestionForChat({
+        mode: conversationMode as "romance" | "friends" | "business",
+        partnerUserId: otherUser.id,
+        myUserId: meId,
+      });
+      setChatExperienceSuggestion(suggestion ?? null);
+    } catch {
+      setChatExperienceSuggestion(null);
+    } finally {
+      setLoadingExperienceSuggestion(false);
+    }
+  }, [meId, otherUser, showChatExperienceCard, conversationMode]);
+
+  useEffect(() => {
+    if (showChatExperienceCard && meId && otherUser) {
+      fetchChatExperienceSuggestion();
+    } else {
+      setChatExperienceSuggestion(null);
+    }
+  }, [showChatExperienceCard, meId, otherUser?.id, fetchChatExperienceSuggestion]);
+
+  useEffect(() => {
+    const fromQuery = matchBridgeParam === "1" || matchBridgeParam === "true";
+    const fromMatchDm =
+      conversation?.dm_source === "match" && isRomance && isDm && messages.length === 0;
+    const wantBridge = fromQuery || fromMatchDm;
+    if (!wantBridge) return;
+    if (!meId || !otherUser || !isRomance || !isDm) return;
+    if (loading) return;
+    if (matchBridgeHandled || matchBridgeOnceRef.current) return;
+    const already = messages.some((m) => {
+      if (m.message_type !== "cta") return false;
+      try {
+        const p = JSON.parse(m.content) as { type?: string };
+        return p.type === "match_bridge";
+      } catch {
+        return false;
+      }
+    });
+    if (already) {
+      setMatchBridgeHandled(true);
+      return;
+    }
+    matchBridgeOnceRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const ok = await postMatchBridgeCtaMessage({
+          conversationId: convId,
+          partnerUserId: otherUser.id,
+        });
+        if (!cancelled && ok) refetch();
+      } catch {
+        matchBridgeOnceRef.current = false;
+      } finally {
+        if (!cancelled) setMatchBridgeHandled(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    matchBridgeParam,
+    conversation?.dm_source,
+    meId,
+    otherUser?.id,
+    isRomance,
+    isDm,
+    loading,
+    messages,
+    matchBridgeHandled,
+    convId,
+    refetch,
+  ]);
+
+  const openConciergeFromChat = useCallback(() => {
+    if (!otherUser) return;
+    router.push({
+      pathname: "/concierge",
+      params: {
+        source_screen: "chats",
+        mode: conversationMode,
+        partner_user_id: otherUser.id,
+        partner_display_name: formatName(otherUser),
+      },
+    });
+  }, [otherUser, conversationMode, router]);
+
+  const openStrategicHost = useCallback(async () => {
+    if (!meId || !conversation || !participants.length) return;
+    if (!["romance", "friends", "business"].includes(conversationMode)) return;
+    setShowStrategicHost(true);
+    setStrategicLoading(true);
+    setStrategicTopics(null);
+    setStrategicSelectedTopic(null);
+    setStrategicPlanOptions(null);
+    try {
+      const city =
+        (participants.find((p) => p.id === meId)?.city ?? participants.find((p) => p.id !== meId)?.city ?? null) ||
+        null;
+      const topics = await getChatStrategicHostTopics({
+        mode: conversationMode as "romance" | "friends" | "business",
+        participantUserIds: participants.map((p) => p.id),
+        city: city ?? undefined,
+        conversationId: convId,
+      });
+      setStrategicTopics(topics);
+    } catch (e) {
+      setStrategicTopics([]);
+      Alert.alert("Winkly AI", e instanceof Error ? e.message : "Could not load suggestions");
+    } finally {
+      setStrategicLoading(false);
+    }
+  }, [meId, conversation, participants, conversationMode]);
+
+  const loadStructuredPlansForTopic = useCallback(async (topic: StrategicHostTopic) => {
+    if (!meId || !conversation) return;
+    if (!["romance", "friends", "business"].includes(conversationMode)) return;
+    const city =
+      (participants.find((p) => p.id === meId)?.city ?? participants.find((p) => p.id !== meId)?.city ?? null) ||
+      null;
+    setStrategicLoading(true);
+    try {
+      const dt = new Date(Date.now() + 48 * 3600_000);
+      dt.setMinutes(0, 0, 0);
+      setStrategicSelectedTopic(topic);
+      const plans = await getPlannerThemePlans({
+        mode: conversationMode,
+        theme: topic.title,
+        participantUserIds: participants.map((p) => p.id),
+        city: city ?? undefined,
+        dateTimeIso: dt.toISOString(),
+      });
+      setStrategicPlanOptions(plans.slice(0, 2));
+    } catch (e) {
+      Alert.alert("Winkly AI", e instanceof Error ? e.message : "Could not draft a plan");
+    } finally {
+      setStrategicLoading(false);
+    }
+  }, [meId, conversation, conversationMode, participants, convId, refetch]);
+
+  const draftPendingPlanFromStructuredOption = useCallback(async (opt: PlannerThemePlanOption) => {
+    if (!meId || !conversation) return;
+    const city =
+      (participants.find((p) => p.id === meId)?.city ?? participants.find((p) => p.id !== meId)?.city ?? null) ||
+      null;
+    setStrategicLoading(true);
+    try {
+      const res = await callWinklyPlan({
+        context: {
+          mode: conversationMode,
+          city: city ?? undefined,
+          date_from: opt.date_time,
+          user_prompt: opt.topic,
+          activity_hint: opt.topic,
+          participant_user_ids: participants.map((p) => p.id),
+          conversation_id: convId,
+        },
+      });
+      const payload = JSON.stringify({
+        type: "pending_plan",
+        pending_plan_id: res.pending_plan_id,
+        ...res.winkly_plan,
+      });
+      await sendMessage(convId, payload, [], { messageType: "cta" });
+      setShowStrategicHost(false);
+      setStrategicSelectedTopic(null);
+      setStrategicPlanOptions(null);
+      refetch();
+    } catch (e) {
+      Alert.alert("Winkly AI", e instanceof Error ? e.message : "Could not draft a pending plan");
+    } finally {
+      setStrategicLoading(false);
+    }
+  }, [meId, conversation, conversationMode, participants, convId, refetch]);
+
+  const openConciergeStaleNudge = useCallback(() => {
+    if (!otherUser) return;
+    const hint = staleNudgeHint;
+    const prefill = hint
+      ? `We have not messaged in a while. We share an interest in ${hint}. Suggest a quiet place for a short sync — respect dietary and noise preferences for both of us. Include OpenTable-style discovery, not a confirmed booking.`
+      : "We have not messaged in 48+ hours. Suggest a quiet café or coworking spot for a short sync; respect both users' preferences; use calendar-friendly times.";
+    router.push({
+      pathname: "/concierge",
+      params: {
+        source_screen: "chats",
+        mode: conversationMode,
+        partner_user_id: otherUser.id,
+        partner_display_name: formatName(otherUser),
+        prefill_prompt: prefill,
+      },
+    });
+    setStaleNudgeVisible(false);
+  }, [otherUser, conversationMode, router, staleNudgeHint]);
+
+  const onRunMatchAgent = useCallback(async () => {
+    if (!meId || !otherUser) return;
+    if (conversationMode !== "romance" && conversationMode !== "friends") return;
+    setMatchAgentLoading(true);
+    try {
+      const res = await postMatchAgentCtaMessage({
+        conversationId: convId,
+        partnerUserId: otherUser.id,
+        createdByUserId: meId,
+        mode: conversationMode,
+      });
+      if (!res.ok) {
+        Alert.alert("Match Agent", res.error);
+        return;
+      }
+      refetch();
+    } catch (e) {
+      Alert.alert("Match Agent", e instanceof Error ? e.message : "Try again");
+    } finally {
+      setMatchAgentLoading(false);
+    }
+  }, [meId, otherUser, convId, conversationMode, refetch]);
+
+  const onMatchAgentApprove = useCallback(async (proposalId: string) => {
+    const r = await recordMatchAgentApproval(proposalId);
+    if (r.ok) {
+      setMatchAgentApprovalStage((prev) => ({
+        ...prev,
+        [proposalId]: r.stage === "confirmed" ? "confirmed" : "waiting_other",
+      }));
+      return;
+    }
+    if (r.error === "ALREADY_FULLY_CONFIRMED") {
+      setMatchAgentApprovalStage((prev) => ({ ...prev, [proposalId]: "confirmed" }));
+      return;
+    }
+    if (r.error === "ALREADY_APPROVED") {
+      setMatchAgentApprovalStage((prev) => ({ ...prev, [proposalId]: "waiting_other" }));
+      return;
+    }
+    Alert.alert("Could not update", r.error);
+  }, []);
+
+  useEffect(() => {
+    if (!isDm || !meId || !otherUser || !convId) return;
+    if (conversationMode !== "business" && conversationMode !== "friends") return;
+    let cancelled = false;
+    (async () => {
+      const eligible = await isConversationEligibleForStaleNudge(convId);
+      if (cancelled || !eligible) {
+        if (!cancelled) setStaleNudgeVisible(false);
+        return;
+      }
+      const hint = await getSharedInterestHintForPair(meId, otherUser.id, conversationMode);
+      if (!cancelled) {
+        setStaleNudgeHint(hint);
+        setStaleNudgeVisible(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isDm, meId, otherUser?.id, convId, conversationMode, messages.length]);
+
   const loadMeta = useCallback(async () => {
     const { data: conv } = await supabase
       .from("conversations")
-      .select("id,type,mode,related_event_id")
+      .select("id,type,mode,related_event_id,dm_source")
       .eq("id", convId)
       .single();
     setConversation(conv as ConversationRow);
@@ -341,8 +695,93 @@ export default function ChatView({ conversationId }: Props) {
     [refetch]
   );
 
+  const onSendIcebreaker = useCallback(async () => {
+    if (!convId) return;
+    try {
+      setSending(true);
+      const prompt = pickRandomIcebreaker();
+      await sendMessage(convId, buildIcebreakerPayload(prompt), [], { messageType: "icebreaker" });
+      refetch();
+    } catch {
+      setError("Could not send icebreaker");
+    } finally {
+      setSending(false);
+    }
+  }, [convId, refetch]);
+
+  const onVideoCall = useCallback(async () => {
+    if (!convId) return;
+    setVideoCallLoading(true);
+    try {
+      const session = await startVideoCallForConversation(convId);
+      await openVideoCallRoom(session);
+    } catch (e) {
+      Alert.alert("Video call", e instanceof Error ? e.message : "Could not start call");
+    } finally {
+      setVideoCallLoading(false);
+    }
+  }, [convId]);
+
+  const onConfirmMatchBridge = useCallback(
+    async (p: {
+      title: string;
+      place: string | null;
+      location: string | null;
+      starts_at: string;
+      ends_at: string | null;
+      activity_theme?: string;
+    }) => {
+      if (!meId || !otherUser || !convId) return;
+      if (!p.starts_at || typeof p.starts_at !== "string") {
+        Alert.alert("Missing time", "This suggestion could not be confirmed. Try inviting from the menu instead.");
+        return;
+      }
+      try {
+        const inviteTitle = p.place?.trim()
+          ? `${p.activity_theme === "coffee" ? "Coffee" : "Date"} at ${p.place.trim()}`
+          : p.title;
+        const { planner_item_id, planner_invitation_id } = await createPlannerInvite(meId, otherUser.id, convId, {
+          title: inviteTitle,
+          source_mode: "romance",
+          starts_at: p.starts_at,
+          ends_at: p.ends_at ?? undefined,
+          activity: p.activity_theme ?? "Date",
+          location: p.location || undefined,
+          place: p.place || undefined,
+        });
+        const ctaPayload = JSON.stringify({
+          type: "planner_invite",
+          planner_item_id,
+          planner_invitation_id,
+          title: inviteTitle,
+          activity: p.activity_theme ?? "Date",
+          location: p.location,
+          place: p.place,
+          starts_at: p.starts_at,
+          ends_at: p.ends_at,
+          source_mode: "romance",
+        });
+        await sendMessage(convId, ctaPayload, [], { messageType: "cta" });
+        setInvitationStatusMap((prev) => ({ ...prev, [planner_invitation_id]: "pending" }));
+        refetch();
+      } catch (e) {
+        Alert.alert("Could not create invite", e instanceof Error ? e.message : "Try again");
+      }
+    },
+    [meId, otherUser, convId, refetch]
+  );
+
   const renderMessage = useCallback(
     ({ item }: { item: Message }) => {
+      let isCenteredCta = false;
+      if (item.message_type === "cta") {
+        try {
+          const parsed = JSON.parse(item.content) as { type?: string };
+          if (parsed.type === "match_bridge" || parsed.type === "match_agent") isCenteredCta = true;
+        } catch {
+          // ignore
+        }
+      }
       const mine = meId && item.sender_id === meId;
       const deletedForMe = item.delete_type === "for_me" && mine;
       const deletedForEveryone = item.delete_type === "for_everyone";
@@ -351,8 +790,8 @@ export default function ChatView({ conversationId }: Props) {
       return (
         <View
           style={{
-            alignSelf: mine ? "flex-end" : "flex-start",
-            maxWidth: "84%",
+            alignSelf: isCenteredCta ? "center" : mine ? "flex-end" : "flex-start",
+            maxWidth: isCenteredCta ? "96%" : "84%",
             marginBottom: 8,
           }}
         >
@@ -384,7 +823,332 @@ export default function ChatView({ conversationId }: Props) {
             </View>
           ) : (
             <>
-              {item.reply_to_id ? (
+              {item.message_type === "cta" ? (() => {
+                try {
+                  const p = JSON.parse(item.content);
+                  if (p.type === "match_bridge") {
+                    const accent = Colors.romance.primary;
+                    return (
+                      <View
+                        style={{
+                          padding: 14,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: accent + "55",
+                          backgroundColor: accent + "10",
+                          minWidth: 240,
+                        }}
+                      >
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                          <SparklesIcon size={16} color={accent} />
+                          <Text style={{ fontSize: 12, fontWeight: "800", color: accent }}>AI Bridge</Text>
+                        </View>
+                        <Text style={{ fontSize: 15, lineHeight: 22, marginBottom: 8 }}>{p.bridge_message}</Text>
+                        {p.disclaimer ? (
+                          <Text style={{ fontSize: 11, color: Colors.gray600, marginBottom: 10 }}>{p.disclaimer}</Text>
+                        ) : null}
+                        <Pressable
+                          onPress={() => {
+                            onConfirmMatchBridge({
+                              title: typeof p.title === "string" ? p.title : "Date",
+                              place: typeof p.place === "string" ? p.place : null,
+                              location: typeof p.location === "string" ? p.location : null,
+                              starts_at: p.starts_at,
+                              ends_at: typeof p.ends_at === "string" ? p.ends_at : null,
+                              activity_theme: typeof p.activity_theme === "string" ? p.activity_theme : undefined,
+                            });
+                          }}
+                          style={{
+                            paddingVertical: 10,
+                            alignItems: "center",
+                            backgroundColor: accent,
+                            borderRadius: 10,
+                          }}
+                        >
+                          <Text style={{ fontSize: 14, fontWeight: "700", color: Colors.accentYellow }}>Tap to confirm</Text>
+                        </Pressable>
+                      </View>
+                    );
+                  }
+                  if (p.type === "match_agent") {
+                    const pma = p as MatchAgentCtaPayload;
+                    const accentMa =
+                      conversationMode === "romance"
+                        ? Colors.romance.primary
+                        : conversationMode === "friends"
+                          ? Colors.friends.primary
+                          : Colors.primaryViolet;
+                    const proposalId =
+                      typeof pma.proposal_id === "string" && pma.proposal_id.length > 0 ? pma.proposal_id : null;
+                    const stage = proposalId ? matchAgentApprovalStage[proposalId] : undefined;
+                    const draft = pma.draft;
+                    const venue =
+                      draft && typeof draft.venue_name === "string" ? draft.venue_name : null;
+                    const timeCap =
+                      draft && typeof draft.proposed_time_caption === "string"
+                        ? draft.proposed_time_caption
+                        : null;
+                    const privacyLine =
+                      pma.privacy && typeof pma.privacy.double_opt_in === "string"
+                        ? pma.privacy.double_opt_in
+                        : null;
+                    return (
+                      <View
+                        style={{
+                          padding: 14,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: accentMa + "55",
+                          backgroundColor: accentMa + "10",
+                          minWidth: 240,
+                        }}
+                      >
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                          <SparklesIcon size={16} color={accentMa} />
+                          <Text style={{ fontSize: 12, fontWeight: "800", color: accentMa }}>Match Agent</Text>
+                        </View>
+                        <Text style={{ fontSize: 15, lineHeight: 22, marginBottom: 8 }}>{pma.agent_message}</Text>
+                        {venue ? (
+                          <Text style={{ fontSize: 13, color: Colors.gray700, marginBottom: 4 }}>
+                            {venue}
+                            {timeCap ? ` · ${timeCap}` : ""}
+                          </Text>
+                        ) : null}
+                        {privacyLine ? (
+                          <Text style={{ fontSize: 11, color: Colors.gray600, marginBottom: 10 }}>{privacyLine}</Text>
+                        ) : null}
+                        {proposalId && stage === "confirmed" ? (
+                          <Text style={{ fontSize: 13, fontWeight: "600", color: Colors.successGreen }}>
+                            Both confirmed — plan saved in Winkly.
+                          </Text>
+                        ) : null}
+                        {proposalId && stage === "waiting_other" ? (
+                          <Text style={{ fontSize: 13, color: Colors.gray600, textAlign: "center" }}>
+                            Waiting for the other person to confirm.
+                          </Text>
+                        ) : null}
+                        {proposalId && !stage ? (
+                          <Pressable
+                            onPress={() => onMatchAgentApprove(proposalId)}
+                            style={{
+                              paddingVertical: 10,
+                              alignItems: "center",
+                              backgroundColor: accentMa,
+                              borderRadius: 10,
+                            }}
+                          >
+                            <Text style={{ fontSize: 14, fontWeight: "700", color: Colors.accentYellow }}>I&apos;m in</Text>
+                          </Pressable>
+                        ) : null}
+                        {!proposalId ? (
+                          <Text style={{ fontSize: 11, color: Colors.gray600, marginTop: 4 }}>
+                            Draft only — run the flow again after migration if proposals are not saving.
+                          </Text>
+                        ) : null}
+                      </View>
+                    );
+                  }
+                  if (p.type === "pending_plan") {
+                    const pendingPlanId = typeof p.pending_plan_id === "string" ? p.pending_plan_id : null;
+                    const status = pendingPlanId ? pendingPlanStatusMap[pendingPlanId] : undefined;
+                    const imInvitee = !mine;
+                    const dateStr =
+                      typeof p.date_time === "string" && p.date_time
+                        ? new Date(p.date_time).toLocaleString(undefined, {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "";
+                    const loc = p.location_details?.name
+                      ? String(p.location_details.name)
+                      : p.location_details?.address
+                        ? String(p.location_details.address)
+                        : "";
+                    return (
+                      <View
+                        style={{
+                          padding: 14,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: Colors.primaryViolet + "55",
+                          backgroundColor: Colors.primaryViolet + "0A",
+                          minWidth: 240,
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: "800", color: Colors.primaryViolet, marginBottom: 6 }}>
+                          Winkly plan (needs confirmation)
+                        </Text>
+                        <Text style={{ fontWeight: "700", fontSize: 15, marginBottom: 4 }}>
+                          {String(p.topic ?? "Plan")}
+                        </Text>
+                        {dateStr ? <Text style={{ fontSize: 13, color: Colors.gray700, marginBottom: 2 }}>{dateStr}</Text> : null}
+                        {loc ? <Text style={{ fontSize: 13, color: Colors.gray600, marginBottom: 10 }}>{loc}</Text> : null}
+
+                        {pendingPlanId && imInvitee && status !== "confirmed" ? (
+                          <Pressable
+                            onPress={() => {
+                              setPendingPlanStatusMap((prev) => ({ ...prev, [pendingPlanId]: "confirming" }));
+                              confirmPendingPlan(pendingPlanId)
+                                .then((r) => {
+                                  setPendingPlanStatusMap((prev) => ({
+                                    ...prev,
+                                    [pendingPlanId]: r.all_participants_confirmed ? "confirmed" : "waiting_other",
+                                  }));
+                                })
+                                .catch((e) => {
+                                  setPendingPlanStatusMap((prev) => ({ ...prev, [pendingPlanId]: "error" }));
+                                  Alert.alert("Couldn't confirm", (e as Error)?.message ?? "Please try again.");
+                                });
+                            }}
+                            style={{
+                              paddingVertical: 10,
+                              alignItems: "center",
+                              backgroundColor:
+                                status === "confirming" ? Colors.gray200 : Colors.primaryViolet,
+                              borderRadius: 10,
+                            }}
+                          >
+                            <Text style={{ fontSize: 14, fontWeight: "700", color: Colors.white }}>
+                              {status === "confirming" ? "Confirming..." : "Confirm"}
+                            </Text>
+                          </Pressable>
+                        ) : null}
+                        {pendingPlanId && imInvitee && status === "waiting_other" ? (
+                          <Text style={{ fontSize: 12, color: Colors.gray600, marginTop: 8, textAlign: "center" }}>
+                            Confirmed — waiting for the other person.
+                          </Text>
+                        ) : null}
+                        {pendingPlanId && status === "confirmed" ? (
+                          <Text style={{ fontSize: 12, color: Colors.successGreen, marginTop: 8, textAlign: "center" }}>
+                            Both confirmed — saved in Planner.
+                          </Text>
+                        ) : null}
+                      </View>
+                    );
+                  }
+                  if (p.type === "planner_invite") {
+                    const status = invitationStatusMap[p.planner_invitation_id];
+                    const imInvitee = !mine;
+                    const dateStr = p.starts_at
+                      ? new Date(p.starts_at).toLocaleString(undefined, {
+                          weekday: "short",
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "";
+                    const locationLine =
+                      [p.place, p.location ? fmtLocationLine(String(p.location)) : ""].filter(Boolean).join(" • ") || null;
+                    return (
+                      <View
+                        style={{
+                          padding: 14,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: accentColor + "50",
+                          backgroundColor: accentColor + "08",
+                          minWidth: 220,
+                        }}
+                      >
+                        <Text style={{ fontWeight: "600", fontSize: 15, marginBottom: 4 }}>{p.title}</Text>
+                        {dateStr ? (
+                          <Text style={{ fontSize: 13, color: Colors.gray700, marginBottom: 2 }}>{dateStr}</Text>
+                        ) : null}
+                        {locationLine ? (
+                          <Text style={{ fontSize: 13, color: Colors.gray600, marginBottom: 10 }}>{locationLine}</Text>
+                        ) : null}
+                        {imInvitee && status === "pending" && (
+                          <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+                            <Pressable
+                              onPress={() => {
+                                declinePlannerInvite(p.planner_invitation_id).then(() => {
+                                  setInvitationStatusMap((prev) => ({ ...prev, [p.planner_invitation_id]: "declined" }));
+                                  refetch();
+                                });
+                              }}
+                              style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: Colors.gray100, borderRadius: 10 }}
+                            >
+                              <Text style={{ fontSize: 13, fontWeight: "600" }}>Decline</Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={() => {
+                                reschedulePlannerInvite(p.planner_invitation_id).then(() => {
+                                  setInvitationStatusMap((prev) => ({ ...prev, [p.planner_invitation_id]: "reschedule" }));
+                                  refetch();
+                                });
+                              }}
+                              style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: Colors.gray100, borderRadius: 10 }}
+                            >
+                              <Text style={{ fontSize: 13, fontWeight: "600" }}>Reschedule</Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={() => {
+                                acceptPlannerInvite(p.planner_invitation_id).then(() => {
+                                  setInvitationStatusMap((prev) => ({ ...prev, [p.planner_invitation_id]: "accepted" }));
+                                  refetch();
+                                });
+                              }}
+                              style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: accentColor, borderRadius: 10 }}
+                            >
+                              <Text style={{ fontSize: 13, fontWeight: "600", color: Colors.accentYellow }}>Accept</Text>
+                            </Pressable>
+                          </View>
+                        )}
+                        {imInvitee && status === "accepted" && (
+                          <Text style={{ fontSize: 12, color: Colors.successGreen, marginTop: 4 }}>You accepted</Text>
+                        )}
+                        {imInvitee && status === "declined" && (
+                          <Text style={{ fontSize: 12, color: Colors.gray600, marginTop: 4 }}>You declined</Text>
+                        )}
+                        {imInvitee && status === "reschedule" && (
+                          <Text style={{ fontSize: 12, color: Colors.gray600, marginTop: 4 }}>You asked to reschedule</Text>
+                        )}
+                      </View>
+                    );
+                  }
+                } catch {}
+                return (
+                  <View style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 14, backgroundColor: Colors.gray100 }}>
+                    <Text style={{ fontSize: 15 }}>{item.content}</Text>
+                  </View>
+                );
+              })() : null}
+
+              {item.message_type === "icebreaker" ? (() => {
+                try {
+                  const p = JSON.parse(item.content);
+                  const prompt = typeof p.prompt === "string" ? p.prompt : item.content;
+                  return (
+                    <View
+                      style={{
+                        padding: 14,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: Colors.primaryViolet + "55",
+                        backgroundColor: Colors.primaryViolet + "12",
+                        maxWidth: 300,
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: "800", color: Colors.primaryViolet, marginBottom: 6 }}>
+                        Icebreaker
+                      </Text>
+                      <Text style={{ fontSize: 15, lineHeight: 22 }}>{prompt}</Text>
+                    </View>
+                  );
+                } catch {
+                  return (
+                    <View style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 14, backgroundColor: Colors.gray100 }}>
+                      <Text style={{ fontSize: 15 }}>{item.content}</Text>
+                    </View>
+                  );
+                }
+              })() : null}
+
+              {item.message_type !== "cta" && item.message_type !== "icebreaker" && item.reply_to_id ? (
                 <View
                   style={{
                     marginBottom: 4,
@@ -402,7 +1166,7 @@ export default function ChatView({ conversationId }: Props) {
                 </View>
               ) : null}
 
-              {(item.message_type === "image" || item.message_type === "gif") ? (
+              {item.message_type !== "cta" && item.message_type !== "icebreaker" && (item.message_type === "image" || item.message_type === "gif") ? (
                 <View style={{ borderRadius: 14, overflow: "hidden" }}>
                   <Image
                     source={{ uri: (item.attachments?.[0]?.url ?? item.content) || "" }}
@@ -413,7 +1177,7 @@ export default function ChatView({ conversationId }: Props) {
                     <Text style={{ padding: 8, fontSize: 15 }}>{item.content}</Text>
                   ) : null}
                 </View>
-              ) : (
+              ) : item.message_type !== "cta" && item.message_type !== "icebreaker" ? (
                 <View
                   style={{
                     paddingVertical: 8,
@@ -426,7 +1190,7 @@ export default function ChatView({ conversationId }: Props) {
                 >
                   <Text style={{ fontSize: 15 }}>{item.content}</Text>
                 </View>
-              )}
+              ) : null}
 
               <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4, gap: 8 }}>
                 <Text style={{ fontSize: 11, color: Colors.gray500 }}>
@@ -508,7 +1272,24 @@ export default function ChatView({ conversationId }: Props) {
         </View>
       );
     },
-    [meId, accentColor, reactionsByMessage, onAddReaction, onRemoveReaction, onDeleteForSelf, onDeleteForEveryone, handleReportMessage]
+    [
+      meId,
+      accentColor,
+      reactionsByMessage,
+      invitationStatusMap,
+      pendingPlanStatusMap,
+      refetch,
+      onAddReaction,
+      onRemoveReaction,
+      onDeleteForSelf,
+      onDeleteForEveryone,
+      handleReportMessage,
+      onConfirmMatchBridge,
+      fmtLocationLine,
+      conversationMode,
+      matchAgentApprovalStage,
+      onMatchAgentApprove,
+    ]
   );
 
   if (loading) {
@@ -548,12 +1329,21 @@ export default function ChatView({ conversationId }: Props) {
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </Pressable>
 
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontWeight: "900", fontSize: 16 }}>{otherPartyLabel}</Text>
+        <Pressable
+          style={{ flex: 1 }}
+          onPress={() => {
+            if (isDm && otherUser && conversation?.mode) {
+              const mode = conversation.mode as "romance" | "friends" | "business";
+              if (mode === "romance") router.push(`/(modes)/romance/profile-view?id=${otherUser.id}`);
+              else router.push(`/(modes)/${mode}/profile-view?user_id=${otherUser.id}`);
+            }
+          }}
+        >
+          <Text style={{ fontWeight: "900", fontSize: 16 }} numberOfLines={1}>{otherPartyLabel}</Text>
           <Text style={{ opacity: 0.65, fontSize: 12 }}>
             {typingUserIds.size > 0 ? "typing…" : conversation ? `${conversation.mode} • direct` : ""}
           </Text>
-        </View>
+        </Pressable>
 
         <Pressable
           onPress={() => setShowMenu(!showMenu)}
@@ -569,6 +1359,61 @@ export default function ChatView({ conversationId }: Props) {
           <Ionicons name="ellipsis-vertical" size={24} color={Colors.textPrimary} />
         </Pressable>
       </View>
+
+      {staleNudgeVisible && isDm && (conversationMode === "business" || conversationMode === "friends") ? (
+        <View
+          style={{
+            marginHorizontal: 14,
+            marginTop: 8,
+            padding: 12,
+            borderRadius: 12,
+            backgroundColor: Colors.primaryViolet + "14",
+            borderWidth: 1,
+            borderColor: Colors.primaryViolet + "44",
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <SparklesIcon size={18} color={Colors.primaryViolet} />
+            <Text style={{ fontWeight: "800", fontSize: 13, color: Colors.primaryViolet }}>Concierge nudge</Text>
+          </View>
+          <Text style={{ fontSize: 14, color: Colors.textPrimary, marginBottom: 10, lineHeight: 20 }}>
+            {staleNudgeHint
+              ? `You have not messaged in a while — you both care about ${staleNudgeHint}. Want Winkly to suggest a spot for a quick sync?`
+              : "It has been quiet here — want Winkly to suggest a time and place that fits both of you?"}
+          </Text>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Pressable
+              onPress={() => {
+                openConciergeStaleNudge();
+              }}
+              style={{
+                flex: 1,
+                paddingVertical: 10,
+                alignItems: "center",
+                backgroundColor: Colors.primaryViolet,
+                borderRadius: 10,
+              }}
+            >
+              <Text style={{ fontWeight: "700", color: Colors.accentYellow }}>Find a spot</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                dismissStaleConciergeNudge(convId).then(() => setStaleNudgeVisible(false)).catch(() => {});
+              }}
+              style={{
+                paddingVertical: 10,
+                paddingHorizontal: 14,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: Colors.gray100,
+                borderRadius: 10,
+              }}
+            >
+              <Text style={{ fontWeight: "600", color: Colors.gray700 }}>Later</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
 
       {showMenu && (
         <View
@@ -591,12 +1436,23 @@ export default function ChatView({ conversationId }: Props) {
             <Ionicons name={readReceiptsOn ? "checkmark-circle" : "checkmark-circle-outline"} size={20} color={Colors.textPrimary} />
             <Text style={{ marginLeft: 8 }}>Read receipts {readReceiptsOn ? "On" : "Off"}</Text>
           </Pressable>
+          {isDm && otherUser && (
+            <Pressable
+              onPress={() => { setShowMenu(false); setShowInviteModal(true); }}
+              style={{ padding: 12, flexDirection: "row", alignItems: "center" }}
+            >
+              <Ionicons name="calendar-outline" size={20} color={Colors.primaryViolet} />
+              <Text style={{ marginLeft: 8, color: Colors.primaryViolet }}>
+                {conversationMode === "romance" ? "Invite on date" : conversationMode === "friends" ? "Invite to meet-up" : conversationMode === "business" ? "Suggest meeting" : "Invite to meet"}
+              </Text>
+            </Pressable>
+          )}
           <Pressable onPress={handleMute} style={{ padding: 12, flexDirection: "row", alignItems: "center" }}>
             <Ionicons name={muted ? "notifications-off" : "notifications-outline"} size={20} color={Colors.textPrimary} />
             <Text style={{ marginLeft: 8 }}>{muted ? "Unmute chat" : "Mute chat"}</Text>
           </Pressable>
           <Pressable onPress={handleBlock} style={{ padding: 12, flexDirection: "row", alignItems: "center" }}>
-            <Ionicons name="ban-outline" size={20} color={Colors.errorRed} />
+            <Ionicons name="remove-circle-outline" size={20} color={Colors.errorRed} />
             <Text style={{ marginLeft: 8, color: Colors.errorRed }}>Block user</Text>
           </Pressable>
           <Pressable onPress={() => setShowMenu(false)} style={{ padding: 12 }}>
@@ -604,6 +1460,175 @@ export default function ChatView({ conversationId }: Props) {
           </Pressable>
         </View>
       )}
+
+      <InviteToPlanModal
+        visible={showInviteModal}
+        mode={conversationMode}
+        onClose={() => setShowInviteModal(false)}
+        partnerUserId={otherUser?.id}
+        partnerDisplayName={otherUser ? formatName(otherUser) : undefined}
+        onSubmit={async (values: InviteFormValues) => {
+          if (!meId || !otherUser) throw new Error("Missing user");
+          const title = values.place.trim() ? `${values.activity} at ${values.place.trim()}` : values.activity;
+          const startsAtIso = values.starts_at.toISOString();
+          const { planner_item_id, planner_invitation_id } = await createPlannerInvite(
+            meId,
+            otherUser.id,
+            convId,
+            {
+              title,
+              source_mode: conversationMode,
+              starts_at: startsAtIso,
+              ends_at: values.ends_at ? values.ends_at.toISOString() : undefined,
+              activity: values.activity,
+              location: values.location || undefined,
+              place: values.place || undefined,
+            }
+          );
+          const ctaPayload = JSON.stringify({
+            type: "planner_invite",
+            planner_item_id,
+            planner_invitation_id,
+            title,
+            activity: values.activity,
+            location: values.location || null,
+            place: values.place || null,
+            starts_at: startsAtIso,
+            ends_at: values.ends_at ? values.ends_at.toISOString() : null,
+            source_mode: conversationMode,
+          });
+          await sendMessage(convId, ctaPayload, [], { messageType: "cta" });
+          refetch();
+          setInvitationStatusMap((prev) => ({ ...prev, [planner_invitation_id]: "pending" }));
+        }}
+      />
+
+      <Modal visible={showStrategicHost} transparent animationType="fade">
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", padding: 18 }}
+          onPress={() => setShowStrategicHost(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: Colors.white,
+              borderRadius: 18,
+              padding: 16,
+              maxHeight: "80%",
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <SparklesIcon size={18} color={Colors.primaryViolet} />
+                <Text style={{ fontWeight: "900", fontSize: 14, color: Colors.textPrimary }}>
+                  Strategic Host topics
+                </Text>
+              </View>
+              <Pressable onPress={() => setShowStrategicHost(false)} hitSlop={10}>
+                <Ionicons name="close" size={22} color={Colors.gray500} />
+              </Pressable>
+            </View>
+
+            {strategicLoading ? (
+              <View style={{ paddingVertical: 18, alignItems: "center" }}>
+                <ActivityIndicator color={Colors.primaryViolet} />
+                <Text style={{ marginTop: 8, color: Colors.gray600 }}>Finding your sweet spot…</Text>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {strategicPlanOptions?.length ? (
+                  <>
+                    <Pressable
+                      onPress={() => { setStrategicSelectedTopic(null); setStrategicPlanOptions(null); }}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 }}
+                    >
+                      <Ionicons name="arrow-back" size={18} color={Colors.primaryViolet} />
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: Colors.primaryViolet }}>Back to topics</Text>
+                    </Pressable>
+                    {strategicSelectedTopic ? (
+                      <View style={{ marginBottom: 10 }}>
+                        <Text style={{ fontSize: 12, color: Colors.gray500, fontWeight: "700" }}>Topic</Text>
+                        <Text style={{ fontSize: 14, fontWeight: "900", color: Colors.textPrimary }}>{strategicSelectedTopic.title}</Text>
+                      </View>
+                    ) : null}
+                    {strategicPlanOptions.slice(0, 2).map((p, idx) => (
+                      <Pressable
+                        key={`${p.topic}-${idx}`}
+                        onPress={() => draftPendingPlanFromStructuredOption(p)}
+                        style={{
+                          padding: 12,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: Colors.gray200,
+                          backgroundColor: Colors.backgroundLight,
+                          marginBottom: 10,
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: "800", color: Colors.primaryViolet, marginBottom: 6 }}>
+                          Plan option {idx + 1}
+                        </Text>
+                        <Text style={{ fontSize: 14, fontWeight: "900", color: Colors.textPrimary, marginBottom: 4 }}>
+                          {p.topic}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: Colors.gray600, lineHeight: 17, marginBottom: 8 }}>
+                          {[p.location.name, p.location.address].filter(Boolean).join(" • ")}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: Colors.gray600, lineHeight: 17 }}>
+                          {p.details}
+                        </Text>
+                        <Text style={{ marginTop: 10, fontSize: 12, fontWeight: "800", color: Colors.primaryViolet }}>
+                          Draft pending plan →
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    {(strategicTopics ?? []).map((t, idx) => (
+                      <Pressable
+                        key={`${t.title}-${idx}`}
+                        onPress={() => loadStructuredPlansForTopic(t)}
+                        style={{
+                          padding: 12,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: Colors.gray200,
+                          backgroundColor: Colors.backgroundLight,
+                          marginBottom: 10,
+                        }}
+                      >
+                        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 14, fontWeight: "800", color: Colors.textPrimary, marginBottom: 4 }}>
+                              {t.title}
+                            </Text>
+                            <Text style={{ fontSize: 12, color: Colors.gray600, lineHeight: 17 }}>
+                              {t.pitch}
+                            </Text>
+                          </View>
+                          <View style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: Colors.primaryViolet + "12" }}>
+                            <Text style={{ fontSize: 11, fontWeight: "800", color: Colors.primaryViolet }}>
+                              {t.type}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={{ marginTop: 10, fontSize: 12, fontWeight: "700", color: Colors.primaryViolet }}>
+                          See 2 plan options →
+                        </Text>
+                      </Pressable>
+                    ))}
+                    {(strategicTopics ?? []).length === 0 ? (
+                      <Text style={{ color: Colors.gray600, textAlign: "center", paddingVertical: 14 }}>
+                        No topics found. Try again in a moment.
+                      </Text>
+                    ) : null}
+                  </>
+                )}
+              </ScrollView>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -644,6 +1669,20 @@ export default function ChatView({ conversationId }: Props) {
             onEndReachedThreshold={0.5}
           />
 
+          {showChatExperienceCard && (loadingExperienceSuggestion ? (
+            <View style={{ paddingHorizontal: 14, paddingVertical: 12, alignItems: "center" }}>
+              <ActivityIndicator size="small" color={accentColor} />
+              <Text style={{ fontSize: 13, color: Colors.gray500, marginTop: 6 }}>Winkly is preparing a suggestion…</Text>
+            </View>
+          ) : chatExperienceSuggestion ? (
+            <ChatExperienceSuggestionCard
+              suggestion={chatExperienceSuggestion}
+              mode={conversationMode as "romance" | "friends" | "business"}
+              onPlanDate={openConciergeFromChat}
+              onSuggestAnother={fetchChatExperienceSuggestion}
+            />
+          ) : null)}
+
           {/* Composer */}
           <View style={{ flexDirection: "row", gap: 8, marginTop: 10, alignItems: "flex-end" }}>
             <Pressable
@@ -660,6 +1699,103 @@ export default function ChatView({ conversationId }: Props) {
             >
               <Ionicons name="image-outline" size={24} color={Colors.textPrimary} />
             </Pressable>
+
+            {isDm && otherUser && (
+              <Pressable
+                onPress={() => setShowInviteModal(true)}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: Colors.primaryViolet + "18",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                accessibilityLabel="Invite to activity"
+              >
+                <Ionicons name="calendar-outline" size={22} color={Colors.primaryViolet} />
+              </Pressable>
+            )}
+
+            {showMatchAgentButton && (
+              <Pressable
+                onPress={onRunMatchAgent}
+                disabled={matchAgentLoading}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: Colors.primaryViolet + "20",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: matchAgentLoading ? 0.55 : 1,
+                }}
+                accessibilityLabel="Match Agent: suggest a place and time"
+              >
+                {matchAgentLoading ? (
+                  <ActivityIndicator size="small" color={Colors.primaryViolet} />
+                ) : (
+                  <SparklesIcon size={22} color={Colors.primaryViolet} />
+                )}
+              </Pressable>
+            )}
+
+            {showChatExperienceCard && (
+              <Pressable
+                onPress={openStrategicHost}
+                disabled={strategicLoading}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: Colors.primaryViolet + "12",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: strategicLoading ? 0.6 : 1,
+                }}
+                accessibilityLabel="Strategic Host: topic suggestions"
+              >
+                <Ionicons name="sparkles-outline" size={22} color={Colors.primaryViolet} />
+              </Pressable>
+            )}
+
+            {isDm && otherUser && (
+              <Pressable
+                onPress={onSendIcebreaker}
+                disabled={sending}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: Colors.gray100,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: sending ? 0.5 : 1,
+                }}
+                accessibilityLabel="Send icebreaker"
+              >
+                <Ionicons name="game-controller-outline" size={22} color={Colors.primaryViolet} />
+              </Pressable>
+            )}
+
+            {isDm && otherUser && (
+              <Pressable
+                onPress={onVideoCall}
+                disabled={videoCallLoading}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: Colors.gray100,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: videoCallLoading ? 0.5 : 1,
+                }}
+                accessibilityLabel="Video call"
+              >
+                <Ionicons name="videocam-outline" size={22} color={Colors.primaryViolet} />
+              </Pressable>
+            )}
 
             <Pressable
               onPress={() => inputRef.current?.focus()}

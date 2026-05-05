@@ -8,6 +8,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { supabase } from "@/lib/supabase";
+import { useNormalizedLocation } from "@/lib/location/useLocationDisplay";
 
 type MinimalProfile = {
   displayName: string;
@@ -55,6 +56,8 @@ export default function ViewProfile() {
     };
   }, []);
 
+  const cityDisplay = useNormalizedLocation(profile?.city ?? "");
+
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -76,7 +79,7 @@ export default function ViewProfile() {
         ) : (
           <View style={styles.card}>
             <Text style={styles.name}>{profile?.displayName ?? "—"}</Text>
-            <Text style={styles.meta}>{profile?.city ?? "—"}</Text>
+            <Text style={styles.meta}>{cityDisplay || "—"}</Text>
 
             <View style={styles.badgeRow}>
               <View style={[styles.badge, profile?.verified ? styles.badgeGood : styles.badgeNeutral]}>
@@ -126,7 +129,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  headerTitle: { ...Typography.h3, color: Colors.textPrimary },
+  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
   ghostBtn: {
     width: 70,
     paddingVertical: 8,

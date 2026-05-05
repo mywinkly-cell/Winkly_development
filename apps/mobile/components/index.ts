@@ -6,4 +6,5 @@ export { Avatar } from "./ui/Avatar";
 export { Header } from "./layout/Header";
 export { ModeSwitch } from "./layout/ModeSwitch";
 export { ProgressRing } from "./ui/ProgressRing";
+export { WinklyAISpark, SparklesIcon } from "./ui/WinklyAISpark";
 export { RouteGuard } from "./RouteGuard";

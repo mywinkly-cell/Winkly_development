@@ -8,11 +8,12 @@
 // ────────────────────────────────────────────────
 
 import React, { useEffect, useRef } from "react";
-import { Text, Image, TouchableOpacity, ScrollView, Animated } from "react-native";
+import { Text, Image, TouchableOpacity, ScrollView, Animated, type ViewStyle } from "react-native";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { getTermsAndCookiesAccepted } from "@/lib/legalFlags";
 
 export default function GetStarted() {
   const router = useRouter();
@@ -21,6 +22,12 @@ export default function GetStarted() {
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 320, useNativeDriver: true }).start();
   }, [fadeAnim]);
+
+  useEffect(() => {
+    getTermsAndCookiesAccepted().then((accepted) => {
+      if (!accepted) router.replace("/(auth)/terms-cookies");
+    });
+  }, [router]);
 
   return (
     <SafeScreenView style={{ flex: 1, backgroundColor: Colors.backgroundMuted }}>
@@ -104,7 +111,7 @@ export default function GetStarted() {
 // ────────────────────────────────────────────────
 // Styles
 // ────────────────────────────────────────────────
-const cardButton = {
+const cardButton: ViewStyle = {
   width: "100%",
   maxWidth: 360,
   borderWidth: 2,

@@ -34,7 +34,7 @@ export default function WelcomeIntro() {
   const handleContinue = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await setIntroSeen();
-    router.replace("/(onboarding-personal)/get-started");
+    router.replace("/(auth)/terms-cookies");
   };
 
   return (

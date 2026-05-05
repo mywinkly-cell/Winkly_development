@@ -21,9 +21,12 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { FriendsBottomNav } from "@/components/layout/FriendsBottomNav";
+import { MatchCardOverlay } from "@/components/matching/MatchCardOverlay";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { supabase } from "@/lib/supabase";
-import { computeFriendsCompatibility, buildFriendsMatchTags, type FriendsProfile } from "@/lib/ai/friendsInsights";
+import { buildFriendsMatchTags, computeFriendsCompatibility, type FriendsProfile } from "@/lib/ai/friendsInsights";
+import { hasAnyAIAccess } from "@/lib/ai/aiFeatureGate";
+import { useModeContext } from "@/providers/ModeContextProvider";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const CARD_WIDTH = SCREEN_WIDTH * 0.9;
@@ -35,11 +38,13 @@ const CARD_RADIUS = 24;
 const STACK_OFFSET = 8;
 const STACK_SCALE = 0.96;
 const PAGE_SIZE = 20;
+const SUPER_LIKE_PER_DAY = 10;
 
 type Profile = {
   id: string;
   user_id?: string | null;
   display_name: string;
+  age?: number | null;
   city: string;
   occupation?: string | null;
   chipItems: string[];
@@ -47,48 +52,23 @@ type Profile = {
   about?: string;
 };
 
-type NextPlan = {
-  title: string;
-  time: string;
-  location: string;
-} | null;
-
 const MOCK_PROFILES: Profile[] = [
-  {
-    id: "1",
-    display_name: "Alex",
-    city: "Berlin",
-    occupation: "Designer",
-    chipItems: ["Coffee", "Hiking", "Art"],
-    photoUrl: "https://i.pravatar.cc/400?u=alex",
-  },
-  {
-    id: "2",
-    display_name: "Jordan",
-    city: "Berlin",
-    occupation: "Developer",
-    chipItems: ["Music", "Travel", "Small groups"],
-    photoUrl: "https://i.pravatar.cc/400?u=jordan",
-  },
-  {
-    id: "3",
-    display_name: "Sam",
-    city: "Berlin",
-    occupation: "Photographer",
-    chipItems: ["Museums", "Coffee", "Cultural events"],
-    photoUrl: "https://i.pravatar.cc/400?u=sam",
-  },
+  { id: "1", display_name: "Alex", age: 28, city: "Berlin", occupation: "Designer", chipItems: ["Coffee", "Hiking", "Art"], photoUrl: "https://i.pravatar.cc/400?u=alex" },
+  { id: "2", display_name: "Jordan", age: 26, city: "Berlin", occupation: "Developer", chipItems: ["Music", "Travel", "Small groups"], photoUrl: "https://i.pravatar.cc/400?u=jordan" },
+  { id: "3", display_name: "Sam", age: 30, city: "Berlin", occupation: "Photographer", chipItems: ["Museums", "Coffee", "Cultural events"], photoUrl: "https://i.pravatar.cc/400?u=sam" },
 ];
 
 export default function FriendsHome() {
   const router = useRouter();
+  const { context } = useModeContext();
+  const showAiHints = hasAnyAIAccess(context.subscription_tier ?? "free");
 
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
-  const [nextPlan, setNextPlan] = useState<NextPlan>(null);
   const [selfProfile, setSelfProfile] = useState<FriendsProfile | null>(null);
+  const [superLikeRemainingToday, setSuperLikeRemainingToday] = useState(SUPER_LIKE_PER_DAY);
 
   const cardAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
 
@@ -120,7 +100,7 @@ export default function FriendsHome() {
       let feedData: any[] | null = null;
       const { data: fpData } = await supabase
         .from("friend_profiles")
-        .select("id,user_id,display_name,city,vibe_tags,about_short,interests,main_photo_url,avatar_url")
+        .select("id,user_id,display_name,city,occupation,age,vibe_tags,about_short,interests,main_photo_url,avatar_url")
         .order("created_at", { ascending: false })
         .limit(PAGE_SIZE + 5);
 
@@ -138,7 +118,9 @@ export default function FriendsHome() {
             id: row.user_id ?? row.id,
             user_id: row.user_id ?? row.id,
             display_name: row.display_name ?? "Friend",
+            age: row.age ?? null,
             city: row.city ?? "City",
+            occupation: row.occupation ?? null,
             chipItems,
             photoUrl: row.main_photo_url ?? row.avatar_url ?? "https://i.pravatar.cc/400?u=default",
             about: row.about_short ?? null,
@@ -148,45 +130,34 @@ export default function FriendsHome() {
       } else {
         const fb = await supabase
           .from("user_profiles")
-          .select("id,first_name,last_name,city,about,main_photo_url,avatar_url")
+          .select("id,first_name,last_name,city,about,main_photo_url,avatar_url,occupation,birthday")
           .neq("id", userData.user.id)
           .order("created_at", { ascending: false })
           .limit(PAGE_SIZE);
 
         if (fb.data?.length) {
-          const mapped: Profile[] = (fb.data as any[]).map((row) => ({
-            id: row.id,
-            user_id: row.id,
-            display_name: [row.first_name, row.last_name].filter(Boolean).join(" ").trim() || "Friend",
-            city: row.city ?? "City",
-            chipItems: [],
-            photoUrl: row.main_photo_url ?? row.avatar_url ?? "https://i.pravatar.cc/400?u=default",
-            about: row.about ?? null,
-          }));
+          const mapped: Profile[] = (fb.data as any[]).map((row) => {
+            const birthday = row.birthday;
+            const age = birthday ? new Date().getFullYear() - new Date(birthday).getFullYear() : null;
+            return {
+              id: row.id,
+              user_id: row.id,
+              display_name: [row.first_name, row.last_name].filter(Boolean).join(" ").trim() || "Friend",
+              age: age ?? null,
+              city: row.city ?? "City",
+              occupation: row.occupation ?? null,
+              chipItems: [],
+              photoUrl: row.main_photo_url ?? row.avatar_url ?? "https://i.pravatar.cc/400?u=default",
+              about: row.about ?? null,
+            };
+          });
           setProfiles(mapped);
         } else {
           setProfiles(MOCK_PROFILES);
         }
       }
 
-      const { data: plannerData } = await supabase
-        .from("planner_items")
-        .select("title, starts_at, meta")
-        .eq("source_mode", "friends")
-        .gte("starts_at", new Date().toISOString())
-        .order("starts_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      if (plannerData) {
-        const d = new Date(plannerData.starts_at);
-        setNextPlan({
-          title: plannerData.title,
-          time: d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          location: (plannerData.meta as any)?.location ?? "TBD",
-        });
-      }
-    } catch (e) {
+    } catch (_e) {
       setProfiles(MOCK_PROFILES);
     } finally {
       setLoading(false);
@@ -317,8 +288,8 @@ export default function FriendsHome() {
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, { dx, dy }) => Math.abs(dx) > 10 || Math.abs(dy) > 10,
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => false,
       onPanResponderRelease: (_, gestureState) => {
         const { dx, dy } = gestureState;
         const isTap = Math.abs(dx) < 20 && Math.abs(dy) < 20;
@@ -374,11 +345,25 @@ export default function FriendsHome() {
       ? currentProfile.chipItems
       : buildFriendsMatchTags({ self: selfProfile, other: otherForInsights }).slice(0, 3);
 
+  const friendsAiHint = React.useMemo(() => {
+    if (!showAiHints || !selfProfile || !currentProfile) return null;
+    const other: FriendsProfile = {
+      id: currentProfile.id,
+      display_name: currentProfile.display_name,
+      city: currentProfile.city,
+      interests: currentProfile.chipItems,
+      vibe_tags: currentProfile.chipItems,
+    };
+    const score = computeFriendsCompatibility({ self: selfProfile, other });
+    const tags = buildFriendsMatchTags({ self: selfProfile, other });
+    return { score, tags };
+  }, [showAiHints, selfProfile, currentProfile]);
+
   return (
     <View style={styles.container}>
       <ModeHeader
         currentMode="friends"
-        rightSlot="filters"
+        leftSlot="filters"
         onFilterPress={() => router.push("/(modes)/friends/filters")}
       />
 
@@ -388,7 +373,7 @@ export default function FriendsHome() {
         </View>
       ) : !currentProfile ? (
         <View style={styles.center}>
-          <Text style={styles.emptyTitle}>You've seen everyone nearby 👋</Text>
+          <Text style={styles.emptyTitle}>You&apos;ve seen everyone nearby 👋</Text>
           <Pressable
             onPress={() => router.push("/(modes)/friends/filters")}
             style={styles.adjustFiltersBtn}
@@ -458,22 +443,16 @@ export default function FriendsHome() {
                     <Ionicons name="ellipsis-vertical" size={22} color={Colors.friends.primary} />
                   </Pressable>
 
-                  <View style={styles.infoOverlay}>
-                    <Text style={styles.nameAge}>{currentProfile.display_name}</Text>
-                    <Text style={styles.cityOverlay}>{currentProfile.city}</Text>
-                    {currentProfile.occupation ? (
-                      <Text style={styles.occupationOverlay}>{currentProfile.occupation}</Text>
-                    ) : null}
-                    {chipItems.length > 0 ? (
-                      <View style={styles.chipRow}>
-                        {chipItems.slice(0, 3).map((i) => (
-                          <View key={i} style={styles.chipOverlay}>
-                            <Text style={styles.chipTextOverlay}>{i}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    ) : null}
-                  </View>
+                  <MatchCardOverlay
+                    name={currentProfile.display_name}
+                    age={currentProfile.age}
+                    city={currentProfile.city}
+                    occupation={currentProfile.occupation ?? null}
+                    chipItems={chipItems}
+                    mode="friends"
+                    aiHint={friendsAiHint}
+                    cardRadius={CARD_RADIUS}
+                  />
                 </Animated.View>
               </View>
             </View>
@@ -494,13 +473,18 @@ export default function FriendsHome() {
 
               <View style={styles.actionButtonColumn}>
                 <Pressable
-                  onPress={() =>
-                    currentProfile && (applySuperConnect(currentProfile.id), animateCardOut("right", "superConnect"))
-                  }
-                  disabled={transitioning}
+                  onPress={() => {
+                    if (currentProfile) {
+                      if (superLikeRemainingToday <= 0) return;
+                      applySuperConnect(currentProfile.id);
+                      animateCardOut("right", "superConnect");
+                    }
+                  }}
+                  disabled={transitioning || superLikeRemainingToday <= 0}
                   style={({ pressed }) => [
                     styles.actionIconWrap,
                     styles.actionIconGlowIntent,
+                    (superLikeRemainingToday <= 0 || transitioning) && styles.actionBtnDisabled,
                     pressed && styles.actionBtnPressed,
                   ]}
                   accessibilityLabel="Super Connect"
@@ -518,33 +502,18 @@ export default function FriendsHome() {
                   style={({ pressed }) => [styles.actionIconWrap, styles.actionIconGlowLike, pressed && styles.actionBtnPressed]}
                   accessibilityLabel="Add friend"
                 >
-                  <Ionicons name="person-add" size={ACTION_ICON_SIZE} color={Colors.friends.primary} />
+                  <Ionicons name="heart" size={ACTION_ICON_SIZE} color={Colors.friends.primary} />
                 </Pressable>
               </View>
             </View>
+            <View style={styles.actionBarSubtitle}>
+              <Text style={styles.subtitleLine1}>
+                {superLikeRemainingToday <= 0
+                  ? "You have no Super likes left today."
+                  : `You have ${superLikeRemainingToday} Super like${superLikeRemainingToday === 1 ? "" : "s"} left today.`}
+              </Text>
+            </View>
           </View>
-
-          {nextPlan && (
-            <Pressable
-              onPress={() => router.push("/planner")}
-              style={styles.plannerBanner}
-              accessibilityLabel="Open planner"
-            >
-              <View style={styles.plannerBannerContent}>
-                <Text style={styles.plannerLabel}>Next</Text>
-                <Text style={styles.plannerTitle} numberOfLines={1}>
-                  {nextPlan.title}
-                </Text>
-                <Text style={styles.plannerMeta}>
-                  {nextPlan.time} · {nextPlan.location}
-                </Text>
-              </View>
-              <View style={styles.openPlannerBtn}>
-                <Text style={styles.openPlannerText}>Open</Text>
-                <Ionicons name="chevron-forward" size={18} color={Colors.textPrimary} />
-              </View>
-            </Pressable>
-          )}
         </>
       )}
 
@@ -589,8 +558,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: Layout.spacing.lg,
-    paddingBottom: 8,
+    paddingTop: Layout.spacing.sm,
+    paddingBottom: 2,
     minHeight: 0,
   },
   cardStackWrap: {
@@ -641,69 +610,18 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  infoOverlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 18,
-    paddingTop: 32,
-    paddingBottom: 18,
-    borderBottomLeftRadius: CARD_RADIUS,
-    borderBottomRightRadius: CARD_RADIUS,
-    backgroundColor: "rgba(0,0,0,0.45)",
-  },
-  nameAge: {
-    ...Typography.h2,
-    fontSize: 24,
-    fontFamily: FontFamily.heading,
-    color: Colors.white,
-    marginBottom: 4,
-    textShadowColor: "rgba(0,0,0,0.3)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  cityOverlay: {
-    ...Typography.body,
-    fontSize: 15,
-    color: "rgba(255,255,255,0.92)",
-    marginBottom: 2,
-  },
-  occupationOverlay: {
-    ...Typography.caption,
-    color: "rgba(255,255,255,0.85)",
-    marginBottom: 10,
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    alignItems: "center",
-  },
-  chipOverlay: {
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.22)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
-  },
-  chipTextOverlay: {
-    ...Typography.caption,
-    fontSize: 12,
-    color: Colors.white,
-  },
   actionBarContainer: {
     alignItems: "center",
     width: "100%",
+    paddingBottom: 28,
   },
   actionRow: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     gap: 8,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingTop: 2,
+    paddingBottom: 4,
   },
   actionButtonColumn: {
     alignItems: "center",
@@ -737,62 +655,26 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
+  actionBtnDisabled: {
+    opacity: 0.5,
+  },
   actionBtnPressed: {
     transform: [{ scale: 0.92 }],
   },
-  plannerBanner: {
-    flexDirection: "row",
+  actionBarSubtitle: {
+    width: "100%",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginHorizontal: 20,
-    marginBottom: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: 20,
-    backgroundColor: Colors.friends.primary,
-    minHeight: 72,
-    overflow: "hidden",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    paddingTop: 2,
+    paddingBottom: 8,
   },
-  plannerBannerContent: {
-    flex: 1,
-    marginRight: 12,
-  },
-  plannerLabel: {
+  subtitleLine1: {
     ...Typography.caption,
     fontSize: 11,
-    fontWeight: "600",
-    color: "rgba(255,255,255,0.8)",
-    letterSpacing: 0.5,
-    marginBottom: 2,
-    textTransform: "uppercase",
-  },
-  plannerTitle: {
-    ...Typography.body,
-    fontWeight: "600",
-    fontSize: 16,
-    color: Colors.white,
-    marginBottom: 2,
-  },
-  plannerMeta: {
-    ...Typography.caption,
-    color: "rgba(255,255,255,0.85)",
-    fontSize: 13,
-  },
-  openPlannerBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: Colors.white,
-    minHeight: 44,
-    justifyContent: "center",
-  },
-  openPlannerText: {
-    ...Typography.button,
-    fontSize: 15,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
+    color: Colors.gray600,
+    marginTop: 0,
+    textAlign: "center",
+    width: "100%",
   },
 });

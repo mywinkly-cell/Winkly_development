@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  headerTitle: { ...Typography.h3, fontFamily: FontFamily.heading, color: Colors.textPrimary },
+  headerTitle: { ...Typography.headerTitle, fontFamily: FontFamily.heading, color: Colors.textPrimary },
   placeholder: { width: 40 },
   scroll: { padding: Layout.screenPadding, paddingBottom: 40 },
   card: {

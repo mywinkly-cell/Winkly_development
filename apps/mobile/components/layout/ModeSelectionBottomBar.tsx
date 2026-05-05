@@ -8,7 +8,7 @@ import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 

@@ -10,7 +10,6 @@
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "@/lib/supabase";
 import { Alert } from "react-native";
-// @ts-expect-error - base64-arraybuffer may not have types
 import { decode } from "base64-arraybuffer";
 
 /**
@@ -111,7 +110,7 @@ export async function pickAndUploadVideo(userId: string, mode: string) {
 }
 
 /** Chat: pick and upload one or multiple images. Returns attachment array. */
-export async function pickAndUploadChatImages(userId: string): Promise<Array<{ type: "image"; url: string }>> {
+export async function pickAndUploadChatImages(userId: string): Promise<{ type: "image"; url: string }[]> {
   try {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
@@ -128,7 +127,7 @@ export async function pickAndUploadChatImages(userId: string): Promise<Array<{ t
 
     if (result.canceled || !result.assets?.length) return [];
 
-    const attachments: Array<{ type: "image"; url: string }> = [];
+    const attachments: { type: "image"; url: string }[] = [];
 
     for (const asset of result.assets) {
       if (!asset.base64) continue;

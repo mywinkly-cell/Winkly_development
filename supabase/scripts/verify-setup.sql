@@ -4,30 +4,30 @@
 -- Aligned with current schema (docs/PRODUCT_DOCUMENTATION.md §4)
 -- ────────────────────────────────────────────────
 
--- 1) CORE TABLES (current schema)
+-- 1) CORE TABLES (current schema; includes user_profiles/sub_profiles used by app)
 SELECT 'TABLES' AS check_type, table_name AS name,
   CASE WHEN table_name IN (
-    'users', 'profiles_core', 'profiles_mode', 'profiles_business',
-    'follows', 'events', 'event_participants', 'event_invitations',
-    'planner_items', 'planner_participants',
+    'users', 'user_profiles', 'profiles_core', 'profiles_mode', 'profiles_business', 'sub_profiles',
+    'follows', 'events', 'event_participants', 'event_invitations', 'event_chat_settings',
+    'planner_items', 'planner_participants', 'planner_invitations',
     'conversations', 'conversation_members', 'conversation_member_settings',
     'messages', 'message_reactions', 'message_read_receipts',
     'groups', 'group_members',
     'wishlist_items', 'user_preferences', 'calendar_connections',
-    'ai_requests', 'user_blocks', 'event_chat_settings'
+    'ai_requests', 'user_blocks', 'romance_likes'
   ) THEN 'required' ELSE 'optional' END AS status
 FROM information_schema.tables
 WHERE table_schema = 'public'
   AND table_type = 'BASE TABLE'
   AND table_name IN (
-    'users', 'profiles_core', 'profiles_mode', 'profiles_business',
-    'follows', 'events', 'event_participants', 'event_invitations',
-    'planner_items', 'planner_participants',
+    'users', 'user_profiles', 'profiles_core', 'profiles_mode', 'profiles_business', 'sub_profiles',
+    'follows', 'events', 'event_participants', 'event_invitations', 'event_chat_settings',
+    'planner_items', 'planner_participants', 'planner_invitations',
     'conversations', 'conversation_members', 'conversation_member_settings',
     'messages', 'message_reactions', 'message_read_receipts',
     'groups', 'group_members',
     'wishlist_items', 'user_preferences', 'calendar_connections',
-    'ai_requests', 'user_blocks', 'event_chat_settings'
+    'ai_requests', 'user_blocks', 'romance_likes'
   )
 ORDER BY status DESC, table_name;
 
@@ -45,10 +45,10 @@ JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'public'
   AND c.relkind = 'r'
   AND relname IN (
-    'users', 'profiles_core', 'profiles_mode', 'profiles_business',
+    'users', 'user_profiles', 'profiles_core', 'profiles_mode', 'profiles_business', 'sub_profiles',
     'follows', 'events', 'event_participants', 'planner_items',
     'conversations', 'conversation_members', 'messages',
-    'groups', 'group_members'
+    'groups', 'group_members', 'romance_likes'
   )
 ORDER BY relrowsecurity, relname;
 
@@ -58,9 +58,9 @@ SELECT 'POLICIES' AS check_type, tablename AS table_name,
 FROM pg_policies
 WHERE schemaname = 'public'
   AND tablename IN (
-    'users', 'profiles_core', 'profiles_mode', 'profiles_business',
+    'users', 'user_profiles', 'profiles_core', 'profiles_mode', 'profiles_business', 'sub_profiles',
     'follows', 'events', 'conversations', 'conversation_members',
-    'messages', 'planner_items', 'groups'
+    'messages', 'planner_items', 'groups', 'romance_likes'
   )
 GROUP BY tablename
 ORDER BY tablename;

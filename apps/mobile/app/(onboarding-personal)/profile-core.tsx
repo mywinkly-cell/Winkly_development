@@ -19,6 +19,9 @@ import {
   Image,
   Switch,
   Animated,
+  Modal,
+  Pressable,
+  Linking,
 } from "react-native";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import * as ImagePicker from "expo-image-picker";
@@ -29,10 +32,19 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import cities from "@/assets/cities.json";
+import { searchCities, type CityCountry } from "@/lib/location/citySearch";
+import {
+  normalizeLocationDisplayString,
+  formatDefaultLocationDisplay,
+} from "@/lib/location/countryDisplay";
+import { reverseGeocodeToDisplay } from "@/lib/location";
+import { upsertOwnProfileCore } from "@/lib/access/profiles";
+import { LANGUAGE_OPTIONS as PROFILE_LANGUAGE_OPTIONS } from "@/constants/profileOptions";
 import { RomanceSubProfile } from "@/components/onboarding/RomanceSubProfile";
 import { FriendsSubProfile } from "@/components/onboarding/FriendsSubProfile";
 import { BusinessSubProfile } from "@/components/onboarding/BusinessSubProfile";
@@ -46,18 +58,13 @@ const EDUCATION_OPTIONS = [
   "Other",
 ];
 
-const LANGUAGE_OPTIONS = [
-  "English",
-  "German",
-  "Ukrainian",
-  "Spanish",
-  "French",
-  "Italian",
-  "Polish",
-  "Russian",
-  "Turkish",
-  "Other",
-];
+const PROFILE_LANGS = PROFILE_LANGUAGE_OPTIONS.filter((l) => l !== "Any");
+
+function sortedProfileLanguages(selected: string[]): string[] {
+  const set = new Set(selected);
+  const rest = PROFILE_LANGS.filter((l) => !set.has(l)).sort((a, b) => a.localeCompare(b));
+  return [...selected.filter((l) => PROFILE_LANGS.includes(l)), ...rest];
+}
 
 function toISODateOnly(d: Date) {
   // yyyy-mm-dd
@@ -79,6 +86,8 @@ function isAuthSessionMissing(err: any) {
 }
 
 export default function ProfileCore() {
+  const { i18n } = useTranslation();
+  const appLanguage = i18n?.language ?? "en";
   const router = useRouter();
   const { edit } = useLocalSearchParams<{ edit?: string }>();
   const isEditFlow = edit === "1";
@@ -97,9 +106,36 @@ export default function ProfileCore() {
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [city, setCity] = useState("");
-  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [suggestions, setSuggestions] = useState<CityCountry[]>([]);
   const [cityConfirmed, setCityConfirmed] = useState(false);
   const [locationPromptShown, setLocationPromptShown] = useState(false);
+  type LocationPermissionStatus = "undetermined" | "granted" | "denied";
+  const [locationPermissionStatus, setLocationPermissionStatus] = useState<LocationPermissionStatus>("undetermined");
+  const [locationLoading, setLocationLoading] = useState(false);
+  const citySearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [languageModalVisible, setLanguageModalVisible] = useState(false);
+
+  useEffect(() => () => {
+    if (citySearchTimer.current) clearTimeout(citySearchTimer.current);
+  }, []);
+
+  // Check location permission on mount and when screen is focused (e.g. returning from Settings)
+  const refreshLocationPermission = useCallback(async () => {
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      setLocationPermissionStatus(status === "granted" ? "granted" : status === "denied" ? "denied" : "undetermined");
+    } catch {
+      setLocationPermissionStatus("undetermined");
+    }
+  }, []);
+  useEffect(() => {
+    refreshLocationPermission();
+  }, [refreshLocationPermission]);
+  useFocusEffect(
+    useCallback(() => {
+      refreshLocationPermission();
+    }, [refreshLocationPermission])
+  );
 
   const [education, setEducation] = useState("");
   const [languages, setLanguages] = useState<string[]>([]);
@@ -184,7 +220,7 @@ export default function ProfileCore() {
 
           const { data: up } = await supabase
             .from("user_profiles")
-            .select("first_name, last_name, gender, birthday, city, education, occupation, languages, instagram, core_photos, main_photo_url")
+            .select("first_name, last_name, gender, birthday, city, education, occupation, languages, instagram, core_photos, main_photo_url, night_owl")
             .eq("id", userId)
             .maybeSingle();
 
@@ -192,6 +228,7 @@ export default function ProfileCore() {
             first_name?: string; last_name?: string; gender?: string; birthday?: string;
             city?: string; education?: string; occupation?: string; languages?: string[] | null;
             instagram?: string; core_photos?: string[]; main_photo_url?: string;
+            night_owl?: boolean | null;
           } | null;
 
           if (upRow?.first_name || upRow?.last_name) {
@@ -201,7 +238,7 @@ export default function ProfileCore() {
             setGender(upRow.gender ?? "");
             setBirthday(upRow.birthday ? new Date(upRow.birthday) : null);
             const dbCity = upRow.city ?? "";
-            setCity(dbCity);
+            setCity(dbCity ? normalizeLocationDisplayString(String(dbCity), appLanguage) : "");
             if (dbCity) setCityConfirmed(true);
             setEducation(upRow.education ?? "");
             setLanguages(Array.isArray(upRow.languages) ? upRow.languages : []);
@@ -295,7 +332,7 @@ export default function ProfileCore() {
             setGender(data.gender ?? "");
             setBirthday(data.birthday ? new Date(data.birthday) : null);
             const draftCity = data.city ?? "";
-            setCity(draftCity);
+            setCity(draftCity ? normalizeLocationDisplayString(String(draftCity), appLanguage) : "");
             if (draftCity) setCityConfirmed(true);
             setEducation(data.education ?? "");
             setLanguages(data.languages ?? []);
@@ -355,7 +392,7 @@ export default function ProfileCore() {
         console.warn("Profile draft/location init warning:", e);
       }
     })();
-  }, []);
+  }, [appLanguage]);
 
   // ─────────────── AUTO-SAVE DRAFT ───────────────
   const autoSave = useCallback(async () => {
@@ -486,6 +523,7 @@ export default function ProfileCore() {
   const saveToSupabase = useCallback(async () => {
     const { data } = await supabase.auth.getUser();
     if (!data?.user?.id || !firstName || !lastName) return;
+    const cityNorm = city.trim() ? normalizeLocationDisplayString(city.trim(), appLanguage) : null;
     try {
       await supabase.from("user_profiles").upsert({
         id: data.user.id,
@@ -493,7 +531,7 @@ export default function ProfileCore() {
         last_name: lastName,
         gender: gender || null,
         birthday: birthday ? toISODateOnly(birthday) : null,
-        city: city || null,
+        city: cityNorm,
         education: education || null,
         occupation: occupation || null,
         languages: languages.length ? languages : null,
@@ -501,10 +539,15 @@ export default function ProfileCore() {
         core_photos: corePhotos.filter(Boolean) as string[],
         main_photo_url: corePhotos[0] || null,
       }, { onConflict: "id" });
+      await upsertOwnProfileCore(data.user.id, {
+        first_name: firstName.trim() || null,
+        last_name: lastName.trim() || null,
+        city: cityNorm,
+      });
     } catch (e) {
       console.warn("Auto-save to Supabase:", e);
     }
-  }, [firstName, lastName, gender, birthday, city, education, occupation, languages, instagram, corePhotos]);
+  }, [firstName, lastName, gender, birthday, city, education, occupation, languages, instagram, corePhotos, appLanguage]);
 
   useEffect(() => {
     if (!firstName && !lastName) return;
@@ -512,8 +555,8 @@ export default function ProfileCore() {
     return () => clearTimeout(t);
   }, [saveToSupabase, firstName, lastName]);
 
-  // ─────────────── CITY AUTOCOMPLETE ───────────────
-  const onCityChange = (text: string) => {
+  // ─────────────── CITY AUTOCOMPLETE (Nominatim + static fallback) ───────────────
+  const onCityChange = useCallback((text: string) => {
     setCity(text);
     setCityConfirmed(false);
 
@@ -523,96 +566,138 @@ export default function ProfileCore() {
       return;
     }
 
-    const matches = (cities as any[])
-      .filter((c: any) => String(c.city).toLowerCase().startsWith(q.toLowerCase()))
-      .slice(0, 10);
+    if (citySearchTimer.current) clearTimeout(citySearchTimer.current);
+    citySearchTimer.current = setTimeout(async () => {
+      const fromApi = await searchCities(q, appLanguage);
+      if (fromApi.length > 0) {
+        setSuggestions(fromApi);
+        return;
+      }
+      const fromJson = (cities as any[])
+        .filter((c: any) => String(c.city).toLowerCase().startsWith(q.toLowerCase()))
+        .slice(0, 10)
+        .map((c: any) => ({ city: c.city, country: c.country || "" }));
+      setSuggestions(fromJson);
+    }, 400);
+  }, [appLanguage]);
 
-    setSuggestions(matches);
-  };
-
-  const selectCity = (c: any) => {
-    setCity(`${c.city}, ${c.country}`);
+  const selectCity = useCallback((c: CityCountry) => {
+    setCity(formatDefaultLocationDisplay(c.city, c.country, appLanguage));
     setSuggestions([]);
     setCityConfirmed(true);
-  };
+  }, [appLanguage]);
+
+  /** Same pipeline as Concierge / device location: trust reverse-geocode, full country name; static list only as fallback. */
+  const applyLocationToCity = useCallback(
+    async (latitude: number, longitude: number) => {
+      try {
+        const result = await reverseGeocodeToDisplay(latitude, longitude, appLanguage);
+        if (result.ok && result.display) {
+          setCity(result.display);
+          setCityConfirmed(true);
+          setSuggestions([]);
+          return;
+        }
+      } catch (e) {
+        console.warn("reverseGeocodeToDisplay:", e);
+      }
+      try {
+        const nearby = (cities as any[])
+          .map((c: any) => ({ ...c, dist: Math.hypot((c.lat ?? 0) - latitude, (c.lng ?? 0) - longitude) }))
+          .sort((a: any, b: any) => a.dist - b.dist)
+          .slice(0, 1);
+        if (nearby.length > 0) {
+          setCity(
+            formatDefaultLocationDisplay(
+              String(nearby[0].city),
+              String(nearby[0].country ?? ""),
+              appLanguage
+            )
+          );
+        }
+      } catch {
+        /* ignore */
+      }
+      setCityConfirmed(true);
+      setSuggestions([]);
+    },
+    [appLanguage]
+  );
 
   const requestLocationForCity = useCallback(() => {
-    if (locationPromptShown) return;
-    setLocationPromptShown(true);
-    Alert.alert(
-      "Use your location?",
-      "Winkly can use your location to suggest your city for better recommendations and nearby matches.",
-      [
-        { text: "Not now", style: "cancel" },
-        {
-          text: "Allow",
-          onPress: async () => {
-            try {
-              const { status } = await Location.requestForegroundPermissionsAsync();
-              if (status === "granted") {
-                const pos = await Location.getCurrentPositionAsync({});
-                const { latitude, longitude } = pos.coords;
+    (async () => {
+      try {
+        const { status: existing } = await Location.getForegroundPermissionsAsync();
+        setLocationPermissionStatus(existing === "granted" ? "granted" : existing === "denied" ? "denied" : "undetermined");
+
+        if (existing === "denied") {
+          Alert.alert(
+            "Location access",
+            "To set your city from GPS, enable location access for Winkly in your device settings.",
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Open settings", onPress: () => Linking.openSettings() },
+            ]
+          );
+          return;
+        }
+
+        if (existing === "granted") {
+          setLocationLoading(true);
+          try {
+            const pos = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.High,
+              mayShowUserSettingsDialog: true,
+            });
+            const { latitude, longitude } = pos.coords;
+            await applyLocationToCity(latitude, longitude);
+          } finally {
+            setLocationLoading(false);
+          }
+          return;
+        }
+
+        // undetermined: ask once
+        if (locationPromptShown) return;
+        setLocationPromptShown(true);
+        Alert.alert(
+          "Use your location?",
+          "Winkly can use your location to suggest your city for better recommendations and nearby matches.",
+          [
+            { text: "Not now", style: "cancel" },
+            {
+              text: "Allow",
+              onPress: async () => {
                 try {
-                  const [addr] = await Location.reverseGeocodeAsync({ latitude, longitude });
-                  if (addr?.city) {
-                    const country = addr.country ?? addr.region ?? "";
-                    const cityStr = country ? `${addr.city}, ${country}` : String(addr.city);
-                    const inList = (cities as any[]).find(
-                      (c: any) =>
-                        String(c.city).toLowerCase() === String(addr.city).toLowerCase() &&
-                        String(c.country || "").toLowerCase() === String(country).toLowerCase()
-                    );
-                    if (inList) {
-                      setCity(`${inList.city}, ${inList.country}`);
-                      setCityConfirmed(true);
-                      setSuggestions([]);
-                    } else {
-                      const nearby = (cities as any[])
-                        .map((c: any) => ({ ...c, dist: Math.hypot((c.lat ?? 0) - latitude, (c.lng ?? 0) - longitude) }))
-                        .filter((c: any) => c.dist < 500)
-                        .sort((a: any, b: any) => a.dist - b.dist)
-                        .slice(0, 10);
-                      if (nearby.length > 0) {
-                        setCity(`${nearby[0].city}, ${nearby[0].country}`);
-                        setCityConfirmed(true);
-                        setSuggestions([]);
-                      } else {
-                        setCity(cityStr);
-                        setCityConfirmed(true);
-                        setSuggestions([]);
-                      }
-                    }
-                  } else {
-                    const nearby = (cities as any[])
-                      .map((c: any) => ({ ...c, dist: Math.hypot((c.lat ?? 0) - latitude, (c.lng ?? 0) - longitude) }))
-                      .sort((a: any, b: any) => a.dist - b.dist)
-                      .slice(0, 10);
-                    if (nearby.length > 0) {
-                      setCity(`${nearby[0].city}, ${nearby[0].country}`);
-                      setCityConfirmed(true);
-                      setSuggestions([]);
+                  const { status } = await Location.requestForegroundPermissionsAsync();
+                  setLocationPermissionStatus(status === "granted" ? "granted" : status === "denied" ? "denied" : "undetermined");
+                  if (status === "granted") {
+                    setLocationLoading(true);
+                    try {
+                      const pos = await Location.getCurrentPositionAsync({
+                        accuracy: Location.Accuracy.High,
+                        mayShowUserSettingsDialog: true,
+                      });
+                      const { latitude, longitude } = pos.coords;
+                      await applyLocationToCity(latitude, longitude);
+                    } finally {
+                      setLocationLoading(false);
                     }
                   }
-                } catch {
-                  const nearby = (cities as any[])
-                    .map((c: any) => ({ ...c, dist: Math.hypot((c.lat ?? 0) - latitude, (c.lng ?? 0) - longitude) }))
-                    .sort((a: any, b: any) => a.dist - b.dist)
-                    .slice(0, 10);
-                  if (nearby.length > 0) {
-                    setCity(`${nearby[0].city}, ${nearby[0].country}`);
-                    setCityConfirmed(true);
-                    setSuggestions([]);
-                  }
+                } catch (e) {
+                  console.warn("Location for city:", e);
+                  setLocationLoading(false);
                 }
-              }
-            } catch (e) {
-              console.warn("Location for city:", e);
-            }
-          },
-        },
-      ]
-    );
-  }, [locationPromptShown]);
+              },
+            },
+          ]
+        );
+      } catch (e) {
+        console.warn("Location for city:", e);
+        setLocationLoading(false);
+      }
+    })();
+  }, [locationPromptShown, applyLocationToCity]);
 
   const toggleMulti = (arr: string[], val: string, setter: (v: string[]) => void, max: number) => {
     const has = arr.includes(val);
@@ -803,13 +888,15 @@ export default function ProfileCore() {
         return;
       }
 
+      const cityNorm = normalizeLocationDisplayString(city.trim(), appLanguage);
+
       const payload: Record<string, any> = {
         id: authUser.id,
         first_name: firstName,
         last_name: lastName,
         gender,
         birthday: toISODateOnly(birthday),
-        city,
+        city: cityNorm,
         education: education || null,
         occupation: occupation || null,
         languages: languages.length ? languages : null,
@@ -823,6 +910,13 @@ export default function ProfileCore() {
         .upsert(payload, { onConflict: "id" });
 
       if (upsertErr) throw upsertErr;
+
+      const { error: coreErr } = await upsertOwnProfileCore(authUser.id, {
+        first_name: firstName.trim() || null,
+        last_name: lastName.trim() || null,
+        city: cityNorm,
+      });
+      if (coreErr) throw coreErr;
 
       if (romanceEnabled) {
         const romanceMeta: Record<string, unknown> = {
@@ -842,14 +936,19 @@ export default function ProfileCore() {
           food: foodRomance || null,
           videos: romanceVideos.filter(Boolean),
         };
-        await supabase.from("sub_profiles").upsert({
+        const romancePayload = {
           user_id: authUser.id,
           mode: "romance",
           bio: bioRomance || null,
           photos: romancePhotos.filter(Boolean) as string[],
           interests: interestsRomance.length ? interestsRomance : null,
           meta: romanceMeta,
-        }, { onConflict: "user_id,mode" });
+        };
+        await supabase.from("sub_profiles").upsert(romancePayload, { onConflict: "user_id,mode" });
+        await supabase.from("profiles_mode").upsert(
+          { ...romancePayload, updated_at: new Date().toISOString() },
+          { onConflict: "user_id,mode" }
+        );
       }
       if (friendsEnabled) {
         const friendsMeta: Record<string, unknown> = {
@@ -864,14 +963,19 @@ export default function ProfileCore() {
           food: foodFriends || null,
           videos: friendsVideos.filter(Boolean),
         };
-        await supabase.from("sub_profiles").upsert({
+        const friendsPayload = {
           user_id: authUser.id,
           mode: "friends",
           bio: bioFriends || null,
           photos: friendsPhotos.filter(Boolean) as string[],
           interests: interestsFriends.length ? interestsFriends : null,
           meta: friendsMeta,
-        }, { onConflict: "user_id,mode" });
+        };
+        await supabase.from("sub_profiles").upsert(friendsPayload, { onConflict: "user_id,mode" });
+        await supabase.from("profiles_mode").upsert(
+          { ...friendsPayload, updated_at: new Date().toISOString() },
+          { onConflict: "user_id,mode" }
+        );
       }
       if (businessEnabled) {
         const businessMeta: Record<string, unknown> = {
@@ -884,14 +988,19 @@ export default function ProfileCore() {
           instagram: instagramBusiness.trim() || null,
           videos: businessVideos.filter(Boolean),
         };
-        await supabase.from("sub_profiles").upsert({
+        const businessPayload = {
           user_id: authUser.id,
           mode: "business",
           bio: bioBusiness || null,
           photos: businessPhotos.filter(Boolean) as string[],
           interests: interestsBusiness.length ? interestsBusiness : null,
           meta: businessMeta,
-        }, { onConflict: "user_id,mode" });
+        };
+        await supabase.from("sub_profiles").upsert(businessPayload, { onConflict: "user_id,mode" });
+        await supabase.from("profiles_mode").upsert(
+          { ...businessPayload, updated_at: new Date().toISOString() },
+          { onConflict: "user_id,mode" }
+        );
       }
 
       await AsyncStorage.removeItem("winkly_profile_draft");
@@ -1118,22 +1227,32 @@ export default function ProfileCore() {
           <Text style={[label, { marginBottom: 0 }]}>City <Text style={requiredMark}>*</Text></Text>
           <TouchableOpacity
             onPress={() => { Haptics.selectionAsync(); requestLocationForCity(); }}
+            disabled={locationLoading}
             style={{
               flexDirection: "row",
               alignItems: "center",
               paddingVertical: 6,
               paddingHorizontal: 12,
               borderRadius: 16,
-              backgroundColor: Colors.primaryViolet + "15",
-              shadowColor: Colors.primaryViolet,
+              backgroundColor: locationPermissionStatus === "granted" ? Colors.primaryViolet + "15" : Colors.gray200 + "80",
+              shadowColor: locationPermissionStatus === "granted" ? Colors.primaryViolet : "transparent",
               shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.15,
+              shadowOpacity: locationPermissionStatus === "granted" ? 0.15 : 0,
               shadowRadius: 4,
-              elevation: 3,
+              elevation: locationPermissionStatus === "granted" ? 3 : 0,
+              opacity: locationLoading ? 0.7 : 1,
             }}
           >
-            <Ionicons name="locate" size={16} color={Colors.primaryViolet} style={{ marginRight: 6 }} />
-            <Text style={{ ...Typography.caption, fontWeight: "600", color: Colors.primaryViolet }}>Use my location</Text>
+            {locationLoading ? (
+              <Text style={{ ...Typography.caption, fontWeight: "600", color: Colors.gray600, marginRight: 6 }}>Getting location…</Text>
+            ) : (
+              <>
+                <Ionicons name="locate" size={16} color={locationPermissionStatus === "granted" ? Colors.primaryViolet : Colors.gray500} style={{ marginRight: 6 }} />
+                <Text style={{ ...Typography.caption, fontWeight: "600", color: locationPermissionStatus === "granted" ? Colors.primaryViolet : Colors.gray600 }}>
+                  {locationPermissionStatus === "denied" ? "Enable location" : "Use my location"}
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
         <TextInput
@@ -1155,7 +1274,7 @@ export default function ProfileCore() {
                 style={suggestionItem}
               >
                 <Text style={{ color: Colors.textPrimary }}>
-                  {item.city}, {item.country}
+                  {formatDefaultLocationDisplay(item.city, item.country, appLanguage)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1205,36 +1324,72 @@ export default function ProfileCore() {
         />
 
         <Text style={label}>Languages</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ marginBottom: 16 }}
-          keyboardShouldPersistTaps="handled"
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync();
+            setLanguageModalVisible(true);
+          }}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            minHeight: 48,
+            paddingVertical: 12,
+            paddingHorizontal: 16,
+            borderRadius: Layout.radii.control,
+            borderWidth: 1,
+            borderColor: Colors.gray200,
+            backgroundColor: Colors.backgroundLight,
+            marginBottom: 16,
+          }}
         >
-          {LANGUAGE_OPTIONS.map((lang) => {
-            const selected = languages.includes(lang);
-            return (
-              <TouchableOpacity
-                key={lang}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setLanguages((prev) => (selected ? prev.filter((l) => l !== lang) : [...prev, lang]));
-                }}
-                style={{
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
-                  borderRadius: 20,
-                  marginRight: 8,
-                  backgroundColor: selected ? Colors.primaryViolet : Colors.gray100,
-                }}
-              >
-                <Text style={{ ...Typography.caption, color: selected ? "#FFF" : Colors.textPrimary }}>
-                  {lang}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+          <Text style={{ ...Typography.body, color: Colors.textPrimary, flex: 1 }} numberOfLines={1}>
+            {languages.length === 0 ? "Choose languages" : languages.join(", ")}
+          </Text>
+          <Ionicons name="chevron-down" size={20} color={Colors.gray600} />
+        </Pressable>
+
+        <Modal
+          visible={languageModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setLanguageModalVisible(false)}
+        >
+          <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center", padding: 20 }} onPress={() => setLanguageModalVisible(false)}>
+            <Pressable style={{ width: "100%", maxWidth: 400, maxHeight: "80%", backgroundColor: Colors.backgroundLight, borderRadius: Layout.radii.card, overflow: "hidden", shadowColor: Colors.softBlack, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 12 }} onPress={(e) => e.stopPropagation()}>
+              <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.gray200 }}>
+                <Text style={{ ...Typography.h3, fontFamily: FontFamily.heading, color: Colors.textPrimary, marginBottom: 4 }}>Choose languages</Text>
+                <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 8 }}>Your selections appear first in the list.</Text>
+                <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setLanguageModalVisible(false); }} style={{ position: "absolute", top: 16, right: 16, padding: 4 }} hitSlop={12}>
+                  <Ionicons name="close" size={24} color={Colors.gray600} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={{ maxHeight: 320, paddingVertical: 8 }} showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
+                {sortedProfileLanguages(languages).map((lang) => {
+                  const selected = languages.includes(lang);
+                  return (
+                    <Pressable
+                      key={lang}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setLanguages((prev) => (selected ? prev.filter((l) => l !== lang) : [...prev, lang]));
+                      }}
+                      style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14, paddingHorizontal: 20, backgroundColor: selected ? Colors.primaryViolet + "18" : "transparent" }}
+                    >
+                      <Text style={{ ...Typography.body, color: selected ? Colors.primaryViolet : Colors.textPrimary, fontWeight: selected ? "600" : "400" }} numberOfLines={1}>{lang}</Text>
+                      {selected && <Ionicons name="checkmark-circle" size={22} color={Colors.primaryViolet} />}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <View style={{ padding: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.gray200 }}>
+                <Pressable onPress={() => { Haptics.selectionAsync(); setLanguageModalVisible(false); }} style={{ backgroundColor: Colors.primaryViolet, paddingVertical: 14, borderRadius: Layout.radii.control, alignItems: "center" }}>
+                  <Text style={{ ...Typography.button, color: Colors.white, fontFamily: FontFamily.heading }}>Done</Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
           <Image source={require("@/assets/icons/Instagram_icon.png")} style={{ width: 16, height: 16, marginRight: 8 }} resizeMode="contain" />
@@ -1251,6 +1406,7 @@ export default function ProfileCore() {
           onBlur={() => setFocusedField(null)}
           style={[inputBase, focusedField === "instagram" && inputFocused, { marginBottom: 4 }]}
         />
+
           </View>
 
           {/* ─────── SUB-PROFILES ─────── */}

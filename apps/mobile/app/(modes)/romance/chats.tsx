@@ -6,7 +6,7 @@
 
 import React from "react";
 import { View } from "react-native";
-import { ModeHeader } from "@/components/layout/ModeHeader";
+import { ChatsHeader } from "@/components/layout/ChatsHeader";
 import { RomanceBottomNav } from "@/components/layout/RomanceBottomNav";
 import { ChatsInboxContent } from "@/components/chats/ChatsInboxContent";
 import { Colors } from "@/constants/tokens";
@@ -14,7 +14,7 @@ import { Colors } from "@/constants/tokens";
 export default function RomanceChats() {
   return (
     <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
-      <ModeHeader currentMode="romance" rightSlot="filterSettings" />
+      <ChatsHeader />
       <ChatsInboxContent sourceMode="romance" />
       <RomanceBottomNav />
     </View>

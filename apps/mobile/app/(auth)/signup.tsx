@@ -25,6 +25,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { AUTH_REDIRECT_URL } from "@/constants/config";
+import { getTermsAndCookiesAccepted } from "@/lib/legalFlags";
 
 function isInvalidRefreshToken(err: unknown): boolean {
   const msg = String((err as any)?.message ?? "").toLowerCase();
@@ -56,6 +57,12 @@ export default function Signup() {
     if (params.accountType === "business") setAccountType("business");
     else if (params.accountType === "personal") setAccountType("personal");
   }, [params.accountType]);
+
+  React.useEffect(() => {
+    getTermsAndCookiesAccepted().then((accepted) => {
+      if (!accepted) router.replace("/(auth)/terms-cookies?next=signup");
+    });
+  }, [router]);
 
   const oauthReady = useMemo(() => {
     const googleAndroid = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
@@ -232,7 +239,7 @@ export default function Signup() {
               </View>
 
               <Text style={styles.legal}>
-                By continuing, you agree to Winkly's <Text style={styles.link}>Terms</Text> & <Text style={styles.link}>Privacy Policy</Text>.
+                By continuing, you agree to Winkly&apos;s <Text style={styles.link}>Terms</Text> & <Text style={styles.link}>Privacy Policy</Text>.
               </Text>
 
               <TouchableOpacity onPress={() => router.replace("/(auth)/signin")} style={styles.footerLink}>

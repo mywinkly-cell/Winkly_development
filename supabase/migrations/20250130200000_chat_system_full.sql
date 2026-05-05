@@ -217,7 +217,10 @@ ALTER TABLE public.event_chat_settings
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 14. VIEW: conversation_participants (alias for conversation_members)
 -- ─────────────────────────────────────────────────────────────────────────────
-CREATE OR REPLACE VIEW public.conversation_participants AS
+-- Idempotent: drop table first (DROP VIEW errors if object is a table), then view, then create view
+DROP TABLE IF EXISTS public.conversation_participants CASCADE;
+DROP VIEW IF EXISTS public.conversation_participants;
+CREATE VIEW public.conversation_participants AS
 SELECT
   id,
   conversation_id,

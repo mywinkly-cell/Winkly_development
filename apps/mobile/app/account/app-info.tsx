@@ -51,7 +51,7 @@ export default function AppInfo() {
                 await supabase.auth.signOut();
               }
               router.replace("/(auth)/signin");
-            } catch (err) {
+            } catch (_err) {
               Alert.alert("Error", "Could not sign out.");
             } finally {
               setSigningOut(false);
@@ -86,12 +86,12 @@ export default function AppInfo() {
           <TouchableOpacity
             onPress={() => {
               Haptics.selectionAsync();
-              Alert.alert("What's new", "Release notes will appear here.");
+              Alert.alert("What&apos;s new", "Release notes will appear here.");
             }}
             style={styles.linkRow}
             activeOpacity={0.7}
           >
-            <Text style={styles.linkText}>What's new</Text>
+            <Text style={styles.linkText}>What&apos;s new</Text>
             <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
           </TouchableOpacity>
         </View>
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  headerTitle: { ...Typography.h3, fontFamily: FontFamily.heading, color: Colors.textPrimary },
+  headerTitle: { ...Typography.headerTitle, fontFamily: FontFamily.heading, color: Colors.textPrimary },
   placeholder: { width: 40 },
   scroll: { padding: Layout.screenPadding, paddingBottom: 40 },
   card: {

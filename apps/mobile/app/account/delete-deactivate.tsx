@@ -15,37 +15,47 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
+import { requestAccountDeletion } from "@/lib/account/deleteAccount";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 
 export default function DeleteDeactivate() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  const onDeactivate = async () => {
+  const onDeactivate = () => {
     Alert.alert(
       "Deactivate account",
-      "This will hide your profile and pause all modes. You can reactivate by signing in again.\n\n(Temporary placeholder — we’ll wire this to DB later.)",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Deactivate",
-          style: "destructive",
-          onPress: () => Alert.alert("Done", "Account deactivation placeholder saved."),
-        },
-      ]
+      "Deactivation is not available yet. You can sign out below, or permanently delete your account.\n\n(Deactivation is not available yet. You can sign out below, or permanently delete your account. — we’ll ",
+      [{ text: "OK", style: "cancel" }]
     );
   };
 
-  const onDelete = async () => {
+  const onDelete = () => {
     Alert.alert(
-      "Delete account",
-      "This action is permanent.\n\n(Temporary placeholder — in production we’ll call an admin function to delete user data safely.)",
+      "Permanently delete account",
+      "Your profile, messages, planner, events, and all data will be deleted. This cannot be undone.\n\n(Deactivation is not available yet. You can sign out below, or permanently delete your account. — in production we’ll Continue?",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Request deletion",
+          text: "Delete my account",
           style: "destructive",
-          onPress: () => Alert.alert("Request sent", "Deletion request placeholder created."),
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              const result = await requestAccountDeletion();
+              if ("ok" in result && result.ok) {
+                await supabase.auth.signOut({ scope: "local" });
+                router.replace("/(auth)/splash");
+                return;
+              }
+              Alert.alert("Deletion failed", (result as { error: string }).error ?? "Please try again or contact support.");
+            } catch (e) {
+              Alert.alert("Error", e instanceof Error ? e.message : "Something went wrong.");
+            } finally {
+              setDeleting(false);
+            }
+          },
         },
       ]
     );
@@ -96,10 +106,19 @@ export default function DeleteDeactivate() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Delete</Text>
             <Text style={styles.sectionText}>
-              Request permanent deletion of your profile and data. This action cannot be undone.
+              Permanently delete your profile, messages, planner, and all data. This cannot be undone.
             </Text>
-            <TouchableOpacity onPress={onDelete} style={styles.dangerBtn} activeOpacity={0.9}>
-              <Text style={styles.dangerText}>Request deletion</Text>
+            <TouchableOpacity
+              onPress={onDelete}
+              style={[styles.dangerBtn, deleting && styles.dangerBtnDisabled]}
+              activeOpacity={0.9}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <ActivityIndicator size="small" color="#E11D48" />
+              ) : (
+                <Text style={styles.dangerText}>Delete my account</Text>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -124,7 +143,7 @@ export default function DeleteDeactivate() {
         </View>
 
         <Text style={styles.note}>
-          Note: Deactivate/Delete are placeholders for now. Next step: connect to Supabase tables + admin function.
+          Deletion removes your account and all data (including AI usage records). Third‑party services (e.g. analytics) may retain data per their policies.
         </Text>
       </ScrollView>
     </View>
@@ -153,7 +172,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  headerTitle: { ...Typography.h3, color: Colors.textPrimary },
+  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
 
   card: {
     backgroundColor: "#FFF",
@@ -197,6 +216,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E11D48",
   },
+  dangerBtnDisabled: { opacity: 0.7 },
   dangerText: { ...Typography.button, color: "#E11D48" },
 
   note: { ...Typography.caption, color: Colors.gray600, marginTop: 12, textAlign: "center" },

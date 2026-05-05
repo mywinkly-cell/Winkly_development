@@ -66,7 +66,7 @@ export function MatchesPanel({
       );
       onChatStart?.(match.id);
       router.push(`/chats/${chatId}`);
-    } catch (err) {
+    } catch (_err) {
       // Error handling delegated to caller or global
     }
   };

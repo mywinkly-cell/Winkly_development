@@ -1,8 +1,6 @@
 // lib/access/planner.ts — Mode-filtered planner items
 
 import { supabase } from "@/lib/supabase";
-import type { Mode } from "@/types";
-
 type PlannerSource = "romance" | "friends" | "business" | "events";
 
 /** Get planner items for user, optionally filtered by source_mode. RLS enforces participant access. */

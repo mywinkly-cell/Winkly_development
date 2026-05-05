@@ -79,10 +79,27 @@ export default function PrivacySafety() {
           />
           <View style={styles.divider} />
           <Row
+            title="Photo verification"
+            subtitle="Selfie check against your profile photo"
+            onPress={() => router.push("/account/photo-verification" as never)}
+            icon="camera-outline"
+          />
+          <View style={styles.divider} />
+          <Row
             title="Data sharing permissions"
             subtitle="What we share with partners"
-            onPress={() => {}}
+            onPress={() => router.push("/account/ai-memory")}
             icon="share-social-outline"
+          />
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>AI & data controls</Text>
+          <Row
+            title="Delete AI memory"
+            subtitle="Clear your vector profile, cached AI plans, and AI usage records"
+            onPress={() => router.push("/account/ai-memory")}
+            icon="trash-outline"
           />
         </View>
 
@@ -99,7 +116,7 @@ export default function PrivacySafety() {
             style={styles.primaryRow}
             activeOpacity={0.7}
           >
-            <Ionicons name="ban-outline" size={22} color={Colors.primaryViolet} />
+            <Ionicons name="remove-circle-outline" size={22} color={Colors.primaryViolet} />
             <Text style={styles.primaryRowText}>View blocked users</Text>
             <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
           </TouchableOpacity>
@@ -134,7 +151,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  headerTitle: { ...Typography.h3, fontFamily: FontFamily.heading, color: Colors.textPrimary },
+  headerTitle: { ...Typography.headerTitle, fontFamily: FontFamily.heading, color: Colors.textPrimary },
   placeholder: { width: 40 },
   scroll: { padding: Layout.screenPadding, paddingBottom: 40 },
   card: {

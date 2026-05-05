@@ -16,7 +16,10 @@ CREATE TABLE IF NOT EXISTS public.starred_messages (
 
 ALTER TABLE public.starred_messages ENABLE ROW LEVEL SECURITY;
 
--- RLS: own stars only
+-- RLS: own stars only (idempotent)
+DROP POLICY IF EXISTS sm_select ON public.starred_messages;
+DROP POLICY IF EXISTS sm_insert ON public.starred_messages;
+DROP POLICY IF EXISTS sm_delete ON public.starred_messages;
 CREATE POLICY sm_select ON public.starred_messages FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY sm_insert ON public.starred_messages FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY sm_delete ON public.starred_messages FOR DELETE USING (auth.uid() = user_id);
@@ -24,6 +27,9 @@ CREATE POLICY sm_delete ON public.starred_messages FOR DELETE USING (auth.uid() 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. TRIGGER: Auto-create event chat when first participant RSVPs
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Ensure rsvp_status exists (some DBs have event_participants without it)
+ALTER TABLE public.event_participants ADD COLUMN IF NOT EXISTS rsvp_status TEXT NOT NULL DEFAULT 'pending';
+
 CREATE OR REPLACE FUNCTION public.maybe_create_event_chat()
 RETURNS TRIGGER AS $$
 DECLARE

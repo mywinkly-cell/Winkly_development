@@ -1,6 +1,6 @@
 // ────────────────────────────────────────────────
-// Mode Selection Header — Profile | Winkly | Settings
-// Used on mode-selection, mode-selection/chats, mode-selection/planner
+// Mode Selection Header — Profile | Winkly | Settings (optional)
+// Settings icon shown only on the Mode Selection home tab, not on Chats or Planner.
 // ────────────────────────────────────────────────
 
 import React, { useEffect, useState } from "react";
@@ -10,11 +10,16 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useModeContext } from "@/providers";
-import { Colors, Layout, Typography, FontFamily } from "@/constants/tokens";
+import { Colors, Layout, Typography, FontFamily, HEADER, Shadow } from "@/constants/tokens";
 
 type AccountType = "personal" | "business";
 
-export function ModeSelectionHeader() {
+type ModeSelectionHeaderProps = {
+  /** Show General settings icon (Winkly Violet). Only true on Mode Selection home tab. */
+  showSettingsIcon?: boolean;
+};
+
+export function ModeSelectionHeader({ showSettingsIcon = false }: ModeSelectionHeaderProps) {
   const router = useRouter();
   const { context } = useModeContext();
   const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
@@ -54,6 +59,25 @@ export function ModeSelectionHeader() {
     loadPhoto();
   }, [accountType]);
 
+  const leftBtnStyle = {
+    width: HEADER.buttonSize,
+    height: HEADER.buttonSize,
+    borderRadius: HEADER.buttonRadius,
+    backgroundColor: Colors.gray100,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    ...Shadow.button,
+  };
+  const rightBtnStyle = {
+    width: HEADER.buttonSize,
+    height: HEADER.buttonSize,
+    borderRadius: HEADER.buttonRadius,
+    backgroundColor: Colors.primaryViolet + "18",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    ...Shadow.button,
+  };
+
   return (
     <View
       style={{
@@ -65,11 +89,7 @@ export function ModeSelectionHeader() {
         backgroundColor: Colors.white,
         borderBottomWidth: 1,
         borderBottomColor: Colors.gray200,
-        shadowColor: "#1C1C1E",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.12,
-        shadowRadius: 12,
-        elevation: 6,
+        ...Shadow.card,
       }}
     >
       <TouchableOpacity
@@ -82,25 +102,13 @@ export function ModeSelectionHeader() {
           );
         }}
         activeOpacity={0.8}
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: 22,
-          backgroundColor: Colors.gray100,
-          alignItems: "center",
-          justifyContent: "center",
-          shadowColor: "#1C1C1E",
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.28,
-          shadowRadius: 6,
-          elevation: 6,
-        }}
+        style={leftBtnStyle}
       >
-        <View style={{ width: 44, height: 44, borderRadius: 22, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+        <View style={{ width: HEADER.buttonSize, height: HEADER.buttonSize, borderRadius: HEADER.buttonRadius, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
           {profilePhotoUri ? (
-            <Image source={{ uri: profilePhotoUri }} style={{ width: 44, height: 44 }} resizeMode="cover" />
+            <Image source={{ uri: profilePhotoUri }} style={{ width: HEADER.buttonSize, height: HEADER.buttonSize }} resizeMode="cover" />
           ) : (
-            <Ionicons name="person-circle-outline" size={36} color={Colors.textPrimary} />
+            <Ionicons name="person-circle-outline" size={HEADER.iconSize} color={Colors.textPrimary} />
           )}
         </View>
       </TouchableOpacity>
@@ -118,28 +126,20 @@ export function ModeSelectionHeader() {
         </Text>
       </View>
 
-      <TouchableOpacity
-        onPress={() => {
-          Haptics.selectionAsync();
-          router.push("/account");
-        }}
-        activeOpacity={0.8}
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: 22,
-          backgroundColor: Colors.gray100,
-          alignItems: "center",
-          justifyContent: "center",
-          shadowColor: "#1C1C1E",
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.28,
-          shadowRadius: 6,
-          elevation: 6,
-        }}
-      >
-        <Ionicons name="settings" size={24} color={Colors.textPrimary} />
-      </TouchableOpacity>
+      {showSettingsIcon ? (
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.selectionAsync();
+            router.push("/account");
+          }}
+          activeOpacity={0.8}
+          style={rightBtnStyle}
+        >
+          <Ionicons name="settings" size={HEADER.iconSize} color={Colors.primaryViolet} />
+        </TouchableOpacity>
+      ) : (
+        <View style={{ width: HEADER.buttonSize, height: HEADER.buttonSize }} />
+      )}
     </View>
   );
 }

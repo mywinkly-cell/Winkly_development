@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,10 +9,15 @@ import {
   Alert,
   RefreshControl,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import {
+  getBusinessFilters,
+  applyBusinessFiltersToFeed,
+  type BusinessFiltersState,
+} from "@/lib/filters/businessFiltersStorage";
 
 type ResultType = "person" | "company" | "service";
 
@@ -45,6 +50,17 @@ export default function BusinessDiscover() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [savedFilters, setSavedFilters] = useState<BusinessFiltersState | null>(null);
+
+  useEffect(() => {
+    getBusinessFilters().then(setSavedFilters);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      getBusinessFilters().then(setSavedFilters);
+    }, [])
+  );
 
   const hint = useMemo(() => {
     if (params?.company_id) return "Company selected. You can find people, services & partners.";
@@ -53,14 +69,16 @@ export default function BusinessDiscover() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return results.filter((r) => {
+    const byQueryAndType = results.filter((r) => {
       const qOk =
         !q ||
         `${r.title} ${r.subtitle ?? ""} ${r.meta ?? ""}`.toLowerCase().includes(q);
       const tOk = activeType === "all" || r.type === activeType;
       return qOk && tOk;
     });
-  }, [results, query, activeType]);
+    if (!savedFilters) return byQueryAndType;
+    return applyBusinessFiltersToFeed(byQueryAndType, savedFilters);
+  }, [results, query, activeType, savedFilters]);
 
   async function fetchDiscover(opts?: { reset?: boolean }) {
     const reset = !!opts?.reset;

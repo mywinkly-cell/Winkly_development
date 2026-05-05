@@ -1,0 +1,37 @@
+diff --git a/node_modules/react-native-range-slider-expo/src/RangeSlider.tsx b/node_modules/react-native-range-slider-expo/src/RangeSlider.tsx
+index 7d74a45..24aac81 100644
+--- a/node_modules/react-native-range-slider-expo/src/RangeSlider.tsx
++++ b/node_modules/react-native-range-slider-expo/src/RangeSlider.tsx
+@@ -78,8 +78,8 @@ const RangeSlider = memo(({
+   const [leftBarScaleX] = useState(new Animated.Value(0.01));
+ 
+   // refs
+-  const toValueTextRef = React.createRef<TextInput>();
+-  const fromValueTextRef = React.createRef<TextInput>();
++  const toValueTextRef = React.createRef<TextInput | null>();
++  const fromValueTextRef = React.createRef<TextInput | null>();
+   const opacity = React.useRef<Animated.Value>(new Animated.Value(0)).current;
+   const {formatLabel, decimalRound} = useUtils({step, labelFormatter});
+ 
+diff --git a/node_modules/react-native-range-slider-expo/src/components/KnobBubble.tsx b/node_modules/react-native-range-slider-expo/src/components/KnobBubble.tsx
+index eab1767..8f7d30c 100644
+--- a/node_modules/react-native-range-slider-expo/src/components/KnobBubble.tsx
++++ b/node_modules/react-native-range-slider-expo/src/components/KnobBubble.tsx
+@@ -1,14 +1,14 @@
+ import React, { useMemo } from 'react';
+ import { Animated, StyleSheet, TextInput, TextStyle } from 'react-native';
+-import Svg, { Color, Path } from 'react-native-svg';
++import Svg, { Path } from 'react-native-svg';
+ import { osRtl } from './utils';
+ 
+ interface KnobProps {
+   translateX: Animated.Value;
+   scale: Animated.Value;
+   knobSize: number;
+-  textInputRef: React.RefObject<TextInput>;
+-  valueLabelsBackgroundColor: Color | undefined;
++  textInputRef: React.RefObject<TextInput | null>;
++  valueLabelsBackgroundColor: string | undefined;
+   textStyle: TextStyle;
+ }
+ 

@@ -6,7 +6,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
+import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import type { AppMode, Conversation, ConversationMember, Message, UserMini } from "@/lib/chats";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { ChatPreviewCard } from "./ChatPreviewCard";
@@ -14,7 +16,7 @@ import { MatchesConnectionsSubheader, type MatchConnectionItem } from "./Matches
 
 type ChatTabKey = "all" | AppMode;
 
-const CHAT_TAB_CONFIG: Array<{ key: ChatTabKey; label: string; secondary: string; accent: string }> = [
+const CHAT_TAB_CONFIG: { key: ChatTabKey; label: string; secondary: string; accent: string }[] = [
   { key: "all", label: "All", secondary: Colors.white, accent: Colors.primaryViolet },
   { key: "romance", label: "Romance", secondary: Colors.romance.secondary, accent: Colors.romance.primary },
   { key: "friends", label: "Friends", secondary: Colors.friends.secondary, accent: Colors.friends.primary },
@@ -42,6 +44,7 @@ type ChatsInboxContentProps = {
 };
 
 export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
+  const { i18n } = useTranslation();
   const router = useRouter();
   const tabs = useMemo(() => getTabsWithModeFirst(sourceMode), [sourceMode]);
   const initialTab: "all" | AppMode = sourceMode === "all" ? "all" : sourceMode;
@@ -49,7 +52,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
   const [activeTab, setActiveTab] = useState<"all" | AppMode>(initialTab);
   const [loading, setLoading] = useState<boolean>(true);
   const [items, setItems] = useState<Conversation[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
 
   const [meId, setMeId] = useState<string | null>(null);
   const [participantsByConv, setParticipantsByConv] = useState<Record<string, ConversationMember[]>>({});
@@ -66,6 +69,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
   const [businessConnectionsLoading, setBusinessConnectionsLoading] = useState(false);
   const [hasFriendsConnections, setHasFriendsConnections] = useState<boolean | null>(null);
   const [hasBusinessConnections, setHasBusinessConnections] = useState<boolean | null>(null);
+  const [myCity, setMyCity] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -73,6 +77,16 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
       setMeId(data.user?.id ?? null);
     })();
   }, []);
+
+  useEffect(() => {
+    if (!meId) return;
+    const lang = i18n?.language ?? "en";
+    (async () => {
+      const { data } = await supabase.from("user_profiles").select("city").eq("id", meId).maybeSingle();
+      const raw = (data as { city?: string } | null)?.city ?? null;
+      setMyCity(raw?.trim() ? normalizeLocationDisplayString(raw, lang) : null);
+    })();
+  }, [meId, i18n?.language]);
 
   const loadConversationsAndMeta = useCallback(async () => {
     setLoading(true);
@@ -130,7 +144,21 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
         if (minisErr) throw minisErr;
 
         const map: Record<string, UserMini> = {};
-        for (const u of (minis ?? []) as UserMini[]) map[u.id] = u;
+        for (const u of (minis ?? []) as UserMini[]) map[u.id] = { ...u };
+
+        const { data: modeProfiles } = await supabase
+          .from("profiles_mode")
+          .select("user_id,mode,photos")
+          .in("user_id", userIds)
+          .in("mode", ["romance", "friends", "business"]);
+
+        for (const row of (modeProfiles ?? []) as { user_id: string; mode: string; photos: (string | null)[] }[]) {
+          const u = map[row.user_id];
+          if (!u) continue;
+          if (row.mode === "romance") u.romance_photos = row.photos ?? [];
+          else if (row.mode === "friends") u.friends_photos = row.photos ?? [];
+          else if (row.mode === "business") u.business_photos = row.photos ?? [];
+        }
         setUsersById(map);
       } else {
         setUsersById({});
@@ -145,7 +173,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
           .in("conversation_id", convIds)
           .eq("user_id", uid);
         const byConv: Record<string, { pinned: boolean; last_read_at: string | null }> = {};
-        for (const s of (settings ?? []) as Array<{ conversation_id: string; pinned: boolean; last_read_at: string | null }>) {
+        for (const s of (settings ?? []) as { conversation_id: string; pinned: boolean; last_read_at: string | null }[]) {
           byConv[s.conversation_id] = { pinned: s.pinned, last_read_at: s.last_read_at };
         }
         setMemberSettingsByConv(byConv);
@@ -155,7 +183,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
           p_user_id: uid,
         });
         const unreadMap: Record<string, number> = {};
-        for (const r of (unreadRows ?? []) as Array<{ conversation_id: string; unread_count: number }>) {
+        for (const r of (unreadRows ?? []) as { conversation_id: string; unread_count: number }[]) {
           unreadMap[r.conversation_id] = Number(r.unread_count) || 0;
         }
         setUnreadByConv(unreadMap);
@@ -205,8 +233,8 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
         supabase.rpc("romance_new_matches", { current_user_id: userData.user.id }),
         supabase.rpc("romance_connections", { current_user_id: userData.user.id }),
       ]);
-      const newMatches = (newRes.data ?? []) as Array<Record<string, unknown>>;
-      const connections = (connRes.data ?? []) as Array<Record<string, unknown>>;
+      const newMatches = (newRes.data ?? []) as Record<string, unknown>[];
+      const connections = (connRes.data ?? []) as Record<string, unknown>[];
       const seen = new Set<string>();
       const list: MatchConnectionItem[] = [];
       for (const m of [...newMatches, ...connections]) {
@@ -259,17 +287,26 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
         setFriendsConnectionsList([]);
         return;
       }
-      const { data: profiles } = await supabase
-        .from("user_profiles")
-        .select("id,first_name,last_name,main_photo_url,city")
-        .in("id", mutualIds);
-      const list: MatchConnectionItem[] = (profiles ?? []).map((p: Record<string, unknown>) => ({
-        id: p.id as string,
-        first_name: (p.first_name as string) ?? null,
-        last_name: (p.last_name as string) ?? null,
-        city: (p.city as string) ?? null,
-        main_photo_url: (p.main_photo_url as string) ?? null,
-      }));
+      const [profilesRes, friendProfilesRes] = await Promise.all([
+        supabase.from("user_profiles").select("id,first_name,last_name,main_photo_url,city").in("id", mutualIds),
+        supabase.from("friend_profiles").select("user_id,main_photo_url").in("user_id", mutualIds),
+      ]);
+      const profiles = profilesRes.data ?? [];
+      const friendPhotoByUserId: Record<string, string | null> = {};
+      for (const row of (friendProfilesRes.data ?? []) as { user_id: string; main_photo_url: string | null }[]) {
+        const uid = row.user_id;
+        friendPhotoByUserId[uid] = row.main_photo_url ?? null;
+      }
+      const list: MatchConnectionItem[] = profiles.map((p: Record<string, unknown>) => {
+        const id = p.id as string;
+        return {
+          id,
+          first_name: (p.first_name as string) ?? null,
+          last_name: (p.last_name as string) ?? null,
+          city: (p.city as string) ?? null,
+          main_photo_url: (friendPhotoByUserId[id] ?? p.main_photo_url ?? null) as string | null,
+        };
+      });
       setFriendsConnectionsList(list);
     } catch {
       setFriendsConnectionsList([]);
@@ -350,7 +387,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
   }, [loadConversationsAndMeta]);
 
   function getConversationTitle(conv: Conversation): string {
-    if (conv.type === "dm" || conv.type === "direct") {
+    if (conv.type === "dm") {
       const parts = participantsByConv[conv.id] ?? [];
       const otherId = parts.find((p) => p.user_id !== meId)?.user_id ?? null;
       return formatName(otherId ? usersById[otherId] : null);
@@ -360,14 +397,33 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
     return "Group chat";
   }
 
-  function getParticipantAvatars(conv: Conversation): Array<{ userId: string; photoUrl?: string | null }> {
+  /** Avatar photo per participant: use mode-specific main photo (conversation mode) for consistency. */
+  function getParticipantAvatars(conv: Conversation): { userId: string; photoUrl?: string | null }[] {
     const parts = participantsByConv[conv.id] ?? [];
     const others = parts.filter((p) => p.user_id !== meId);
-    return others.slice(0, 2).map((p) => ({
-      userId: p.user_id,
-      photoUrl: usersById[p.user_id]?.main_photo_url ?? null,
-    }));
+    const mode = conv.mode;
+    return others.slice(0, 2).map((p) => {
+      const u = usersById[p.user_id];
+      const photoUrl =
+        mode === "romance"
+          ? (u?.romance_photos?.find((x) => !!x) ?? u?.main_photo_url ?? null)
+          : mode === "friends"
+            ? (u?.friends_photos?.find((x) => !!x) ?? u?.main_photo_url ?? null)
+            : mode === "business"
+              ? (u?.business_photos?.find((x) => !!x) ?? u?.main_photo_url ?? null)
+              : (u?.main_photo_url ?? null);
+      return { userId: p.user_id, photoUrl: photoUrl ?? null };
+    });
   }
+
+  /** Chats ordered by last message sent (most recent first), same for All and every sub-tab. */
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      const tsA = lastMessageByConv[a.id]?.created_at ?? a.last_message_at ?? a.created_at ?? "";
+      const tsB = lastMessageByConv[b.id]?.created_at ?? b.last_message_at ?? b.created_at ?? "";
+      return tsB.localeCompare(tsA);
+    });
+  }, [items, lastMessageByConv]);
 
   if (loading) {
     return (
@@ -422,12 +478,13 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
         friendsLoading={friendsConnectionsLoading}
         businessLoading={businessConnectionsLoading}
         onRefresh={refreshMatchesAndConversations}
+        myCity={myCity}
       />
 
       <View style={styles.contentArea}>
       <FlatList
         style={{ flex: 1 }}
-        data={items}
+        data={sortedItems}
         keyExtractor={(c) => c.id}
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         renderItem={({ item }) => {
@@ -457,6 +514,15 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
               unreadCount={unreadByConv[item.id] ?? 0}
               isPinned={settings?.pinned ?? false}
               onPress={() => router.push(`/chats/${item.id}`)}
+              onAvatarPress={
+                item.mode && item.mode !== "events"
+                  ? (userId) => {
+                      if (item.mode === "romance") router.push(`/(modes)/romance/profile-view?id=${userId}`);
+                      else if (item.mode === "friends") router.push(`/(modes)/friends/profile-view?user_id=${userId}`);
+                      else if (item.mode === "business") router.push(`/(modes)/business/profile-view?user_id=${userId}`);
+                    }
+                  : undefined
+              }
             />
           );
         }}

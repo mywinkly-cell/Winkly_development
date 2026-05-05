@@ -5,6 +5,7 @@ export const LANGUAGE_OPTIONS = [
   "Any",
   "English",
   "German",
+  "Ukrainian",
   "Spanish",
   "French",
   "Italian",
@@ -27,6 +28,8 @@ export const LIFESTYLE_ROMANCE = [
   "Walks & light movement",
   "Mostly relaxed / home-oriented",
   "Spontaneous bursts of activity",
+  "Night owl",
+  "Early bird",
 ];
 
 export const SMOKING_OPTIONS = [

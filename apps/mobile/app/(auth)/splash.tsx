@@ -67,46 +67,51 @@ export default function Splash() {
     wink.start();
 
     const t = setTimeout(async () => {
-      const seen = await getIntroSeen();
+      try {
+        const seen = await getIntroSeen();
 
-      const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase.auth.getSession();
 
-      if (!session?.user) {
-        if (!seen) {
-          router.replace("/(auth)/welcome-intro");
-        } else {
-          router.replace("/(auth)/signin");
+        if (!session?.user) {
+          if (!seen) {
+            router.replace("/(auth)/welcome-intro");
+          } else {
+            router.replace("/(auth)/signin");
+          }
+          return;
         }
-        return;
-      }
 
-      // Validate session with server — clear if stale (e.g. user deleted in Supabase)
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        await supabase.auth.signOut({ scope: "local" });
-        await clearIntroSeen();
+        // Validate session with server — clear if stale (e.g. user deleted in Supabase)
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+          await supabase.auth.signOut({ scope: "local" });
+          await clearIntroSeen();
+          router.replace("/(auth)/welcome-intro");
+          return;
+        }
+
+        if (!session.user.email_confirmed_at) {
+          router.replace("/(auth)/verify");
+          return;
+        }
+
+        const accountType = session.user.user_metadata?.account_type as string | undefined;
+        const userId = session.user.id;
+        if (accountType === "business") {
+          const { data: bp } = await supabase.from("business_profiles").select("business_name").or(`id.eq.${userId},user_id.eq.${userId}`).limit(1).maybeSingle();
+          const hasProfile = !!(bp as any)?.business_name?.trim?.();
+          router.replace(hasProfile ? "/(onboarding-personal)/mode-selection" : "/(auth)/welcome-back-setup");
+        } else {
+          const { data: up } = await supabase.from("user_profiles").select("first_name, last_name, gender, birthday, city, core_photos").eq("id", userId).maybeSingle();
+          const u = up as any;
+          const hasCore = !!(u?.first_name?.trim?.() && u?.last_name?.trim?.() && u?.gender?.trim?.() && u?.birthday && u?.city?.trim?.());
+          const hasPhoto = Array.isArray(u?.core_photos) ? u.core_photos.filter(Boolean).length > 0 : false;
+          const profileComplete = hasCore && hasPhoto;
+          router.replace(profileComplete ? "/(onboarding-personal)/mode-selection" : "/(auth)/welcome-back-setup");
+        }
+      } catch {
+        // If anything throws (network, Supabase, etc.), send to welcome-intro so app doesn't crash or blink
         router.replace("/(auth)/welcome-intro");
-        return;
-      }
-
-      if (!session.user.email_confirmed_at) {
-        router.replace("/(auth)/verify");
-        return;
-      }
-
-      const accountType = session.user.user_metadata?.account_type as string | undefined;
-      const userId = session.user.id;
-      if (accountType === "business") {
-        const { data: bp } = await supabase.from("business_profiles").select("business_name").or(`id.eq.${userId},user_id.eq.${userId}`).limit(1).maybeSingle();
-        const hasProfile = !!(bp as any)?.business_name?.trim?.();
-        router.replace(hasProfile ? "/(onboarding-personal)/mode-selection" : "/(auth)/welcome-back-setup");
-      } else {
-        const { data: up } = await supabase.from("user_profiles").select("first_name, last_name, gender, birthday, city, core_photos").eq("id", userId).maybeSingle();
-        const u = up as any;
-        const hasCore = !!(u?.first_name?.trim?.() && u?.last_name?.trim?.() && u?.gender?.trim?.() && u?.birthday && u?.city?.trim?.());
-        const hasPhoto = Array.isArray(u?.core_photos) ? u.core_photos.filter(Boolean).length > 0 : false;
-        const profileComplete = hasCore && hasPhoto;
-        router.replace(profileComplete ? "/(onboarding-personal)/mode-selection" : "/(auth)/welcome-back-setup");
       }
     }, SPLASH_TOTAL_MS);
 

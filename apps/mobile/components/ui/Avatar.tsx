@@ -3,7 +3,7 @@
 
 import React from "react";
 import { View, Image, Text, StyleSheet } from "react-native";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Colors, Typography } from "@/constants/tokens";
 
 type AvatarProps = {
   uri?: string | null;

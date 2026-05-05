@@ -15,7 +15,7 @@ export default function ModeSelectionPlanner() {
   const plannerRef = useRef<PlannerIndexHandle>(null);
   return (
     <SafeScreenView edges={["left", "right"]} style={styles.screen}>
-      <PlannerHeader onFilterPress={() => plannerRef.current?.openFilter()} />
+      <PlannerHeader onFilterPress={() => plannerRef.current?.openFilter()} onAIPress={() => plannerRef.current?.openConcierge()} />
       <View style={styles.content}>
         <PlannerIndex ref={plannerRef} embedded />
       </View>

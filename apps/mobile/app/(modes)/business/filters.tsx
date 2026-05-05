@@ -1,21 +1,20 @@
 // Business Mode – Filtering screen
 // Premium styling aligned with Romance & Friends filters
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   ScrollView,
   Pressable,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { ModeBottomBar } from "@/components/layout/ModeBottomBar";
-import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
+import { Colors, Typography, Layout, FontFamily, HEADER } from "@/constants/tokens";
 import {
   LANGUAGE_OPTIONS,
   INDUSTRY_OPTIONS,
@@ -23,6 +22,7 @@ import {
   NETWORKING_GOALS_OPTIONS,
   INTEREST_POPULAR_BUSINESS,
 } from "@/constants/profileOptions";
+import { getBusinessFilters, setBusinessFilters } from "@/lib/filters/businessFiltersStorage";
 
 const DISTANCE_OPTIONS_KM = [5, 10, 25, 50, 100, 999] as const;
 
@@ -35,6 +35,21 @@ export default function BusinessFiltersScreen() {
   const [roles, setRoles] = useState<string[]>([]);
   const [networkingGoals, setNetworkingGoals] = useState<string[]>([]);
   const [interests, setInterests] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const saved = await getBusinessFilters();
+      if (cancelled) return;
+      setDistanceKm(saved.distanceKm);
+      setLanguages(saved.languages.length ? saved.languages : ["Any"]);
+      setIndustries(saved.industries);
+      setRoles(saved.roles);
+      setNetworkingGoals(saved.networkingGoals);
+      setInterests(saved.interests);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const toggleLanguage = (lang: string) => {
     Haptics.selectionAsync();
@@ -58,9 +73,16 @@ export default function BusinessFiltersScreen() {
     }
   };
 
-  const handleApply = () => {
+  const handleApply = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    // TODO: persist filters and apply to discover feed
+    await setBusinessFilters({
+      distanceKm,
+      languages,
+      industries,
+      roles,
+      networkingGoals,
+      interests,
+    });
     router.back();
   };
 
@@ -73,7 +95,7 @@ export default function BusinessFiltersScreen() {
           activeOpacity={0.9}
           accessibilityLabel="Back"
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={HEADER.iconSize} color={Colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Filtering</Text>
         <View style={styles.headerRight} />
@@ -197,10 +219,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 14,
-    minHeight: 56,
+    paddingHorizontal: 16,
+    ...Layout.topHeaderBar,
     backgroundColor: Colors.white,
     borderBottomWidth: 1,
     borderBottomColor: Colors.gray200,
@@ -211,19 +231,19 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: HEADER.buttonSize,
+    height: HEADER.buttonSize,
+    borderRadius: HEADER.buttonRadius,
     backgroundColor: Colors.gray100,
     alignItems: "center",
     justifyContent: "center",
   },
   headerTitle: {
-    ...Typography.h3,
+    ...Typography.headerTitle,
     fontFamily: FontFamily.heading,
     color: Colors.textPrimary,
   },
-  headerRight: { width: 44 },
+  headerRight: { width: HEADER.buttonSize, height: HEADER.buttonSize },
   scroll: { flex: 1 },
   scrollContent: { padding: 20, paddingTop: 20, paddingBottom: 24 },
   sectionCard: {

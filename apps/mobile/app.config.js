@@ -18,6 +18,15 @@ module.exports = {
       "expo-web-browser",
       "expo-apple-authentication",
       [
+        "expo-audio",
+        {
+          microphonePermission: "Winkly uses your microphone to let you record a short voice prompt for your profile.",
+          recordAudioAndroid: true,
+          enableBackgroundPlayback: true,
+          enableBackgroundRecording: false
+        }
+      ],
+      [
         "expo-calendar",
         {
           calendarPermission: "Winkly syncs your planner items with your device calendar so you never miss an event.",
@@ -60,6 +69,7 @@ module.exports = {
       permissions: [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
+        "RECORD_AUDIO",
         "READ_CALENDAR",
         "WRITE_CALENDAR"
       ]

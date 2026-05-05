@@ -10,7 +10,7 @@ import React from "react";
 import { TouchableOpacity, View, Text, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { Colors, Layout, Typography } from "@/constants/tokens";
+import { Colors, Typography } from "@/constants/tokens";
 
 type ModeSwitchButtonProps = {
   currentMode: "romance" | "friends" | "business" | "events";

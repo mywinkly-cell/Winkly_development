@@ -20,7 +20,8 @@ export type MessageType =
   | "system"
   | "poll"
   | "location"
-  | "cta";
+  | "cta"
+  | "icebreaker";
 
 export type MemberRole = "owner" | "admin" | "moderator" | "member";
 
@@ -104,6 +105,10 @@ export interface UserMini {
   last_name: string | null;
   city: string | null;
   main_photo_url?: string | null;
+  /** Mode-specific photos for avatar/profile consistency (chats/planner use conversation mode). */
+  romance_photos?: (string | null)[];
+  friends_photos?: (string | null)[];
+  business_photos?: (string | null)[];
 }
 
 export interface ConversationWithMeta extends Conversation {

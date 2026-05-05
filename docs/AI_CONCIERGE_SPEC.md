@@ -1,0 +1,315 @@
+# AI Concierge — Experience Architect (Technical Spec)
+
+**Last updated:** 2026-02-21
+
+This document integrates the **AI Concierge / Experience Architect** behaviour with the existing Winkly ai-gateway. It defines: input data sources, logic controller (constraint intersection, real-time checks), persona and reasoning chain, **heuristic weighting**, **hidden-friction logic** (transition + arrival), **state machine** (Analysis → Discovery → Refinement), **detailed menu option schema** (itinerary + logistics), **global planner** (conflict resolution + follow-up), and connection to Business Accounts.
+
+**Related:** `AI_CONCIERGE_RECOMMENDATION.md` (provider, tools), `AI_INTEGRATION_AND_DATE_INVITE_RECOMMENDATION.md` (invite flow, roadmap), `ONBOARDING_PROFILE_FIELDS.md` (profile fields).
+
+---
+
+## 1. Objective
+
+Build an AI-driven **Experience Architect** that uses:
+
+- **Structured user data** (user_profiles / profiles_core + sub_profiles / profiles_mode)
+- **Real-time external data** (weather, places, optional routing)
+
+to produce **3 curated “Menu Options”** (A, B, C) for any social or personal activity (date, meet-up, business meeting, event).
+
+---
+
+## 2. Input Data Sources
+
+### A. Primary user (source: user_profiles or profiles_core + sub_profiles / profiles_mode)
+
+| Data | Source | Use |
+|------|--------|-----|
+| Identity | first_name, gender, birth_date → age | Concierge context |
+| Location | city (home base), optional real-time GPS | Location filter, travel time |
+| Active mode | Romance / Friends / Business / Events | Mode weighting and rules |
+
+### B. User DNA (source: sub_profiles for active mode; see ONBOARDING_PROFILE_FIELDS.md)
+
+**Hard constraints (non-negotiable):**
+
+- **Allergies** (e.g. Peanuts, Tree nuts, Gluten) → Exclude unsafe venues.
+- **Food / dietary** (Vegan, Vegetarian, etc.) → Constraint intersection with partner.
+- **Smoking / alcohol** (preferences) → Filter venue type.
+
+**Soft filters (preferences):**
+
+- **Lifestyle** (Very active, Moderately active, Mostly relaxed, etc.).
+- **Interests** (Art, Fitness, Music, etc.).
+- **Values** (Honesty, Adventure, Growth, etc.).
+- **Relationship goals** (Romance) or **Meetup goals** (Friends) or **Networking goals** (Business).
+
+**Bio:** Scan `bio` for natural-language clues (e.g. “I hate loud music”) and feed a short summary into context.
+
+**Transport (when available):** Preferred transport mode (e.g. Driver, Uber, Public transit) for **Arrival logic** (parking vs drop-off, well-lit entrance).
+
+### C. Partner / group context (when applicable)
+
+If the user is inviting a **match or connection**, fetch the same data for the **counterparty** (profiles_core/user_profiles + sub_profile for the same mode). Used for **constraint intersection** and **DNA alignment**.
+
+---
+
+## 3. Logic Controller (System Prompt Logic)
+
+### Step 1: Constraint intersection (“lowest common denominator”)
+
+- **Dietary:** If User A = Vegan and User B = Omnivore → Result must be **Vegan-friendly**.
+- **Allergies:** If either has Nut allergy → Exclude Peanut/Tree-nut-focused venues.
+- **Mode + goals:** e.g. Romance + “Something serious” → Prioritise high-intimacy, low-noise venues.
+
+### Step 2: Real-time verification (before final output)
+
+- **Weather API:** If “Mostly relaxed” or rain predicted → Pivot to **indoor** options; avoid outdoor-only.
+- **Places (when available):** Filter by `open_now`, rating, price_level (matched to implied budget).
+- **Navigation (when available):** Ensure route is feasible from user’s city or current location.
+
+### Step 3: Internal supply first
+
+- **Winkly businesses:** When searching (e.g. “restaurants”, “tennis”), **first** query `business_profiles` / business offers (when table exists). A matching local business (e.g. “Vegan Italian” with a Business Account) is placed in **Option A**.
+
+---
+
+## 4. Persona and Reasoning Chain
+
+### Persona (system prompt)
+
+- **Role:** “Elite Digital Concierge” — sophisticated, proactive, concise.
+- **Behaviour:** Present **finalised solutions** (3 options); don’t ask the user to do the work.
+
+### Reasoning priority (order of application)
+
+1. **Safety / hard constraints** — Allergies, dietary, mobility. Non-negotiable.
+2. **Contextual logic** — Weather, time of day, mode. The “reality” filter.
+3. **DNA alignment** — Interests, lifestyle, values. The “delight” filter.
+4. **Internal supply** — Prefer businesses with a `business_profile` on Winkly.
+
+### Multi-step reasoning (Chain of Thought) in the prompt
+
+**STEP 1: Cross-reference DNA**
+
+- Common ground (shared interests).
+- Points of friction (e.g. one Vegan, one Omnivore; one Active, one Relaxed).
+- Goal: “Synthetic vibe” that satisfies both without compromising safety.
+
+**STEP 2: Environmental check**
+
+- Weather: If rain/snow/heat → eliminate outdoor-only.
+- Time: e.g. Thursday night → prioritise mid-week vibes, live jazz, etc.
+
+**STEP 3: Menu categorisation (3 distinct narratives)**
+
+1. **“The Core Match”** — Dominant shared interest (e.g. both Fitness → Padel + protein bar).
+2. **“The Sophisticated Pivot”** — Based on values (e.g. both value Growth → Art gallery + quiet wine bar).
+3. **“The Effortless Classic”** — Based on lifestyle (e.g. both Very Active → Scenic walk + organic café).
+
+**STEP 4: Output refinement**
+
+- Each option includes **Concierge Insight** (“Why I chose this for you”) and **Friction-less detail** (e.g. parking, accessibility).
+
+---
+
+## 5. Mode-specific weighting
+
+| Mode | Priority (high → low) | Example logic |
+|------|------------------------|---------------|
+| **Romance** | Atmosphere > Food > Activity | Dim lighting, low music as 80% of selection. |
+| **Friends** | Activity > Noise level > Price | High-energy spots where 4–6 people won’t feel “too loud”. |
+| **Business** | Noise level > Privacy > Connectivity | Wi-Fi, spaced tables, privacy for deals. |
+| **Events** | Spontaneity > Proximity > Popularity | “What’s happening now within 5 km?” |
+
+---
+
+## 5b. Heuristic weighting engine (micro-decision scoring)
+
+Venue/option scoring is modelled as:
+
+**S = (w₁ · C) + (w₂ · V) + (w₃ · L)**
+
+- **C (Compatibility):** Dietary/allergy fit. If any conflict → S = 0 (exclude).
+- **V (Vibe match):** How well venue metadata (e.g. “romantic,” “loud,” “industrial”) matches the active mode and DNA.
+- **L (Logistics):** Distance vs preferred transport; feasibility of route.
+
+**Mode-specific weights (examples):**
+
+| Mode | Emphasis | Example |
+|------|-----------|---------|
+| **Romance** | V dominant | w₂(V) ≈ 0.7; atmosphere drives selection. |
+| **Business** | L + noise | Logistics and noise level weighted ~0.8. |
+| **Friends** | V + L | Vibe and accessibility balanced. |
+
+The LLM should reason in these terms when choosing among options (even without real venue APIs, it can rank by compatibility, inferred vibe, and stated location/transport).
+
+---
+
+## 5c. Hidden friction (“silent needs”)
+
+A 5-star concierge addresses things the guest didn’t ask for but would be annoyed by if missing.
+
+### Transition logic (multi-venue plans)
+
+- If the plan has two locations (e.g. **Tennis → Dinner**), consider the **Freshness Factor**.
+- **Rule:** If the first activity is physical (sport, gym) and the next venue has a **dress code** (e.g. “Fine dining”), either:
+  - Insert a **45-minute “Refresh Gap”** (buffer), or
+  - Suggest a venue with **shower/changing facilities** so they can go “straight to dinner.”
+- Concierge tip in the itinerary should state this explicitly (e.g. “I’ve chosen this court because they provide towels and showers, so you can head straight to dinner”).
+
+### Arrival logic (transport-based)
+
+- **Driver:** Prefer venues with **parking** (or valet); mention it in `logistics.parking` and in a concierge_tip.
+- **Uber / Public transit:** Prefer **clear drop-off points**, **well-lit entrance**, **accessibility**; mention in itinerary or logistics.
+
+Use `transport` (or preferred_transport) from profile when available; otherwise infer from context (e.g. city centre → transit-friendly).
+
+---
+
+## 5d. State machine (reasoning states)
+
+The AI should follow these **states** in order:
+
+| State | Action | Example |
+|-------|--------|---------|
+| **Analysis** | Compare `values` and `interests` across profiles; resolve friction. | Both value “Adventure,” one “Mostly relaxed” → suggest “Scenic cable car” or “Private boat” (adventure without physical strain). |
+| **Discovery** | Inject **business_profiles** (Premium Partners). If a Business Account matches lifestyle/tags, use it as the **Anchor** for one option. | “Tennis” + “Premium Partner” with court → Option A anchored at that venue. |
+| **Refinement (Self-critique)** | Before final output, run a **“But” pass**: check weather, dress code, transport. | “I suggested a terrace, but wind is 25 km/h → move dinner to enclosed veranda.” |
+
+Implement in the system prompt as explicit steps so the model always does Analysis → Discovery → Refinement before returning the menu.
+
+---
+
+## 6. Output format (3 options JSON)
+
+The LLM must return exactly **3 options**. Two shapes are supported; the **detailed** shape is preferred when the model has enough context to fill it.
+
+### Minimal (backward-compatible)
+
+```json
+{
+  "options": [
+    {
+      "option_name": "Short title",
+      "why_this_fits": "Logic based on profile overlaps and constraints.",
+      "schedule": ["7:00 PM - Activity", "8:30 PM - Dinner"],
+      "business_link": "Google Maps or venue URL",
+      "weather_note": "How the plan accounts for weather",
+      "price_indicator": "€ / €€ / €€€"
+    }
+  ]
+}
+```
+
+### Detailed (Concierge Tips + itinerary + logistics)
+
+Use this so the UI can show **Concierge Tips** per step and **logistics** (weather protection, parking, cost).
+
+```json
+{
+  "options": [
+    {
+      "option_id": "opt_1",
+      "option_name": "The Active Sophisticate",
+      "narrative": "The Active Sophisticate",
+      "logic_bridge": "Since you both love Fitness but have Relationship Goals as Long-term, I've paired a competitive activity with a high-intimacy dinner.",
+      "why_this_fits": "Optional short summary; same idea as logic_bridge.",
+      "itinerary": [
+        {
+          "time": "18:00",
+          "activity": "Padel Match at [Business_Account_Name]",
+          "concierge_tip": "I've chosen this court because they provide towels and high-end showers, so you can head straight to dinner."
+        },
+        {
+          "time": "19:30",
+          "activity": "Dinner at [Venue_Name]",
+          "concierge_tip": "World-class Vegan menu; I've requested a corner table for better conversation."
+        }
+      ],
+      "schedule": ["18:00 - Padel", "19:30 - Dinner"],
+      "logistics": {
+        "weather_protection": "Full indoor transition",
+        "parking": "Valet available at venue",
+        "estimated_cost": "€120 - €150"
+      },
+      "business_link": "https://...",
+      "weather_note": "How the plan accounts for weather",
+      "price_indicator": "€€"
+    }
+  ]
+}
+```
+
+- **option_id:** Stable id for refinement/delta (e.g. `opt_1`, `opt_2`, `opt_3`).
+- **narrative:** Short theme name (e.g. “The Core Match,” “The Sophisticated Pivot”).
+- **logic_bridge:** One sentence explaining why this option fits their DNA (values + interests + goals).
+- **itinerary:** Ordered list of steps; each has **time**, **activity**, **concierge_tip** (transition/arrival/friction-less detail).
+- **logistics:** **weather_protection**, **parking**, **estimated_cost** (or equivalent) for driver/transit and weather.
+
+The gateway parses either shape and returns `suggestions` to the app for rendering as **Experience Menu** cards.
+
+---
+
+## 6b. Global planner (orchestration)
+
+The AI doesn’t only plan; it **orchestrates** across users and time.
+
+### Conflict resolution (when planning with a partner)
+
+- When **User A** invites **User B**, the system must consider **both** planners.
+- **Rule:** If User B has an existing commitment (e.g. “Business meetup at 17:00”), the AI must **only propose start times after that** (e.g. 19:00 or later for the date).
+- **Implementation:** Backend fetches planner items for the **partner** (when `partner_user_id` is set) and injects them into context as `PARTNER_PLANNER_ITEMS` (or similar). The system prompt instructs the model to avoid double-booking and to state any assumed buffer (e.g. “I’ve set dinner at 19:30 so you have time after your 17:00 meeting”).
+
+### Follow-up (post-event feedback)
+
+- **24 hours after** the event, the app can trigger a follow-up (e.g. in-app or push): “How was the tennis date?”
+- The answer is stored and used to **refine User DNA** over time (e.g. “Noise tolerance” lowered if they hated the noise; “Preferred cuisine” updated if they loved the restaurant).
+- **Implementation:** Future: store feedback in a `concierge_feedback` or profile_meta field and use it to adjust weights or bio clues for the next plan. Not required for current gateway; document for product/backend.
+
+---
+
+## 7. Refinement (Delta / “Change one thing”)
+
+If the user says e.g. **“I don’t like Option 2, give me something more chill”**:
+
+- **Interpretation:** Lower “intellectual/social” energy; more relaxed.
+- **Delta logic:** Keep Options 1 and 3; replace Option 2 with a new suggestion (e.g. Private cinema, botanical garden walk) that fits the refinement.
+- **Implementation:** Client sends `refinement_feedback` and optionally `previous_options` (or selected index) in the next concierge request; system prompt instructs the model to adjust only what’s needed.
+
+---
+
+## 8. User journey and UI integration
+
+| Step | Action |
+|------|--------|
+| **Trigger** | User taps “Plan a Date / Meet-up” in chat or Planner (existing Invite flow). |
+| **Selection** | User selects **Partner** (optional) and **Timeframe**. |
+| **Processing** | AI Concierge pulls profiles → runs logic → fetches real-time data (weather, Winkly events, planner). |
+| **Presentation** | User sees **Experience Menu** (3 cards: option_name, why_this_fits, schedule, link, weather_note, price). |
+| **Refinement** | User can tap “Change one thing” (e.g. earlier time, different cuisine) → delta request. |
+| **Finalise** | On “Confirm”, chosen option becomes the invite; sent to partner and added to both Planners (existing planner_invitations flow). |
+
+---
+
+## 9. Engineering implementation (current)
+
+- **LLM:** OpenAI (GPT-4o-mini) or Gemini (1.5 Flash) in `ai-gateway`; persona, 4-step reasoning, **heuristic weighting (S = C+V+L)**, **state machine (Analysis → Discovery → Refinement)**, **hidden friction** (transition + arrival), and **self-critique** in system prompt.
+- **Profile injection:** Gateway fetches `profiles_core` / `user_profiles` + `profiles_mode` for primary and (when `partner_user_id` set) partner; builds `PRIMARY_USER`, `PARTNER_USER`, `LOCATION`; includes `transport` / `preferred_transport` when in meta.
+- **Partner planner (conflict resolution):** When `partner_user_id` is set, gateway fetches planner items for the **partner** and injects `PARTNER_PLANNER_ITEMS` so the model only proposes times that don’t conflict.
+- **Tools:** `get_weather` (Open-Meteo), `get_winkly_events`, `get_planner_items`; optional later: Google Places, `get_winkly_business_offers`.
+- **Output:** Model instructed to return JSON with `options` array; **detailed** shape preferred: `option_id`, `narrative`, `logic_bridge`, `itinerary[]` (time, activity, concierge_tip), `logistics` (weather_protection, parking, estimated_cost). Gateway parses and returns `suggestions` for UI.
+- **Business bridge:** When `business_profiles` or `business_offers` exist, gateway will query them first and use as Anchor for Option A.
+- **Follow-up / DNA refinement:** Post-event feedback (“How was the date?”) and weight updates are product/backend; not yet implemented in gateway.
+
+---
+
+## 10. Input needed from you (product/ops)
+
+| Item | Status | Action |
+|------|--------|--------|
+| **Google Maps API key** | Optional | For Place Search, Details, Routing. Add to Supabase secrets and implement in gateway when ready. |
+| **Business profiles / offers table** | Not yet | Define schema for business_profiles + offers (e.g. venue, tags, dietary, link); then add `get_winkly_business_offers` tool and “Option A = Winkly business first” in prompt. |
+| **Profile fields in DB** | Partial | Ensure allergies, food, lifestyle, values, relationship_goals, meetup_goals are in `profiles_mode.meta`. Optional: `transport` or `preferred_transport` (e.g. Driver, Uber, Public transit) for Arrival logic (parking vs drop-off). |
+| **Post-event feedback / DNA refinement** | Future | Store "How was the date?" answers and use to adjust weights (e.g. noise tolerance); not yet in gateway. |
+| **Vector search (interests / business_tags)** | Future | Optional: use vector DB for interest and business_tag matching; not required for MVP. |

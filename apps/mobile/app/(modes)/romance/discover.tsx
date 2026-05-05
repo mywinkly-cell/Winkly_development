@@ -1,28 +1,18 @@
 // apps/mobile/app/(modes)/romance/discover.tsx
-// ────────────────────────────────────────────────
-// Winkly Romance Mode – Discover Screen (v7.1 AI)
-// © 2025 Winkly Technologies UG (haftungsbeschränkt)
-// Purpose:
-//   • Main "swiping" / discovery surface for Romance
-//   • Shows AI-ordered profiles from romance_discover_feed
-//   • Uses compatibility score + match tags
-//   • Like / Pass actions (with Supabase RPC stubs)
-//   • Consistent header
-// ────────────────────────────────────────────────
+// Discover: People Who Liked You (Section 1) + Recommended for You by Winkly AI (Section 2).
+// Mode colors and copy; analytics; block/report; match → Chats.
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
-  Image,
-  TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Dimensions,
+  ScrollView,
+  RefreshControl,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { useRouter, useFocusEffect } from "expo-router";
+import { usePostHog } from "posthog-react-native";
 
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { RomanceBottomNav } from "@/components/layout/RomanceBottomNav";
@@ -33,10 +23,52 @@ import {
   buildMatchTags,
   type RomanceProfile,
 } from "@/lib/ai/romanceInsights";
+import {
+  getRomanceAiMatchingEnabled,
+  getRomanceFilters,
+  applyRomanceFiltersToFeed,
+} from "@/lib/filters/romanceFiltersStorage";
+import { romanceLikeProfile } from "@/lib/chats";
+import { blockUser, reportUser } from "@/lib/chats";
+import { useModeContext } from "@/providers";
+import {
+  DiscoverPeopleWhoLikedYou,
+  type PeopleWhoLikedYouItem,
+} from "@/components/discover/DiscoverPeopleWhoLikedYou";
+import {
+  DiscoverRecommendedSection,
+  type RecommendedItem,
+} from "@/components/discover/DiscoverRecommendedSection";
+import {
+  discoverOpen,
+  likedYouLikeBack,
+  recommendationLike,
+  discoverProfileBlock,
+  discoverProfileReport,
+  matchCreatedFromDiscover,
+  recommendationLimitReached,
+} from "@/lib/discover/analytics";
+import {
+  getRecommendationLikesSentToday,
+  incrementRecommendationLikeSentToday,
+  DISCOVER_LIMITS,
+} from "@/lib/discover/storage";
+import { combinedMatchScore, fetchBehaviorAffinityMap } from "@/lib/matching/behaviorAffinities";
 
-const { width } = Dimensions.get("window");
+type RomanceLikeReceived = {
+  id: string;
+  first_name?: string;
+  last_name?: string;
+  age?: number;
+  city?: string;
+  interests?: string[];
+  romance_photos?: (string | null)[];
+  core_photos?: (string | null)[];
+  occupation?: string;
+  bio_romance?: string;
+};
 
-type FeedItem = {
+type FeedRow = {
   id: string;
   first_name: string;
   age?: number | null;
@@ -52,494 +84,314 @@ type FeedItem = {
 
 export default function RomanceDiscover() {
   const router = useRouter();
+  const posthog = usePostHog();
+  const { context } = useModeContext();
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selfProfile, setSelfProfile] = useState<RomanceProfile | null>(null);
-  const [feed, setFeed] = useState<FeedItem[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [likeInProgress, setLikeInProgress] = useState(false);
+  const [peopleWhoLikedYou, setPeopleWhoLikedYou] = useState<PeopleWhoLikedYouItem[]>([]);
+  const [recommendations, setRecommendations] = useState<RecommendedItem[]>([]);
+  const [likesUsedToday, setLikesUsedToday] = useState(0);
 
-  // ────────────────────────────────────────────────
-  // Load self profile + AI discover feed
-  // ────────────────────────────────────────────────
-  const loadData = async () => {
+  const subscriptionTier = context.subscription_tier ?? "free";
+  const canViewFullLikedYou = ["super", "premium", "enterprise"].includes(subscriptionTier);
+  const canLikeUnlimited = canViewFullLikedYou;
+
+  const loadLikesReceived = useCallback(async (userId: string) => {
+    const { data, error } = await supabase.rpc("romance_likes_received", {
+      current_user_id: userId,
+    });
+    if (error) return [];
+    const list = (data ?? []) as RomanceLikeReceived[];
+    return list.map((row) => {
+      const photo = row.romance_photos?.[0] ?? row.core_photos?.[0];
+      const tag = row.occupation ?? (Array.isArray(row.interests) && row.interests[0]) ?? null;
+      const name = [row.first_name, row.last_name].filter(Boolean).join(" ").trim() || "Someone";
+      return {
+        id: row.id,
+        name,
+        age: row.age ?? null,
+        tag: tag ?? null,
+        distance: null,
+        photoUrl: photo ?? null,
+      } as PeopleWhoLikedYouItem;
+    });
+  }, []);
+
+  const loadRecommendations = useCallback(
+    async (userId: string, self: RomanceProfile | null): Promise<RecommendedItem[]> => {
+      const { data: feedData, error } = await supabase.rpc("romance_discover_feed", {
+        current_user_id: userId,
+      });
+      let rows: FeedRow[] = (feedData ?? []) as FeedRow[];
+      if (error) {
+        const { data: fallback } = await supabase
+          .from("public_profile_view")
+          .select("id, first_name, age, city, interests, languages, occupation, bio_romance, core_photos, romance_photos")
+          .neq("id", userId)
+          .limit(50);
+        rows = (fallback || []) as FeedRow[];
+        rows = rows.filter(
+          (r) =>
+            (Array.isArray(r.romance_photos) && r.romance_photos.some((p) => !!p)) ||
+            (r.bio_romance != null && String(r.bio_romance).trim() !== "")
+        );
+      }
+
+      const scored = rows.map((r) => {
+        const other: RomanceProfile = {
+          id: r.id,
+          first_name: r.first_name,
+          age: r.age ?? undefined,
+          city: r.city ?? undefined,
+          interests: r.interests ?? [],
+          languages: r.languages ?? [],
+          occupation: r.occupation ?? undefined,
+          bio_romance: r.bio_romance ?? undefined,
+        };
+        const compatibility = computeCompatibilityScore({ self: self ?? undefined, other });
+        return { ...r, compatibility };
+      });
+
+      const filters = await getRomanceFilters();
+      const filtered = applyRomanceFiltersToFeed(scored, filters);
+      const aiOn = await getRomanceAiMatchingEnabled();
+      if (aiOn) {
+        const ids = filtered.map((r) => r.id);
+        const affMap = await fetchBehaviorAffinityMap(userId, ids, "romance");
+        filtered.sort((a, b) => {
+          const ca = a.compatibility ?? 72;
+          const cb = b.compatibility ?? 72;
+          const sa = combinedMatchScore(ca, affMap.get(a.id) ?? 0.5);
+          const sb = combinedMatchScore(cb, affMap.get(b.id) ?? 0.5);
+          return sb - sa;
+        });
+      }
+
+      const take = DISCOVER_LIMITS.recommendationsPerDay;
+      return filtered.slice(0, take).map((r) => {
+        const other: RomanceProfile = {
+          id: r.id,
+          first_name: r.first_name,
+          age: r.age ?? undefined,
+          city: r.city ?? undefined,
+          interests: r.interests ?? [],
+          languages: r.languages ?? [],
+          occupation: r.occupation ?? undefined,
+          bio_romance: r.bio_romance ?? undefined,
+        };
+        const tags = buildMatchTags({ self: self ?? undefined, other });
+        const photo = r.romance_photos?.[0] ?? r.core_photos?.[0];
+        return {
+          id: r.id,
+          name: r.first_name ?? "Someone",
+          age: r.age ?? null,
+          location: r.city ? `${r.city}` : null,
+          compatibility: r.compatibility ?? null,
+          sharedInterests: (r.interests ?? []).slice(0, 3),
+          lifestyleTag: tags[0] ?? null,
+          goalSnippet: r.bio_romance ? r.bio_romance.slice(0, 80) + (r.bio_romance.length > 80 ? "…" : "") : null,
+          photoUrl: photo ?? null,
+        } as RecommendedItem;
+      });
+    },
+    []
+  );
+
+  const loadData = useCallback(async () => {
     try {
-      setLoading(true);
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) return;
 
-      // Self profile
+      const uid = userData.user.id;
+
       const { data: me } = await supabase
         .from("public_profile_view")
         .select("*")
-        .eq("id", userData.user.id)
+        .eq("id", uid)
         .single();
 
-      if (me) {
-        setSelfProfile({
-          id: me.id,
-          first_name: me.first_name,
-          age: me.age,
-          city: me.city,
-          interests: me.interests,
-          languages: me.languages,
-          occupation: me.occupation,
-          bio_romance: me.bio_romance,
-          compatibility: me.compatibility,
-        });
-      }
+      const self: RomanceProfile | null = me
+        ? {
+            id: me.id,
+            first_name: me.first_name,
+            age: me.age,
+            city: me.city,
+            interests: me.interests,
+            languages: me.languages,
+            occupation: me.occupation,
+            bio_romance: me.bio_romance,
+          }
+        : null;
+      setSelfProfile(self);
 
-      // Discover feed – AI-ordered in backend
-      const { data: feedData, error } = await supabase.rpc(
-        "romance_discover_feed",
-        { current_user_id: userData.user.id }
-      );
+      const [likedYouList, recList] = await Promise.all([
+        loadLikesReceived(uid),
+        loadRecommendations(uid, self),
+      ]);
 
-      if (error) {
-        console.warn("romance_discover_feed error", error);
-      }
+      setPeopleWhoLikedYou(likedYouList);
+      setRecommendations(recList);
 
-      const items: FeedItem[] = (feedData || []) as FeedItem[];
-
-      // Extra safety: re-score on client
-      const scored = items.map((item) => {
-        const other: RomanceProfile = {
-          id: item.id,
-          first_name: item.first_name,
-          age: item.age ?? undefined,
-          city: item.city ?? undefined,
-          interests: item.interests || [],
-          languages: item.languages || [],
-          occupation: item.occupation || undefined,
-          bio_romance: item.bio_romance || undefined,
-          compatibility: item.compatibility ?? undefined,
-        };
-
-        const score = computeCompatibilityScore({
-          self: selfProfile,
-          other,
-        });
-
-        return {
-          ...item,
-          compatibility: score,
-        };
-      });
-
-      scored.sort(
-        (a, b) => (b.compatibility ?? 0) - (a.compatibility ?? 0)
-      );
-
-      setFeed(scored);
-      setCurrentIndex(0);
+      const used = await getRecommendationLikesSentToday("romance");
+      setLikesUsedToday(used);
     } catch (err) {
       console.warn("RomanceDiscover loadData error", err);
-      Alert.alert("Error", "Could not load discover feed.");
+      Alert.alert("Error", "Could not load discover.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [loadLikesReceived, loadRecommendations]);
 
   useEffect(() => {
+    setLoading(true);
     loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const currentItem = useMemo(
-    () => (currentIndex < feed.length ? feed[currentIndex] : null),
-    [feed, currentIndex]
+  useFocusEffect(
+    useCallback(() => {
+      discoverOpen(posthog ?? null, "romance");
+      loadData();
+    }, [loadData, posthog])
   );
 
-  // ────────────────────────────────────────────────
-  // Handle Like / Pass
-  // ────────────────────────────────────────────────
-  const goToNext = () => {
-    setCurrentIndex((prev) => prev + 1);
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
   };
 
-  const handlePass = async () => {
-    if (!currentItem) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    // Optional: supabase RPC for "pass"
+  const handleLikeBack = async (item: PeopleWhoLikedYouItem) => {
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (userData?.user) {
-        // Example RPC – adjust to your real function name/schema
-        // await supabase.rpc("romance_pass_profile", {
-        //   current_user_id: userData.user.id,
-        //   target_user_id: currentItem.id,
-        // });
+      const result = await romanceLikeProfile(item.id);
+      likedYouLikeBack(posthog ?? null, "romance", item.id);
+      if (result?.is_match) {
+        matchCreatedFromDiscover(posthog ?? null, "romance", item.id);
+        setPeopleWhoLikedYou((prev) => prev.filter((p) => p.id !== item.id));
+        if (result.chat_id) router.push(`/chats/${result.chat_id}?matchBridge=1`);
+        else Alert.alert("It's a match! 💖", "You both liked each other. Open Chats to say hi.");
+      } else {
+        setPeopleWhoLikedYou((prev) => prev.filter((p) => p.id !== item.id));
       }
-    } catch (err) {
-      console.warn("Pass RPC error", err);
+    } catch (e) {
+      Alert.alert("Error", (e as Error).message ?? "Could not send like.");
     }
-
-    goToNext();
   };
 
-  const handleLike = async () => {
-    if (!currentItem || likeInProgress) return;
-    setLikeInProgress(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
+  const handleRecommendationLike = async (item: RecommendedItem) => {
+    if (!canLikeUnlimited && likesUsedToday >= 1) {
+      recommendationLimitReached(posthog ?? null, "romance");
+      return;
+    }
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (userData?.user) {
-        // Example RPC – adjust to your real function name/schema
-        // const { data, error } = await supabase.rpc("romance_like_profile", {
-        //   current_user_id: userData.user.id,
-        //   target_user_id: currentItem.id,
-        // });
-        // if (error) throw error;
-        // if (data?.is_match) {
-        //   Alert.alert("It's a match! 💖", "You both liked each other.");
-        // }
+      const result = await romanceLikeProfile(item.id);
+      await incrementRecommendationLikeSentToday("romance");
+      setLikesUsedToday((c) => c + 1);
+      recommendationLike(posthog ?? null, "romance", item.id);
+      setRecommendations((prev) => prev.filter((p) => p.id !== item.id));
+      if (result?.is_match) {
+        matchCreatedFromDiscover(posthog ?? null, "romance", item.id);
+        if (result.chat_id) router.push(`/chats/${result.chat_id}?matchBridge=1`);
+        else Alert.alert("It's a match! 💖", "Open Chats to say hi.");
       }
-    } catch (err) {
-      console.warn("Like RPC error", err);
-    } finally {
-      setLikeInProgress(false);
-      goToNext();
+    } catch (e) {
+      Alert.alert("Error", (e as Error).message ?? "Could not send like.");
     }
   };
 
-  const handleOpenProfile = () => {
-    if (!currentItem) return;
-    router.push(`/(modes)/romance/profile-view?id=${currentItem.id}`);
+  const handleBlock = async (item: { id: string }) => {
+    try {
+      await blockUser(item.id);
+      discoverProfileBlock(posthog ?? null, "romance", item.id);
+      setPeopleWhoLikedYou((prev) => prev.filter((p) => p.id !== item.id));
+      setRecommendations((prev) => prev.filter((p) => p.id !== item.id));
+    } catch (e) {
+      Alert.alert("Error", (e as Error).message ?? "Could not block.");
+    }
   };
 
-  // ────────────────────────────────────────────────
-  // Card render (active profile)
-// ────────────────────────────────────────────────
-  const renderCard = () => {
-    if (!currentItem) {
-      return (
-        <View
-          style={{
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text
-            style={{ ...Typography.body, color: Colors.gray700 }}
-          >
-            No more profiles for now.
-          </Text>
-          <TouchableOpacity
-            onPress={loadData}
-            style={{
-              marginTop: 12,
-              paddingVertical: 10,
-              paddingHorizontal: 20,
-              borderRadius: Layout.radii.control,
-              borderWidth: 1,
-              borderColor: Colors.primaryViolet,
-            }}
-          >
-            <Text
-              style={{
-                ...Typography.body,
-                color: Colors.primaryViolet,
-              }}
-            >
-              Refresh feed
-            </Text>
-          </TouchableOpacity>
-        </View>
-      );
+  const handleReport = async (item: { id: string }) => {
+    try {
+      await reportUser(item.id, "other", "Reported from Discover");
+      discoverProfileReport(posthog ?? null, "romance", item.id);
+      setPeopleWhoLikedYou((prev) => prev.filter((p) => p.id !== item.id));
+      setRecommendations((prev) => prev.filter((p) => p.id !== item.id));
+      Alert.alert("Report sent", "Thanks for helping keep Winkly safe.");
+    } catch (e) {
+      Alert.alert("Error", (e as Error).message ?? "Could not report.");
     }
+  };
 
-    const mainPhoto =
-      currentItem.romance_photos?.[0] ||
-      currentItem.romance_photos?.find((p) => !!p) ||
-      currentItem.core_photos?.[0] ||
-      null;
+  const primaryColor = Colors.romance.primary;
 
-    const other: RomanceProfile = {
-      id: currentItem.id,
-      first_name: currentItem.first_name,
-      age: currentItem.age,
-      city: currentItem.city,
-      interests: currentItem.interests || [],
-      languages: currentItem.languages || [],
-      occupation: currentItem.occupation || undefined,
-      bio_romance: currentItem.bio_romance || undefined,
-      compatibility: currentItem.compatibility ?? undefined,
-    };
-
-    const score = computeCompatibilityScore({
-      self: selfProfile,
-      other,
-    });
-
-    const tags = buildMatchTags({ self: selfProfile, other });
-
+  if (loading) {
     return (
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <TouchableOpacity
-          activeOpacity={0.95}
-          onPress={handleOpenProfile}
-          style={{
-            width: width * 0.9,
-            height: width * 1.1,
-            borderRadius: Layout.radii.card,
-            backgroundColor: "#FFF",
-            overflow: "hidden",
-            shadowColor: "#000",
-            shadowOpacity: 0.12,
-            shadowRadius: 10,
-            elevation: 3,
-          }}
-        >
-          {/* Photo area */}
-          <View style={{ flex: 3, backgroundColor: Colors.gray200 }}>
-            {mainPhoto ? (
-              <Image
-                source={{ uri: mainPhoto }}
-                style={{ width: "100%", height: "100%" }}
-              />
-            ) : (
-              <View
-                style={{
-                  flex: 1,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontSize: 40 }}>📷</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Info area */}
-          <View
-            style={{
-              flex: 2,
-              padding: 14,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                marginBottom: 6,
-              }}
-            >
-              <View style={{ flex: 1, paddingRight: 8 }}>
-                <Text
-                  style={{
-                    ...Typography.h2,
-                    fontSize: 20,
-                    color: Colors.textPrimary,
-                  }}
-                  numberOfLines={1}
-                >
-                  {currentItem.first_name}
-                  {currentItem.age ? `, ${currentItem.age}` : ""}
-                </Text>
-                <Text
-                  style={{
-                    ...Typography.caption,
-                    color: Colors.gray700,
-                  }}
-                  numberOfLines={1}
-                >
-                  {currentItem.city || "Somewhere nearby"}
-                </Text>
-              </View>
-
-              {/* Compatibility badge */}
-              <View
-                style={{
-                  minWidth: 68,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: Colors.accentMint,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  paddingHorizontal: 10,
-                }}
-              >
-                <Text
-                  style={{
-                    ...Typography.caption,
-                    fontWeight: "700",
-                    color: "#003329",
-                  }}
-                >
-                  {score}% match
-                </Text>
-              </View>
-            </View>
-
-            {/* Tags */}
-            {tags.length > 0 && (
-              <View
-                style={{
-                  flexDirection: "row",
-                  flexWrap: "wrap",
-                  marginBottom: 6,
-                }}
-              >
-                {tags.slice(0, 3).map((tag) => (
-                  <View
-                    key={tag}
-                    style={{
-                      borderRadius: 999,
-                      backgroundColor: Colors.gray100,
-                      paddingVertical: 4,
-                      paddingHorizontal: 8,
-                      marginRight: 6,
-                      marginBottom: 4,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        ...Typography.caption,
-                        color: Colors.gray700,
-                      }}
-                    >
-                      {tag}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Short bio */}
-            {currentItem.bio_romance ? (
-              <Text
-                style={{
-                  ...Typography.body,
-                  color: Colors.gray800,
-                }}
-                numberOfLines={3}
-              >
-                {currentItem.bio_romance}
-              </Text>
-            ) : (
-              <Text
-                style={{
-                  ...Typography.caption,
-                  color: Colors.gray500,
-                }}
-              >
-                No bio yet. Get to know each other in chat 😉
-              </Text>
-            )}
-          </View>
-        </TouchableOpacity>
-
-        {/* Actions */}
-        <View
-          style={{
-            flexDirection: "row",
-            marginTop: 20,
-            justifyContent: "space-evenly",
-            width: "80%",
-          }}
-        >
-          {/* Pass */}
-          <TouchableOpacity
-            onPress={handlePass}
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 32,
-              borderWidth: 2,
-              borderColor: Colors.gray300,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "#FFF",
-            }}
-          >
-            <Ionicons name="close" size={32} color={Colors.gray500} />
-          </TouchableOpacity>
-
-          {/* Like */}
-          <TouchableOpacity
-            onPress={handleLike}
-            disabled={likeInProgress}
-            style={{
-              width: 72,
-              height: 72,
-              borderRadius: 36,
-              backgroundColor: Colors.accentCoral,
-              alignItems: "center",
-              justifyContent: "center",
-              shadowColor: "#000",
-              shadowOpacity: 0.2,
-              shadowRadius: 8,
-              elevation: 4,
-              opacity: likeInProgress ? 0.7 : 1,
-            }}
-          >
-            <Ionicons name="heart" size={36} color="#FFF" />
-          </TouchableOpacity>
+      <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
+        <ModeHeader currentMode="romance" rightSlot="filterSettings" />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={primaryColor} />
         </View>
+        <RomanceBottomNav />
       </View>
     );
-  };
+  }
 
-  // ────────────────────────────────────────────────
-  // UI
-  // ────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
-      {/* HEADER */}
       <ModeHeader currentMode="romance" rightSlot="filterSettings" />
 
-      {/* TOP LABEL */}
-      <View style={{ paddingHorizontal: 20, marginBottom: 6 }}>
-        <Text
-          style={{
-            ...Typography.h1,
-            fontSize: 24,
-            color: Colors.textPrimary,
-            marginBottom: 4,
-          }}
-        >
-          Discover new matches 💘
-        </Text>
-        <Text
-          style={{
-            ...Typography.caption,
-            color: Colors.gray700,
-          }}
-        >
-          Winkly orders profiles based on shared interests, lifestyle and vibe.
-        </Text>
-      </View>
+      <ScrollView
+        style={{ flex: 1 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={primaryColor} />
+        }
+        contentContainerStyle={{ paddingBottom: 24 }}
+      >
+        <View style={{ paddingHorizontal: 20, marginBottom: 6 }}>
+          <Text style={{ ...Typography.h1, fontSize: 24, color: Colors.textPrimary, marginBottom: 4 }}>
+            Discover
+          </Text>
+          <Text style={{ ...Typography.caption, color: Colors.gray700 }}>
+            Winkly already did the thinking for you. High-probability matches and curated recommendations.
+          </Text>
+        </View>
 
-      {/* MAIN AREA */}
-      <View style={{ flex: 1 }}>
-        {loading ? (
-          <View
-            style={{
-              flex: 1,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <ActivityIndicator
-              size="large"
-              color={Colors.primaryViolet}
-            />
+        <DiscoverPeopleWhoLikedYou
+          mode="romance"
+          items={peopleWhoLikedYou}
+          canViewFull={canViewFullLikedYou}
+          primaryColor={primaryColor}
+          sectionTitle="People Who Liked You"
+          onLikeBack={handleLikeBack}
+          onViewProfile={(item) => router.push(`/(modes)/romance/profile-view?id=${item.id}`)}
+          onBlock={handleBlock}
+          onReport={handleReport}
+        />
+
+        <DiscoverRecommendedSection
+          mode="romance"
+          items={recommendations}
+          remainingToday={recommendations.length}
+          totalPerDay={DISCOVER_LIMITS.recommendationsPerDay}
+          primaryColor={primaryColor}
+          canLikeUnlimited={canLikeUnlimited}
+          likesUsedToday={likesUsedToday}
+          onSendLike={handleRecommendationLike}
+          onViewProfile={(item) => router.push(`/(modes)/romance/profile-view?id=${item.id}`)}
+          onBlock={handleBlock}
+          onReport={handleReport}
+        />
+
+        {peopleWhoLikedYou.length === 0 && recommendations.length === 0 && (
+          <View style={{ paddingHorizontal: 20, paddingVertical: 32, alignItems: "center" }}>
+            <Text style={{ ...Typography.body, color: Colors.gray700, textAlign: "center" }}>
+              No new recommendations right now. Check back later or refine your filters.
+            </Text>
           </View>
-        ) : (
-          renderCard()
         )}
-      </View>
+      </ScrollView>
 
-      {/* BOTTOM BAR — same as Home */}
       <RomanceBottomNav />
     </View>
   );

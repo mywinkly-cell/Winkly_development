@@ -22,6 +22,8 @@ import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { useTranslation } from "react-i18next";
+import { getTermsAndCookiesAccepted } from "@/lib/legalFlags";
 
 function isInvalidRefreshToken(err: unknown): boolean {
   const msg = String((err as any)?.message ?? "").toLowerCase();
@@ -29,6 +31,7 @@ function isInvalidRefreshToken(err: unknown): boolean {
 }
 
 export default function Signin() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { signOut } = useAuth();
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -43,6 +46,12 @@ export default function Signin() {
     Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
   }, [fadeAnim]);
 
+  React.useEffect(() => {
+    getTermsAndCookiesAccepted().then((accepted) => {
+      if (!accepted) router.replace("/(auth)/terms-cookies?next=signin");
+    });
+  }, [router]);
+
   const oauthReady = useMemo(() => {
     const googleAndroid = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
     const googleIos = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
@@ -54,7 +63,7 @@ export default function Signin() {
   const onSignin = async () => {
     const cleanEmail = email.trim();
     if (!cleanEmail || !password) {
-      Alert.alert("Incomplete", "Please enter both email and password.");
+      Alert.alert(t("auth.incomplete"), t("auth.enterEmailPassword"));
       return;
     }
     try {
@@ -86,9 +95,9 @@ export default function Signin() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       if (isInvalidRefreshToken(err)) {
         try { await signOut(); } catch { /* already cleared */ }
-        Alert.alert("Session expired", "Your previous session has expired. Please sign in again with your email and password.");
+        Alert.alert(t("auth.sessionExpired"), t("auth.sessionExpiredMessage"));
       } else {
-        Alert.alert("Error", err?.message ?? "Unknown error");
+        Alert.alert(t("common.error"), err?.message ?? "Unknown error");
       }
     } finally {
       setLoading(false);
@@ -96,14 +105,14 @@ export default function Signin() {
   };
 
   const handleGoogleSignin = () => {
-    if (!oauthReady.googleReady) Alert.alert("Google not configured", "Add OAuth client IDs in .env.");
-    else Alert.alert("Coming soon", "Google sign-in will be enabled after OAuth setup.");
+    if (!oauthReady.googleReady) Alert.alert(t("auth.oauthNotConfigured"), "Add OAuth client IDs in .env.");
+    else Alert.alert(t("auth.comingSoon"), "Google sign-in will be enabled after OAuth setup.");
   };
   const handleFacebookSignin = () => {
-    if (!oauthReady.facebookReady) Alert.alert("Facebook not configured", "Add Facebook App ID in .env.");
-    else Alert.alert("Coming soon", "Facebook sign-in will be enabled after OAuth setup.");
+    if (!oauthReady.facebookReady) Alert.alert(t("auth.oauthNotConfigured"), "Add Facebook App ID in .env.");
+    else Alert.alert(t("auth.comingSoon"), "Facebook sign-in will be enabled after OAuth setup.");
   };
-  const handleAppleSignin = () => oauthReady.appleReady && Alert.alert("Coming soon", "Apple sign-in requires EAS build.");
+  const handleAppleSignin = () => oauthReady.appleReady && Alert.alert(t("auth.comingSoon"), "Apple sign-in requires EAS build.");
 
   return (
     <SafeScreenView style={styles.safe}>
@@ -115,12 +124,12 @@ export default function Signin() {
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.title}>Welcome back</Text>
-              <Text style={styles.subtitle}>Sign in to continue your journey.</Text>
+              <Text style={styles.title}>{t("auth.welcomeBack")}</Text>
+              <Text style={styles.subtitle}>{t("auth.signInSubtitle")}</Text>
 
-              <Text style={styles.label}>Email</Text>
+              <Text style={styles.label}>{t("auth.email")}</Text>
               <TextInput
-                placeholder="name@example.com"
+                placeholder={t("auth.emailPlaceholder")}
                 placeholderTextColor={Colors.gray500}
                 value={email}
                 onChangeText={setEmail}
@@ -133,9 +142,9 @@ export default function Signin() {
                 style={[styles.input, emailFocused && styles.inputFocused]}
               />
 
-              <Text style={styles.label}>Password</Text>
+              <Text style={styles.label}>{t("auth.password")}</Text>
               <TextInput
-                placeholder="Your password"
+                placeholder={t("auth.passwordPlaceholder")}
                 placeholderTextColor={Colors.gray500}
                 value={password}
                 onChangeText={setPassword}
@@ -156,17 +165,20 @@ export default function Signin() {
                 {loading ? (
                   <ActivityIndicator color={Colors.accentYellow} />
                 ) : (
-                  <Text style={styles.primaryText}>Sign in</Text>
+                  <Text style={styles.primaryText}>{t("auth.signin")}</Text>
                 )}
               </TouchableOpacity>
 
               <TouchableOpacity onPress={() => router.push("/(auth)/reset-password")} style={styles.resetLink}>
-                <Text style={styles.resetText}>Forgot your password?</Text>
+                <Text style={styles.resetText}>{t("auth.forgotPassword")}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push("/(auth)/reset-confirm")} style={styles.resetLinkSecondary}>
+                <Text style={styles.resetTextSecondary}>Already have a reset link?</Text>
               </TouchableOpacity>
 
               <View style={styles.dividerRow}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or continue with</Text>
+                <Text style={styles.dividerText}>{t("auth.orContinueWith")}</Text>
                 <View style={styles.dividerLine} />
               </View>
 
@@ -174,19 +186,19 @@ export default function Signin() {
                 {oauthReady.googleReady && (
                   <TouchableOpacity onPress={handleGoogleSignin} activeOpacity={0.85} style={styles.oauthBtnFull}>
                     <Image source={require("../../assets/icons/google.png")} style={styles.oauthIcon} />
-                    <Text style={styles.oauthLabel}>Continue with Google</Text>
+                    <Text style={styles.oauthLabel}>{t("auth.continueWithGoogle")}</Text>
                   </TouchableOpacity>
                 )}
                 {oauthReady.facebookReady && (
                   <TouchableOpacity onPress={handleFacebookSignin} activeOpacity={0.85} style={styles.oauthBtnFull}>
                     <Image source={require("../../assets/icons/facebook.png")} style={styles.oauthIcon} />
-                    <Text style={styles.oauthLabel}>Continue with Facebook</Text>
+                    <Text style={styles.oauthLabel}>{t("auth.continueWithFacebook")}</Text>
                   </TouchableOpacity>
                 )}
                 {Platform.OS === "ios" && (
                   <TouchableOpacity onPress={handleAppleSignin} activeOpacity={0.85} style={styles.oauthBtnFull}>
                     <Image source={require("../../assets/icons/apple.png")} style={styles.oauthIcon} />
-                    <Text style={styles.oauthLabel}>Continue with Apple</Text>
+                    <Text style={styles.oauthLabel}>{t("auth.continueWithApple")}</Text>
                   </TouchableOpacity>
                 )}
                 {!oauthReady.googleReady && !oauthReady.facebookReady && !oauthReady.appleReady && (
@@ -196,7 +208,7 @@ export default function Signin() {
 
               <TouchableOpacity onPress={() => router.replace("/(onboarding-personal)/get-started")} style={styles.footerLink}>
                 <Text style={styles.footerText}>
-                  Don't have an account? <Text style={styles.link}>Sign up</Text>
+                  {t("auth.noAccount")} <Text style={styles.link}>{t("auth.signup")}</Text>
                 </Text>
               </TouchableOpacity>
             </View>
@@ -256,8 +268,10 @@ const styles = StyleSheet.create({
   primaryBtnDisabled: { opacity: 0.7 },
   primaryText: { ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.heading },
 
-  resetLink: { alignItems: "center", marginBottom: 24, minHeight: 44, justifyContent: "center" },
+  resetLink: { alignItems: "center", marginBottom: 8, minHeight: 44, justifyContent: "center" },
   resetText: { ...Typography.caption, color: Colors.primaryViolet },
+  resetLinkSecondary: { alignItems: "center", marginBottom: 24, minHeight: 44, justifyContent: "center" },
+  resetTextSecondary: { ...Typography.caption, color: Colors.gray600, fontSize: 13 },
 
   dividerRow: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
   dividerLine: { flex: 1, height: 1, backgroundColor: Colors.gray200 },
