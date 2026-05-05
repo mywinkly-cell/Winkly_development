@@ -6,7 +6,7 @@ import { View, TouchableOpacity, Image, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Layout } from "@/constants/tokens";
+import { Colors, Layout, Shadow, HEADER } from "@/constants/tokens";
 
 type HeaderProps = {
   onProfilePress?: () => void;
@@ -29,7 +29,7 @@ export function Header({ onProfilePress, onPlannerPress }: HeaderProps) {
   return (
     <View style={styles.container}>
       <TouchableOpacity onPress={handleProfile} style={styles.iconBtn} activeOpacity={0.8}>
-        <Ionicons name="person-circle-outline" size={28} color={Colors.textPrimary} />
+        <Ionicons name="person-circle-outline" size={HEADER.iconSize} color={Colors.textPrimary} />
       </TouchableOpacity>
 
       <Image
@@ -39,7 +39,7 @@ export function Header({ onProfilePress, onPlannerPress }: HeaderProps) {
       />
 
       <TouchableOpacity onPress={handlePlanner} style={styles.iconBtn} activeOpacity={0.8}>
-        <Ionicons name="calendar-outline" size={24} color={Colors.primaryViolet} />
+        <Ionicons name="calendar-outline" size={HEADER.iconSize} color={Colors.primaryViolet} />
       </TouchableOpacity>
     </View>
   );
@@ -50,24 +50,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: Layout.spacing.lg,
-    paddingVertical: Layout.spacing.sm,
+    paddingHorizontal: 16,
+    ...Layout.topHeaderBar,
+    backgroundColor: Colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray200,
+    ...Shadow.card,
   },
   iconBtn: {
-    width: Layout.touchTargetMin,
-    height: Layout.touchTargetMin,
-    borderRadius: Layout.radii.avatar,
+    width: HEADER.buttonSize,
+    height: HEADER.buttonSize,
+    borderRadius: HEADER.buttonRadius,
     backgroundColor: Colors.gray100,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.28,
-    shadowRadius: 6,
-    elevation: 6,
+    ...Shadow.button,
   },
   logo: {
-    width: 120,
-    height: 40,
+    height: HEADER.titleFontSize,
+    width: HEADER.titleFontSize * (120 / 40),
   },
 });

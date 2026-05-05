@@ -42,9 +42,10 @@ Checklist to **activate** the app (production-ready backend + build) and **publi
 
 ### 1.5 Legal and support
 
-- [ ] **Privacy policy** URL (required for Play and for many auth providers).
-- [ ] **Terms of service** URL (recommended).
-- [ ] Point account/legal screens to these URLs (see `app/account/legal.tsx`).
+- [ ] **Privacy policy** URL (required for Play and for many auth providers). Source: `docs/PRIVACY_POLICY.md` — host at e.g. `https://winkly.app/privacy`.
+- [ ] **Terms of service** URL (recommended). Source: `docs/TERMS_OF_SERVICE.md` — host at e.g. `https://winkly.app/terms`.
+- [ ] Point account/legal screens to these URLs (see `app/account/legal.tsx`). For GDPR/EEA, ensure the Privacy Policy is live before launch.
+- [ ] Optional: **Community guidelines** — host and link from legal screen; see `docs/` for data protection context (`DATA_PROTECTION_AND_PRIVACY_ASSESSMENT.md`).
 
 ### 1.6 Build a production Android app
 

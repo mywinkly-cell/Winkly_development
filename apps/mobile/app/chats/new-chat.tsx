@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { createDirectChat } from "@/lib/chats";
 import type { AppMode, DMSource } from "@/lib/chats";
+import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 
 type UserMini = {
   id: string;
@@ -52,8 +53,8 @@ async function loadRomanceMatches(userId: string): Promise<UserMini[]> {
     supabase.rpc("romance_new_matches", { current_user_id: userId }),
     supabase.rpc("romance_connections", { current_user_id: userId }),
   ]);
-  const newMatches = (newRes.data ?? []) as Array<Record<string, unknown>>;
-  const connections = (connRes.data ?? []) as Array<Record<string, unknown>>;
+  const newMatches = (newRes.data ?? []) as Record<string, unknown>[];
+  const connections = (connRes.data ?? []) as Record<string, unknown>[];
   const seen = new Set<string>();
   const list: UserMini[] = [];
   for (const m of [...newMatches, ...connections]) {
@@ -76,6 +77,7 @@ async function loadRomanceMatches(userId: string): Promise<UserMini[]> {
 
 export default function NewChat() {
   const router = useRouter();
+  const fmtLoc = useFormatLocationDisplay();
   const params = useLocalSearchParams<{ mode?: string }>();
 
   const mode: AppMode = useMemo(() => {
@@ -344,7 +346,7 @@ export default function NewChat() {
                 <View style={{ flex: 1 }}>
                   <Text style={{ ...Typography.body, fontWeight: "600" }}>{formatName(item)}</Text>
                   <Text style={{ fontSize: 13, color: Colors.gray600, marginTop: 2 }}>
-                    {item.city ?? "—"}
+                    {fmtLoc(item.city) || "—"}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />

@@ -58,6 +58,7 @@ export type ProfileCoreUpdate = {
   bio?: string | null;
   core_photos?: string[] | null;
   instagram?: string | null;
+  night_owl?: boolean | null;
 };
 
 /** Upsert current user's core profile (insert or update by id). */
@@ -90,6 +91,11 @@ export type ProfileModeUpdate = {
   photos?: string[] | null;
   interests?: string[] | null;
   meta?: Record<string, unknown> | null;
+  lifestyle_tags?: string[] | null;
+  voice_prompt_url?: string | null;
+  voice_prompt_seconds?: number | null;
+  video_bio_url?: string | null;
+  video_poster_url?: string | null;
 };
 
 /** Upsert current user's mode sub-profile (insert or update by user_id + mode). */

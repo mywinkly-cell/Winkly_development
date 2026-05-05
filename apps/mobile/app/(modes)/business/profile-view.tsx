@@ -9,7 +9,9 @@ import {
 } from "react-native";
 import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
+import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 
 type BusinessProfile = {
@@ -46,6 +48,7 @@ function fullName(p: BusinessProfile) {
 }
 
 export default function BusinessProfileView() {
+  const { i18n } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{ user_id?: string }>();
 
@@ -174,7 +177,9 @@ export default function BusinessProfileView() {
               </Text>
 
               <Text style={{ color: Colors.mutedText, marginTop: 6 }}>
-                {profile.city || "Location not specified"}
+                {profile.city?.trim()
+                  ? normalizeLocationDisplayString(profile.city, i18n?.language ?? "en")
+                  : "Location not specified"}
               </Text>
 
               {/* Actions */}

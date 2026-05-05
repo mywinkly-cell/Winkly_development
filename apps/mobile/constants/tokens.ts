@@ -56,6 +56,9 @@ export const Colors = {
   successGreen: "#34C759",
 };
 
+/** Single source for top header bar height (all app top headers). Title = 0.5*this; button radius = 0.6*this. */
+export const HEADER_BAR_HEIGHT = 56;
+
 export const Typography = {
   h1: {
     fontSize: 32,
@@ -93,6 +96,12 @@ export const Typography = {
     lineHeight: 31,
     fontWeight: "700" as const,
   },
+  /** Single title size for all top header bars (screen titles, "Winkly", etc.). Use for consistent premium UI. */
+  headerTitle: {
+    fontSize: 22,
+    lineHeight: 31,
+    fontWeight: "700" as const,
+  },
 };
 
 /** Unified top header bar dimensions (all app top headers use this). */
@@ -100,6 +109,18 @@ export const TOP_HEADER_BAR = {
   paddingTop: 8,
   paddingBottom: 12,
   minHeight: 56,
+} as const;
+
+/** Consistent icon and button sizes for all top headers (premium UI/UX). */
+export const HEADER = {
+  /** Icon size for every header action (back, filter, AI spark, add, etc.). */
+  iconSize: 24,
+  /** Touch target for header buttons (left/right slots). */
+  buttonSize: 44,
+  /** Border radius for header buttons (pill/circle). */
+  buttonRadius: 22,
+  /** Title/logo height in top bar (px). Use for logo height and consistent title size; matches Typography.headerTitle. */
+  titleFontSize: 22,
 } as const;
 
 export const Layout = {

@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, Image, ActivityIndicator } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { supabase } from "@/lib/supabase";
 
@@ -82,7 +82,7 @@ export default function WelcomePersonal() {
 
       {/* CTA */}
       <TouchableOpacity
-        onPress={() => router.replace("/(modes)/romance/home")}
+        onPress={() => router.replace("/(modes)/romance/home" as Href)}
         style={{
           backgroundColor: Colors.primaryViolet,
           borderRadius: Layout.radii.card,

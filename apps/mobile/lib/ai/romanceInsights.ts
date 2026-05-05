@@ -17,8 +17,9 @@ export type RomanceProfile = {
 };
 
 /**
- * Compute a compatibility score between self & other using
- * only overlapping structured fields. Pure heuristic.
+ * Compute a compatibility score (0–100%) between self & other.
+ * Weighted overlap model: shared interests (+5 each, cap +15), shared languages (+3 each, cap +9),
+ * same city (+7), close age (+3–5). Bounded 55–96% for variance. Deterministic, no ML.
  */
 export function computeCompatibilityScore(params: {
   self?: RomanceProfile | null;

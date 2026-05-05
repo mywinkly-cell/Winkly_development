@@ -1,22 +1,25 @@
 // Romance Mode – Filtering screen
-// Free: distance, age, language. Subscription: interests, relationship goals, sub-profile fields. Premium: AI matching.
+// Free: distance, age, language. Subscription: interests, relationship goals. Super+: AI matching. Premium: full AI.
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   View,
   Text,
   ScrollView,
   Pressable,
   StyleSheet,
-  TextInput,
   Alert,
   TouchableOpacity,
+  Platform,
+  Modal,
 } from "react-native";
+import Slider from "@react-native-community/slider";
+import RangeSlider from "react-native-range-slider-expo";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { RomanceBottomNav } from "@/components/layout/RomanceBottomNav";
-import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
+import { Colors, Typography, Layout, FontFamily, HEADER } from "@/constants/tokens";
 import {
   LANGUAGE_OPTIONS,
   RELATIONSHIP_GOALS_OPTIONS,
@@ -33,23 +36,64 @@ import {
   FOOD_OPTIONS,
   INTEREST_POPULAR_ROMANCE,
 } from "@/constants/profileOptions";
+import { useTranslation } from "react-i18next";
 import { useModeContext } from "@/providers/ModeContextProvider";
+import { useAuth } from "@/providers/AuthProvider";
+import { getOwnProfileCore } from "@/lib/access/profiles";
+import { getDefaultFilterLanguage } from "@/lib/appLanguageToFilter";
+import {
+  getRomanceAiMatchingEnabled,
+  setRomanceAiMatchingEnabled,
+  getRomanceFilters,
+  setRomanceFilters,
+} from "@/lib/filters/romanceFiltersStorage";
+import { canUseAIFeature } from "@/lib/ai/aiFeatureGate";
+import { WinklyAISpark, SparklesIcon } from "@/components/ui/WinklyAISpark";
 
-const DISTANCE_OPTIONS_KM = [5, 10, 25, 50, 100, 999] as const; // 999 = Any
-const AGE_MIN_DEFAULT = 18;
-const AGE_MAX_DEFAULT = 99;
+const MAX_LANGUAGES = 5;
+
+const DISTANCE_KM_ANY = 999;
+const AGE_MIN_LIMIT = 18;
+const AGE_MAX_LIMIT = 100;
+const DISTANCE_MIN = 5;
+const DISTANCE_MAX = 100;
+const DISTANCE_STEP = 10;
+
+/** Build dropdown list: Any first, then user's profile languages in order, then rest A–Z */
+function sortedLanguageOptions(
+  allOptions: string[],
+  profileLanguages: string[]
+): string[] {
+  const rest = allOptions.filter((l) => l !== "Any");
+  const setRest = new Set(rest);
+  const userOrdered = profileLanguages.filter((l) => setRest.has(l));
+  const userSet = new Set(userOrdered);
+  const remaining = rest.filter((l) => !userSet.has(l)).sort((a, b) => a.localeCompare(b));
+  return ["Any", ...userOrdered, ...remaining];
+}
 
 export default function RomanceFiltersScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const { i18n } = useTranslation();
   const { context } = useModeContext();
   const HAS_SUBSCRIPTION = context.subscription_tier !== "free";
-  const HAS_PREMIUM = context.subscription_tier === "premium";
+  const HAS_AI_MATCHING = canUseAIFeature(context.subscription_tier, "smart_matching");
 
   // —— Basic (free) ——
   const [distanceKm, setDistanceKm] = useState<number>(50);
-  const [ageMin, setAgeMin] = useState<string>(String(AGE_MIN_DEFAULT));
-  const [ageMax, setAgeMax] = useState<string>(String(AGE_MAX_DEFAULT));
-  const [languages, setLanguages] = useState<string[]>(["Any"]);
+  const [ageMin, setAgeMin] = useState<number>(AGE_MIN_LIMIT);
+  const [ageMax, setAgeMax] = useState<number>(AGE_MAX_LIMIT);
+  const [languages, setLanguages] = useState<string[]>([]);
+  const [profileLanguages, setProfileLanguages] = useState<string[]>([]);
+  const [languageModalVisible, setLanguageModalVisible] = useState(false);
+  const languageDefaultInitialized = useRef(false);
+
+  useEffect(() => {
+    if (languageDefaultInitialized.current) return;
+    languageDefaultInitialized.current = true;
+    setLanguages([getDefaultFilterLanguage(i18n.language ?? "en")]);
+  }, [i18n.language]);
 
   // —— Subscription filters ——
   const [interests, setInterests] = useState<string[]>([]);
@@ -66,8 +110,63 @@ export default function RomanceFiltersScreen() {
   const [allergies, setAllergies] = useState<string[]>([]);
   const [food, setFood] = useState<string>("");
 
-  // —— Premium ——
-  const [aiMatchingEnabled, setAiMatchingEnabled] = useState(false);
+  // —— Premium (AI matching persisted) ——
+  const [aiMatchingEnabled, setAiMatchingEnabled] = useState(true);
+
+  const sortedLanguages = useMemo(
+    () => sortedLanguageOptions(LANGUAGE_OPTIONS, profileLanguages),
+    [profileLanguages]
+  );
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      const profile = await getOwnProfileCore(user.id);
+      if (cancelled) return;
+      const langs = (profile as { languages?: string[] | null } | null)?.languages;
+      setProfileLanguages(Array.isArray(langs) ? langs : []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const on = await getRomanceAiMatchingEnabled();
+      if (!cancelled) setAiMatchingEnabled(on);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Load persisted filters on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const saved = await getRomanceFilters();
+      if (cancelled) return;
+      setDistanceKm(saved.distanceKm);
+      setAgeMin(saved.ageMin);
+      setAgeMax(saved.ageMax);
+      setLanguages(saved.languages.length ? saved.languages : [getDefaultFilterLanguage(i18n.language ?? "en")]);
+      setInterests(saved.interests);
+      setRelationshipGoals(saved.relationshipGoals);
+      setLifestyle(saved.lifestyle);
+      setSmoking(saved.smoking);
+      setAlcohol(saved.alcohol);
+      setKids(saved.kids);
+      setSexualViews(saved.sexualViews);
+      setReligion(saved.religion);
+      setPoliticalViews(saved.politicalViews);
+      setValues(saved.values);
+      setPets(saved.pets);
+      setAllergies(saved.allergies);
+      setFood(saved.food);
+    })();
+    return () => { cancelled = true; };
+  }, [i18n.language]);
 
   const toggleLanguage = (lang: string) => {
     Haptics.selectionAsync();
@@ -77,10 +176,18 @@ export default function RomanceFiltersScreen() {
     }
     setLanguages((prev) => {
       const next = prev.filter((l) => l !== "Any");
-      if (next.includes(lang)) return next.length ? next : ["Any"];
-      return [...next, lang].length ? [...next, lang] : ["Any"];
+      if (next.includes(lang)) return next.length > 1 ? next.filter((l) => l !== lang) : [getDefaultFilterLanguage(i18n.language ?? "en")];
+      if (next.length >= MAX_LANGUAGES) return prev;
+      return [...next, lang];
     });
   };
+
+  const languageLabel =
+    languages.length === 0
+      ? getDefaultFilterLanguage(i18n.language ?? "en")
+      : languages.includes("Any")
+        ? "Any"
+        : languages.slice(0, MAX_LANGUAGES).join(", ");
 
   const toggleChip = (arr: string[], val: string, setter: (v: string[]) => void, max: number) => {
     Haptics.selectionAsync();
@@ -91,9 +198,28 @@ export default function RomanceFiltersScreen() {
     }
   };
 
-  const handleApply = () => {
+  const handleApply = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    // TODO: persist filters (context / AsyncStorage / API) and apply to discover feed
+    await setRomanceAiMatchingEnabled(aiMatchingEnabled);
+    await setRomanceFilters({
+      distanceKm,
+      ageMin,
+      ageMax,
+      languages,
+      interests,
+      relationshipGoals,
+      lifestyle,
+      smoking,
+      alcohol,
+      kids,
+      sexualViews,
+      religion,
+      politicalViews,
+      values,
+      pets,
+      allergies,
+      food,
+    });
     router.back();
   };
 
@@ -108,13 +234,13 @@ export default function RomanceFiltersScreen() {
     );
   };
 
-  const lockPremium = () => {
+  const lockAI = () => {
     Alert.alert(
-      "AI-powered matching with Premium",
-      "Use AI to surface better matches for you. Upgrade to Premium in Account.",
+      "Smart AI matching",
+      "Winkly AI analyses profiles and surfaces better matches for you. Upgrade to Super or Premium in Account.",
       [
         { text: "Cancel", style: "cancel" },
-        { text: "View Premium", onPress: () => router.push("/account/premium") },
+        { text: "See plans", onPress: () => router.push("/account/subscription") },
       ]
     );
   };
@@ -133,93 +259,243 @@ export default function RomanceFiltersScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* —— Basic (free) —— */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Basic filters</Text>
-          <Text style={styles.sectionHint}>Free for everyone</Text>
+        {/* —— Basic settings (all users, all tariffs) —— */}
+        <View style={[styles.sectionCard, styles.sectionCardBasic]}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Basic settings</Text>
+            <View style={styles.badgeFree}>
+              <Ionicons name="checkmark-circle" size={14} color={Colors.white} />
+              <Text style={styles.badgeFreeText}>All users</Text>
+            </View>
+          </View>
+          <Text style={styles.sectionHint}>Distance and age — available on all tariffs.</Text>
 
-          <Text style={styles.label}>Distance (max km)</Text>
-          <View style={styles.chipRow}>
-            {DISTANCE_OPTIONS_KM.map((km) => (
+          <Text style={styles.label}>Distance (max)</Text>
+          {distanceKm === DISTANCE_KM_ANY ? (
+            <View style={styles.chipRow}>
+              <Text style={[styles.chipText, { marginRight: 8 }]}>Any distance</Text>
               <Pressable
-                key={km}
                 onPress={() => {
                   Haptics.selectionAsync();
-                  setDistanceKm(km);
+                  setDistanceKm(50);
                 }}
-                style={[styles.chip, distanceKm === km && styles.chipSelected]}
+                style={styles.chip}
               >
-                <Text style={[styles.chipText, distanceKm === km && styles.chipTextSelected]}>
-                  {km === 999 ? "Any" : `${km} km`}
-                </Text>
+                <Text style={styles.chipText}>Set limit</Text>
               </Pressable>
-            ))}
+            </View>
+          ) : (
+            <>
+              <View style={styles.sliderValueRow}>
+                <Text style={styles.sliderValue}>{distanceKm} km</Text>
+                <Pressable
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setDistanceKm(DISTANCE_KM_ANY);
+                  }}
+                  style={styles.chip}
+                >
+                  <Text style={styles.chipText}>Any</Text>
+                </Pressable>
+              </View>
+              <Slider
+                style={styles.slider}
+                minimumValue={DISTANCE_MIN}
+                maximumValue={DISTANCE_MAX}
+                step={DISTANCE_STEP}
+                value={distanceKm}
+                onValueChange={(v) => setDistanceKm(Math.round(v))}
+                minimumTrackTintColor={Colors.romance.primary}
+                maximumTrackTintColor={Colors.gray300}
+                thumbTintColor={Colors.romance.primary}
+                onSlidingStart={() => Haptics.selectionAsync()}
+              />
+            </>
+          )}
+
+          <Text style={[styles.label, { marginTop: 20 }]}>Age range</Text>
+          <View style={styles.sliderValueRow}>
+            <Text style={styles.sliderValue}>{ageMin} – {ageMax}</Text>
+          </View>
+          <View style={styles.rangeSliderWrap}>
+            <RangeSlider
+              min={AGE_MIN_LIMIT}
+              max={AGE_MAX_LIMIT}
+              step={1}
+              initialFromValue={ageMin}
+              initialToValue={ageMax}
+              fromValueOnChange={(v) => {
+                const n = Math.round(v);
+                setAgeMin(n);
+                Haptics.selectionAsync();
+              }}
+              toValueOnChange={(v) => {
+                const n = Math.round(v);
+                setAgeMax(n);
+                Haptics.selectionAsync();
+              }}
+              fromKnobColor={Colors.romance.primary}
+              toKnobColor={Colors.romance.primary}
+              inRangeBarColor={Colors.romance.primary}
+              outOfRangeBarColor={Colors.gray300}
+              showRangeLabels={false}
+              showValueLabels={false}
+              barHeight={4}
+              knobSize={28}
+            />
           </View>
 
-          <Text style={styles.label}>Age range</Text>
-          <View style={styles.ageRow}>
-            <TextInput
-              style={styles.ageInput}
-              value={ageMin}
-              onChangeText={setAgeMin}
-              placeholder="18"
-              placeholderTextColor={Colors.gray500}
-              keyboardType="number-pad"
-              maxLength={2}
-            />
-            <Text style={styles.ageDash}>–</Text>
-            <TextInput
-              style={styles.ageInput}
-              value={ageMax}
-              onChangeText={setAgeMax}
-              placeholder="99"
-              placeholderTextColor={Colors.gray500}
-              keyboardType="number-pad"
-              maxLength={2}
-            />
-          </View>
+          <Text style={[styles.label, { marginTop: 20 }]}>Language</Text>
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync();
+              setLanguageModalVisible(true);
+            }}
+            style={styles.languageDropdownTrigger}
+          >
+            <Text style={styles.languageDropdownText} numberOfLines={1}>
+              {languageLabel}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color={Colors.gray600} />
+          </Pressable>
+          <Text style={styles.languageHint}>Up to {MAX_LANGUAGES} languages. Your profile languages appear first.</Text>
 
-          <Text style={styles.label}>Language</Text>
-          <View style={styles.chipRowWrap}>
-            {LANGUAGE_OPTIONS.slice(0, 8).map((lang) => {
-              const selected = languages.includes(lang) || (languages.includes("Any") && lang === "Any");
-              return (
-                <Pressable
-                  key={lang}
-                  onPress={() => toggleLanguage(lang)}
-                  style={[styles.chipSmall, selected && styles.chipSelected]}
+          <Modal
+            visible={languageModalVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setLanguageModalVisible(false)}
+          >
+            <Pressable style={styles.modalOverlay} onPress={() => setLanguageModalVisible(false)}>
+              <Pressable style={styles.languageModalContent} onPress={(e) => e.stopPropagation()}>
+                <View style={styles.languageModalHeader}>
+                  <Text style={styles.languageModalTitle}>Choose languages</Text>
+                  <Text style={styles.languageModalSubtitle}>Up to {MAX_LANGUAGES} (your profile languages first)</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setLanguageModalVisible(false);
+                    }}
+                    style={styles.languageModalClose}
+                    hitSlop={12}
+                    accessibilityLabel="Close"
+                  >
+                    <Ionicons name="close" size={24} color={Colors.gray600} />
+                  </TouchableOpacity>
+                </View>
+                <ScrollView
+                  style={styles.languageModalList}
+                  showsVerticalScrollIndicator={true}
+                  keyboardShouldPersistTaps="handled"
                 >
-                  <Text style={[styles.chipTextSmall, selected && styles.chipTextSelected]}>{lang}</Text>
-                </Pressable>
-              );
-            })}
+                  {sortedLanguages.map((lang) => {
+                    const isAny = lang === "Any";
+                    const selected =
+                      languages.includes(lang) || (languages.includes("Any") && isAny);
+                    const anySelected = languages.includes("Any");
+                    const atMax = !selected && !isAny && languages.filter((l) => l !== "Any").length >= MAX_LANGUAGES;
+                    const disabled = anySelected ? !isAny : atMax;
+                    return (
+                      <Pressable
+                        key={lang}
+                        onPress={() => !disabled && toggleLanguage(lang)}
+                        style={[
+                          styles.languageModalRow,
+                          selected && styles.languageModalRowSelected,
+                          disabled && !selected && styles.languageModalRowDisabled,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.languageModalRowText,
+                            selected && styles.languageModalRowTextSelected,
+                            disabled && !selected && styles.languageModalRowTextDisabled,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {lang}
+                        </Text>
+                        {selected && (
+                          <Ionicons name="checkmark-circle" size={22} color={Colors.romance.primary} />
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+                <View style={styles.languageModalFooter}>
+                  <Pressable
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setLanguageModalVisible(false);
+                    }}
+                    style={styles.languageModalDoneBtn}
+                  >
+                    <Text style={styles.languageModalDoneText}>Done</Text>
+                  </Pressable>
+                </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
+        </View>
+
+        {/* —— Subscription: AI-powered matching —— */}
+        <View style={[styles.sectionCard, styles.sectionCardSubscription]}>
+          <View style={styles.sectionHeaderRowWithBadge}>
+            <View style={styles.sectionHeaderTitleWrap}>
+              <WinklyAISpark feature="smart_matching" size={HEADER.iconSize} style={{ marginRight: 4 }} />
+              <Text style={styles.sectionTitle} numberOfLines={2}>AI-powered matching</Text>
+            </View>
+            <View style={[styles.badge, styles.badgeSubscription]}>
+              <Ionicons name="lock-closed" size={12} color={Colors.white} />
+              <Text style={styles.badgeText}>Subscription</Text>
+            </View>
           </View>
-          <View style={styles.chipRowWrap}>
-            {LANGUAGE_OPTIONS.slice(8).map((lang) => {
-              const selected = languages.includes(lang);
-              return (
-                <Pressable
-                  key={lang}
-                  onPress={() => toggleLanguage(lang)}
-                  style={[styles.chipSmall, selected && styles.chipSelected]}
-                >
-                  <Text style={[styles.chipTextSmall, selected && styles.chipTextSelected]}>{lang}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <Text style={styles.sectionHint}>
+            Use AI to surface people who fit you better. (We&apos;ll develop this feature soon.)
+          </Text>
+
+          {HAS_AI_MATCHING ? (
+            <View style={styles.toggleRow}>
+              <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 12 }}>
+                <View style={{ marginRight: 8 }}>
+                  <SparklesIcon size={16} color={Colors.romance.primary} />
+                </View>
+                <Text style={styles.toggleLabel}>Use AI to improve my match order</Text>
+              </View>
+              <Pressable
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  const next = !aiMatchingEnabled;
+                  setAiMatchingEnabled(next);
+                  setRomanceAiMatchingEnabled(next);
+                }}
+                style={[styles.toggleTrack, aiMatchingEnabled && styles.toggleTrackOn]}
+              >
+                <View style={[styles.toggleThumb, aiMatchingEnabled && styles.toggleThumbOn]} />
+              </Pressable>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.upsellCard} onPress={lockAI} activeOpacity={0.9}>
+              <SparklesIcon size={28} color={Colors.gray400} />
+              <Text style={styles.upsellTitle}>Better matches with AI</Text>
+              <Text style={styles.upsellText}>
+                Super and Premium use AI to rank and suggest people who are a better fit for you.
+              </Text>
+              <Text style={styles.upsellCta}>See plans</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* —— Subscription: more filters —— */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>More filters</Text>
-            {!HAS_SUBSCRIPTION && (
-              <View style={styles.badge}>
-                <Ionicons name="lock-closed" size={12} color={Colors.white} />
-                <Text style={styles.badgeText}>Subscription</Text>
-              </View>
-            )}
+        <View style={[styles.sectionCard, styles.sectionCardSubscription]}>
+          <View style={styles.sectionHeaderRowWithBadge}>
+            <View style={styles.sectionHeaderTitleWrap}>
+              <Text style={styles.sectionTitle} numberOfLines={2}>More filters</Text>
+            </View>
+            <View style={[styles.badge, styles.badgeSubscription]}>
+              <Ionicons name="lock-closed" size={12} color={Colors.white} />
+              <Text style={styles.badgeText}>Subscription</Text>
+            </View>
           </View>
           <Text style={styles.sectionHint}>
             {HAS_SUBSCRIPTION
@@ -396,50 +672,6 @@ export default function RomanceFiltersScreen() {
           )}
         </View>
 
-        {/* —— Premium: AI matching —— */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="sparkles" size={18} color={Colors.primaryViolet} style={{ marginRight: 6 }} />
-            <Text style={styles.sectionTitle}>AI-powered matching</Text>
-            {!HAS_PREMIUM && (
-              <View style={[styles.badge, styles.badgePremium]}>
-                <Ionicons name="sparkles" size={12} color={Colors.softBlack} />
-                <Text style={styles.badgeTextPremium}>Premium</Text>
-              </View>
-            )}
-          </View>
-          <Text style={styles.sectionHint}>
-            Use AI to surface people who fit you better. (We'll develop this feature soon.)
-          </Text>
-
-          {HAS_PREMIUM ? (
-            <View style={styles.toggleRow}>
-              <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 12 }}>
-                <Ionicons name="sparkles" size={16} color={Colors.primaryViolet} style={{ marginRight: 8 }} />
-                <Text style={styles.toggleLabel}>Use AI to improve my match order</Text>
-              </View>
-              <Pressable
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setAiMatchingEnabled((v) => !v);
-                }}
-                style={[styles.toggleTrack, aiMatchingEnabled && styles.toggleTrackOn]}
-              >
-                <View style={[styles.toggleThumb, aiMatchingEnabled && styles.toggleThumbOn]} />
-              </Pressable>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.upsellCard} onPress={lockPremium} activeOpacity={0.9}>
-              <Ionicons name="sparkles" size={28} color={Colors.primaryViolet} />
-              <Text style={styles.upsellTitle}>Better matches with AI</Text>
-              <Text style={styles.upsellText}>
-                Premium uses AI to rank and suggest people who are a better fit for you.
-              </Text>
-              <Text style={styles.upsellCta}>Upgrade to Premium</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
         <Pressable onPress={handleApply} style={styles.applyBtn} android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
           <Text style={styles.applyBtnText}>Apply filters</Text>
         </Pressable>
@@ -456,10 +688,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 14,
-    minHeight: 56,
+    paddingHorizontal: 16,
+    ...Layout.topHeaderBar,
     backgroundColor: Colors.white,
     borderBottomWidth: 1,
     borderBottomColor: Colors.gray200,
@@ -470,19 +700,19 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: HEADER.buttonSize,
+    height: HEADER.buttonSize,
+    borderRadius: HEADER.buttonRadius,
     backgroundColor: Colors.gray100,
     alignItems: "center",
     justifyContent: "center",
   },
   headerTitle: {
-    ...Typography.h3,
+    ...Typography.headerTitle,
     fontFamily: FontFamily.heading,
     color: Colors.textPrimary,
   },
-  headerRight: { width: 44 },
+  headerRight: { width: HEADER.buttonSize, height: HEADER.buttonSize },
   scroll: { flex: 1 },
   scrollContent: { padding: 20, paddingTop: 20, paddingBottom: 24 },
   section: { marginBottom: 28 },
@@ -499,7 +729,47 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.gray200,
   },
+  sectionCardBasic: {
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.romance.primary,
+  },
+  sectionCardSubscription: {
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.romance.primary,
+  },
+  sectionHeaderRowWithBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+    gap: 12,
+  },
+  sectionHeaderTitleWrap: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minWidth: 0,
+  },
   sectionHeaderRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 },
+  badgeFree: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: Colors.romance.primary,
+  },
+  badgeFreeText: {
+    ...Typography.caption,
+    fontSize: 11,
+    fontWeight: "600",
+    color: Colors.white,
+  },
+  badgeSubscription: {
+    backgroundColor: Colors.romance.primary,
+  },
   sectionTitle: {
     ...Typography.h3,
     fontSize: 18,
@@ -558,25 +828,145 @@ const styles = StyleSheet.create({
   chipTextSelected: {
     color: Colors.white,
   },
-  ageRow: {
+  sliderValueRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
-    marginBottom: 18,
+    justifyContent: "space-between",
+    marginBottom: 8,
   },
-  ageInput: {
-    width: 76,
-    borderWidth: 1.5,
-    borderColor: Colors.gray300,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+  sliderValue: {
     ...Typography.body,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
-  ageDash: {
+  sliderMinLabel: {
+    ...Typography.caption,
+    color: Colors.gray600,
+    marginBottom: 4,
+  },
+  slider: {
+    width: "100%",
+    height: Platform.OS === "ios" ? 28 : 40,
+  },
+  rangeSliderWrap: {
+    width: "100%",
+    marginTop: 4,
+    height: Platform.OS === "ios" ? 28 : 40,
+  },
+  languageDropdownTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: 48,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: Layout.radii.control,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    backgroundColor: Colors.backgroundLight,
+    marginTop: 8,
+  },
+  languageDropdownText: {
     ...Typography.body,
+    color: Colors.textPrimary,
+    flex: 1,
+    marginRight: 8,
+  },
+  languageHint: {
+    ...Typography.caption,
+    color: Colors.gray600,
+    marginTop: 6,
+    marginLeft: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  languageModalContent: {
+    width: "100%",
+    maxWidth: 400,
+    maxHeight: "80%",
+    backgroundColor: Colors.backgroundLight,
+    borderRadius: Layout.radii.card,
+    overflow: "hidden",
+    shadowColor: Colors.softBlack,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  languageModalHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray200,
+  },
+  languageModalTitle: {
+    ...Typography.h3,
+    fontFamily: FontFamily.heading,
+    color: Colors.textPrimary,
+    marginBottom: 4,
+  },
+  languageModalSubtitle: {
+    ...Typography.caption,
+    color: Colors.gray600,
+    marginBottom: 8,
+  },
+  languageModalClose: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    padding: 4,
+  },
+  languageModalList: {
+    maxHeight: 320,
+    paddingVertical: 8,
+  },
+  languageModalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  languageModalRowSelected: {
+    backgroundColor: Colors.romance.secondary,
+  },
+  languageModalRowDisabled: {
+    opacity: 0.5,
+  },
+  languageModalRowText: {
+    ...Typography.body,
+    color: Colors.textPrimary,
+    flex: 1,
+  },
+  languageModalRowTextSelected: {
+    fontWeight: "600",
+    color: Colors.romance.primary,
+  },
+  languageModalRowTextDisabled: {
     color: Colors.gray500,
+  },
+  languageModalFooter: {
+    padding: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.gray200,
+  },
+  languageModalDoneBtn: {
+    backgroundColor: Colors.romance.primary,
+    paddingVertical: 14,
+    borderRadius: Layout.radii.control,
+    alignItems: "center",
+  },
+  languageModalDoneText: {
+    ...Typography.button,
+    color: Colors.white,
+    fontFamily: FontFamily.heading,
   },
   badge: {
     flexDirection: "row",
@@ -585,7 +975,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: 14,
-    backgroundColor: Colors.primaryViolet,
+    backgroundColor: Colors.romance.primary,
   },
   badgeText: {
     ...Typography.caption,

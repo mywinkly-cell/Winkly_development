@@ -1,13 +1,28 @@
 -- Winkly Schema v8.1 — Supabase-first, Identity Firewall
--- Enums
-CREATE TYPE account_type AS ENUM ('personal', 'business');
-CREATE TYPE app_mode AS ENUM ('romance', 'friends', 'business', 'events');
-CREATE TYPE planner_source AS ENUM ('romance', 'friends', 'business', 'events');
-CREATE TYPE conversation_type AS ENUM ('dm', 'group', 'event', 'ai');
-CREATE TYPE visibility AS ENUM ('public', 'connections', 'private');
+-- Enums (idempotent: skip if type already exists)
+DO $$ BEGIN
+  CREATE TYPE account_type AS ENUM ('personal', 'business');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE app_mode AS ENUM ('romance', 'friends', 'business', 'events');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE planner_source AS ENUM ('romance', 'friends', 'business', 'events');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE conversation_type AS ENUM ('dm', 'group', 'event', 'ai');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE visibility AS ENUM ('public', 'connections', 'private');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Users (extends auth.users)
-CREATE TABLE public.users (
+CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT,
   account_type account_type NOT NULL DEFAULT 'personal',
@@ -19,7 +34,7 @@ CREATE TABLE public.users (
 );
 
 -- Profiles core (personal)
-CREATE TABLE public.profiles_core (
+CREATE TABLE IF NOT EXISTS public.profiles_core (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   first_name TEXT,
   last_name TEXT,
@@ -36,7 +51,7 @@ CREATE TABLE public.profiles_core (
 );
 
 -- Profiles mode (personal sub-profiles; unique user_id+mode)
-CREATE TABLE public.profiles_mode (
+CREATE TABLE IF NOT EXISTS public.profiles_mode (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   mode app_mode NOT NULL,
@@ -50,7 +65,7 @@ CREATE TABLE public.profiles_mode (
 );
 
 -- Profiles business (business account)
-CREATE TABLE public.profiles_business (
+CREATE TABLE IF NOT EXISTS public.profiles_business (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   business_name TEXT NOT NULL,
   location TEXT,
@@ -67,7 +82,7 @@ CREATE TABLE public.profiles_business (
 );
 
 -- Follows
-CREATE TABLE public.follows (
+CREATE TABLE IF NOT EXISTS public.follows (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   follower_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   followee_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -76,7 +91,7 @@ CREATE TABLE public.follows (
 );
 
 -- Events
-CREATE TABLE public.events (
+CREATE TABLE IF NOT EXISTS public.events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   created_by UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
@@ -92,7 +107,7 @@ CREATE TABLE public.events (
 );
 
 -- Event participants
-CREATE TABLE public.event_participants (
+CREATE TABLE IF NOT EXISTS public.event_participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -103,7 +118,7 @@ CREATE TABLE public.event_participants (
 );
 
 -- Event invitations
-CREATE TABLE public.event_invitations (
+CREATE TABLE IF NOT EXISTS public.event_invitations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
   inviter_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -114,7 +129,7 @@ CREATE TABLE public.event_invitations (
 );
 
 -- Planner items
-CREATE TABLE public.planner_items (
+CREATE TABLE IF NOT EXISTS public.planner_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   created_by UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   source_mode planner_source NOT NULL,
@@ -130,7 +145,7 @@ CREATE TABLE public.planner_items (
 );
 
 -- Planner participants
-CREATE TABLE public.planner_participants (
+CREATE TABLE IF NOT EXISTS public.planner_participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   planner_item_id UUID NOT NULL REFERENCES public.planner_items(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -140,7 +155,7 @@ CREATE TABLE public.planner_participants (
 );
 
 -- Conversations
-CREATE TABLE public.conversations (
+CREATE TABLE IF NOT EXISTS public.conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   type conversation_type NOT NULL DEFAULT 'dm',
   mode app_mode NOT NULL,
@@ -152,7 +167,7 @@ CREATE TABLE public.conversations (
 );
 
 -- Conversation members
-CREATE TABLE public.conversation_members (
+CREATE TABLE IF NOT EXISTS public.conversation_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -162,7 +177,7 @@ CREATE TABLE public.conversation_members (
 );
 
 -- Messages
-CREATE TABLE public.messages (
+CREATE TABLE IF NOT EXISTS public.messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
   sender_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -171,7 +186,7 @@ CREATE TABLE public.messages (
 );
 
 -- Event chat settings
-CREATE TABLE public.event_chat_settings (
+CREATE TABLE IF NOT EXISTS public.event_chat_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
   chat_enabled BOOLEAN NOT NULL DEFAULT true,
@@ -180,7 +195,7 @@ CREATE TABLE public.event_chat_settings (
 );
 
 -- Groups (minimal)
-CREATE TABLE public.groups (
+CREATE TABLE IF NOT EXISTS public.groups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   created_by UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -189,7 +204,7 @@ CREATE TABLE public.groups (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE public.group_members (
+CREATE TABLE IF NOT EXISTS public.group_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   group_id UUID NOT NULL REFERENCES public.groups(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -199,7 +214,7 @@ CREATE TABLE public.group_members (
 );
 
 -- Wishlist items
-CREATE TABLE public.wishlist_items (
+CREATE TABLE IF NOT EXISTS public.wishlist_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
@@ -210,7 +225,7 @@ CREATE TABLE public.wishlist_items (
 );
 
 -- User preferences
-CREATE TABLE public.user_preferences (
+CREATE TABLE IF NOT EXISTS public.user_preferences (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   key TEXT NOT NULL,
@@ -221,7 +236,7 @@ CREATE TABLE public.user_preferences (
 );
 
 -- Calendar connections
-CREATE TABLE public.calendar_connections (
+CREATE TABLE IF NOT EXISTS public.calendar_connections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   provider TEXT NOT NULL,
@@ -233,7 +248,7 @@ CREATE TABLE public.calendar_connections (
 );
 
 -- AI requests (safe telemetry)
-CREATE TABLE public.ai_requests (
+CREATE TABLE IF NOT EXISTS public.ai_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   mode app_mode NOT NULL,
@@ -259,6 +274,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT OR UPDATE ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();

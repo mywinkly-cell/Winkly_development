@@ -33,6 +33,7 @@ import {
   buildMatchTags,
   type RomanceProfile,
 } from "@/lib/ai/romanceInsights";
+import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 
 type ModeKey = "romance" | "friends" | "business" | "events";
 type MatchCategory = "new" | "connections" | "pending";
@@ -45,8 +46,9 @@ type ModeState = {
 
 export default function RomanceMatches() {
   const router = useRouter();
+  const fmtLoc = useFormatLocationDisplay();
 
-  const [activeMode, setActiveMode] = useState<ModeKey | null>("romance");
+  const [, setActiveMode] = useState<ModeKey | null>("romance");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -141,7 +143,7 @@ export default function RomanceMatches() {
   // if you later want to use mode card in this screen)
 // (For now we only use Romance; kept for future use.)
 // ────────────────────────────────────────────────
-  const handleModePress = (mode: ModeKey) => {
+  const _handleModePress = (mode: ModeKey) => {
     if (mode === "events") {
       Haptics.selectionAsync();
       setActiveMode("events");
@@ -194,7 +196,7 @@ export default function RomanceMatches() {
       if (!userData?.user) return;
       const chatId = await createDirectChat(item.id, "romance", "match", userData.user.id);
       router.push(`/chats/${chatId}`);
-    } catch (err) {
+    } catch (_err) {
       Alert.alert("Error", "Could not open chat.");
     }
   };
@@ -268,9 +270,21 @@ export default function RomanceMatches() {
             {item.first_name}, {item.age ?? "—"}
           </Text>
           <Text style={{ ...Typography.caption, color: Colors.gray700 }}>
-            {item.city}
+            {fmtLoc(item.city)}
           </Text>
 
+          {tab === "pending" && item.super_like && (
+            <View style={{ marginTop: 6, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: "rgba(230, 184, 0, 0.18)", alignSelf: "flex-start" }}>
+              <Text style={{ ...Typography.caption, color: "#B8860B", fontWeight: "600" }} numberOfLines={1}>
+                ★ Super liked you
+              </Text>
+              {item.super_like_message ? (
+                <Text style={{ ...Typography.caption, color: Colors.gray700, marginTop: 4 }} numberOfLines={2}>
+                  &quot;{item.super_like_message}&quot;
+                </Text>
+              ) : null}
+            </View>
+          )}
           <Text
             style={{
               ...Typography.caption,
@@ -377,9 +391,21 @@ export default function RomanceMatches() {
             {item.first_name}, {item.age ?? "—"}
           </Text>
           <Text style={{ ...Typography.body, color: Colors.gray700 }}>
-            {item.city}
+            {fmtLoc(item.city)}
           </Text>
 
+          {tab === "pending" && item.super_like && (
+            <View style={{ marginTop: 6, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: "rgba(230, 184, 0, 0.18)" }}>
+              <Text style={{ ...Typography.caption, color: "#B8860B", fontWeight: "600" }} numberOfLines={1}>
+                ★ Super liked you
+              </Text>
+              {item.super_like_message ? (
+                <Text style={{ ...Typography.caption, color: Colors.gray700, marginTop: 4 }} numberOfLines={2}>
+                  &quot;{item.super_like_message}&quot;
+                </Text>
+              ) : null}
+            </View>
+          )}
           <Text
             style={{
               ...Typography.caption,

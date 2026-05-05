@@ -13,11 +13,13 @@ import {
   Dimensions,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { supabase } from "@/lib/supabase";
+import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 
 type PreviewMode = "romance" | "friends" | "business" | "events";
 
@@ -44,6 +46,7 @@ function getAge(birthday: string | Date | null): number | null {
 }
 
 export default function ProfilePreview() {
+  const { i18n } = useTranslation();
   const router = useRouter();
   const { mode } = useLocalSearchParams<{ mode?: string }>();
   const [activeMode, setActiveMode] = useState<PreviewMode>((mode as PreviewMode) || "romance");
@@ -164,7 +167,8 @@ export default function ProfilePreview() {
   }
 
   const firstName = (data?.firstName ?? "").trim();
-  const city = (data?.city ?? "").trim();
+  const cityRaw = (data?.city ?? "").trim();
+  const city = cityRaw ? normalizeLocationDisplayString(cityRaw, i18n?.language ?? "en") : "";
   const birthday = data?.birthday ? new Date(data.birthday) : null;
   const age = getAge(birthday);
   // On matching cards we show first name only — never full name or account details
@@ -314,7 +318,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  headerTitle: { ...Typography.h3, fontFamily: FontFamily.heading, color: Colors.textPrimary },
+  headerTitle: { ...Typography.headerTitle, fontFamily: FontFamily.heading, color: Colors.textPrimary },
   placeholder: { width: 44 },
   hint: {
     ...Typography.caption,

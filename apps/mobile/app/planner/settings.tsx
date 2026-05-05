@@ -26,7 +26,27 @@ import { Colors, Typography, Layout } from "@/constants/tokens";
 const STORAGE_KEYS = {
   reminders: "winkly_planner_reminders",
   weeklyDigest: "winkly_planner_weekly_digest",
+  defaultReminderWhen: "winkly_planner_default_reminder_when",
+  defaultReminderChannel: "winkly_planner_default_reminder_channel",
 };
+
+export type DefaultReminderWhen = "at_time" | "5m" | "10m" | "15m" | "30m" | "1h" | "1d";
+export type DefaultReminderChannel = "push" | "email" | "both";
+
+const DEFAULT_REMINDER_WHEN_OPTIONS: { value: DefaultReminderWhen; label: string }[] = [
+  { value: "at_time", label: "At time of event" },
+  { value: "5m", label: "5 minutes before" },
+  { value: "10m", label: "10 minutes before" },
+  { value: "15m", label: "15 minutes before" },
+  { value: "30m", label: "30 minutes before" },
+  { value: "1h", label: "1 hour before" },
+  { value: "1d", label: "1 day before" },
+];
+const DEFAULT_REMINDER_CHANNEL_OPTIONS: { value: DefaultReminderChannel; label: string }[] = [
+  { value: "push", label: "Push notification" },
+  { value: "email", label: "Email" },
+  { value: "both", label: "Both" },
+];
 
 type PermissionStatus = "undetermined" | "granted" | "denied";
 
@@ -34,6 +54,8 @@ export default function PlannerSettings() {
   const router = useRouter();
   const [reminders, setReminders] = useState(false);
   const [weeklyDigest, setWeeklyDigest] = useState(false);
+  const [defaultReminderWhen, setDefaultReminderWhen] = useState<DefaultReminderWhen>("15m");
+  const [defaultReminderChannel, setDefaultReminderChannel] = useState<DefaultReminderChannel>("push");
   const [calendarStatus, setCalendarStatus] = useState<PermissionStatus>("undetermined");
   const [locationStatus, setLocationStatus] = useState<PermissionStatus>("undetermined");
   const [loading, setLoading] = useState<"calendar" | "location" | null>(null);
@@ -58,12 +80,20 @@ export default function PlannerSettings() {
 
   const loadPreferences = useCallback(async () => {
     try {
-      const [r, w] = await Promise.all([
+      const [r, w, when, ch] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.reminders),
         AsyncStorage.getItem(STORAGE_KEYS.weeklyDigest),
+        AsyncStorage.getItem(STORAGE_KEYS.defaultReminderWhen),
+        AsyncStorage.getItem(STORAGE_KEYS.defaultReminderChannel),
       ]);
       setReminders(r === "true");
       setWeeklyDigest(w === "true");
+      if (when && ["at_time", "5m", "10m", "15m", "30m", "1h", "1d"].includes(when)) {
+        setDefaultReminderWhen(when as DefaultReminderWhen);
+      }
+      if (ch && ["push", "email", "both"].includes(ch)) {
+        setDefaultReminderChannel(ch as DefaultReminderChannel);
+      }
     } catch {
       // use defaults
     }
@@ -93,6 +123,24 @@ export default function PlannerSettings() {
     }
   }, []);
 
+  const saveDefaultReminderWhen = useCallback(async (value: DefaultReminderWhen) => {
+    setDefaultReminderWhen(value);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.defaultReminderWhen, value);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const saveDefaultReminderChannel = useCallback(async (value: DefaultReminderChannel) => {
+    setDefaultReminderChannel(value);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.defaultReminderChannel, value);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const handleCalendarToggle = async () => {
     Haptics.selectionAsync();
     if (calendarStatus === "granted") {
@@ -117,7 +165,7 @@ export default function PlannerSettings() {
           ]
         );
       }
-    } catch (e) {
+    } catch (_e) {
       Alert.alert("Error", "Could not request calendar access. Please try again.");
     } finally {
       setLoading(null);
@@ -148,7 +196,7 @@ export default function PlannerSettings() {
           ]
         );
       }
-    } catch (e) {
+    } catch (_e) {
       Alert.alert("Error", "Could not request location access. Please try again.");
     } finally {
       setLoading(null);
@@ -213,6 +261,54 @@ export default function PlannerSettings() {
               ios_backgroundColor={Colors.gray300}
             />
           </View>
+
+          <View style={styles.hr} />
+
+          <Text style={styles.rowSub}>Default reminder time (for new items)</Text>
+          <View style={styles.pickerRow}>
+            {DEFAULT_REMINDER_WHEN_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                onPress={() => { Haptics.selectionAsync(); saveDefaultReminderWhen(opt.value); }}
+                style={[styles.pillOption, defaultReminderWhen === opt.value && styles.pillOptionActive]}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.pillOptionText, defaultReminderWhen === opt.value && styles.pillOptionTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.hr} />
+
+          <Text style={styles.rowSub}>Default reminder channel</Text>
+          <View style={styles.pickerRow}>
+            {DEFAULT_REMINDER_CHANNEL_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.value}
+                onPress={() => { Haptics.selectionAsync(); saveDefaultReminderChannel(opt.value); }}
+                style={[styles.pillOption, defaultReminderChannel === opt.value && styles.pillOptionActive]}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.pillOptionText, defaultReminderChannel === opt.value && styles.pillOptionTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.hr} />
+
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); router.push("/account/notifications-preferences"); }}
+            style={styles.linkRow}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="notifications-outline" size={20} color={Colors.primaryViolet} />
+            <Text style={styles.linkRowText}>Manage app notifications</Text>
+            <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
+          </TouchableOpacity>
         </View>
 
         <View style={[styles.card, { marginTop: 20 }]}>
@@ -331,7 +427,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  headerTitle: { ...Typography.h3, color: Colors.textPrimary },
+  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
   headerPlaceholder: { width: 44 },
 
   card: {
@@ -404,5 +500,45 @@ const styles = StyleSheet.create({
     ...Typography.button,
     color: Colors.primaryViolet,
     fontWeight: "600",
+  },
+
+  pickerRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
+  },
+  pillOption: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: Colors.gray100,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+  },
+  pillOptionActive: {
+    backgroundColor: Colors.primaryViolet + "18",
+    borderColor: Colors.primaryViolet + "50",
+  },
+  pillOptionText: {
+    ...Typography.caption,
+    color: Colors.gray700,
+    fontWeight: "500",
+  },
+  pillOptionTextActive: {
+    color: Colors.primaryViolet,
+    fontWeight: "600",
+  },
+  linkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    gap: 12,
+  },
+  linkRowText: {
+    flex: 1,
+    ...Typography.body,
+    color: Colors.primaryViolet,
+    fontWeight: "500",
   },
 });

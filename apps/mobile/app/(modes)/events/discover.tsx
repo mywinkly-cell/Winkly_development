@@ -12,6 +12,7 @@ import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 
 type EventRow = {
   id: string;
@@ -39,6 +40,7 @@ function formatDateTime(iso: string) {
 
 export default function EventsDiscover() {
   const router = useRouter();
+  const fmtLoc = useFormatLocationDisplay();
 
   const [query, setQuery] = useState("");
   const [activeCity, setActiveCity] = useState<string | "all">("all");
@@ -261,7 +263,7 @@ export default function EventsDiscover() {
 
                     <Text style={{ color: Colors.mutedText, marginTop: 4 }} numberOfLines={1}>
                       {formatDateTime(e.start_at)}
-                      {e.city ? ` · ${e.city}` : ""}
+                      {e.city ? ` · ${fmtLoc(e.city)}` : ""}
                       {e.venue_name ? ` · ${e.venue_name}` : ""}
                     </Text>
 

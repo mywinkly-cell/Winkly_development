@@ -1,5 +1,5 @@
 // ────────────────────────────────────────────────
-// Romance Mode Bottom Nav — Home, Discover, Switch (center), Chats, Planner
+// Romance Mode Bottom Nav — Home, Discover, Switch (center), Chats, Planner (Matches live in Chats sub-bar)
 // Same on all Romance tab screens
 // ────────────────────────────────────────────────
 
@@ -7,17 +7,16 @@ import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { ModeSwitchCenterButton } from "@/components/layout/ModeSwitchCenterButton";
 
-type RomanceTab = "home" | "discover" | "matches" | "chats" | "planner";
+type RomanceTab = "home" | "discover" | "chats" | "planner";
 
 function getActiveTab(pathname: string): RomanceTab {
   if (!pathname) return "home";
   if (pathname.includes("/discover")) return "discover";
-  if (pathname.includes("/matches")) return "matches";
   if (pathname.includes("/chats")) return "chats";
   if (pathname.includes("/planner")) return "planner";
   return "home";
@@ -33,7 +32,6 @@ export function RomanceBottomNav() {
     Haptics.selectionAsync();
     if (tab === "home") router.replace("/(modes)/romance");
     else if (tab === "discover") router.replace("/(modes)/romance/discover");
-    else if (tab === "matches") router.replace("/(modes)/romance/matches");
     else if (tab === "chats") router.replace("/(modes)/romance/chats");
     else router.replace("/(modes)/romance/planner");
   };
@@ -84,17 +82,6 @@ export function RomanceBottomNav() {
         <Ionicons name="search" size={24} color={isActive("discover") ? activeColor : inactiveColor} />
         <Text style={[Typography.caption, { marginTop: 4, color: isActive("discover") ? activeColor : inactiveColor }]}>
           Discover
-        </Text>
-      </Pressable>
-
-      <Pressable
-        onPress={() => nav("matches")}
-        style={{ alignItems: "center", justifyContent: "center", minWidth: 48, minHeight: 48 }}
-        accessibilityLabel="Matches"
-      >
-        <Ionicons name="heart" size={24} color={isActive("matches") ? activeColor : inactiveColor} />
-        <Text style={[Typography.caption, { marginTop: 4, color: isActive("matches") ? activeColor : inactiveColor }]}>
-          Matches
         </Text>
       </Pressable>
 

@@ -20,8 +20,15 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { RomanceBottomNav } from "@/components/layout/RomanceBottomNav";
+import { MatchCardOverlay } from "@/components/matching/MatchCardOverlay";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { useModeContext } from "@/providers/ModeContextProvider";
+import { romanceLikeProfile } from "@/lib/chats";
+import { computeCompatibilityScore, buildMatchTags, type RomanceProfile } from "@/lib/ai/romanceInsights";
+import { hasAnyAIAccess } from "@/lib/ai/aiFeatureGate";
+import { supabase } from "@/lib/supabase";
+import { SuperLikeInviteModal } from "@/components/romance/SuperLikeInviteModal";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const CARD_WIDTH = SCREEN_WIDTH * 0.9;
@@ -45,12 +52,6 @@ type Profile = {
   chipItems: string[];
   photoUrl: string;
 };
-
-type NextPlan = {
-  title: string;
-  time: string;
-  location: string;
-} | null;
 
 const MOCK_PROFILES: Profile[] = [
   {
@@ -82,27 +83,23 @@ const MOCK_PROFILES: Profile[] = [
   },
 ];
 
-const MOCK_NEXT_PLAN: NextPlan = {
-  title: "Dinner with Lucas",
-  time: "19:00",
-  location: "Café Blüte",
-};
-
 export default function RomanceHome() {
   const router = useRouter();
   const { context } = useModeContext();
   const hasIntentSubscription = context.subscription_tier === "premium";
+  const showAiHints = hasAnyAIAccess(context.subscription_tier ?? "free");
 
-  const [loading, setLoading] = useState(false);
-  const [profiles, setProfiles] = useState<Profile[]>(MOCK_PROFILES);
+  const [loading] = useState(false);
+  const [profiles] = useState<Profile[]>(MOCK_PROFILES);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
-  const [nextPlan] = useState<NextPlan>(MOCK_NEXT_PLAN);
+  const [selfProfile, setSelfProfile] = useState<RomanceProfile | null>(null);
   // Intent (Super Like): daily limit — 1 free/day; 10/day with subscription (Premium)
   const [intentRemainingToday, setIntentRemainingToday] = useState(
     hasIntentSubscription ? INTENT_SUBSCRIBER_PER_DAY : INTENT_FREE_PER_DAY
   );
   const [intentModalVisible, setIntentModalVisible] = useState(false);
+  const [superLikeInviteModalVisible, setSuperLikeInviteModalVisible] = useState(false);
   const [intentMessage, setIntentMessage] = useState("");
   const [intentAiIcebreaker] = useState("Your taste in coffee is *chef's kiss* — same!"); // TODO: AI-generated, user-confirmed
 
@@ -115,8 +112,48 @@ export default function RomanceHome() {
     }
   }, [context.subscription_tier]);
 
+  useEffect(() => {
+    if (!showAiHints) return;
+    (async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user?.id) return;
+      const { data } = await supabase
+        .from("public_profile_view")
+        .select("id,first_name,age,city,romance_interests,languages,occupation,bio_romance")
+        .eq("id", userData.user.id)
+        .maybeSingle();
+      if (data) {
+        const row = data as any;
+        setSelfProfile({
+          id: row.id,
+          first_name: row.first_name,
+          age: row.age ?? undefined,
+          city: row.city ?? undefined,
+          interests: row.romance_interests ?? [],
+          languages: row.languages ?? [],
+          occupation: row.occupation ?? undefined,
+          bio_romance: row.bio_romance ?? undefined,
+        });
+      }
+    })();
+  }, [showAiHints]);
+
   const currentProfile = profiles[currentIndex];
-  const intentLimit = hasIntentSubscription ? INTENT_SUBSCRIBER_PER_DAY : INTENT_FREE_PER_DAY;
+
+  const romanceAiHint = React.useMemo(() => {
+    if (!showAiHints || !selfProfile || !currentProfile) return null;
+    const other: RomanceProfile = {
+      id: currentProfile.id,
+      first_name: currentProfile.name,
+      age: currentProfile.age,
+      city: currentProfile.city,
+      interests: currentProfile.chipItems,
+      occupation: currentProfile.occupation ?? undefined,
+    };
+    const score = computeCompatibilityScore({ self: selfProfile, other });
+    const tags = buildMatchTags({ self: selfProfile, other });
+    return { score, tags };
+  }, [showAiHints, selfProfile, currentProfile]);
 
   const advanceToNext = () => {
     setCurrentIndex((i) => i + 1);
@@ -129,14 +166,31 @@ export default function RomanceHome() {
     // TODO: API — store negative preference; profile may reappear up to 2 times if passed again
   };
 
-  const applyLike = (profileId: string) => {
-    // TODO: API — send like; if mutual → MATCH; else stored silently. Positive preference for ranking.
+  const applyLike = async (profileId: string) => {
+    try {
+      const result = await romanceLikeProfile(profileId);
+      if (result?.is_match && result?.chat_id) {
+        router.push(`/chats/${result.chat_id}?matchBridge=1`);
+      }
+    } catch (e) {
+      console.warn("Like failed", e);
+    }
   };
 
-  const applyIntent = (profileId: string, message?: string) => {
-    // TODO: API — priority like, profile higher in their stack; optional icebreaker/message
+  const applyIntent = async (profileId: string, message?: string) => {
     setIntentRemainingToday((n) => Math.max(0, n - 1));
     pendingIntentMessage.current = undefined;
+    try {
+      const result = await romanceLikeProfile(profileId, {
+        superLike: true,
+        superLikeMessage: message || null,
+      });
+      if (result?.is_match && result?.chat_id) {
+        router.push(`/chats/${result.chat_id}?matchBridge=1`);
+      }
+    } catch (e) {
+      console.warn("Super like failed", e);
+    }
   };
 
   /** Block: remove from suggestions permanently for this user. */
@@ -241,18 +295,18 @@ export default function RomanceHome() {
       toValue,
       duration: 250,
       useNativeDriver: true,
-    }).start(() => {
+    }).start(async () => {
       if (profileId && action === "pass") applyPass(profileId);
-      if (profileId && action === "like") applyLike(profileId);
-      if (profileId && action === "intent") applyIntent(profileId, pendingIntentMessage.current);
+      if (profileId && action === "like") await applyLike(profileId);
+      if (profileId && action === "intent") await applyIntent(profileId, pendingIntentMessage.current);
       advanceToNext();
     });
   };
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, { dx, dy }) => Math.abs(dx) > 10 || Math.abs(dy) > 10,
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => false,
       onPanResponderRelease: (_, gestureState) => {
         const { dx, dy } = gestureState;
         const isTap = Math.abs(dx) < 20 && Math.abs(dy) < 20;
@@ -334,7 +388,7 @@ export default function RomanceHome() {
 
   return (
     <View style={styles.container}>
-      <ModeHeader currentMode="romance" rightSlot="filters" onFilterPress={() => router.push("/(modes)/romance/filters")} />
+      <ModeHeader currentMode="romance" leftSlot="filters" onFilterPress={() => router.push("/(modes)/romance/filters")} />
 
       {loading ? (
         <View style={styles.center}>
@@ -343,7 +397,7 @@ export default function RomanceHome() {
       ) : !currentProfile ? (
         <View style={styles.center}>
           <Text style={styles.emptyTitle}>
-            You've seen everyone nearby 💫
+            You&apos;ve seen everyone nearby 💫
           </Text>
           <Pressable
             onPress={() => {}}
@@ -421,24 +475,16 @@ export default function RomanceHome() {
                   <Ionicons name="ellipsis-vertical" size={22} color={Colors.romance.primary} />
                 </Pressable>
 
-                <View style={styles.infoOverlay}>
-                  <Text style={styles.nameAge}>
-                    {currentProfile.name}, {currentProfile.age}
-                  </Text>
-                  <Text style={styles.cityOverlay}>{currentProfile.city}</Text>
-                  {currentProfile.occupation ? (
-                    <Text style={styles.occupationOverlay}>{currentProfile.occupation}</Text>
-                  ) : null}
-                  {currentProfile.chipItems.length > 0 ? (
-                    <View style={styles.chipRow}>
-                      {currentProfile.chipItems.slice(0, 3).map((i) => (
-                        <View key={i} style={styles.chipOverlay}>
-                          <Text style={styles.chipTextOverlay}>{i}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  ) : null}
-                </View>
+                <MatchCardOverlay
+                  name={currentProfile.name}
+                  age={currentProfile.age}
+                  city={currentProfile.city}
+                  occupation={currentProfile.occupation ?? null}
+                  chipItems={currentProfile.chipItems}
+                  mode="romance"
+                  aiHint={romanceAiHint}
+                  cardRadius={CARD_RADIUS}
+                />
               </Animated.View>
             </View>
             </View>
@@ -487,10 +533,8 @@ export default function RomanceHome() {
             <View style={styles.actionBarSubtitle}>
               <Text style={styles.intentSubtitleLine1}>
                 {intentRemainingToday <= 0
-                  ? "0 left"
-                  : hasIntentSubscription
-                    ? `You have ${intentRemainingToday} today`
-                    : "You have 1 free Super Spark for a day."}
+                  ? "There are no Super Likes left for today."
+                  : `You have ${intentRemainingToday} Super Like${intentRemainingToday === 1 ? "" : "s"} today.`}
               </Text>
               {!hasIntentSubscription && (
                 <>
@@ -524,13 +568,13 @@ export default function RomanceHome() {
                 <Pressable style={styles.intentModalCard} onPress={(e) => e.stopPropagation()}>
                   <Text style={styles.intentModalTitle}>Add a message? (optional)</Text>
                   <Text style={styles.intentModalHint}>
-                    They'll see it when they see your profile. Use an AI icebreaker or write your own.
+                    They&apos;ll see it when they see your profile. Use an AI icebreaker or write your own.
                   </Text>
                   <Pressable
                     style={styles.icebreakerChip}
                     onPress={() => setIntentMessage(intentAiIcebreaker)}
                   >
-                    <Ionicons name="sparkles" size={16} color={Colors.primaryViolet} />
+                    <SparklesIcon size={16} color={Colors.primaryViolet} />
                     <Text style={styles.icebreakerChipText}>Use AI icebreaker</Text>
                   </Pressable>
                   <TextInput
@@ -542,6 +586,16 @@ export default function RomanceHome() {
                     multiline
                     maxLength={200}
                   />
+                  <Pressable
+                    style={styles.intentInviteChip}
+                    onPress={() => {
+                      setIntentModalVisible(false);
+                      setSuperLikeInviteModalVisible(true);
+                    }}
+                  >
+                    <Ionicons name="calendar-outline" size={18} color={Colors.primaryViolet} />
+                    <Text style={styles.intentInviteChipText}>Send with an invite (place & time)</Text>
+                  </Pressable>
                   <View style={styles.intentModalActions}>
                     <Pressable
                       style={styles.intentModalBtnSecondary}
@@ -561,26 +615,19 @@ export default function RomanceHome() {
             </Pressable>
           </Modal>
 
-          {nextPlan && (
-            <Pressable
-              onPress={() => router.push("/planner")}
-              style={styles.plannerBanner}
-              accessibilityLabel="Open planner"
-            >
-              <View style={styles.plannerBannerContent}>
-                <Text style={styles.plannerLabel}>Next</Text>
-                <Text style={styles.plannerTitle} numberOfLines={1}>
-                  {nextPlan.title}
-                </Text>
-                <Text style={styles.plannerMeta}>
-                  {nextPlan.time} · {nextPlan.location}
-                </Text>
-              </View>
-              <View style={styles.openPlannerBtn}>
-                <Text style={styles.openPlannerText}>Open</Text>
-                <Ionicons name="chevron-forward" size={18} color={Colors.textPrimary} />
-              </View>
-            </Pressable>
+          {currentProfile && (
+            <SuperLikeInviteModal
+              visible={superLikeInviteModalVisible}
+              targetUserId={currentProfile.id}
+              targetFirstName={currentProfile.name}
+              onClose={() => setSuperLikeInviteModalVisible(false)}
+              onSend={(message) => {
+                setSuperLikeInviteModalVisible(false);
+                setIntentRemainingToday((n) => Math.max(0, n - 1));
+                pendingIntentMessage.current = message;
+                animateCardOut("right", "intent");
+              }}
+            />
           )}
         </>
       )}
@@ -626,8 +673,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: Layout.spacing.lg,
-    paddingBottom: 8,
+    paddingTop: Layout.spacing.sm,
+    paddingBottom: 2,
     minHeight: 0,
   },
   cardStackWrap: {
@@ -678,69 +725,18 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  infoOverlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 18,
-    paddingTop: 32,
-    paddingBottom: 18,
-    borderBottomLeftRadius: CARD_RADIUS,
-    borderBottomRightRadius: CARD_RADIUS,
-    backgroundColor: "rgba(0,0,0,0.45)",
-  },
-  nameAge: {
-    ...Typography.h2,
-    fontSize: 24,
-    fontFamily: FontFamily.heading,
-    color: Colors.white,
-    marginBottom: 4,
-    textShadowColor: "rgba(0,0,0,0.3)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  cityOverlay: {
-    ...Typography.body,
-    fontSize: 15,
-    color: "rgba(255,255,255,0.92)",
-    marginBottom: 2,
-  },
-  occupationOverlay: {
-    ...Typography.caption,
-    color: "rgba(255,255,255,0.85)",
-    marginBottom: 10,
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    alignItems: "center",
-  },
-  chipOverlay: {
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.22)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
-  },
-  chipTextOverlay: {
-    ...Typography.caption,
-    fontSize: 12,
-    color: Colors.white,
-  },
   actionBarContainer: {
     alignItems: "center",
     width: "100%",
+    paddingBottom: 28,
   },
   actionRow: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     gap: 8,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingTop: 2,
+    paddingBottom: 4,
   },
   actionButtonColumn: {
     alignItems: "center",
@@ -779,7 +775,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
-    paddingBottom: 16,
+    paddingTop: 2,
+    paddingBottom: 8,
   },
   actionBtnDisabled: {
     opacity: 0.5,
@@ -859,6 +856,23 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: Colors.romance.primary,
   },
+  intentInviteChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primaryViolet,
+    backgroundColor: Colors.primaryViolet + "12",
+  },
+  intentInviteChipText: {
+    ...Typography.caption,
+    fontWeight: "600",
+    color: Colors.primaryViolet,
+  },
   intentMessageInput: {
     borderWidth: 1,
     borderColor: Colors.gray300,
@@ -896,60 +910,5 @@ const styles = StyleSheet.create({
     ...Typography.button,
     fontFamily: FontFamily.heading,
     color: Colors.white,
-  },
-  plannerBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginHorizontal: 20,
-    marginBottom: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: 20,
-    backgroundColor: Colors.primaryViolet,
-    minHeight: 72,
-    overflow: "hidden",
-  },
-  plannerBannerContent: {
-    flex: 1,
-    marginRight: 12,
-  },
-  plannerLabel: {
-    ...Typography.caption,
-    fontSize: 11,
-    fontWeight: "600",
-    color: "rgba(255,255,255,0.8)",
-    letterSpacing: 0.5,
-    marginBottom: 2,
-    textTransform: "uppercase",
-  },
-  plannerTitle: {
-    ...Typography.body,
-    fontWeight: "600",
-    fontSize: 16,
-    color: Colors.white,
-    marginBottom: 2,
-  },
-  plannerMeta: {
-    ...Typography.caption,
-    color: "rgba(255,255,255,0.85)",
-    fontSize: 13,
-  },
-  openPlannerBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: Colors.white,
-    minHeight: 44,
-    justifyContent: "center",
-  },
-  openPlannerText: {
-    ...Typography.button,
-    fontSize: 15,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
   },
 });

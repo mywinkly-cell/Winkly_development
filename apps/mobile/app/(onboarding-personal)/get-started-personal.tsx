@@ -11,6 +11,7 @@ import { SafeScreenView } from "@/components/SafeScreenView";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 
 export default function GetStartedPersonal() {
@@ -71,7 +72,7 @@ export default function GetStartedPersonal() {
 
           <View style={styles.point}>
             <View style={{ width: 24, alignItems: "center" }}>
-              <Ionicons name="sparkles" size={16} color={Colors.primaryViolet} />
+              <SparklesIcon size={16} color={Colors.primaryViolet} />
             </View>
             <Text style={[styles.pointText, { flex: 1 }]}>
               One app, multiple modes — switch between Romance, Friends, and Business without separate profiles
@@ -110,7 +111,7 @@ export default function GetStartedPersonal() {
           style={styles.subscriptionLink}
           activeOpacity={0.8}
         >
-          <Ionicons name="diamond-outline" size={18} color={Colors.primaryViolet} />
+          <Ionicons name="star-outline" size={18} color={Colors.primaryViolet} />
           <Text style={styles.subscriptionLinkText}>View plans & pricing</Text>
           <Ionicons name="chevron-forward" size={18} color={Colors.gray500} />
         </TouchableOpacity>

@@ -6,7 +6,7 @@
 // Purpose: Set up company/brand information during Business Account onboarding
 // ────────────────────────────────────────────────
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,

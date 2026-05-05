@@ -7,7 +7,7 @@ import { useRouter, useSegments } from "expo-router";
 import { useAuth } from "@/providers/AuthProvider";
 import { useModeContext } from "@/providers/ModeContextProvider";
 
-const AUTH_ROUTES = ["splash", "welcome-intro", "get-started", "welcome-back-setup", "intro", "signup", "signin", "verify", "email-verified", "callback", "reset-password", "reset-confirm"];
+const AUTH_ROUTES = ["splash", "welcome-intro", "terms-cookies", "get-started", "welcome-back-setup", "intro", "signup", "signin", "verify", "email-verified", "callback", "reset-password", "reset-confirm"];
 
 export function RouteGuard({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();

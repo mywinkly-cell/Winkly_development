@@ -75,6 +75,8 @@ export default function CreateEvent() {
   const [price, setPrice] = useState(""); // EUR
 
   const [visibility, setVisibility] = useState<CreateEventPayload["visibility"]>("public");
+  /** Allow a group chat for this event (only for public events; host opts in). */
+  const [allowEventChat, setAllowEventChat] = useState(false);
 
   const [saving, setSaving] = useState(false);
 
@@ -141,6 +143,12 @@ export default function CreateEvent() {
       }
 
       const eventId = data?.id;
+      if (eventId && visibility === "public" && allowEventChat) {
+        await supabase.from("event_chat_settings").upsert(
+          { event_id: eventId, chat_enabled: true },
+          { onConflict: "event_id" }
+        );
+      }
       Alert.alert("Event created", "Your event was created successfully.");
       router.replace({
         pathname: "/(modes)/events/event-details",
@@ -352,6 +360,32 @@ export default function CreateEvent() {
               </Text>
             </TouchableOpacity>
           </View>
+
+          {visibility === "public" && (
+            <>
+              <Text style={[styles.label, { color: Colors.mutedText, marginTop: 16 }]}>Group chat</Text>
+              <TouchableOpacity
+                onPress={() => setAllowEventChat((v) => !v)}
+                style={[
+                  styles.chip,
+                  {
+                    backgroundColor: allowEventChat ? Colors.primary : Colors.background,
+                    borderColor: Colors.border,
+                    alignSelf: "flex-start",
+                    marginTop: 6,
+                  },
+                ]}
+                activeOpacity={0.9}
+              >
+                <Text style={{ color: allowEventChat ? Colors.onPrimary : Colors.text, fontWeight: "700" }}>
+                  {allowEventChat ? "Allow group chat ✓" : "Allow a group chat for this event"}
+                </Text>
+              </TouchableOpacity>
+              <Text style={[styles.hint, { color: Colors.mutedText, marginTop: 6 }]}>
+                Participants who join or mark interested can chat with each other in one group chat.
+              </Text>
+            </>
+          )}
 
           <TouchableOpacity
             onPress={onSave}

@@ -10,7 +10,7 @@ import { Colors, Typography, Layout } from "@/constants/tokens";
 
 export default function ProfileSettingsScreen() {
   const router = useRouter();
-  const { user, accountType } = useAuth();
+  const { accountType } = useAuth();
   const [switching, setSwitching] = useState(false);
 
   const handleSwitchAccountType = async () => {

@@ -57,7 +57,7 @@ export default function Intro() {
         </View>
 
         <Text style={styles.legal}>
-          By continuing, you agree to Winkly's <Text style={styles.link}>Terms</Text> & <Text style={styles.link}>Privacy Policy</Text>.
+          By continuing, you agree to Winkly&apos;s <Text style={styles.link}>Terms</Text> & <Text style={styles.link}>Privacy Policy</Text>.
         </Text>
       </Animated.View>
     </SafeScreenView>

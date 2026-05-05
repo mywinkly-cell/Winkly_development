@@ -1,37 +1,56 @@
-// ────────────────────────────────────────────────
-// Winkly Friends Mode – Discover Screen
-// Same logic/view as Romance Discover; Friends sub-profile data & colors
-// ────────────────────────────────────────────────
+// Friends Discover: People Who Want to Connect (Section 1) + Recommended for You by Winkly AI (Section 2).
+// Mode colors and copy; analytics; block/report; connect → Chats.
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
-  Image,
-  TouchableOpacity,
   ActivityIndicator,
-  Dimensions,
   Alert,
+  ScrollView,
+  RefreshControl,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { useRouter, useFocusEffect } from "expo-router";
+import { usePostHog } from "posthog-react-native";
+
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { FriendsBottomNav } from "@/components/layout/FriendsBottomNav";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Colors, Typography } from "@/constants/tokens";
 import { supabase } from "@/lib/supabase";
 import {
   computeFriendsCompatibility,
   buildFriendsMatchTags,
   type FriendsProfile,
 } from "@/lib/ai/friendsInsights";
+import { getFriendsFilters, applyFriendsFiltersToFeed } from "@/lib/filters/friendsFiltersStorage";
+import { followUser } from "@/lib/access/connections";
+import { blockUser, reportUser } from "@/lib/chats";
+import { useModeContext } from "@/providers";
+import {
+  DiscoverPeopleWhoLikedYou,
+  type PeopleWhoLikedYouItem,
+} from "@/components/discover/DiscoverPeopleWhoLikedYou";
+import {
+  DiscoverRecommendedSection,
+  type RecommendedItem,
+} from "@/components/discover/DiscoverRecommendedSection";
+import {
+  discoverOpen,
+  likedYouLikeBack,
+  recommendationLike,
+  discoverProfileBlock,
+  discoverProfileReport,
+  recommendationLimitReached,
+} from "@/lib/discover/analytics";
+import {
+  getRecommendationLikesSentToday,
+  incrementRecommendationLikeSentToday,
+  DISCOVER_LIMITS,
+} from "@/lib/discover/storage";
 
-const { width } = Dimensions.get("window");
-const PAGE_SIZE = 20;
-
-type FeedItem = {
+type FriendProfileRow = {
   id: string;
-  user_id?: string | null;
+  user_id?: string;
   display_name: string;
   city?: string | null;
   interests?: string[] | null;
@@ -43,332 +62,293 @@ type FeedItem = {
 
 export default function FriendsDiscover() {
   const router = useRouter();
+  const posthog = usePostHog();
+  const { context } = useModeContext();
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selfProfile, setSelfProfile] = useState<FriendsProfile | null>(null);
-  const [feed, setFeed] = useState<FeedItem[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [likeInProgress, setLikeInProgress] = useState(false);
+  const [peopleWhoWantToConnect, setPeopleWhoWantToConnect] = useState<PeopleWhoLikedYouItem[]>([]);
+  const [recommendations, setRecommendations] = useState<RecommendedItem[]>([]);
+  const [likesUsedToday, setLikesUsedToday] = useState(0);
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) return;
+  const subscriptionTier = context.subscription_tier ?? "free";
+  const canViewFull = ["super", "premium", "enterprise"].includes(subscriptionTier);
+  const canLikeUnlimited = canViewFull;
 
-      const { data: me } = await supabase
-        .from("profiles_mode")
-        .select("interests, meta")
-        .eq("user_id", userData.user.id)
-        .eq("mode", "friends")
-        .maybeSingle();
+  const loadPeopleWhoWantToConnect = useCallback(async (userId: string) => {
+    const { data: followMe } = await supabase
+      .from("follows")
+      .select("follower_id")
+      .eq("followee_id", userId);
+    const followerIds = (followMe ?? []).map((r: { follower_id: string }) => r.follower_id);
+    if (followerIds.length === 0) return [];
 
-      if (me?.interests) {
-        setSelfProfile({
-          id: userData.user.id,
-          interests: me.interests as string[],
-          vibe_tags: (me.meta as any)?.vibe_tags,
-          city: (me.meta as any)?.city,
-        });
-      }
+    const { data: iFollow } = await supabase
+      .from("follows")
+      .select("followee_id")
+      .eq("follower_id", userId);
+    const iFollowIds = new Set((iFollow ?? []).map((r: { followee_id: string }) => r.followee_id));
+    const wantToConnectIds = followerIds.filter((id: string) => !iFollowIds.has(id));
+    if (wantToConnectIds.length === 0) return [];
+
+    const { data: fp } = await supabase
+      .from("friend_profiles")
+      .select("id,user_id,display_name,city,vibe_tags,about_short,interests,main_photo_url,avatar_url")
+      .in("user_id", wantToConnectIds);
+
+    const rows = (fp ?? []) as FriendProfileRow[];
+    return rows.map((r) => ({
+      id: r.user_id ?? r.id,
+      name: r.display_name ?? "Someone",
+      age: null,
+      tag: (r.vibe_tags?.[0] ?? r.interests?.[0]) ?? null,
+      distance: null,
+      photoUrl: r.main_photo_url ?? r.avatar_url ?? null,
+    })) as PeopleWhoLikedYouItem[];
+  }, []);
+
+  const loadRecommendations = useCallback(
+    async (userId: string, self: FriendsProfile | null): Promise<RecommendedItem[]> => {
+      const { data: iFollow } = await supabase
+        .from("follows")
+        .select("followee_id")
+        .eq("follower_id", userId);
+      const iFollowIds = new Set((iFollow ?? []).map((r: { followee_id: string }) => r.followee_id));
 
       const { data: fpData } = await supabase
         .from("friend_profiles")
         .select("id,user_id,display_name,city,vibe_tags,about_short,interests,main_photo_url,avatar_url")
         .order("created_at", { ascending: false })
-        .limit(PAGE_SIZE + 5);
+        .limit(50);
 
-      let items: FeedItem[] = [];
-      if (fpData?.length) {
-        const myId = userData.user.id;
-        items = fpData.filter((r: any) => (r.user_id ?? r.id) !== myId) as FeedItem[];
-      }
+      let rows: FriendProfileRow[] = (fpData ?? []).filter(
+        (r: { user_id?: string; id: string }) => (r.user_id ?? r.id) !== userId
+      ) as FriendProfileRow[];
+      rows = rows.filter((r) => !iFollowIds.has(r.user_id ?? r.id));
 
-      if (!items.length) {
-        const { data: upData } = await supabase
-          .from("user_profiles")
-          .select("id,first_name,last_name,city,about,main_photo_url,avatar_url")
-          .neq("id", userData.user.id)
-          .order("created_at", { ascending: false })
-          .limit(PAGE_SIZE);
-
-        if (upData?.length) {
-          items = (upData as any[]).map((row) => ({
-            id: row.id,
-            user_id: row.id,
-            display_name: [row.first_name, row.last_name].filter(Boolean).join(" ").trim() || "Friend",
-            city: row.city ?? null,
-            interests: null,
-            vibe_tags: null,
-            about_short: row.about ?? null,
-            main_photo_url: row.main_photo_url ?? null,
-            avatar_url: row.avatar_url ?? null,
-          }));
-        }
-      }
-
-      const scored = items.map((item) => {
+      const scored = rows.map((r) => {
         const other: FriendsProfile = {
-          id: item.id,
-          display_name: item.display_name,
-          city: item.city ?? undefined,
-          interests: item.interests ?? [],
-          vibe_tags: item.vibe_tags ?? [],
-          about: item.about_short ?? undefined,
+          id: r.user_id ?? r.id,
+          display_name: r.display_name,
+          city: r.city ?? undefined,
+          interests: r.interests ?? [],
+          vibe_tags: r.vibe_tags ?? [],
+          about: r.about_short ?? undefined,
         };
-        const score = computeFriendsCompatibility({ self: selfProfile, other });
-        return { ...item, compatibility: score };
+        const compatibility = computeFriendsCompatibility({ self: self ?? undefined, other });
+        return { ...r, compatibility };
       });
-      scored.sort((a, b) => ((b as any).compatibility ?? 0) - ((a as any).compatibility ?? 0));
-      setFeed(scored);
-      setCurrentIndex(0);
+
+      const filters = await getFriendsFilters();
+      const filtered = applyFriendsFiltersToFeed(scored, filters);
+      filtered.sort((a, b) => ((b as { compatibility?: number }).compatibility ?? 0) - ((a as { compatibility?: number }).compatibility ?? 0));
+
+      const take = DISCOVER_LIMITS.recommendationsPerDay;
+      return filtered.slice(0, take).map((r) => {
+        const other: FriendsProfile = {
+          id: r.user_id ?? r.id,
+          display_name: r.display_name,
+          city: r.city ?? undefined,
+          interests: r.interests ?? [],
+          vibe_tags: r.vibe_tags ?? [],
+          about: r.about_short ?? undefined,
+        };
+        const tags = buildFriendsMatchTags({ self: self ?? undefined, other });
+        const photo = r.main_photo_url ?? r.avatar_url ?? null;
+        return {
+          id: r.user_id ?? r.id,
+          name: r.display_name ?? "Someone",
+          age: null,
+          location: r.city ?? null,
+          compatibility: (r as { compatibility?: number }).compatibility ?? null,
+          sharedInterests: [...(r.interests ?? []).slice(0, 2), ...(r.vibe_tags ?? []).slice(0, 1)].slice(0, 3),
+          lifestyleTag: tags[0] ?? null,
+          goalSnippet: r.about_short ? r.about_short.slice(0, 80) + (r.about_short.length > 80 ? "…" : "") : null,
+          photoUrl: photo ?? null,
+        } as RecommendedItem;
+      });
+    },
+    []
+  );
+
+  const loadData = useCallback(async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) return;
+
+      const uid = userData.user.id;
+
+      const { data: me } = await supabase
+        .from("profiles_mode")
+        .select("interests, meta")
+        .eq("user_id", uid)
+        .eq("mode", "friends")
+        .maybeSingle();
+
+      const self: FriendsProfile | null = me
+        ? {
+            id: uid,
+            interests: (me.interests as string[]) ?? [],
+            vibe_tags: (me.meta as { vibe_tags?: string[] })?.vibe_tags,
+            city: (me.meta as { city?: string })?.city,
+          }
+        : null;
+      setSelfProfile(self);
+
+      const [wantToConnectList, recList] = await Promise.all([
+        loadPeopleWhoWantToConnect(uid),
+        loadRecommendations(uid, self),
+      ]);
+
+      setPeopleWhoWantToConnect(wantToConnectList);
+      setRecommendations(recList);
+
+      const used = await getRecommendationLikesSentToday("friends");
+      setLikesUsedToday(used);
     } catch (err) {
       console.warn("FriendsDiscover loadData error", err);
-      Alert.alert("Error", "Could not load discover feed.");
+      Alert.alert("Error", "Could not load discover.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [loadPeopleWhoWantToConnect, loadRecommendations]);
 
   useEffect(() => {
+    setLoading(true);
     loadData();
   }, []);
 
-  const currentItem = useMemo(
-    () => (currentIndex < feed.length ? feed[currentIndex] : null),
-    [feed, currentIndex]
+  useFocusEffect(
+    useCallback(() => {
+      discoverOpen(posthog ?? null, "friends");
+      loadData();
+    }, [loadData, posthog])
   );
 
-  const goToNext = () => setCurrentIndex((prev) => prev + 1);
-
-  const handlePass = async () => {
-    if (!currentItem) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    goToNext();
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
   };
 
-  const handleAddFriend = async () => {
-    if (!currentItem || likeInProgress) return;
-    setLikeInProgress(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  const handleConnectBack = async (item: PeopleWhoLikedYouItem) => {
     try {
-      // TODO: RPC for friend request / like
-    } catch (err) {
-      console.warn("Add friend error", err);
-    } finally {
-      setLikeInProgress(false);
-      goToNext();
+      await followUser(item.id);
+      likedYouLikeBack(posthog ?? null, "friends", item.id);
+      setPeopleWhoWantToConnect((prev) => prev.filter((p) => p.id !== item.id));
+    } catch (e) {
+      Alert.alert("Error", (e as Error).message ?? "Could not connect.");
     }
   };
 
-  const handleOpenProfile = () => {
-    if (!currentItem) return;
-    const uid = currentItem.user_id ?? currentItem.id;
-    router.push(`/(modes)/friends/profile-view?user_id=${uid}`);
+  const handleRecommendationLike = async (item: RecommendedItem) => {
+    if (!canLikeUnlimited && likesUsedToday >= 1) {
+      recommendationLimitReached(posthog ?? null, "friends");
+      return;
+    }
+    try {
+      await followUser(item.id);
+      await incrementRecommendationLikeSentToday("friends");
+      setLikesUsedToday((c) => c + 1);
+      recommendationLike(posthog ?? null, "friends", item.id);
+      setRecommendations((prev) => prev.filter((p) => p.id !== item.id));
+    } catch (e) {
+      Alert.alert("Error", (e as Error).message ?? "Could not send like.");
+    }
   };
 
-  const renderCard = () => {
-    if (!currentItem) {
-      return (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ ...Typography.body, color: Colors.gray700 }}>
-            No more profiles for now.
-          </Text>
-          <TouchableOpacity
-            onPress={loadData}
-            style={{
-              marginTop: 12,
-              paddingVertical: 10,
-              paddingHorizontal: 20,
-              borderRadius: Layout.radii.control,
-              borderWidth: 2,
-              borderColor: Colors.friends.primary,
-            }}
-          >
-            <Text style={{ ...Typography.body, color: Colors.friends.primary, fontWeight: "600" }}>
-              Refresh feed
-            </Text>
-          </TouchableOpacity>
-        </View>
-      );
+  const handleBlock = async (item: { id: string }) => {
+    try {
+      await blockUser(item.id);
+      discoverProfileBlock(posthog ?? null, "friends", item.id);
+      setPeopleWhoWantToConnect((prev) => prev.filter((p) => p.id !== item.id));
+      setRecommendations((prev) => prev.filter((p) => p.id !== item.id));
+    } catch (e) {
+      Alert.alert("Error", (e as Error).message ?? "Could not block.");
     }
+  };
 
-    const mainPhoto =
-      currentItem.main_photo_url ?? currentItem.avatar_url ?? null;
-    const other: FriendsProfile = {
-      id: currentItem.id,
-      display_name: currentItem.display_name,
-      city: currentItem.city ?? undefined,
-      interests: currentItem.interests ?? [],
-      vibe_tags: currentItem.vibe_tags ?? [],
-      about: currentItem.about_short ?? undefined,
-    };
-    const score = computeFriendsCompatibility({ self: selfProfile, other });
-    const tags = buildFriendsMatchTags({ self: selfProfile, other });
+  const handleReport = async (item: { id: string }) => {
+    try {
+      await reportUser(item.id, "other", "Reported from Discover");
+      discoverProfileReport(posthog ?? null, "friends", item.id);
+      setPeopleWhoWantToConnect((prev) => prev.filter((p) => p.id !== item.id));
+      setRecommendations((prev) => prev.filter((p) => p.id !== item.id));
+      Alert.alert("Report sent", "Thanks for helping keep Winkly safe.");
+    } catch (e) {
+      Alert.alert("Error", (e as Error).message ?? "Could not report.");
+    }
+  };
 
+  const primaryColor = Colors.friends.primary;
+
+  if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <TouchableOpacity
-          activeOpacity={0.95}
-          onPress={handleOpenProfile}
-          style={{
-            width: width * 0.9,
-            height: width * 1.1,
-            borderRadius: Layout.radii.card,
-            backgroundColor: "#FFF",
-            overflow: "hidden",
-            shadowColor: "#000",
-            shadowOpacity: 0.12,
-            shadowRadius: 10,
-            elevation: 3,
-          }}
-        >
-          <View style={{ flex: 3, backgroundColor: Colors.gray200 }}>
-            {mainPhoto ? (
-              <Image
-                source={{ uri: mainPhoto }}
-                style={{ width: "100%", height: "100%" }}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ fontSize: 40 }}>👋</Text>
-              </View>
-            )}
-          </View>
-
-          <View style={{ flex: 2, padding: 14 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
-                <Text
-                  style={{ ...Typography.h2, fontSize: 20, color: Colors.textPrimary }}
-                  numberOfLines={1}
-                >
-                  {currentItem.display_name}
-                </Text>
-                <Text style={{ ...Typography.caption, color: Colors.gray700 }} numberOfLines={1}>
-                  {currentItem.city || "Somewhere nearby"}
-                </Text>
-              </View>
-              <View
-                style={{
-                  minWidth: 68,
-                  height: 32,
-                  borderRadius: 16,
-                  backgroundColor: Colors.friends.secondary,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  paddingHorizontal: 10,
-                }}
-              >
-                <Text style={{ ...Typography.caption, fontWeight: "700", color: Colors.friends.primary }}>
-                  {score}% match
-                </Text>
-              </View>
-            </View>
-
-            {tags.length > 0 && (
-              <View style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 6 }}>
-                {tags.slice(0, 3).map((tag) => (
-                  <View
-                    key={tag}
-                    style={{
-                      borderRadius: 999,
-                      backgroundColor: Colors.friends.secondary,
-                      paddingVertical: 4,
-                      paddingHorizontal: 8,
-                      marginRight: 6,
-                      marginBottom: 4,
-                    }}
-                  >
-                    <Text style={{ ...Typography.caption, color: Colors.friends.primary }}>{tag}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {currentItem.about_short ? (
-              <Text style={{ ...Typography.body, color: Colors.gray800 }} numberOfLines={3}>
-                {currentItem.about_short}
-              </Text>
-            ) : (
-              <Text style={{ ...Typography.caption, color: Colors.gray500 }}>
-                No bio yet. Connect and get to know each other! 👋
-              </Text>
-            )}
-          </View>
-        </TouchableOpacity>
-
-        <View
-          style={{
-            flexDirection: "row",
-            marginTop: 20,
-            justifyContent: "space-evenly",
-            width: "80%",
-          }}
-        >
-          <TouchableOpacity
-            onPress={handlePass}
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 32,
-              borderWidth: 2,
-              borderColor: Colors.gray300,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "#FFF",
-            }}
-          >
-            <Ionicons name="close" size={32} color={Colors.gray500} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={handleAddFriend}
-            disabled={likeInProgress}
-            style={{
-              width: 72,
-              height: 72,
-              borderRadius: 36,
-              backgroundColor: Colors.friends.primary,
-              alignItems: "center",
-              justifyContent: "center",
-              shadowColor: "#000",
-              shadowOpacity: 0.2,
-              shadowRadius: 8,
-              elevation: 4,
-              opacity: likeInProgress ? 0.7 : 1,
-            }}
-          >
-            <Ionicons name="person-add" size={36} color="#FFF" />
-          </TouchableOpacity>
+      <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
+        <ModeHeader currentMode="friends" rightSlot="filters" onFilterPress={() => router.push("/(modes)/friends/filters")} />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={primaryColor} />
         </View>
+        <FriendsBottomNav />
       </View>
     );
-  };
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
       <ModeHeader currentMode="friends" rightSlot="filters" onFilterPress={() => router.push("/(modes)/friends/filters")} />
 
-      <View style={{ paddingHorizontal: 20, marginBottom: 6 }}>
-        <Text style={{ ...Typography.h1, fontSize: 24, color: Colors.textPrimary, marginBottom: 4 }}>
-          Discover new friends 👋
-        </Text>
-        <Text style={{ ...Typography.caption, color: Colors.gray700 }}>
-          Winkly orders profiles based on shared interests, activities and vibe.
-        </Text>
-      </View>
+      <ScrollView
+        style={{ flex: 1 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={primaryColor} />
+        }
+        contentContainerStyle={{ paddingBottom: 24 }}
+      >
+        <View style={{ paddingHorizontal: 20, marginBottom: 6 }}>
+          <Text style={{ ...Typography.h1, fontSize: 24, color: Colors.textPrimary, marginBottom: 4 }}>
+            Discover
+          </Text>
+          <Text style={{ ...Typography.caption, color: Colors.gray700 }}>
+            Winkly already did the thinking for you. People who want to connect and curated recommendations.
+          </Text>
+        </View>
 
-      <View style={{ flex: 1 }}>
-        {loading ? (
-          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-            <ActivityIndicator size="large" color={Colors.friends.primary} />
+        <DiscoverPeopleWhoLikedYou
+          mode="friends"
+          items={peopleWhoWantToConnect}
+          canViewFull={canViewFull}
+          primaryColor={primaryColor}
+          sectionTitle="People Who Want to Connect"
+          onLikeBack={handleConnectBack}
+          onViewProfile={(item) => router.push(`/(modes)/friends/profile-view?user_id=${item.id}`)}
+          onBlock={handleBlock}
+          onReport={handleReport}
+        />
+
+        <DiscoverRecommendedSection
+          mode="friends"
+          items={recommendations}
+          remainingToday={recommendations.length}
+          totalPerDay={DISCOVER_LIMITS.recommendationsPerDay}
+          primaryColor={primaryColor}
+          canLikeUnlimited={canLikeUnlimited}
+          likesUsedToday={likesUsedToday}
+          onSendLike={handleRecommendationLike}
+          onViewProfile={(item) => router.push(`/(modes)/friends/profile-view?user_id=${item.id}`)}
+          onBlock={handleBlock}
+          onReport={handleReport}
+        />
+
+        {peopleWhoWantToConnect.length === 0 && recommendations.length === 0 && (
+          <View style={{ paddingHorizontal: 20, paddingVertical: 32, alignItems: "center" }}>
+            <Text style={{ ...Typography.body, color: Colors.gray700, textAlign: "center" }}>
+              No new recommendations right now. Check back later or refine your filters.
+            </Text>
           </View>
-        ) : (
-          renderCard()
         )}
-      </View>
+      </ScrollView>
 
       <FriendsBottomNav />
     </View>

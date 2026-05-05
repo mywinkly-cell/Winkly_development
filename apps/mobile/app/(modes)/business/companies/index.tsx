@@ -14,6 +14,7 @@ import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 
 type CompanyRow = {
   id: string;
@@ -51,6 +52,7 @@ function normalizeCompany(row: any): CompanyRow {
 
 export default function BusinessCompaniesIndex() {
   const router = useRouter();
+  const fmtLoc = useFormatLocationDisplay();
 
   const [query, setQuery] = useState("");
   const [industry, setIndustry] = useState<string | null>(null);
@@ -306,7 +308,8 @@ export default function BusinessCompaniesIndex() {
                     </Text>
 
                     <Text style={{ color: Colors.mutedText }} numberOfLines={1}>
-                      {safeText(c.industry) || "Industry"} · {safeText(c.city) || "City"}{" "}
+                      {safeText(c.industry) || "Industry"} ·{" "}
+                      {c.city?.trim() ? fmtLoc(safeText(c.city)) : "City"}{" "}
                       {c.size ? `· ${c.size}` : ""}
                     </Text>
 

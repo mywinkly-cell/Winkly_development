@@ -1,12 +1,12 @@
 // ────────────────────────────────────────────────
-// Winkly Settings — v8 Global Account & App Preferences
-// Mode Selection → Settings icon (single access point)
-// Account-level configuration only; sub-profiles managed via Profile
+// Winkly General Settings — One place for account, notifications, planner & app
+// Entry: Mode Selection home tab only (violet settings icon).
 // ────────────────────────────────────────────────
 
 import React from "react";
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeScreenView } from "@/components/SafeScreenView";
@@ -25,47 +25,51 @@ type Section = {
   items: SectionItem[];
 };
 
-const SECTIONS: Section[] = [
-  {
-    title: "Account & Identity",
-    items: [
-      { title: "Account & Identity", subtitle: "Email, password, account type, delete account", route: "/account/account-identity", icon: "person-outline" },
-    ],
-  },
-  {
-    title: "Privacy & Safety",
-    items: [
-      { title: "Privacy & Safety", subtitle: "Visibility, discovery, location, blocked users", route: "/account/privacy-safety", icon: "shield-checkmark-outline" },
-    ],
-  },
-  {
-    title: "Notifications & Preferences",
-    items: [
-      { title: "Notifications & Preferences", subtitle: "Push, email, sound, language", route: "/account/notifications-preferences", icon: "notifications-outline" },
-      { title: "Calendar & Maps", subtitle: "Sync planner, location access", route: "/planner/settings", icon: "calendar-outline", iconColor: Colors.events.primary },
-    ],
-  },
-  {
-    title: "Payments & Subscriptions",
-    items: [
-      { title: "Subscription plans", subtitle: "Super & Premium tariffs", route: "/account/subscription", icon: "card-outline" },
-      { title: "Payment methods", subtitle: "Billing history and payment methods", route: "/account/payments", icon: "wallet-outline" },
-    ],
-  },
-  {
-    title: "Support & Legal",
-    items: [
-      { title: "Legal", subtitle: "Terms, privacy, community guidelines", route: "/account/legal", icon: "document-text-outline" },
-      { title: "Invite", subtitle: "Invite contacts to Winkly", route: "/account/invite", icon: "people-outline" },
-    ],
-  },
-  {
-    title: "App Info & Logout",
-    items: [
-      { title: "App Info & Logout", subtitle: "Version, what's new, sign out", route: "/account/app-info", icon: "information-circle-outline" },
-    ],
-  },
-];
+function useSections(): Section[] {
+  const { t } = useTranslation();
+  return [
+    {
+      title: t("settings.account"),
+      items: [
+        { title: t("settings.accountIdentity"), subtitle: t("settings.accountIdentitySub"), route: "/account/account-identity", icon: "person-outline" },
+      ],
+    },
+    {
+      title: t("settings.privacySafety"),
+      items: [
+        { title: t("settings.privacySafety"), subtitle: t("settings.privacySafetySub"), route: "/account/privacy-safety", icon: "shield-checkmark-outline" },
+        { title: t("settings.photoVerification"), subtitle: t("settings.photoVerificationSub"), route: "/account/photo-verification", icon: "camera-outline" },
+      ],
+    },
+    {
+      title: t("settings.notificationsPlanner"),
+      items: [
+        { title: t("settings.notificationsLanguage"), subtitle: t("settings.notificationsLanguageSub"), route: "/account/notifications-preferences", icon: "notifications-outline" },
+        { title: t("settings.plannerReminders"), subtitle: t("settings.plannerRemindersSub"), route: "/planner/settings", icon: "calendar-outline", iconColor: Colors.events.primary },
+      ],
+    },
+    {
+      title: t("settings.billing"),
+      items: [
+        { title: t("settings.subscriptionPlans"), subtitle: t("settings.subscriptionPlansSub"), route: "/account/subscription", icon: "card-outline" },
+        { title: t("settings.paymentMethods"), subtitle: t("settings.paymentMethodsSub"), route: "/account/payments", icon: "wallet-outline" },
+      ],
+    },
+    {
+      title: t("settings.supportLegal"),
+      items: [
+        { title: t("settings.legal"), subtitle: t("settings.legalSub"), route: "/account/legal", icon: "document-text-outline" },
+        { title: t("settings.inviteFriends"), subtitle: t("settings.inviteFriendsSub"), route: "/account/invite", icon: "people-outline" },
+      ],
+    },
+    {
+      title: t("settings.app"),
+      items: [
+        { title: t("settings.appInfo"), subtitle: t("settings.appInfoSub"), route: "/account/app-info", icon: "information-circle-outline" },
+      ],
+    },
+  ];
+}
 
 function SectionCard({ title, items }: Section) {
   const router = useRouter();
@@ -109,6 +113,8 @@ function SectionCard({ title, items }: Section) {
 
 export default function SettingsIndex() {
   const router = useRouter();
+  const { t } = useTranslation();
+  const sections = useSections();
   return (
     <SafeScreenView style={styles.screen}>
       <View style={styles.header}>
@@ -122,7 +128,7 @@ export default function SettingsIndex() {
         >
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={styles.headerTitle}>{t("settings.general")}</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -131,7 +137,10 @@ export default function SettingsIndex() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {SECTIONS.map((section) => (
+        <Text style={styles.intro}>
+          {t("settings.intro")}
+        </Text>
+        {sections.map((section) => (
           <SectionCard key={section.title} {...section} />
         ))}
       </ScrollView>
@@ -167,7 +176,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  headerTitle: { ...Typography.h3, fontFamily: FontFamily.heading, color: Colors.textPrimary },
+  headerTitle: { ...Typography.headerTitle, fontFamily: FontFamily.heading, color: Colors.textPrimary },
   placeholder: { width: 44 },
   scroll: {
     flex: 1,
@@ -175,6 +184,12 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: Layout.screenPadding,
     paddingBottom: 40,
+  },
+  intro: {
+    ...Typography.body,
+    color: Colors.gray600,
+    marginBottom: 20,
+    paddingHorizontal: 4,
   },
   section: {
     marginBottom: 24,

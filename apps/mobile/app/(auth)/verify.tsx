@@ -107,11 +107,11 @@ export default function Verify() {
             <Text style={styles.title}>Please confirm your email</Text>
             <Text style={styles.subtitle}>
               We sent a verification link to your inbox. Tap the link to verify your email and continue.{"\n\n"}
-              You can't use the app until your email is verified.
+              You can&apos;t use the app until your email is verified.
             </Text>
 
             <View style={styles.resendSection}>
-              <Text style={styles.resendTitle}>Didn't get the email?</Text>
+              <Text style={styles.resendTitle}>Didn&apos;t get the email?</Text>
               <TextInput
                 value={emailForResend}
                 onChangeText={setEmailForResend}
@@ -140,7 +140,7 @@ export default function Verify() {
             {__DEV__ && (
               <View style={styles.devSection}>
                 <Text style={styles.devTitle}>Testing in Expo Go?</Text>
-                <Text style={styles.devHint}>Deep links don't work in Expo Go. Paste the full URL from your browser after opening the verification link:</Text>
+                <Text style={styles.devHint}>Deep links don&apos;t work in Expo Go. Paste the full URL from your browser after opening the verification link:</Text>
                 <TextInput
                   value={pasteUrl}
                   onChangeText={setPasteUrl}

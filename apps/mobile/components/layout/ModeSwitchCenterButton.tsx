@@ -4,11 +4,13 @@
 // ────────────────────────────────────────────────
 
 import React from "react";
-import { View, Pressable, StyleSheet } from "react-native";
+import { View, Pressable, StyleSheet, Image } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "@/constants/tokens";
+
+const EVENTS_ICON = require("@/assets/icons/events-icon_1.png");
 
 const TAB_HEIGHT = 48;
 const SCALE = 0.855; // 10% then 5% smaller
@@ -20,11 +22,11 @@ const ICON_SIZE = Math.round(CARD_ICON_SIZE * 0.9);
 
 export type ModeKey = "romance" | "friends" | "business" | "events";
 
-const MODE_ICON: Record<ModeKey, keyof typeof Ionicons.glyphMap> = {
+const MODE_ICON: Record<ModeKey, keyof typeof Ionicons.glyphMap | null> = {
   romance: "heart",
   friends: "people",
   business: "briefcase",
-  events: "ticket",
+  events: null, // uses custom image
 };
 
 type ModeSwitchCenterButtonProps = {
@@ -60,7 +62,11 @@ export function ModeSwitchCenterButton({ mode }: ModeSwitchCenterButtonProps) {
         ]}
         accessibilityLabel="Switch mode"
       >
-        <Ionicons name={MODE_ICON[mode]} size={ICON_SIZE} color={Colors.white} />
+        {mode === "events" ? (
+          <Image source={EVENTS_ICON} style={{ width: ICON_SIZE, height: ICON_SIZE, tintColor: Colors.white }} resizeMode="contain" />
+        ) : (
+          <Ionicons name={MODE_ICON[mode] as keyof typeof Ionicons.glyphMap} size={ICON_SIZE} color={Colors.white} />
+        )}
       </Pressable>
     </View>
   );

@@ -33,13 +33,16 @@ export default function ResetConfirm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Dev-only: paste reset link when testing in Expo Go (deep links don't work)
+  // Paste reset link when the email link opened in a browser (Expo Go, or when app didn’t open from deep link)
   const [pasteUrl, setPasteUrl] = useState("");
   const [pasteLoading, setPasteLoading] = useState(false);
   const handlePasteResetLink = useCallback(async () => {
     const url = pasteUrl.trim();
     if (!url) {
-      Alert.alert("Paste link", "Paste the full URL from your browser's address bar after opening the reset link in the email.");
+      Alert.alert(
+        "Paste link",
+        "Paste the full URL from the reset email, or from your browser’s address bar after opening the link. You can use either the link from the email or the URL after it redirects."
+      );
       return;
     }
     setPasteLoading(true);
@@ -50,7 +53,10 @@ export default function ResetConfirm() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert("Link applied", "You can now enter your new password below.");
       } else {
-        Alert.alert("Invalid link", "Could not use this link. Make sure it's the full URL from the reset email.");
+        Alert.alert(
+          "Invalid or expired link",
+          "Use the full URL from the reset email (the link you received), or the URL from your browser after opening it. Links expire after about an hour."
+        );
       }
     } catch {
       Alert.alert("Error", "Could not apply link. Try again.");
@@ -139,45 +145,45 @@ export default function ResetConfirm() {
         </Text>
 
         {__DEV__ && (
-          <View style={{ marginBottom: 24, width: "100%", maxWidth: 360 }}>
-            <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 8, fontWeight: "600" }}>
-              Testing in Expo Go?
-            </Text>
-            <Text style={{ ...Typography.caption, color: Colors.gray500, marginBottom: 8 }}>
-              Deep links don't work in Expo Go. Paste the full URL from your browser after opening the reset link:
-            </Text>
-            <TextInput
-              value={pasteUrl}
-              onChangeText={setPasteUrl}
-              placeholder="Paste https://... or full URL"
-              placeholderTextColor={Colors.gray500}
-              autoCapitalize="none"
-              autoCorrect={false}
-              multiline
-              style={{
-                ...inputStyle,
-                minHeight: 72,
-                marginBottom: 8,
-              }}
-            />
-            <TouchableOpacity
-              onPress={handlePasteResetLink}
-              disabled={pasteLoading}
-              style={{
-                backgroundColor: Colors.primaryViolet,
-                borderRadius: Layout.radii.control,
-                paddingVertical: 12,
-                alignItems: "center",
-                opacity: pasteLoading ? 0.7 : 1,
-              }}
-            >
-              {pasteLoading ? (
-                <ActivityIndicator color={Colors.accentYellow} size="small" />
-              ) : (
-                <Text style={{ ...Typography.button, color: Colors.accentYellow }}>Paste & continue</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+        <View style={{ marginBottom: 24, width: "100%", maxWidth: 360 }}>
+          <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 8, fontWeight: "600" }}>
+            Testing in Expo Go?
+          </Text>
+          <Text style={{ ...Typography.caption, color: Colors.gray500, marginBottom: 8 }}>
+            Deep links don&apos;t work in Expo Go. Paste the full URL from the reset email (or from your browser after opening the link):
+          </Text>
+          <TextInput
+            value={pasteUrl}
+            onChangeText={setPasteUrl}
+            placeholder="Paste https://... or full URL"
+            placeholderTextColor={Colors.gray500}
+            autoCapitalize="none"
+            autoCorrect={false}
+            multiline
+            style={{
+              ...inputStyle,
+              minHeight: 72,
+              marginBottom: 8,
+            }}
+          />
+          <TouchableOpacity
+            onPress={handlePasteResetLink}
+            disabled={pasteLoading}
+            style={{
+              backgroundColor: Colors.primaryViolet,
+              borderRadius: Layout.radii.control,
+              paddingVertical: 12,
+              alignItems: "center",
+              opacity: pasteLoading ? 0.7 : 1,
+            }}
+          >
+            {pasteLoading ? (
+              <ActivityIndicator color={Colors.accentYellow} size="small" />
+            ) : (
+              <Text style={{ ...Typography.button, color: Colors.accentYellow }}>Paste & continue</Text>
+            )}
+          </TouchableOpacity>
+        </View>
         )}
 
         <TextInput

@@ -7,6 +7,7 @@ import { View, Text, ScrollView, TouchableOpacity, Switch, Alert, StyleSheet } f
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 
 export default function PlannerFilters() {
   const router = useRouter();
@@ -69,7 +70,7 @@ export default function PlannerFilters() {
           <View style={styles.row}>
             <View style={styles.rowText}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Ionicons name="sparkles" size={16} color={Colors.primaryViolet} />
+                <SparklesIcon size={16} color={Colors.primaryViolet} />
                 <Text style={styles.rowTitle}>AI suggestions</Text>
               </View>
               <Text style={styles.rowSub}>Show recommended times/places & follow-ups.</Text>
@@ -108,7 +109,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  headerTitle: { ...Typography.h3, color: Colors.textPrimary },
+  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
 
   actionBtn: { width: 60, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.primaryViolet, alignItems: "center" },
   actionText: { ...Typography.caption, color: Colors.accentYellow },

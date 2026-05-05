@@ -278,7 +278,7 @@ export function useTypingIndicator(conversationId: string | null, meId: string |
 
 /** Fetch reactions for a set of messages */
 export function useMessageReactions(messageIds: string[]) {
-  const [byMessage, setByMessage] = useState<Record<string, Array<{ emoji: string; user_id: string; count?: number }>>>({});
+  const [byMessage, setByMessage] = useState<Record<string, { emoji: string; user_id: string; count?: number }[]>>({});
 
   useEffect(() => {
     if (messageIds.length === 0) {
@@ -292,8 +292,8 @@ export function useMessageReactions(messageIds: string[]) {
         .select("message_id,user_id,emoji")
         .in("message_id", messageIds);
 
-      const rows = (data ?? []) as Array<{ message_id: string; user_id: string; emoji: string }>;
-      const map: Record<string, Array<{ emoji: string; user_id: string }>> = {};
+      const rows = (data ?? []) as { message_id: string; user_id: string; emoji: string }[];
+      const map: Record<string, { emoji: string; user_id: string }[]> = {};
       for (const r of rows) {
         if (!map[r.message_id]) map[r.message_id] = [];
         map[r.message_id].push({ emoji: r.emoji, user_id: r.user_id });

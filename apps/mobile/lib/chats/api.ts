@@ -6,6 +6,9 @@
 import { supabase } from "@/lib/supabase";
 import type { AppMode, DMSource, MessageAttachment, MessageType } from "./types";
 
+/** RPC name — use this constant to avoid typos (e.g. create_derect_chat). */
+const RPC_CREATE_DIRECT_CHAT = "create_direct_chat";
+
 export async function sendMessage(
   conversationId: string,
   content: string,
@@ -53,7 +56,7 @@ export async function createDirectChat(
   source: DMSource,
   initiatorId: string
 ) {
-  const { data, error } = await supabase.rpc("create_direct_chat", {
+  const { data, error } = await supabase.rpc(RPC_CREATE_DIRECT_CHAT, {
     p_user_a: initiatorId,
     p_user_b: otherUserId,
     p_mode: mode,
@@ -314,8 +317,11 @@ export async function getReadReceipts(messageId: string) {
   return data ?? [];
 }
 
-/** Romance: like profile and optionally create chat on match */
-export async function romanceLikeProfile(targetUserId: string) {
+/** Romance: like or super-like profile; optionally create chat on match */
+export async function romanceLikeProfile(
+  targetUserId: string,
+  options?: { superLike?: boolean; superLikeMessage?: string | null }
+) {
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
   if (!uid) throw new Error("Not signed in");
@@ -323,6 +329,8 @@ export async function romanceLikeProfile(targetUserId: string) {
   const { data, error } = await supabase.rpc("romance_like_profile", {
     current_user_id: uid,
     target_user_id: targetUserId,
+    p_super_like: options?.superLike ?? false,
+    p_super_like_message: options?.superLikeMessage ?? null,
   });
   if (error) throw error;
   return data as { liked: boolean; is_match: boolean; chat_id?: string };

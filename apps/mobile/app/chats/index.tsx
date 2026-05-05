@@ -7,11 +7,12 @@ import { supabase } from "@/lib/supabase";
 
 import type { AppMode, Conversation, ConversationMember, Message, UserMini } from "@/lib/chats";
 import { ChatPreviewCard } from "@/components/chats/ChatPreviewCard";
-import { Colors, Layout, Typography, FontFamily } from "@/constants/tokens";
+import { ChatsHeader } from "@/components/layout/ChatsHeader";
+import { Colors, Layout, Typography } from "@/constants/tokens";
 
 type ChatTabKey = "all" | AppMode;
 
-const TABS: Array<{ key: ChatTabKey; label: string; secondary: string; accent: string }> = [
+const TABS: { key: ChatTabKey; label: string; secondary: string; accent: string }[] = [
   { key: "all", label: "All", secondary: Colors.white, accent: Colors.primaryViolet },
   { key: "romance", label: "Romance", secondary: Colors.romance.secondary, accent: Colors.romance.primary },
   { key: "friends", label: "Friends", secondary: Colors.friends.secondary, accent: Colors.friends.primary },
@@ -43,7 +44,7 @@ export default function ChatsHome() {
   const [activeTab, setActiveTab] = useState<"all" | AppMode>(initialTab);
   const [loading, setLoading] = useState<boolean>(true);
   const [items, setItems] = useState<Conversation[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
 
   // hydrated UI maps
   const [meId, setMeId] = useState<string | null>(null);
@@ -111,7 +112,7 @@ export default function ChatsHome() {
           .in("conversation_id", convIds)
           .eq("user_id", uid);
         const byConv: Record<string, { pinned: boolean; last_read_at: string | null }> = {};
-        for (const s of (settings ?? []) as Array<{ conversation_id: string; pinned: boolean; last_read_at: string | null }>) {
+        for (const s of (settings ?? []) as { conversation_id: string; pinned: boolean; last_read_at: string | null }[]) {
           byConv[s.conversation_id] = { pinned: s.pinned, last_read_at: s.last_read_at };
         }
         setMemberSettingsByConv(byConv);
@@ -121,7 +122,7 @@ export default function ChatsHome() {
           p_user_id: uid,
         });
         const unreadMap: Record<string, number> = {};
-        for (const r of (unreadRows ?? []) as Array<{ conversation_id: string; unread_count: number }>) {
+        for (const r of (unreadRows ?? []) as { conversation_id: string; unread_count: number }[]) {
           unreadMap[r.conversation_id] = Number(r.unread_count) || 0;
         }
         setUnreadByConv(unreadMap);
@@ -143,7 +144,7 @@ export default function ChatsHome() {
       }
       setParticipantsByConv(byConv);
 
-      // 3) load user mini profiles for all participant ids (Option B: user_profiles)
+      // 3) load user mini profiles + mode-specific photos for avatar consistency
       const userIds = Array.from(new Set(partsList.map((p) => p.user_id)));
       if (userIds.length > 0) {
         const { data: minis, error: minisErr } = await supabase
@@ -154,7 +155,21 @@ export default function ChatsHome() {
         if (minisErr) throw minisErr;
 
         const map: Record<string, UserMini> = {};
-        for (const u of (minis ?? []) as UserMini[]) map[u.id] = u;
+        for (const u of (minis ?? []) as UserMini[]) map[u.id] = { ...u };
+
+        const { data: modeProfiles } = await supabase
+          .from("profiles_mode")
+          .select("user_id,mode,photos")
+          .in("user_id", userIds)
+          .in("mode", ["romance", "friends", "business"]);
+
+        for (const row of (modeProfiles ?? []) as { user_id: string; mode: string; photos: (string | null)[] }[]) {
+          const u = map[row.user_id];
+          if (!u) continue;
+          if (row.mode === "romance") u.romance_photos = row.photos ?? [];
+          else if (row.mode === "friends") u.friends_photos = row.photos ?? [];
+          else if (row.mode === "business") u.business_photos = row.photos ?? [];
+        }
         setUsersById(map);
       } else {
         setUsersById({});
@@ -217,7 +232,7 @@ export default function ChatsHome() {
 
 
   function getConversationTitle(conv: Conversation): string {
-    if (conv.type === "dm" || conv.type === "direct") {
+    if (conv.type === "dm") {
       const parts = participantsByConv[conv.id] ?? [];
       const otherId = parts.find((p) => p.user_id !== meId)?.user_id ?? null;
       return formatName(otherId ? usersById[otherId] : null);
@@ -232,13 +247,23 @@ export default function ChatsHome() {
     return "Group chat";
   }
 
-  function getParticipantAvatars(conv: Conversation): Array<{ userId: string; photoUrl?: string | null }> {
+  /** Avatar photo per participant: use mode-specific main photo when available (conversation mode). */
+  function getParticipantAvatars(conv: Conversation): { userId: string; photoUrl?: string | null }[] {
     const parts = participantsByConv[conv.id] ?? [];
     const others = parts.filter((p) => p.user_id !== meId);
-    return others.slice(0, 2).map((p) => ({
-      userId: p.user_id,
-      photoUrl: usersById[p.user_id]?.main_photo_url ?? null,
-    }));
+    const mode = conv.mode;
+    return others.slice(0, 2).map((p) => {
+      const u = usersById[p.user_id];
+      const photoUrl =
+        mode === "romance"
+          ? (u?.romance_photos?.find((x) => !!x) ?? u?.main_photo_url ?? null)
+          : mode === "friends"
+            ? (u?.friends_photos?.find((x) => !!x) ?? u?.main_photo_url ?? null)
+            : mode === "business"
+              ? (u?.business_photos?.find((x) => !!x) ?? u?.main_photo_url ?? null)
+              : (u?.main_photo_url ?? null);
+      return { userId: p.user_id, photoUrl: photoUrl ?? null };
+    });
   }
 
   function formatTimestamp(ts: string | null | undefined): string {
@@ -257,18 +282,19 @@ export default function ChatsHome() {
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   }
 
+  /** Chats ordered by last message sent (most recent first), for All and every sub-tab. */
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      const tsA = lastMessageByConv[a.id]?.created_at ?? a.last_message_at ?? a.created_at ?? "";
+      const tsB = lastMessageByConv[b.id]?.created_at ?? b.last_message_at ?? b.created_at ?? "";
+      return tsB.localeCompare(tsA);
+    });
+  }, [items, lastMessageByConv]);
+
   if (loading) {
     return (
       <View style={styles.screen}>
-        <View style={styles.topHeader}>
-          <TouchableOpacity onPress={() => { Haptics.selectionAsync(); router.back(); }} style={styles.headerBtn} activeOpacity={0.9}>
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Chats</Text>
-          </View>
-          <View style={styles.headerRight} />
-        </View>
+        <ChatsHeader />
         <View style={styles.tabBar} />
         <View style={{ flex: 1, padding: 20, justifyContent: "center" }}>
           <ActivityIndicator />
@@ -280,28 +306,8 @@ export default function ChatsHome() {
 
   return (
     <View style={styles.screen}>
-      {/* TOP HEADER — same as Planner */}
-      <View style={styles.topHeader}>
-        <TouchableOpacity
-          onPress={() => { Haptics.selectionAsync(); router.back(); }}
-          style={styles.headerBtn}
-          activeOpacity={0.9}
-          accessibilityLabel="Back"
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Chats</Text>
-        </View>
-        <TouchableOpacity
-          onPress={() => { Haptics.selectionAsync(); goNewChat(); }}
-          style={styles.headerBtn}
-          activeOpacity={0.9}
-          accessibilityLabel="New chat"
-        >
-          <Ionicons name="add-circle-outline" size={26} color={Colors.primaryViolet} />
-        </TouchableOpacity>
-      </View>
+      {/* TOP HEADER — Filter (left) | Chats | Winkly AI (right) */}
+      <ChatsHeader />
 
       {/* SUBHEADER — same tab bar as Planner */}
       <View style={styles.tabBar}>
@@ -352,7 +358,7 @@ export default function ChatsHome() {
 
       <FlatList
         style={{ flex: 1 }}
-        data={items}
+        data={sortedItems}
         keyExtractor={(c) => c.id}
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         renderItem={({ item }) => {
@@ -369,10 +375,19 @@ export default function ChatsHome() {
               unreadCount={unreadByConv[item.id] ?? 0}
               isPinned={settings?.pinned ?? false}
               onPress={() => router.push(`/chats/${item.id}`)}
+              onAvatarPress={
+                item.mode && item.mode !== "events"
+                  ? (userId) => {
+                      if (item.mode === "romance") router.push(`/(modes)/romance/profile-view?id=${userId}`);
+                      else if (item.mode === "friends") router.push(`/(modes)/friends/profile-view?user_id=${userId}`);
+                      else if (item.mode === "business") router.push(`/(modes)/business/profile-view?user_id=${userId}`);
+                    }
+                  : undefined
+              }
             />
           );
         }}
-        ListEmptyComponent={<Text style={{ opacity: 0.7, textAlign: "center" }}>There is no active chats yet. It's time to spark a conversation!</Text>}
+        ListEmptyComponent={<Text style={{ opacity: 0.7, textAlign: "center" }}>There is no active chats yet. It&apos;s time to spark a conversation!</Text>}
       />
       </View>
     </View>
@@ -381,29 +396,6 @@ export default function ChatsHome() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  topHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    ...Layout.topHeaderBar,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  headerBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  headerCenter: { flex: 1, alignItems: "center", justifyContent: "center" },
-  headerTitle: {
-    ...Typography.h3,
-    color: Colors.primaryViolet,
-    fontFamily: FontFamily.heading,
-  },
-  headerRight: { width: 44, height: 44 },
   tabBar: {
     backgroundColor: Colors.white,
     minHeight: 48,

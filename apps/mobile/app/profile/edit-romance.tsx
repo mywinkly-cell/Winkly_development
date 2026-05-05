@@ -1,13 +1,16 @@
 // apps/mobile/app/profile/edit-romance.tsx
 // Winkly – Profile: Edit Romance. Persists to profiles_mode (mode = romance).
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
 import { useAuth } from "@/providers";
 import { getOwnProfileMode, upsertOwnProfileMode } from "@/lib/access/profiles";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { supabase } from "@/lib/supabase";
+import { pickAndUploadVideo } from "@/lib/uploadMedia";
 
 export default function EditRomance() {
   const router = useRouter();
@@ -18,6 +21,13 @@ export default function EditRomance() {
   const [goal, setGoal] = useState("");
   const [aboutLove, setAboutLove] = useState("");
   const [dealbreakers, setDealbreakers] = useState("");
+  const [lifestyleTags, setLifestyleTags] = useState("");
+  const [voiceUrl, setVoiceUrl] = useState<string | null>(null);
+  const [voiceSeconds, setVoiceSeconds] = useState<number | null>(null);
+  const [videoBioUrl, setVideoBioUrl] = useState<string | null>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(audioRecorder);
+  const lastRecordedUriRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -29,15 +39,41 @@ export default function EditRomance() {
       setGoal((meta.relationship_goal as string) ?? "");
       setAboutLove((meta.what_you_value as string) ?? "");
       setDealbreakers((meta.dealbreakers as string) ?? "");
+      const tags = (profile as { lifestyle_tags?: string[] | null })?.lifestyle_tags;
+      setLifestyleTags(Array.isArray(tags) ? tags.join(", ") : "");
+      setVoiceUrl((profile as { voice_prompt_url?: string | null })?.voice_prompt_url ?? null);
+      setVoiceSeconds((profile as { voice_prompt_seconds?: number | null })?.voice_prompt_seconds ?? null);
+      setVideoBioUrl((profile as { video_bio_url?: string | null })?.video_bio_url ?? null);
       setLoading(false);
     })();
     return () => { cancelled = true; };
   }, [user?.id]);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const status = await AudioModule.requestRecordingPermissionsAsync();
+        if (!status.granted) return;
+        await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
+      } catch {
+        // Ignore: user can still use the rest of the screen.
+      }
+    })();
+  }, []);
+
   const save = async () => {
     if (!user?.id) return;
     setSaving(true);
+    const tags = lifestyleTags
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 12);
     const { error } = await upsertOwnProfileMode(user.id, "romance", {
+      lifestyle_tags: tags.length ? tags : null,
+      voice_prompt_url: voiceUrl,
+      voice_prompt_seconds: voiceSeconds,
+      video_bio_url: videoBioUrl,
       meta: {
         relationship_goal: goal.trim() || null,
         what_you_value: aboutLove.trim() || null,
@@ -100,6 +136,89 @@ export default function EditRomance() {
             editable={!saving}
           />
         </View>
+
+        <View style={[styles.card, { marginTop: 16 }]}>
+          <Text style={styles.title}>Rich profile</Text>
+          <Text style={styles.subtitle}>Lifestyle tags, a short voice prompt, and optional video intro.</Text>
+
+          <Label text="Lifestyle tags (comma-separated)" />
+          <TextInput
+            value={lifestyleTags}
+            onChangeText={setLifestyleTags}
+            placeholder="e.g. gym, foodie, travel, early bird"
+            placeholderTextColor={Colors.gray500}
+            style={styles.input}
+            editable={!saving}
+          />
+
+          <Label text="Voice prompt" />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <TouchableOpacity
+              style={[styles.secondaryBtn, recorderState.isRecording && { backgroundColor: Colors.errorRed + "22" }]}
+              onPress={async () => {
+                if (!user?.id) return;
+                if (recorderState.isRecording) {
+                  try {
+                    await audioRecorder.stop();
+                    const uri = audioRecorder.uri ?? lastRecordedUriRef.current;
+                    const durSec =
+                      recorderState.durationMillis != null ? Math.round(recorderState.durationMillis / 1000) : null;
+                    lastRecordedUriRef.current = uri ?? null;
+                    if (!uri) return;
+                    const resp = await fetch(uri);
+                    const blob = await resp.blob();
+                    const path = `${user.id}/romance/voice_${Date.now()}.m4a`;
+                    const { error: upErr } = await supabase.storage.from("user-videos").upload(path, blob, {
+                      contentType: "audio/mp4",
+                      upsert: true,
+                    });
+                    if (upErr) throw upErr;
+                    const { data } = supabase.storage.from("user-videos").getPublicUrl(path);
+                    setVoiceUrl(data.publicUrl);
+                    setVoiceSeconds(durSec);
+                  } catch (e) {
+                    Alert.alert("Voice", e instanceof Error ? e.message : "Upload failed");
+                  }
+                  return;
+                }
+                const perm = await AudioModule.requestRecordingPermissionsAsync();
+                if (!perm.granted) {
+                  Alert.alert("Microphone", "Permission is required to record.");
+                  return;
+                }
+                await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
+                await audioRecorder.prepareToRecordAsync();
+                audioRecorder.record();
+              }}
+              disabled={saving}
+            >
+              <Text style={styles.secondaryBtnText}>{recorderState.isRecording ? "Stop & upload" : "Record voice prompt"}</Text>
+            </TouchableOpacity>
+            {voiceUrl ? (
+              <Text style={{ ...Typography.caption, color: Colors.gray600, flex: 1 }} numberOfLines={2}>
+                Saved voice clip
+              </Text>
+            ) : null}
+          </View>
+
+          <Label text="Video bio (short clip)" />
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            onPress={async () => {
+              if (!user?.id) return;
+              const url = await pickAndUploadVideo(user.id, "romance");
+              if (url) setVideoBioUrl(url);
+            }}
+            disabled={saving}
+          >
+            <Text style={styles.secondaryBtnText}>{videoBioUrl ? "Replace video bio" : "Pick video from library"}</Text>
+          </TouchableOpacity>
+          {videoBioUrl ? (
+            <Text style={{ ...Typography.caption, color: Colors.gray600, marginTop: 8 }} numberOfLines={1}>
+              Video added
+            </Text>
+          ) : null}
+        </View>
       </ScrollView>
     </View>
   );
@@ -146,7 +265,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  headerTitle: { ...Typography.h3, color: Colors.textPrimary },
+  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
   saveBtn: { width: 70, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.primaryViolet, alignItems: "center" },
   saveText: { ...Typography.caption, color: Colors.accentYellow },
 
@@ -167,5 +286,14 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginBottom: 12,
   },
+  secondaryBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: Layout.radii.control,
+    borderWidth: 1,
+    borderColor: Colors.primaryViolet,
+    backgroundColor: Colors.primaryViolet + "10",
+  },
+  secondaryBtnText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
 
 });

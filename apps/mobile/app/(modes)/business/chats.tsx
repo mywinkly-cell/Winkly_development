@@ -6,7 +6,7 @@
 
 import React from "react";
 import { View } from "react-native";
-import { ModeHeader } from "@/components/layout/ModeHeader";
+import { ChatsHeader } from "@/components/layout/ChatsHeader";
 import { ModeBottomBar } from "@/components/layout/ModeBottomBar";
 import { ChatsInboxContent } from "@/components/chats/ChatsInboxContent";
 import { Colors } from "@/constants/tokens";
@@ -14,7 +14,7 @@ import { Colors } from "@/constants/tokens";
 export default function BusinessChats() {
   return (
     <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
-      <ModeHeader currentMode="business" rightSlot="filterSettings" />
+      <ChatsHeader />
       <ChatsInboxContent sourceMode="business" />
       <ModeBottomBar mode="business" />
     </View>

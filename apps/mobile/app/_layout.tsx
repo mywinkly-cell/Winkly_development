@@ -3,6 +3,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { View, ActivityIndicator, LogBox } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -21,6 +22,7 @@ import { ScreenTopSpacer } from "@/components/ScreenTopSpacer";
 import { PostHogIdentitySync, PostHogScreenTracker } from "@/components/PostHogAnalytics";
 import { Colors } from "@/constants/tokens";
 import { POSTHOG_API_KEY, POSTHOG_HOST } from "@/constants/config";
+import { initI18n } from "@/lib/i18n";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -55,7 +57,8 @@ export default function RootLayout() {
   });
 
   const [fontsTimedOut, setFontsTimedOut] = useState(false);
-  const readyToRender = fontsLoaded || fontsTimedOut;
+  const [i18nReady, setI18nReady] = useState(false);
+  const readyToRender = (fontsLoaded || fontsTimedOut) && i18nReady;
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -64,15 +67,23 @@ export default function RootLayout() {
     return () => clearTimeout(t);
   }, [fontsLoaded]);
 
+  useEffect(() => {
+    initI18n().then(() => setI18nReady(true));
+  }, []);
+
   const onLayoutRootView = useCallback(async () => {
     if (readyToRender) await SplashScreen.hideAsync();
   }, [readyToRender]);
 
   if (!readyToRender) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: Colors.primaryViolet }}>
-        <ActivityIndicator size="large" color="#FFFFFF" />
-      </View>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: Colors.primaryViolet }}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+          </View>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     );
   }
 
@@ -109,16 +120,18 @@ export default function RootLayout() {
   );
 
   return (
-    <SafeAreaProvider>
-      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-        {POSTHOG_API_KEY ? (
-          <PostHogProvider apiKey={POSTHOG_API_KEY} options={posthogOptions}>
-            {content}
-          </PostHogProvider>
-        ) : (
-          content
-        )}
-      </View>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+          {POSTHOG_API_KEY ? (
+            <PostHogProvider apiKey={POSTHOG_API_KEY} options={posthogOptions}>
+              {content}
+            </PostHogProvider>
+          ) : (
+            content
+          )}
+        </View>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

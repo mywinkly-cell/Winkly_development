@@ -2,7 +2,7 @@
 // Shown when user arrives from email verification link — session is already set
 
 import React, { useEffect } from "react";
-import { View, Text, ActivityIndicator } from "react-native";
+import { Text, ActivityIndicator } from "react-native";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";

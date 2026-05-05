@@ -45,7 +45,7 @@ export default function WinklyWorld() {
         <Text style={styles.title}>Welcome to your Winkly world</Text>
 
         <Text style={styles.paragraph}>
-          You don't have just one profile. You have modes — each with its own profile, visibility, and intention.
+          You don&apos;t have just one profile. You have modes — each with its own profile, visibility, and intention.
         </Text>
 
         <Text style={styles.paragraph}>
@@ -98,7 +98,7 @@ export default function WinklyWorld() {
             trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }}
             thumbColor={Colors.white}
           />
-          <Text style={styles.dontShowLabel}>Don't show again</Text>
+          <Text style={styles.dontShowLabel}>Don&apos;t show again</Text>
         </View>
       </ScrollView>
     </SafeScreenView>

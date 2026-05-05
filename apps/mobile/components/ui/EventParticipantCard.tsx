@@ -2,9 +2,10 @@
 // Photo, name, age, location, occupation (used on event details & planner)
 
 import React from "react";
-import { View, Text, Image, StyleSheet } from "react-native";
+import { View, Text, Image, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 
 function getAge(birthday: string | Date | null): number | null {
   if (!birthday) return null;
@@ -29,14 +30,17 @@ export type ParticipantInfo = {
 
 type EventParticipantCardProps = {
   participant: ParticipantInfo;
+  /** When set, the card is tappable and opens the user's profile (e.g. Friends profile view). */
+  onPress?: () => void;
 };
 
-export function EventParticipantCard({ participant }: EventParticipantCardProps) {
+export function EventParticipantCard({ participant, onPress }: EventParticipantCardProps) {
+  const fmtLoc = useFormatLocationDisplay();
   const age = getAge(participant.birthday ?? null);
   const name = participant.firstName?.trim() || "Anonymous";
 
-  return (
-    <View style={styles.card}>
+  const content = (
+    <>
       <View style={styles.avatarWrap}>
         {participant.photoUrl ? (
           <Image source={{ uri: participant.photoUrl }} style={styles.avatar} resizeMode="cover" />
@@ -55,10 +59,18 @@ export function EventParticipantCard({ participant }: EventParticipantCardProps)
             </View>
           )}
         </View>
-        {participant.city ? <Text style={styles.city}>{participant.city}</Text> : null}
+        {participant.city ? <Text style={styles.city}>{fmtLoc(participant.city)}</Text> : null}
         {participant.occupation ? <Text style={styles.occupation}>{participant.occupation}</Text> : null}
       </View>
-    </View>
+    </>
+  );
+
+  return onPress ? (
+    <Pressable onPress={onPress} style={styles.card} accessibilityLabel={`View ${name}'s profile`}>
+      {content}
+    </Pressable>
+  ) : (
+    <View style={styles.card}>{content}</View>
   );
 }
 

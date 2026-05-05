@@ -6,24 +6,24 @@
 
 -- QUERY 1: Required tables (missing = problem)
 SELECT 'MISSING_TABLES' AS report_section, unnest(ARRAY[
-  'users', 'profiles_core', 'profiles_mode', 'profiles_business',
-  'follows', 'events', 'event_participants', 'event_invitations',
-  'planner_items', 'planner_participants',
+  'users', 'user_profiles', 'profiles_core', 'profiles_mode', 'profiles_business', 'sub_profiles',
+  'follows', 'events', 'event_participants', 'event_invitations', 'event_chat_settings',
+  'planner_items', 'planner_participants', 'planner_invitations',
   'conversations', 'conversation_members', 'conversation_member_settings',
   'messages', 'groups', 'group_members',
-  'wishlist_items', 'user_preferences', 'ai_requests', 'user_blocks'
+  'wishlist_items', 'user_preferences', 'ai_requests', 'user_blocks', 'romance_likes'
 ]) AS required_table
 EXCEPT
 SELECT 'MISSING_TABLES', table_name::text
 FROM information_schema.tables
 WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
   AND table_name IN (
-    'users', 'profiles_core', 'profiles_mode', 'profiles_business',
-    'follows', 'events', 'event_participants', 'event_invitations',
-    'planner_items', 'planner_participants',
+    'users', 'user_profiles', 'profiles_core', 'profiles_mode', 'profiles_business', 'sub_profiles',
+    'follows', 'events', 'event_participants', 'event_invitations', 'event_chat_settings',
+    'planner_items', 'planner_participants', 'planner_invitations',
     'conversations', 'conversation_members', 'conversation_member_settings',
     'messages', 'groups', 'group_members',
-    'wishlist_items', 'user_preferences', 'ai_requests', 'user_blocks'
+    'wishlist_items', 'user_preferences', 'ai_requests', 'user_blocks', 'romance_likes'
   );
 
 -- QUERY 2: public_profile_view (optional)
@@ -37,12 +37,12 @@ SELECT 'RLS_STATUS' AS report_section, c.relname AS table_name,
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'public' AND c.relkind = 'r'
-  AND c.relname IN ('users', 'profiles_core', 'profiles_mode', 'profiles_business', 'conversations', 'conversation_members', 'messages', 'events');
+  AND c.relname IN ('users', 'user_profiles', 'profiles_core', 'profiles_mode', 'profiles_business', 'sub_profiles', 'conversations', 'conversation_members', 'messages', 'events', 'romance_likes');
 
 -- QUERY 4: Policy counts (0 = problem)
 SELECT 'POLICY_COUNT' AS report_section, p.tablename AS table_name,
   COALESCE(COUNT(*), 0)::text AS policies
-FROM (SELECT unnest(ARRAY['users', 'profiles_core', 'profiles_mode', 'profiles_business', 'conversations', 'conversation_members', 'messages', 'events']) AS tablename) t
+FROM (SELECT unnest(ARRAY['users', 'user_profiles', 'profiles_core', 'profiles_mode', 'profiles_business', 'sub_profiles', 'conversations', 'conversation_members', 'messages', 'events', 'romance_likes']) AS tablename) t
 LEFT JOIN pg_policies p ON p.schemaname = 'public' AND p.tablename = t.tablename
 GROUP BY t.tablename
 ORDER BY t.tablename;

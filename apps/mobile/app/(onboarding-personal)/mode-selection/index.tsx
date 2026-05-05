@@ -12,6 +12,7 @@ import {
   ScrollView,
   Pressable,
   Animated,
+  Image,
 } from "react-native";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -39,14 +40,16 @@ const MODE_CARD_COLORS: Record<ModeKey, string> = {
   events: "#9D33FF",
 };
 
+const EVENTS_ICON = require("@/assets/icons/events-icon_1.png");
+
 const MODE_CONFIG: Record<
   ModeKey,
-  { label: string; subProfileName: string; description: string; icon: keyof typeof Ionicons.glyphMap }
+  { label: string; subProfileName: string; description: string; icon: keyof typeof Ionicons.glyphMap; iconImage?: number }
 > = {
   romance: { label: "Romance", subProfileName: "Romance", description: "Find your spark", icon: "heart" },
   friends: { label: "Friends", subProfileName: "Friends", description: "Meet your people", icon: "people" },
   business: { label: "Business", subProfileName: "Business", description: "Grow your network", icon: "briefcase" },
-  events: { label: "Events", subProfileName: "Events", description: "Join & create", icon: "ticket" },
+  events: { label: "Events", subProfileName: "Events", description: "Join & create", icon: "calendar-outline", iconImage: EVENTS_ICON },
 };
 
 type AccountType = "personal" | "business";
@@ -56,8 +59,8 @@ export default function ModeSelectionIndex() {
   const { context, setActiveMode } = useModeContext();
   const [activeMode, setActiveModeLocal] = useState<ModeKey | null>(null);
   const [loading, setLoading] = useState(true);
-  const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
-  const [accountType, setAccountType] = useState<AccountType>("personal");
+  const [, setProfilePhotoUri] = useState<string | null>(null);
+  const [, setAccountType] = useState<AccountType>("personal");
   const [progress, setProgress] = useState<ModeProgress>({
     romance: 0,
     friends: 0,
@@ -167,7 +170,7 @@ export default function ModeSelectionIndex() {
 
   return (
     <SafeScreenView edges={["left", "right"]} style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
-      <ModeSelectionHeader />
+      <ModeSelectionHeader showSettingsIcon />
 
       <ScrollView
         style={{ flex: 1 }}
@@ -192,7 +195,7 @@ export default function ModeSelectionIndex() {
             marginBottom: 28,
           }}
         >
-          Choose your Winkly mode
+          What would you like to experience today?
         </Text>
 
         <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", marginHorizontal: -CARD_GAP / 2 }}>
@@ -205,6 +208,7 @@ export default function ModeSelectionIndex() {
                 description={cfg.description}
                 color={MODE_CARD_COLORS[mode]}
                 icon={cfg.icon}
+                iconImage={cfg.iconImage}
                 active={activeMode === mode}
                 onPress={() => handleModePress(mode)}
               />
@@ -223,18 +227,20 @@ type ModeCardProps = {
   description: string;
   color: string;
   icon: keyof typeof Ionicons.glyphMap;
+  iconImage?: number;
   active: boolean;
   onPress: () => void;
 };
 
 const CARD_GAP = 12;
+const CARD_ICON_SIZE = 36;
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CARD_SIZE = (SCREEN_WIDTH - 48 - CARD_GAP * 2) / 2;
 const CARD_RADIUS = 28;
 const CARD_PADDING = 24;
 const ACTIVE_SCALE = 1.08;
 
-function ModeCard({ label, description, color, icon, active, onPress }: ModeCardProps) {
+function ModeCard({ label, description, color, icon, iconImage, active, onPress }: ModeCardProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -283,7 +289,11 @@ function ModeCard({ label, description, color, icon, active, onPress }: ModeCard
             }}
           >
             <View style={{ alignItems: "center", flex: 1, justifyContent: "center" }}>
-              <Ionicons name={icon} size={36} color={Colors.white} style={{ marginBottom: 12 }} />
+              {iconImage ? (
+                <Image source={iconImage} style={{ width: CARD_ICON_SIZE, height: CARD_ICON_SIZE, marginBottom: 12, tintColor: Colors.white }} resizeMode="contain" />
+              ) : (
+                <Ionicons name={icon} size={CARD_ICON_SIZE} color={Colors.white} style={{ marginBottom: 12 }} />
+              )}
               <Text selectable={false} style={{ ...Typography.h3, color: Colors.white, marginBottom: 4, textAlign: "center", fontFamily: FontFamily.heading }}>
                 {label}
               </Text>

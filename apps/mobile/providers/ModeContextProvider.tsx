@@ -5,7 +5,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "./AuthProvider";
-import type { ActiveModeContext, AccountType, Mode } from "@/types";
+import type { ActiveModeContext, AccountType, Mode, SubscriptionTier } from "@/types";
 
 const defaultContext: ActiveModeContext = {
   user_id: "",
@@ -49,11 +49,27 @@ export function ModeContextProvider({ children }: { children: React.ReactNode })
     }
 
     try {
-      const { data: userRow, error: userErr } = await supabase
+      // Try with subscription_tier first; if column missing (42703), fall back to account_type + is_premium
+      let userRow: { account_type?: string; is_premium?: boolean; subscription_tier?: string } | null = null;
+      let userErr: { code?: string; message?: string } | null = null;
+
+      const res = await supabase
         .from("users")
-        .select("account_type, is_premium")
+        .select("account_type, is_premium, subscription_tier")
         .eq("id", user.id)
         .maybeSingle();
+      userRow = res.data;
+      userErr = res.error as { code?: string } | null;
+
+      if (userErr?.code === "42703") {
+        const fallback = await supabase
+          .from("users")
+          .select("account_type, is_premium")
+          .eq("id", user.id)
+          .maybeSingle();
+        userRow = fallback.data;
+        userErr = fallback.error as { code?: string } | null;
+      }
 
       if (userErr && isAuthError(userErr)) {
         signOut();
@@ -97,13 +113,22 @@ export function ModeContextProvider({ children }: { children: React.ReactNode })
         permissions.push("business");
       }
 
+      // subscription_tier: from DB when column exists; else fallback is_premium -> premium | free
+      const validTiers: SubscriptionTier[] = ["free", "super", "premium", "enterprise"];
+      const tierFromDb = userRow?.subscription_tier as string | undefined;
+      const subscription_tier: SubscriptionTier =
+        __DEV__
+          ? "premium"
+          : (validTiers.includes(tierFromDb as SubscriptionTier)
+            ? (tierFromDb as SubscriptionTier)
+            : (userRow?.is_premium ? "premium" : "free"));
+
       setContext((prev) => ({
         ...prev,
         user_id: user.id,
         account_type: at,
         permissions,
-        // Development: act as Premium so all features are available for testing
-        subscription_tier: __DEV__ ? "premium" : (userRow?.is_premium ? "premium" : "free"),
+        subscription_tier,
         active_mode: prev.active_mode && permissions.includes(prev.active_mode) ? prev.active_mode : null,
         active_persona_id: prev.active_persona_id,
       }));

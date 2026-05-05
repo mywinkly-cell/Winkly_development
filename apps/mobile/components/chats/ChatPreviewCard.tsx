@@ -7,17 +7,19 @@ import React from "react";
 import { View, Text, Pressable, Image, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography } from "@/constants/tokens";
-import type { Conversation, Message, UserMini } from "@/lib/chats/types";
+import type { Conversation, Message } from "@/lib/chats/types";
 
 type ChatPreviewCardProps = {
   conversation: Conversation;
   chatName: string;
   lastMessage: Message | null;
-  participantAvatars: Array<{ userId: string; photoUrl?: string | null }>;
+  participantAvatars: { userId: string; photoUrl?: string | null }[];
   timestamp: string;
   unreadCount: number;
   isPinned: boolean;
   onPress: () => void;
+  /** When set and this is a 1:1 chat, tapping the avatar opens this user's profile. */
+  onAvatarPress?: (userId: string) => void;
 };
 
 function getLastMessagePreview(msg: Message | null): string {
@@ -38,28 +40,27 @@ export function ChatPreviewCard({
   unreadCount,
   isPinned,
   onPress,
+  onAvatarPress,
 }: ChatPreviewCardProps) {
   const hasUnread = unreadCount > 0;
+  const isDm = conversation.type === "dm";
+  const canOpenProfile = isDm && participantAvatars.length === 1 && onAvatarPress;
 
-  return (
-    <Pressable onPress={onPress} style={styles.card} android_ripple={{ color: Colors.gray200 }}>
-      {/* Avatar(s) */}
-      <View style={styles.avatarSection}>
-        {participantAvatars.length === 1 ? (
-          <View style={styles.avatarWrap}>
-            {participantAvatars[0].photoUrl ? (
-              <Image
-                source={{ uri: participantAvatars[0].photoUrl }}
-                style={styles.avatar}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                <Ionicons name="person" size={24} color={Colors.gray500} />
-              </View>
-            )}
-          </View>
-        ) : participantAvatars.length > 1 ? (
+  const avatarContent = participantAvatars.length === 1 ? (
+    <View style={styles.avatarWrap}>
+      {participantAvatars[0].photoUrl ? (
+        <Image
+          source={{ uri: participantAvatars[0].photoUrl }}
+          style={styles.avatar}
+          resizeMode="cover"
+        />
+      ) : (
+        <View style={[styles.avatar, styles.avatarPlaceholder]}>
+          <Ionicons name="person" size={24} color={Colors.gray500} />
+        </View>
+      )}
+    </View>
+  ) : participantAvatars.length > 1 ? (
           <View style={styles.avatarStack}>
             {participantAvatars.slice(0, 2).map((a, i) => (
               <View
@@ -80,19 +81,44 @@ export function ChatPreviewCard({
               </View>
             ))}
           </View>
+  ) : (
+    <View style={[styles.avatarWrap, styles.avatarPlaceholder]}>
+      <Ionicons name="chatbubbles" size={24} color={Colors.gray500} />
+    </View>
+  );
+
+  return (
+    <Pressable onPress={onPress} style={styles.card} android_ripple={{ color: Colors.gray200 }}>
+      {/* Avatar(s) — tappable in 1:1 to open other user's profile */}
+      <View style={styles.avatarSection}>
+        {canOpenProfile ? (
+          <Pressable
+            onPress={(e) => {
+              e?.stopPropagation?.();
+              onAvatarPress(participantAvatars[0].userId);
+            }}
+            style={styles.avatarWrap}
+          >
+            {avatarContent}
+          </Pressable>
         ) : (
-          <View style={[styles.avatarWrap, styles.avatarPlaceholder]}>
-            <Ionicons name="chatbubbles" size={24} color={Colors.gray500} />
-          </View>
+          avatarContent
         )}
       </View>
 
       {/* Content */}
       <View style={styles.content}>
         <View style={styles.headerRow}>
-          <Text style={[styles.chatName, hasUnread && styles.chatNameUnread]} numberOfLines={1}>
-            {chatName}
-          </Text>
+          <View style={styles.chatNameRow}>
+            <Text style={[styles.chatName, hasUnread && styles.chatNameUnread]} numberOfLines={1}>
+              {chatName}
+            </Text>
+            {conversation.type === "event" && (
+              <View style={styles.eventBadge}>
+                <Text style={styles.eventBadgeText}>Event</Text>
+              </View>
+            )}
+          </View>
           <View style={styles.rightMeta}>
             {isPinned && (
               <Ionicons name="pin" size={12} color={Colors.gray500} style={styles.pinnedBadge} />
@@ -175,12 +201,31 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 4,
   },
+  chatNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
+  },
   chatName: {
     ...Typography.body,
     fontWeight: "600",
     color: Colors.textPrimary,
     flex: 1,
-    marginRight: 8,
+    marginRight: 6,
+  },
+  eventBadge: {
+    backgroundColor: Colors.events.secondary,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  eventBadgeText: {
+    ...Typography.caption,
+    fontSize: 10,
+    fontWeight: "700",
+    color: Colors.events.primary,
   },
   chatNameUnread: {
     fontWeight: "700",

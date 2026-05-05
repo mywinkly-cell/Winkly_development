@@ -4,6 +4,7 @@
 // ────────────────────────────────────────────────
 
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   View,
   Text,
@@ -17,8 +18,10 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
+import { SUPPORTED_LANGUAGES } from "@/lib/i18n";
 
 export default function NotificationsPreferences() {
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const [pushMatches, setPushMatches] = useState(true);
   const [pushEvents, setPushEvents] = useState(true);
@@ -63,35 +66,35 @@ export default function NotificationsPreferences() {
   return (
     <SafeScreenView style={styles.screen}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.8} accessibilityLabel="Back">
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.8} accessibilityLabel={t("common.back")}>
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Notifications & Preferences</Text>
+        <Text style={styles.headerTitle}>{t("notifications.title")}</Text>
         <View style={styles.placeholder} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Push notifications</Text>
+          <Text style={styles.cardTitle}>{t("notifications.pushTitle")}</Text>
           <ToggleRow
-            title="Matches & messages"
-            subtitle="New matches and chat messages"
+            title={t("notifications.matchesMessages")}
+            subtitle={t("notifications.matchesMessagesSub")}
             value={pushMatches}
             onValueChange={setPushMatches}
             icon="heart-outline"
           />
           <View style={styles.divider} />
           <ToggleRow
-            title="Events & planner reminders"
-            subtitle="Upcoming events and planner items"
+            title={t("notifications.eventsReminders")}
+            subtitle={t("notifications.eventsRemindersSub")}
             value={pushEvents}
             onValueChange={setPushEvents}
             icon="calendar-outline"
           />
           <View style={styles.divider} />
           <ToggleRow
-            title="Product updates"
-            subtitle="New features and tips"
+            title={t("notifications.productUpdates")}
+            subtitle={t("notifications.productUpdatesSub")}
             value={pushUpdates}
             onValueChange={setPushUpdates}
             icon="megaphone-outline"
@@ -99,10 +102,10 @@ export default function NotificationsPreferences() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Email notifications</Text>
+          <Text style={styles.cardTitle}>{t("notifications.emailTitle")}</Text>
           <ToggleRow
-            title="Marketing & updates"
-            subtitle="News, offers, and product updates"
+            title={t("notifications.marketing")}
+            subtitle={t("notifications.marketingSub")}
             value={emailMarketing}
             onValueChange={setEmailMarketing}
             icon="mail-outline"
@@ -110,18 +113,18 @@ export default function NotificationsPreferences() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Sound & vibration</Text>
+          <Text style={styles.cardTitle}>{t("notifications.soundVibration")}</Text>
           <ToggleRow
-            title="Sound"
-            subtitle="Notification sounds"
+            title={t("notifications.sound")}
+            subtitle={t("notifications.soundSub")}
             value={soundEnabled}
             onValueChange={setSoundEnabled}
             icon="volume-high-outline"
           />
           <View style={styles.divider} />
           <ToggleRow
-            title="Vibration"
-            subtitle="Haptic feedback"
+            title={t("notifications.vibration")}
+            subtitle={t("notifications.vibrationSub")}
             value={vibrationEnabled}
             onValueChange={setVibrationEnabled}
             icon="phone-portrait-outline"
@@ -129,17 +132,20 @@ export default function NotificationsPreferences() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Language</Text>
+          <Text style={styles.cardTitle}>{t("notifications.language")}</Text>
           <TouchableOpacity
             onPress={() => {
               Haptics.selectionAsync();
+              router.push("/account/language" as any);
             }}
             style={styles.row}
             activeOpacity={0.7}
           >
             <Ionicons name="language-outline" size={20} color={Colors.primaryViolet} />
-            <Text style={styles.rowText}>Language</Text>
-            <Text style={styles.rowValue}>English</Text>
+            <Text style={styles.rowText}>{t("notifications.language")}</Text>
+            <Text style={styles.rowValue}>
+              {SUPPORTED_LANGUAGES.find((l) => l.code === i18n.language)?.name ?? "English"}
+            </Text>
             <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
           </TouchableOpacity>
         </View>
@@ -173,7 +179,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  headerTitle: { ...Typography.h3, fontFamily: FontFamily.heading, color: Colors.textPrimary },
+  headerTitle: { ...Typography.headerTitle, fontFamily: FontFamily.heading, color: Colors.textPrimary },
   placeholder: { width: 40 },
   scroll: { padding: Layout.screenPadding, paddingBottom: 40 },
   card: {

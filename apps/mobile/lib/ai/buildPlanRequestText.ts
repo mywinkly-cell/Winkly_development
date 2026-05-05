@@ -1,0 +1,203 @@
+/**
+ * Builds a single natural-language block = what the user would type into Gemini
+ * from the concierge form (topic, origin/destination, dates, time, budget, weather, sanitized persona).
+ * Sent as plan_request_text; the LLM is only invoked when the user taps Generate.
+ */
+
+import type { ConciergeContext } from "@/lib/ai/conciergeClient";
+
+function formatDateLine(dateFrom?: string, dateTo?: string, singleDay?: boolean): string {
+  if (!dateFrom) return "Date: not specified.";
+  if (singleDay !== false && (!dateTo || dateFrom === dateTo)) {
+    return `Date: ${dateFrom}.`;
+  }
+  return `Dates: ${dateFrom} to ${dateTo ?? dateFrom}.`;
+}
+
+function timePreferenceLine(
+  timePreference?: string,
+  availableSlots?: string[]
+): string {
+  if (availableSlots && availableSlots.length > 0) {
+    return `When I'm free: ${availableSlots.slice(0, 6).join("; ")}${availableSlots.length > 6 ? " …" : ""}.`;
+  }
+  if (!timePreference || timePreference === "any") {
+    return "Time of day: any.";
+  }
+  const map: Record<string, string> = {
+    morning: "Morning",
+    lunch: "Lunchtime",
+    afternoon: "Afternoon",
+    evening: "Evening",
+    weekends: "Weekends",
+    weekdays: "Weekdays",
+    when_free: "When I'm free (see slots if any)",
+  };
+  return `Time of day: ${map[timePreference] ?? timePreference}.`;
+}
+
+function weatherBlock(w?: ConciergeContext["weather_snapshot"]): string {
+  if (!w) return "Weather: not loaded for this request—use location and dates only.";
+  const parts: string[] = [];
+  if (w.period_summary) parts.push(w.period_summary);
+  else if (w.summary) parts.push(w.summary);
+  if (w.avg_temp_min != null && w.avg_temp_max != null) {
+    parts.push(`Typical temps ~${w.avg_temp_min}–${w.avg_temp_max}°C.`);
+  } else if (w.temp_min != null && w.temp_max != null) {
+    parts.push(`Temps ${w.temp_min}–${w.temp_max}°C.`);
+  }
+  if (w.rainy_days != null && w.total_days != null && w.total_days > 1) {
+    parts.push(`Rain on ${w.rainy_days} of ${w.total_days} day(s).`);
+  } else if (w.precipitation != null) {
+    parts.push(`Precipitation indicator: ${w.precipitation}.`);
+  }
+  if (w.date) parts.push(`(Forecast anchor: ${w.date}.)`);
+  return `Weather (from the app for my destination area and dates—use this; do not substitute another city/day): ${parts.join(" ")}`.trim();
+}
+
+function budgetLine(
+  amount?: number,
+  currency?: string,
+  tier?: "low" | "mid" | "high"
+): string {
+  const bits: string[] = [];
+  if (amount != null && !Number.isNaN(amount)) {
+    bits.push(`${amount} ${currency ?? ""}`.trim());
+  }
+  if (tier) bits.push(`(${tier} budget tier)`);
+  if (bits.length === 0) return "Budget: not specified.";
+  return `Budget: ${bits.join(" ")}.`;
+}
+
+/** How the user opened planning: Planner hub vs a mode area vs Chats. */
+export type PlanningEntrySurface = "planner" | "chats" | "mode_context";
+
+export type BuildPlanRequestTextInput = {
+  /** Sub-profile / tab context: romance | friends | business | events */
+  mode: string;
+  /**
+   * Where they opened AI from: use **Planner** when `source_screen === planner` from the Planner hub;
+   * otherwise the active mode label is enough (mode_context / chats).
+   */
+  planningEntrySurface: PlanningEntrySurface;
+  /** Activity / topic: e.g. "Romantic dinner", or user's freeform prompt */
+  activityOrTopic: string;
+  /** Destination area for the plan (city / area), same as before */
+  city?: string;
+  country?: string;
+  /** Device / "where I am now" when distinct from destination (optional). */
+  originLocationLabel?: string;
+  /**
+   * Optional: travel summary from origin → destination (e.g. from Maps). If omitted, the model may estimate.
+   */
+  travelFromOriginSummary?: string;
+  /** When single-day: optional precise local time HH:mm (24h). */
+  exactTimeHm?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  singleDay?: boolean;
+  timePreference?: string;
+  availableSlots?: string[];
+  budgetAmount?: number;
+  budgetCurrency?: string;
+  budgetTier?: "low" | "mid" | "high";
+  weatherSnapshot?: ConciergeContext["weather_snapshot"];
+  /** Display name only — planning companion; not included in sanitized persona block. */
+  partnerDisplayName?: string;
+  /**
+   * Sanitized requester persona (age, area, interests, lifestyle — no name, email, phone).
+   * Built client-side via `formatSanitizedPersonaForConciergePrompt` or left empty when unavailable.
+   */
+  sanitizedRequesterPersona?: string;
+  /** Optional known venue hint from Places / user (name + hours text). */
+  venueName?: string;
+  venueOpenHoursHint?: string;
+  extraNotes?: string;
+};
+
+function modeLine(i: BuildPlanRequestTextInput): string {
+  const m = i.mode.trim() || "events";
+  if (i.planningEntrySurface === "planner") {
+    return `Mode: Planner (planning context: ${m}).`;
+  }
+  return `Mode: ${m}.`;
+}
+
+function destinationPlaceLine(city?: string, country?: string): string {
+  const place =
+    city && country
+      ? `${city}, ${country}`
+      : city
+        ? city
+        : country
+          ? country
+          : "Location not specified.";
+  return `Destination / plan area: ${place}.`;
+}
+
+/**
+ * One block the user could paste into Gemini themselves; must stay in sync with form fields.
+ */
+export function buildPlanRequestText(i: BuildPlanRequestTextInput): string {
+  const origin =
+    i.originLocationLabel?.trim() ||
+    (i.travelFromOriginSummary?.trim() ? "Same as destination or not captured separately." : undefined);
+  const originLine = origin
+    ? `Current location (origin): ${origin}.`
+    : "Current location (origin): not set separately — assume destination area unless user implied travel.";
+
+  const dest = destinationPlaceLine(i.city, i.country);
+  const travel =
+    i.travelFromOriginSummary?.trim()
+      ? `Travel from origin to destination (app / estimate): ${i.travelFromOriginSummary.trim()}.`
+      : "Travel time & distance: not calculated in-app — if origin ≠ destination, estimate in the plan and mention both; when the plan is shared, other participants should get timing from their own origin in the app (future: per-recipient routing).";
+
+  const who = i.partnerDisplayName?.trim()
+    ? `Planning with: ${i.partnerDisplayName.trim()}.`
+    : "Who joins: not specified in the form (solo or decide later).";
+
+  const persona =
+    i.sanitizedRequesterPersona?.trim() ||
+    "Requester persona (sanitized): use PRIMARY_USER from server context — do not use name, email, or phone.";
+
+  const venue =
+    i.venueName?.trim() || i.venueOpenHoursHint?.trim()
+      ? `Venue hint: ${[i.venueName?.trim(), i.venueOpenHoursHint?.trim()].filter(Boolean).join(" — ")}.`
+      : null;
+
+  const lines: string[] = [
+    modeLine(i),
+    `Topic / activity: ${i.activityOrTopic.trim() || "Not specified"}.`,
+    originLine,
+    dest,
+    travel,
+  ];
+  if (venue) lines.push(venue);
+
+  lines.push(
+    formatDateLine(i.dateFrom, i.dateTo, i.singleDay),
+    timePreferenceLine(i.timePreference, i.availableSlots),
+  );
+
+  if (i.singleDay !== false && i.exactTimeHm?.trim()) {
+    lines.push(`Exact start time (local, single day): ${i.exactTimeHm.trim()}.`);
+  }
+
+  lines.push(
+    budgetLine(i.budgetAmount, i.budgetCurrency, i.budgetTier),
+    weatherBlock(i.weatherSnapshot),
+    `Requester persona (sanitized — no name, email, phone): ${persona}`,
+    who,
+  );
+
+  if (i.extraNotes?.trim()) {
+    lines.push(`Additional notes: ${i.extraNotes.trim()}.`);
+  }
+
+  lines.push(
+    "Constraints — verify together before finalizing options: (1) Date and time fit the user’s request. (2) Weather suits the activity (e.g. move outdoor plans indoor if rain/wind). (3) Venue opening hours must contain the requested arrival time — avoid proposing arrival near closing (e.g. <45 min before stated closing) unless the user asked for a short visit. (4) If anything conflicts, say so and suggest a concrete adjustment (different time, day, or venue).",
+    'Output: suggest exactly three concrete plan options as JSON in the required schema. For EACH option include fields aligned with: Topic/activity; Place (city/country OR full address); Name of place; Google Maps link when a real place is named; opening hours when known; date/time; how requested time compares to hours; budget; weather fit; sanitized planning notes; links to official booking or tickets when known (never fabricate URLs). If a constraint cannot be satisfied, explain and offer alternatives.',
+  );
+
+  return lines.join("\n");
+}

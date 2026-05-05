@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS public.romance_likes (
 
 ALTER TABLE public.romance_likes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS rl_select ON public.romance_likes;
+DROP POLICY IF EXISTS rl_insert ON public.romance_likes;
+DROP POLICY IF EXISTS rl_delete ON public.romance_likes;
 CREATE POLICY rl_select ON public.romance_likes FOR SELECT USING (
   auth.uid() = liker_id OR auth.uid() = liked_id
 );

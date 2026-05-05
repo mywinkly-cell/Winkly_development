@@ -1,21 +1,23 @@
 // PlannerHeader — Used on every Planner screen only
-// Left: Filter | Center: Winkly | Right: Settings (no profile)
+// Left: Filter | Center: Winkly | Right: Winkly AI Spark (concierge) only.
+// Settings live only at Mode Selection (General settings) to avoid overwhelming users.
 
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Layout, Shadow, Typography, FontFamily } from "@/constants/tokens";
+import { Colors, Layout, Shadow, Typography, FontFamily, HEADER } from "@/constants/tokens";
+import { WinklyAISpark } from "@/components/ui/WinklyAISpark";
 
 type PlannerHeaderProps = {
   /** Open filter modal (e.g. standalone planner); if not set, navigates to /planner */
   onFilterPress?: () => void;
-  /** Navigate to planner settings; if not set, navigates to /planner/settings */
-  onSettingsPress?: () => void;
+  /** When user taps Spark and has concierge access, open the "Ask AI" flow (e.g. modal). Only used on hub. */
+  onAIPress?: () => void;
 };
 
-export function PlannerHeader({ onFilterPress, onSettingsPress }: PlannerHeaderProps) {
+export function PlannerHeader({ onFilterPress, onAIPress }: PlannerHeaderProps) {
   const router = useRouter();
 
   const handleFilterPress = () => {
@@ -27,15 +29,6 @@ export function PlannerHeader({ onFilterPress, onSettingsPress }: PlannerHeaderP
     }
   };
 
-  const handleSettingsPress = () => {
-    Haptics.selectionAsync();
-    if (onSettingsPress) {
-      onSettingsPress();
-    } else {
-      router.push("/planner/settings");
-    }
-  };
-
   return (
     <View style={styles.container}>
       <TouchableOpacity
@@ -44,19 +37,26 @@ export function PlannerHeader({ onFilterPress, onSettingsPress }: PlannerHeaderP
         activeOpacity={0.8}
         accessibilityLabel="Planner filters"
       >
-        <Ionicons name="filter" size={22} color={Colors.textPrimary} />
+        <Ionicons name="filter" size={HEADER.iconSize} color={Colors.primaryViolet} />
       </TouchableOpacity>
       <View style={styles.centerTitleWrap}>
         <Text style={styles.centerTitle}>Winkly</Text>
       </View>
-      <TouchableOpacity
-        onPress={handleSettingsPress}
-        style={styles.iconBtn}
-        activeOpacity={0.8}
-        accessibilityLabel="Planner settings"
-      >
-        <Ionicons name="settings" size={24} color={Colors.textPrimary} />
-      </TouchableOpacity>
+      <View style={styles.rightRow}>
+        {onAIPress != null ? (
+          <View style={styles.aiButton3D}>
+            <WinklyAISpark
+              feature="concierge"
+              onPress={onAIPress}
+              size={HEADER.iconSize}
+              style={styles.sparkBtn}
+              accessibilityLabel="Winkly AI Agent"
+            />
+          </View>
+        ) : (
+          <View style={styles.placeholder} />
+        )}
+      </View>
     </View>
   );
 }
@@ -73,10 +73,33 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.gray200,
     ...Shadow.card,
   },
+  rightRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  aiButton3D: {
+    width: HEADER.buttonSize,
+    height: HEADER.buttonSize,
+    borderRadius: HEADER.buttonSize / 2,
+    backgroundColor: Colors.gray100,
+    shadowColor: "#1C1C1E",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sparkBtn: {
+    width: HEADER.buttonSize,
+    height: HEADER.buttonSize,
+    marginRight: 0,
+  },
   iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: HEADER.buttonSize,
+    height: HEADER.buttonSize,
+    borderRadius: HEADER.buttonRadius,
     backgroundColor: Colors.gray100,
     alignItems: "center",
     justifyContent: "center",
@@ -85,6 +108,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 4,
+  },
+  placeholder: {
+    width: HEADER.buttonSize,
+    height: HEADER.buttonSize,
   },
   centerTitleWrap: {
     flex: 1,

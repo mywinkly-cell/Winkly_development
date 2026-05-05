@@ -1,6 +1,7 @@
 // ────────────────────────────────────────────────
 // MatchesConnectionsSubheader — Under chat tabs (Romance, All, …)
-// Shows match/connection avatars for the active tab; tap → Cancel, Start chat, or Start group chat
+// Horizontal scroll of match/connection avatars; tap → Start chat, See profile, Unmatch, or Block
+// Shows location (city, country) and distance when < 15km. Sorted newest to oldest.
 // ────────────────────────────────────────────────
 
 import React from "react";
@@ -17,9 +18,16 @@ import {
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout, Shadow } from "@/constants/tokens";
+import { Colors, Typography, Layout } from "@/constants/tokens";
 import { createDirectChat, unmatchRomance, unfollowConnection, blockUser } from "@/lib/chats";
+import { formatDistance, getDefaultDistanceUnit } from "@/lib/distanceUnit";
 import { supabase } from "@/lib/supabase";
+import {
+  formatDefaultLocationDisplay,
+  normalizeLocationDisplayString,
+  sameLocality,
+} from "@/lib/location/countryDisplay";
+import { useTranslation } from "react-i18next";
 
 export type MatchConnectionItem = {
   id: string;
@@ -27,19 +35,21 @@ export type MatchConnectionItem = {
   last_name?: string | null;
   display_name?: string | null;
   city?: string | null;
+  country?: string | null;
+  /** Distance in km; only shown if < 15. Optional until backend/coords available. */
+  distance_km?: number | null;
   romance_photos?: (string | null)[];
   core_photos?: (string | null)[];
   main_photo_url?: string | null;
 };
 
-const CANCEL_REASONS = [
+const BLOCK_REASONS = [
   "Not interested anymore",
   "Wrong person",
   "Met elsewhere",
+  "Harassment or abuse",
   "Other",
 ] as const;
-
-const CANCEL_REASONS_WITH_BLOCK = [...CANCEL_REASONS, "Block and remove"] as const;
 
 function getPhotoUrl(m: MatchConnectionItem): string | null {
   return (
@@ -59,6 +69,26 @@ function getDisplayName(m: MatchConnectionItem): string {
   return `${fn} ${ln}`.trim() || "Match";
 }
 
+function getLocationLine(
+  m: MatchConnectionItem,
+  myCity: string | null | undefined,
+  language: string
+): string {
+  const city = (m.city ?? "").trim();
+  const country = (m.country ?? "").trim();
+  const line = formatDefaultLocationDisplay(city, country || undefined, language);
+  const mine = (myCity ?? "").trim();
+  if (mine && line && sameLocality(line, mine)) return "Same city";
+  if (line) return line;
+  if (city.includes(",")) return normalizeLocationDisplayString(city, language);
+  if (city) return city;
+  return "";
+}
+
+function getDistanceLine(m: MatchConnectionItem): string | null {
+  return formatDistance(m.distance_km ?? null, 15, getDefaultDistanceUnit());
+}
+
 type TabKey = "all" | "romance" | "friends" | "business" | "events";
 
 type MatchesConnectionsSubheaderProps = {
@@ -70,6 +100,8 @@ type MatchesConnectionsSubheaderProps = {
   friendsLoading?: boolean;
   businessLoading?: boolean;
   onRefresh: () => void;
+  /** Current user's city for "Same city" and distance context (optional). */
+  myCity?: string | null;
 };
 
 export function MatchesConnectionsSubheader({
@@ -81,7 +113,10 @@ export function MatchesConnectionsSubheader({
   friendsLoading = false,
   businessLoading = false,
   onRefresh,
+  myCity = null,
 }: MatchesConnectionsSubheaderProps) {
+  const { i18n } = useTranslation();
+  const appLanguage = i18n?.language ?? "en";
   const router = useRouter();
 
   const isRomance = activeTab === "romance";
@@ -106,10 +141,18 @@ export function MatchesConnectionsSubheader({
 
   const showGroupOption = isFriends || isBusiness;
 
+  const goToProfile = (item: MatchConnectionItem) => {
+    if (isRomance) router.push(`/(modes)/romance/profile-view?id=${item.id}`);
+    else if (isFriends) router.push(`/(modes)/friends/profile-view?user_id=${item.id}`);
+    else router.push(`/(modes)/business/profile-view?user_id=${item.id}`);
+  };
+
   const handleAvatarPress = (item: MatchConnectionItem) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const name = getDisplayName(item);
+    const profileLabel = `See ${name}'s profile`;
 
-    const options: Array<{ text: string; onPress?: () => void; style?: "cancel" | "default" }> = [
+    const options: { text: string; onPress?: () => void; style?: "cancel" | "default" }[] = [
       {
         text: "Start chat",
         onPress: async () => {
@@ -128,58 +171,48 @@ export function MatchesConnectionsSubheader({
           }
         },
       },
+      {
+        text: profileLabel,
+        onPress: () => goToProfile(item),
+      },
+      {
+        text: "Unmatch",
+        onPress: () => confirmUnmatch(item),
+      },
+      {
+        text: "Block",
+        onPress: () => showBlockReasons(item),
+      },
+      { text: "Cancel", style: "cancel" as const },
     ];
 
     if (showGroupOption) {
-      options.push({
+      options.splice(2, 0, {
         text: "Start group chat",
-        onPress: () => {
-          router.push("/groups/create-group");
-        },
+        onPress: () => router.push("/groups/create-group"),
       });
     }
 
-    options.push(
-      {
-        text: "Cancel match",
-        onPress: () => showCancelReasons(item),
-      },
-      { text: "Cancel", style: "cancel" as const }
-    );
-
-    Alert.alert(getDisplayName(item), "Choose an action", options);
+    Alert.alert(name, "Choose an action", options);
   };
 
-  const showCancelReasons = (item: MatchConnectionItem) => {
-    const reasons = showGroupOption ? CANCEL_REASONS_WITH_BLOCK : CANCEL_REASONS;
+  const confirmUnmatch = (item: MatchConnectionItem) => {
     Alert.alert(
-      "Cancel match",
-      "Why are you removing this match?",
+      "Unmatch",
+      "Remove this match? You won't see each other in Discover.",
       [
-        ...reasons.map((reason) => ({
-          text: reason,
-          onPress: () => applyCancelMatch(item, reason),
-        })),
-        { text: "Back", style: "cancel" },
+        { text: "Cancel", style: "cancel" },
+        { text: "Unmatch", onPress: () => applyUnmatch(item) },
       ]
     );
   };
 
-  const applyCancelMatch = async (item: MatchConnectionItem, reason: string) => {
+  const applyUnmatch = async (item: MatchConnectionItem) => {
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) return;
-
-      if (reason === "Block and remove") {
-        await blockUser(item.id);
-      }
-
-      if (isRomance) {
-        await unmatchRomance(item.id);
-      } else {
-        await unfollowConnection(item.id);
-      }
-
+      if (isRomance) await unmatchRomance(item.id);
+      else await unfollowConnection(item.id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onRefresh();
     } catch {
@@ -187,32 +220,58 @@ export function MatchesConnectionsSubheader({
     }
   };
 
-  if (!showSubheader) return null;
-
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <Text style={[styles.label, { color: accentColor }]}>{label}</Text>
-        <View style={styles.loadingRow}>
-          <ActivityIndicator size="small" color={accentColor} />
-          <Text style={styles.loadingText}>Loading…</Text>
-        </View>
-      </View>
+  const showBlockReasons = (item: MatchConnectionItem) => {
+    Alert.alert(
+      "Block",
+      "Why are you blocking this person?",
+      [
+        ...BLOCK_REASONS.map((reason) => ({
+          text: reason,
+          onPress: () => applyBlock(item),
+        })),
+        { text: "Back", style: "cancel" },
+      ]
     );
-  }
+  };
 
-  if (list.length === 0) return null;
+  const applyBlock = async (item: MatchConnectionItem) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) return;
+      await blockUser(item.id);
+      if (isRomance) await unmatchRomance(item.id);
+      else await unfollowConnection(item.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onRefresh();
+    } catch {
+      Alert.alert("Error", "Could not block. Please try again.");
+    }
+  };
+
+  if (!showSubheader) return null;
 
   return (
     <View style={styles.container}>
       <Text style={[styles.label, { color: accentColor }]}>{label}</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {list.map((m) => {
+      {loading ? (
+        <View style={styles.loadingRow}>
+          <ActivityIndicator size="small" color={accentColor} />
+          <Text style={styles.loadingText}>Loading…</Text>
+        </View>
+      ) : list.length === 0 ? (
+        <Text style={[styles.emptyHint, { color: accentColor }]}>
+          {isRomance ? "No matches yet" : "No connections yet"}
+        </Text>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {list.map((m) => {
           const photo = getPhotoUrl(m);
+          const locationLine = getLocationLine(m, myCity, appLanguage);
+          const distanceLine = getDistanceLine(m);
           return (
             <TouchableOpacity
               key={m.id}
@@ -232,10 +291,21 @@ export function MatchesConnectionsSubheader({
               <Text style={styles.name} numberOfLines={1}>
                 {getDisplayName(m)}
               </Text>
+              {locationLine ? (
+                <Text style={styles.location} numberOfLines={1}>
+                  {locationLine}
+                </Text>
+              ) : null}
+              {distanceLine ? (
+                <Text style={[styles.distance, { color: accentColor }]} numberOfLines={1}>
+                  {distanceLine}
+                </Text>
+              ) : null}
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -268,6 +338,11 @@ const styles = StyleSheet.create({
     color: Colors.gray600,
     fontSize: 13,
   },
+  emptyHint: {
+    ...Typography.caption,
+    fontSize: 13,
+    paddingVertical: Layout.spacing.sm,
+  },
   scrollContent: {
     flexDirection: "row",
     gap: Layout.spacing.lg,
@@ -276,7 +351,7 @@ const styles = StyleSheet.create({
   },
   avatarCard: {
     alignItems: "center",
-    width: 72,
+    width: 88,
     paddingVertical: 10,
     paddingHorizontal: 6,
     borderRadius: 20,
@@ -312,5 +387,19 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: Colors.textPrimary,
     textAlign: "center",
+  },
+  location: {
+    ...Typography.caption,
+    fontSize: 10,
+    color: Colors.gray600,
+    textAlign: "center",
+    marginTop: 2,
+  },
+  distance: {
+    ...Typography.caption,
+    fontSize: 10,
+    fontWeight: "600",
+    textAlign: "center",
+    marginTop: 1,
   },
 });

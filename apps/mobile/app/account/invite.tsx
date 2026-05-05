@@ -54,7 +54,7 @@ export default function Invite() {
           </View>
           <Text style={styles.cardTitle}>Connect your contacts</Text>
           <Text style={styles.cardSubtitle}>
-            See who's already on Winkly and invite others. We only use hashed identifiers for matching — your contacts stay private.
+            See who&apos;s already on Winkly and invite others. We only use hashed identifiers for matching — your contacts stay private.
           </Text>
           <TouchableOpacity
             onPress={onConnectContacts}
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  headerTitle: { ...Typography.h3, color: Colors.textPrimary },
+  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
   pageSubtitle: {
     ...Typography.body,
     color: Colors.gray600,

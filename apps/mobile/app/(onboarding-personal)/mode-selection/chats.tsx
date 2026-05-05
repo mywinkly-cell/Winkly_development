@@ -6,7 +6,7 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import { SafeScreenView } from "@/components/SafeScreenView";
-import { ModeSelectionHeader } from "@/components/layout/ModeSelectionHeader";
+import { ChatsHeader } from "@/components/layout/ChatsHeader";
 import { ModeSelectionBottomBar } from "@/components/layout/ModeSelectionBottomBar";
 import { ChatsInboxContent } from "@/components/chats/ChatsInboxContent";
 import { Colors } from "@/constants/tokens";
@@ -14,7 +14,7 @@ import { Colors } from "@/constants/tokens";
 export default function ModeSelectionChats() {
   return (
     <SafeScreenView edges={["left", "right"]} style={styles.screen}>
-      <ModeSelectionHeader />
+      <ChatsHeader />
       <View style={styles.content}>
         <ChatsInboxContent sourceMode="all" />
       </View>

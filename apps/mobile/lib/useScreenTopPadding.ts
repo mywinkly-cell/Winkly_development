@@ -1,6 +1,6 @@
 // useScreenTopPadding — returns ~0.79× device top panel (status bar / notch) for consistent top spacing
 
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 
 /** Top padding = 0.7875 × device top panel (0.75 + 5%) for gap below system bar. */
 export function useScreenTopPadding(): number {

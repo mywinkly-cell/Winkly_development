@@ -6,12 +6,18 @@ import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert,
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/providers";
+import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
+import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
+import { useTranslation } from "react-i18next";
+import { supabase } from "@/lib/supabase";
 import { getOwnProfileCore, upsertOwnProfileCore } from "@/lib/access/profiles";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 
 export default function EditCore() {
   const router = useRouter();
   const { user } = useAuth();
+  const { i18n } = useTranslation();
+  const fmtLoc = useFormatLocationDisplay();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -19,33 +25,60 @@ export default function EditCore() {
   const [lastName, setLastName] = useState("");
   const [city, setCity] = useState("");
   const [bio, setBio] = useState("");
+  const [nightOwl, setNightOwl] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
+    const lang = i18n?.language ?? "en";
     (async () => {
+      const { data: up } = await supabase
+        .from("user_profiles")
+        .select("city,night_owl")
+        .eq("id", user.id)
+        .maybeSingle();
       const profile = await getOwnProfileCore(user.id);
       if (cancelled) return;
+      const upCity = up?.city != null && String(up.city).trim() ? String(up.city).trim() : "";
+      const coreCity = profile?.city ? String(profile.city).trim() : "";
+      const cityRaw = upCity || coreCity;
+      setCity(cityRaw ? normalizeLocationDisplayString(cityRaw, lang) : "");
+      const upNightOwl =
+        typeof (up as any)?.night_owl === "boolean" ? ((up as any).night_owl as boolean) : null;
       if (profile) {
         setFirstName(profile.first_name ?? "");
         setLastName(profile.last_name ?? "");
-        setCity(profile.city ?? "");
         setBio(profile.bio ?? "");
+        const coreNightOwl =
+          typeof (profile as any)?.night_owl === "boolean" ? ((profile as any).night_owl as boolean) : null;
+        setNightOwl(upNightOwl ?? coreNightOwl);
+      } else {
+        setNightOwl(upNightOwl);
       }
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [user?.id, i18n?.language]);
 
   const save = async () => {
     if (!user?.id) return;
     setSaving(true);
+    const lang = i18n?.language ?? "en";
+    const cityNorm = city.trim() ? normalizeLocationDisplayString(city.trim(), lang) : null;
     const { error } = await upsertOwnProfileCore(user.id, {
       first_name: firstName.trim() || null,
       last_name: lastName.trim() || null,
-      city: city.trim() || null,
+      city: cityNorm,
       bio: bio.trim() || null,
+      night_owl: nightOwl,
     });
+    if (!error) {
+      const { error: upErr } = await supabase
+        .from("user_profiles")
+        .update({ city: cityNorm, night_owl: nightOwl })
+        .eq("id", user.id);
+      if (upErr) console.warn("user_profiles city sync:", upErr);
+    }
     setSaving(false);
     if (error) {
       Alert.alert("Error", "Could not save profile. Please try again.");
@@ -96,6 +129,7 @@ export default function EditCore() {
           <TextInput
             value={city}
             onChangeText={setCity}
+            onBlur={() => setCity((c) => (c.trim() ? fmtLoc(c) : c))}
             placeholder="Munich"
             placeholderTextColor={Colors.gray500}
             style={styles.input}
@@ -112,6 +146,28 @@ export default function EditCore() {
             multiline
             editable={!saving}
           />
+
+          <Label text="Night owl" />
+          <View style={styles.segmentRow}>
+            {[
+              { key: "yes", label: "Yes", value: true },
+              { key: "no", label: "No", value: false },
+              { key: "skip", label: "Skip", value: null as boolean | null },
+            ].map((opt) => {
+              const active = nightOwl === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  onPress={() => setNightOwl(opt.value)}
+                  activeOpacity={0.9}
+                  disabled={saving}
+                  style={[styles.segmentBtn, active && styles.segmentBtnActive]}
+                >
+                  <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{opt.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -169,7 +225,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  headerTitle: { ...Typography.h3, color: Colors.textPrimary },
+  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
   saveBtn: { width: 70, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.primaryViolet, alignItems: "center" },
   saveBtnDisabled: { opacity: 0.7 },
   saveText: { ...Typography.caption, color: Colors.accentYellow },
@@ -190,5 +246,26 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginBottom: 12,
   },
+
+  segmentRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 6,
+  },
+  segmentBtn: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.gray300,
+    backgroundColor: "#FFF",
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  segmentBtnActive: {
+    borderColor: Colors.primaryViolet,
+    backgroundColor: Colors.primaryViolet + "12",
+  },
+  segmentText: { ...Typography.caption, color: Colors.gray700, fontWeight: "700" },
+  segmentTextActive: { color: Colors.primaryViolet },
 
 });

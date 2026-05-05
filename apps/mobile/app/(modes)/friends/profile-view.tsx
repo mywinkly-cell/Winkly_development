@@ -6,11 +6,17 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Image,
+  Dimensions,
 } from "react-native";
 import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
+import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 type FriendProfile = {
   id: string; // profile id
@@ -22,12 +28,17 @@ type FriendProfile = {
 
   city?: string | null;
   about?: string | null;
+  night_owl?: boolean | null;
 
   vibe_tags?: string[] | null;
   interests?: string[] | null;
 
   main_photo_url?: string | null;
   avatar_url?: string | null;
+  /** Full Friends sub-profile photos (from friend_profiles view) */
+  photos?: (string | null)[] | null;
+  /** Friends sub-profile meta: lifestyle, meetup_goals, alcohol, etc. */
+  meta?: Record<string, unknown> | null;
 
   instagram?: string | null;
   created_at?: string | null;
@@ -46,6 +57,7 @@ function isUuid(v: string) {
 }
 
 export default function FriendsProfileView() {
+  const { i18n } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{ user_id?: string }>();
 
@@ -63,11 +75,11 @@ export default function FriendsProfileView() {
         return;
       }
 
-      // Prefer friend_profiles; fallback to user_profiles.
+      // Prefer friend_profiles (includes Friends sub-profile photos + meta); fallback to user_profiles.
       const { data, error } = await supabase
         .from("friend_profiles")
         .select(
-          "id,user_id,display_name,first_name,last_name,city,about,vibe_tags,interests,main_photo_url,avatar_url,instagram,created_at"
+          "id,user_id,display_name,first_name,last_name,city,about,night_owl,vibe_tags,interests,main_photo_url,avatar_url,photos,meta,instagram,created_at"
         )
         .or(`user_id.eq.${userId},id.eq.${userId}`)
         .limit(1)
@@ -80,7 +92,7 @@ export default function FriendsProfileView() {
 
       const fb = await supabase
         .from("user_profiles")
-        .select("id,first_name,last_name,city,about,main_photo_url,avatar_url,instagram,created_at")
+        .select("id,first_name,last_name,city,about,night_owl,main_photo_url,avatar_url,instagram,created_at")
         .eq("id", userId)
         .maybeSingle();
 
@@ -96,6 +108,7 @@ export default function FriendsProfileView() {
         last_name: fb.data.last_name ?? null,
         city: fb.data.city ?? null,
         about: (fb.data as any).about ?? null,
+        night_owl: (fb.data as any).night_owl ?? null,
         main_photo_url: (fb.data as any).main_photo_url ?? null,
         avatar_url: (fb.data as any).avatar_url ?? null,
         instagram: (fb.data as any).instagram ?? null,
@@ -165,12 +178,52 @@ export default function FriendsProfileView() {
           </View>
         ) : (
           <>
+            {/* Main photo (Friends sub-profile photo so you can decide before liking) */}
+            {(() => {
+              const photoList = (profile.photos ?? []).filter((p): p is string => !!p);
+              const mainPhoto = profile.main_photo_url ?? profile.avatar_url ?? photoList[0] ?? null;
+              return (
+                <View style={[styles.photoSection, { backgroundColor: Colors.gray200 }]}>
+                  {mainPhoto ? (
+                    <Image source={{ uri: mainPhoto }} style={styles.mainPhoto} resizeMode="cover" />
+                  ) : (
+                    <View style={styles.photoPlaceholder}>
+                      <Text style={{ fontSize: 40 }}>📷</Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })()}
+
+            {/* Photo gallery (additional Friends sub-profile photos) */}
+            {(() => {
+              const photoList = (profile.photos ?? []).filter((p): p is string => !!p);
+              if (photoList.length <= 1) return null;
+              return (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.galleryScroll}
+                  contentContainerStyle={styles.galleryContent}
+                >
+                  {photoList.slice(1, 10).map((uri, idx) => (
+                    <View key={`${uri}-${idx}`} style={styles.galleryThumb}>
+                      <Image source={{ uri }} style={styles.galleryThumbImage} resizeMode="cover" />
+                    </View>
+                  ))}
+                </ScrollView>
+              );
+            })()}
+
             {/* Top card */}
             <View style={[styles.profileCard, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
               <Text style={[styles.name, { color: Colors.text }]}>{fullName(profile)}</Text>
 
               <Text style={{ color: Colors.mutedText, marginTop: 6 }}>
-                {profile.city || "Location not specified"} · Friends mode
+                {profile.city?.trim()
+                  ? normalizeLocationDisplayString(profile.city, i18n?.language ?? "en")
+                  : "Location not specified"}{" "}
+                · Friends mode
               </Text>
 
               <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
@@ -251,6 +304,84 @@ export default function FriendsProfileView() {
               )}
             </View>
 
+            {/* Friends sub-profile details (lifestyle, meetup goals, etc.) */}
+            {profile.meta && Object.keys(profile.meta).length > 0 && (
+              <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
+                <Text style={[styles.blockTitle, { color: Colors.text }]}>Lifestyle & meetup</Text>
+                <View style={{ marginTop: 10, gap: 8 }}>
+                  {typeof profile.night_owl === "boolean" && (
+                    <View style={styles.metaRow}>
+                      <Text style={{ color: Colors.mutedText, width: 100 }}>Timing</Text>
+                      <Text style={{ color: Colors.text, flex: 1 }}>{profile.night_owl ? "Night owl" : "Early bird"}</Text>
+                    </View>
+                  )}
+                  {!!profile.meta.lifestyle && (
+                    <View style={styles.metaRow}>
+                      <Text style={{ color: Colors.mutedText, width: 100 }}>Lifestyle</Text>
+                      <Text style={{ color: Colors.text, flex: 1 }}>{String(profile.meta.lifestyle)}</Text>
+                    </View>
+                  )}
+                  {!!profile.meta.alcohol && (
+                    <View style={styles.metaRow}>
+                      <Text style={{ color: Colors.mutedText, width: 100 }}>Alcohol</Text>
+                      <Text style={{ color: Colors.text, flex: 1 }}>{String(profile.meta.alcohol)}</Text>
+                    </View>
+                  )}
+                  {!!profile.meta.smoking && (
+                    <View style={styles.metaRow}>
+                      <Text style={{ color: Colors.mutedText, width: 100 }}>Smoking</Text>
+                      <Text style={{ color: Colors.text, flex: 1 }}>{String(profile.meta.smoking)}</Text>
+                    </View>
+                  )}
+                  {!!profile.meta.status && (
+                    <View style={styles.metaRow}>
+                      <Text style={{ color: Colors.mutedText, width: 100 }}>Status</Text>
+                      <Text style={{ color: Colors.text, flex: 1 }}>{String(profile.meta.status)}</Text>
+                    </View>
+                  )}
+                  {!!profile.meta.kids && (
+                    <View style={styles.metaRow}>
+                      <Text style={{ color: Colors.mutedText, width: 100 }}>Kids</Text>
+                      <Text style={{ color: Colors.text, flex: 1 }}>{String(profile.meta.kids)}</Text>
+                    </View>
+                  )}
+                  {Array.isArray(profile.meta.pets) && profile.meta.pets.length > 0 && (
+                    <View style={styles.metaRow}>
+                      <Text style={{ color: Colors.mutedText, width: 100 }}>Pets</Text>
+                      <Text style={{ color: Colors.text, flex: 1 }}>{(profile.meta.pets as string[]).join(", ")}</Text>
+                    </View>
+                  )}
+                  {Array.isArray(profile.meta.allergies) && profile.meta.allergies.length > 0 && (
+                    <View style={styles.metaRow}>
+                      <Text style={{ color: Colors.mutedText, width: 100 }}>Allergies</Text>
+                      <Text style={{ color: Colors.text, flex: 1 }}>{(profile.meta.allergies as string[]).join(", ")}</Text>
+                    </View>
+                  )}
+                  {!!profile.meta.food && (
+                    <View style={styles.metaRow}>
+                      <Text style={{ color: Colors.mutedText, width: 100 }}>Food</Text>
+                      <Text style={{ color: Colors.text, flex: 1 }}>{String(profile.meta.food)}</Text>
+                    </View>
+                  )}
+                  {Array.isArray(profile.meta.meetup_goals) && profile.meta.meetup_goals.length > 0 && (
+                    <View style={{ marginTop: 4 }}>
+                      <Text style={{ color: Colors.mutedText, marginBottom: 6 }}>Meetup goals</Text>
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                        {(profile.meta.meetup_goals as string[]).map((g, idx) => (
+                          <View
+                            key={`${g}-${idx}`}
+                            style={[styles.chip, { backgroundColor: Colors.friends.primary + "22", borderColor: Colors.friends.primary }]}
+                          >
+                            <Text style={{ color: Colors.text, fontWeight: "700" }}>{g}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
+
             {/* Links */}
             <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
               <Text style={[styles.blockTitle, { color: Colors.text }]}>Links</Text>
@@ -285,6 +416,33 @@ export default function FriendsProfileView() {
 
 const styles: any = {
   screen: { flex: 1, paddingTop: Layout?.screenTopPadding ?? 16 },
+  photoSection: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_WIDTH * 1.1,
+    alignSelf: "center",
+  },
+  mainPhoto: { width: "100%", height: "100%" },
+  photoPlaceholder: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  galleryScroll: { marginTop: 12 },
+  galleryContent: { paddingHorizontal: Layout?.screenPadding ?? 16, gap: 10, paddingBottom: 8 },
+  galleryThumb: {
+    width: 90,
+    height: 120,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: Colors.gray200,
+  },
+  galleryThumbImage: { width: "100%", height: "100%" },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
   header: {
     paddingHorizontal: Layout?.screenPadding ?? 16,
     flexDirection: "row",

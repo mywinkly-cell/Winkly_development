@@ -10,12 +10,13 @@
 // ────────────────────────────────────────────────
 
 import React from "react";
-import { View, Text, TouchableOpacity, Image, ScrollView } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { ModeBottomBar } from "@/components/layout/ModeBottomBar";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 
 export default function BusinessHome() {
   const router = useRouter();
@@ -64,7 +65,7 @@ export default function BusinessHome() {
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>Professionals Near You</Text>
-            <Ionicons name="sparkles" size={18} color={Colors.primaryViolet} />
+            <SparklesIcon size={18} color={Colors.primaryViolet} />
           </View>
           <Text style={{ ...Typography.caption, color: Colors.gray500, marginTop: 4 }}>
             AI-sorted, swipeable business cards will be here
@@ -108,7 +109,7 @@ export default function BusinessHome() {
           </Text>
 
           <TouchableOpacity
-            onPress={() => router.push("/(modes)/business/companies/index")}
+            onPress={() => router.push("/(modes)/business/companies/index" as Href)}
             style={{
               marginTop: 16,
               backgroundColor: Colors.accentNavy,
@@ -145,7 +146,7 @@ export default function BusinessHome() {
           </Text>
 
           <TouchableOpacity
-            onPress={() => router.push("/(modes)/business/opportunities/index")}
+            onPress={() => router.push("/(modes)/business/opportunities/index" as Href)}
             style={{
               marginTop: 16,
               backgroundColor: Colors.accentNavy,
@@ -182,7 +183,7 @@ export default function BusinessHome() {
           </Text>
 
           <TouchableOpacity
-            onPress={() => router.push("/(modes)/business/groups/index")}
+            onPress={() => router.push("/(modes)/business/groups/index" as Href)}
             style={{
               marginTop: 16,
               backgroundColor: Colors.accentNavy,
@@ -211,7 +212,7 @@ export default function BusinessHome() {
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Ionicons name="sparkles" size={18} color={Colors.primaryViolet} />
+            <SparklesIcon size={18} color={Colors.primaryViolet} />
             <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>AI Suggested Matches</Text>
           </View>
           <Text style={{ ...Typography.caption, color: Colors.gray500, marginTop: 4 }}>

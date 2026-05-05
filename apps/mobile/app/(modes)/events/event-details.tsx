@@ -7,11 +7,16 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Share,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
+import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { EventParticipantCard, type ParticipantInfo } from "@/components/ui/EventParticipantCard";
+import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
+import { EventReminderModal } from "@/components/planner/EventReminderModal";
 
 type EventRow = {
   id: string;
@@ -45,6 +50,7 @@ function isUuid(v: string) {
 
 export default function EventDetails() {
   const router = useRouter();
+  const fmtLoc = useFormatLocationDisplay();
   const params = useLocalSearchParams<{ event_id?: string }>();
 
   const eventId = useMemo(
@@ -63,6 +69,7 @@ export default function EventDetails() {
 
   const [savingPlanner, setSavingPlanner] = useState(false);
   const [participants, setParticipants] = useState<ParticipantInfo[]>([]);
+  const [reminderModalVisible, setReminderModalVisible] = useState(false);
 
   async function loadAuth() {
     const res = await supabase.auth.getUser();
@@ -223,7 +230,7 @@ export default function EventDetails() {
     try {
       setStatusLoading(true);
 
-      const { data, error } = await supabase.rpc("join_event", {
+      const { error } = await supabase.rpc("join_event", {
         p_event_id: event.id,
         p_status: next,
       });
@@ -280,6 +287,23 @@ export default function EventDetails() {
     }
   };
 
+  const shareEvent = async () => {
+    if (!event) return;
+    try {
+      Haptics.selectionAsync();
+      const url = `https://winkly.app/events/${event.id}`;
+      const cityPart = event.city ? fmtLoc(event.city) : "";
+      const message = `${event.title}\n${cityPart} ${event.venue_name ?? ""}\n${formatDateTime(event.start_at)}\n\nJoin on Winkly: ${url}`;
+      await Share.share({
+        message,
+        title: event.title,
+        url: Platform.OS === "ios" ? url : undefined,
+      });
+    } catch (err: unknown) {
+      Alert.alert("Share", (err as Error)?.message ?? "Could not share.");
+    }
+  };
+
   const saveToPlanner = async () => {
     if (!event) return;
 
@@ -330,13 +354,25 @@ export default function EventDetails() {
 
         <Text style={[styles.title, Typography.h2]}>Event</Text>
 
-        <TouchableOpacity
-          onPress={() => router.push("/(modes)/events/discover")}
-          style={[styles.pill, { backgroundColor: Colors.card }]}
-          activeOpacity={0.9}
-        >
-          <Text style={{ color: Colors.text, fontWeight: "800" }}>Discover</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {event && (
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); setReminderModalVisible(true); }}
+              style={[styles.headerIconBtn, { backgroundColor: Colors.card, borderColor: Colors.border }]}
+              activeOpacity={0.9}
+              accessibilityLabel="Set reminders"
+            >
+              <Ionicons name="notifications-outline" size={22} color={Colors.primary} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            onPress={() => router.push("/(modes)/events/discover")}
+            style={[styles.pill, { backgroundColor: Colors.card }]}
+            activeOpacity={0.9}
+          >
+            <Text style={{ color: Colors.text, fontWeight: "800" }}>Discover</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
@@ -371,7 +407,7 @@ export default function EventDetails() {
                     {event.end_at ? ` – ${formatDateTime(event.end_at)}` : ""}
                   </Text>
                   <Text style={{ color: Colors.mutedText, marginTop: 6 }}>
-                    {event.city ? `${event.city}` : "City"}
+                    {event.city ? fmtLoc(event.city) : "City"}
                     {event.venue_name ? ` · ${event.venue_name}` : ""}
                   </Text>
 
@@ -420,14 +456,18 @@ export default function EventDetails() {
                 </Text>
               )}
 
-              {/* Who's joining — Participants & Organizer */}
+              {/* Who&apos;s joining — Participants & Organizer */}
               {participants.length > 0 && (
                 <View style={{ marginTop: 20 }}>
                   <Text style={{ color: Colors.text, fontWeight: "900", marginBottom: 12 }}>
-                    Who's joining
+                    Who&apos;s joining
                   </Text>
                   {participants.map((p) => (
-                    <EventParticipantCard key={p.id} participant={p} />
+                    <EventParticipantCard
+                      key={p.id}
+                      participant={p}
+                      onPress={() => router.push(`/(modes)/friends/profile-view?user_id=${p.id}`)}
+                    />
                   ))}
                 </View>
               )}
@@ -480,9 +520,21 @@ export default function EventDetails() {
                       <ActivityIndicator />
                     ) : (
                       <Text style={{ color: Colors.text, fontWeight: "900" }}>
-                        {status === "interested" ? "Interested ✓" : "Interested"}
+                        {status === "interested" ? "Following ✓" : "Follow"}
                       </Text>
                     )}
+                  </TouchableOpacity>
+                </View>
+
+                <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+                  <TouchableOpacity
+                    onPress={shareEvent}
+                    disabled={!userId}
+                    style={[styles.secondaryBtn, { backgroundColor: Colors.background, borderColor: Colors.border, opacity: !userId ? 0.6 : 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }]}
+                    activeOpacity={0.9}
+                  >
+                    <Ionicons name="share-outline" size={18} color={Colors.text} />
+                    <Text style={{ color: Colors.text, fontWeight: "900" }}>Share</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -557,7 +609,7 @@ export default function EventDetails() {
                 </View>
 
                 <Text style={{ color: Colors.mutedText, marginTop: 10, lineHeight: 18 }}>
-                  Chat access: host OR status = going (and interested if enabled).
+                  Group chat: only for public events when the host turned it on. You get access when you join or mark interested.
                 </Text>
               </View>
             </View>
@@ -565,11 +617,20 @@ export default function EventDetails() {
             <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
               <Text style={{ color: Colors.text, fontWeight: "900" }}>Notes</Text>
               <Text style={{ color: Colors.mutedText, marginTop: 6, lineHeight: 18 }}>
-                • Join/Interested uses RPC `join_event()` (secure + atomic){"\n"}
-                • Leaving uses RPC `leave_event()`{"\n"}
-                • Chat membership is synced via triggers on `event_participants`
+                • Event group chats exist only for public events (Events mode) when the host enabled &quot;Allow a group chat&quot;.{"\n"}
+                • Dates/meetings/meetups from Romance/Friends/Business chat use the original chat; no duplicate event chat.{"\n"}
+                • Join/Interested uses RPC `join_event()`; chat membership is synced via triggers.
               </Text>
             </View>
+
+            {event && (
+              <EventReminderModal
+                visible={reminderModalVisible}
+                onClose={() => setReminderModalVisible(false)}
+                itemId={event.id}
+                title={event.title}
+              />
+            )}
           </>
         )}
       </ScrollView>
@@ -588,6 +649,14 @@ const styles: any = {
     paddingBottom: 12,
   },
   backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIconBtn: {
     width: 40,
     height: 40,
     borderRadius: 14,

@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  headerTitle: { ...Typography.h3, color: Colors.textPrimary },
+  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
 
   chat: { paddingHorizontal: 20, paddingBottom: 14 },
   chatMeta: { ...Typography.caption, color: Colors.gray600, marginBottom: 10 },

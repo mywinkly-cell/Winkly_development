@@ -9,7 +9,6 @@
 
 import React, { useState } from "react";
 import {
-  View,
   Text,
   TextInput,
   TouchableOpacity,
@@ -186,20 +185,18 @@ export default function ResetPassword() {
               {sentToEmail}
             </Text>
 
-            {__DEV__ && (
-              <TouchableOpacity
-                onPress={() => router.push("/(auth)/reset-confirm")}
-                style={{
-                  marginBottom: 16,
-                  paddingVertical: 12,
-                  alignItems: "center",
-                }}
-              >
-                <Text style={{ ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" }}>
-                  Testing in Expo Go? Paste reset link on next screen →
-                </Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              onPress={() => router.push("/(auth)/reset-confirm")}
+              style={{
+                marginBottom: 16,
+                paddingVertical: 12,
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" }}>
+                Already have the link? Set new password →
+              </Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() => router.push("/(auth)/signin")}

@@ -2,7 +2,7 @@
 // Shown when returning user has verified session but incomplete onboarding
 
 import React, { useRef, useEffect } from "react";
-import { View, Text, TouchableOpacity, Animated, StyleSheet } from "react-native";
+import { Text, TouchableOpacity, Animated, StyleSheet } from "react-native";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
