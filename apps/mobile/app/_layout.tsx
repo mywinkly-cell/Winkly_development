@@ -37,12 +37,13 @@ if (typeof console !== "undefined" && "reportErrorsAsExceptions" in console) {
 // Suppress VirtualizedLists nesting warning (we fix root causes; this hides any edge-case remnants)
 LogBox.ignoreLogs(["VirtualizedLists should never be nested"]);
 
-// Suppress known non-fatal Expo keep-awake error (common on Android/Expo Go)
-LogBox.ignoreLogs([
-  "Unable to activate keep awake",
-  "Unable to deactivate keep awake",
-  "Network request failed",
-]);
+// Keep-awake warnings are noisy on Expo Go; do not suppress generic network errors in dev (hurts Supabase debugging).
+if (!__DEV__) {
+  LogBox.ignoreLogs([
+    "Unable to activate keep awake",
+    "Unable to deactivate keep awake",
+  ]);
+}
 
 export default function RootLayout() {
   const segments = useSegments();

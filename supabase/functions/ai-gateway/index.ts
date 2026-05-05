@@ -11,20 +11,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
 
 /**
- * Gemini model routing (Engineer Brief 2026):
- * - Default to Gemini 3.1 (stable, general planning).
- * - Use Flash-Lite for fast/cheap “theme/topic card” generation when needed.
- *
- * Override via Supabase secrets:
- * - GEMINI_MODEL (main)
- * - GEMINI_MODEL_LITE (fast/cheap)
+ * Gemini model routing — defaults use real Generative Language API model IDs.
+ * Override via Supabase secrets: GEMINI_MODEL, GEMINI_MODEL_LITE, GEMINI_MODEL_TOPICS, GEMINI_MODEL_PLAN.
  */
-const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.1-flash";
-const GEMINI_MODEL_LITE = Deno.env.get("GEMINI_MODEL_LITE") ?? "gemini-3.1-flash-lite";
+const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.0-flash";
+const GEMINI_MODEL_LITE = Deno.env.get("GEMINI_MODEL_LITE") ?? "gemini-2.0-flash-lite";
 
 // Model routing (cost optimization)
-const GEMINI_MODEL_TOPICS = Deno.env.get("GEMINI_MODEL_TOPICS") ?? "gemini-3.0-flash-lite";
-const GEMINI_MODEL_PLAN = Deno.env.get("GEMINI_MODEL_PLAN") ?? "gemini-3.0-pro";
+const GEMINI_MODEL_TOPICS = Deno.env.get("GEMINI_MODEL_TOPICS") ?? "gemini-2.0-flash-lite";
+const GEMINI_MODEL_PLAN = Deno.env.get("GEMINI_MODEL_PLAN") ?? "gemini-2.0-flash";
 
 // Redis (Upstash REST) — used for rate limiting + semantic caching + context caching
 const UPSTASH_REDIS_REST_URL = Deno.env.get("UPSTASH_REDIS_REST_URL") ?? "";

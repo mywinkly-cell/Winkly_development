@@ -91,6 +91,11 @@ module.exports = {
         foregroundImage: "./assets/icons/winkly-emoji-shadow.png",
         backgroundColor: "#FFFFFF"
       },
+      // Mirrors expo-notifications plugin: default icon + accent for system notifications (esp. pre-Oreo / defaults).
+      notification: {
+        icon: "./assets/icons/winkly-emoji-shadow.png",
+        color: "#7C3AED"
+      },
       permissions: [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",

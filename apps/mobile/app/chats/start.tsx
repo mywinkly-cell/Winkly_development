@@ -200,6 +200,16 @@ export default function StartChat() {
           <Ionicons name="mail-outline" size={20} color={Colors.primaryViolet} />
           <Text style={styles.invitationsLinkText}>Group invitations</Text>
         </Pressable>
+        <Pressable
+          onPress={() => {
+            Haptics.selectionAsync();
+            router.push("/(modes)/friends/friend-requests");
+          }}
+          style={styles.invitationsLink}
+        >
+          <Ionicons name="people-outline" size={20} color={Colors.primaryViolet} />
+          <Text style={styles.invitationsLinkText}>Friends connection requests</Text>
+        </Pressable>
 
         <TextInput
           value={q}
