@@ -6,18 +6,18 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
+  const cors = corsHeaders(req, {
+    methods: "POST, OPTIONS",
+    headers: "authorization, x-client-info, apikey, content-type",
+  });
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
-      headers: { ...cors, "Content-Type": "application/json" },
+      headers: { ...Object.fromEntries(cors), "Content-Type": "application/json" },
     });
   }
 
@@ -27,14 +27,14 @@ serve(async (req) => {
   if (!serviceKey || authHeader !== `Bearer ${serviceKey}`) {
     return new Response(JSON.stringify({ error: "Forbidden — use service role from cron or admin" }), {
       status: 403,
-      headers: { ...cors, "Content-Type": "application/json" },
+      headers: { ...Object.fromEntries(cors), "Content-Type": "application/json" },
     });
   }
 
   if (!url) {
     return new Response(JSON.stringify({ error: "Server misconfigured" }), {
       status: 500,
-      headers: { ...cors, "Content-Type": "application/json" },
+      headers: { ...Object.fromEntries(cors), "Content-Type": "application/json" },
     });
   }
 
@@ -58,7 +58,7 @@ serve(async (req) => {
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
-      headers: { ...cors, "Content-Type": "application/json" },
+      headers: { ...Object.fromEntries(cors), "Content-Type": "application/json" },
     });
   }
 

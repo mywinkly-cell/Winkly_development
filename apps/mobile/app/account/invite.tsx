@@ -4,13 +4,18 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Share, Alert, StyleSheet } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Share, Alert, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import * as Contacts from "expo-contacts";
+import { supabase } from "@/lib/supabase";
+import { hashContactIdentifiers } from "@/lib/contacts/matching";
 
 export default function Invite() {
   const router = useRouter();
   const [contactsConnected, setContactsConnected] = useState(false);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [matchesCount, setMatchesCount] = useState<number | null>(null);
 
   const onShare = async () => {
     try {
@@ -23,13 +28,49 @@ export default function Invite() {
     }
   };
 
-  const onConnectContacts = () => {
-    // TODO: expo-contacts + permission + hash + backend match
-    Alert.alert(
-      "Coming soon",
-      "Connect your contacts to see who's already on Winkly and invite others. We'll ask for permission to access your contacts — only hashed identifiers are sent for matching."
-    );
-    setContactsConnected(true);
+  const onConnectContacts = async () => {
+    try {
+      setContactsLoading(true);
+
+      const perm = await Contacts.requestPermissionsAsync();
+      if (perm.status !== "granted") {
+        Alert.alert("Contacts permission", "To connect contacts, allow access in your device settings.");
+        return;
+      }
+
+      const { data } = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.Emails, Contacts.Fields.PhoneNumbers],
+        pageSize: 5000,
+        pageOffset: 0,
+      });
+
+      const emailHashes: string[] = [];
+      const phoneHashes: string[] = [];
+      for (const c of data ?? []) {
+        const h = await hashContactIdentifiers(c);
+        emailHashes.push(...h.emailHashes);
+        phoneHashes.push(...h.phoneHashes);
+      }
+
+      const uniqEmails = Array.from(new Set(emailHashes)).slice(0, 5000);
+      const uniqPhones = Array.from(new Set(phoneHashes)).slice(0, 5000);
+
+      const { data: matches, error } = await supabase.rpc("match_contacts", {
+        p_email_hashes: uniqEmails.length ? uniqEmails : null,
+        p_phone_hashes: uniqPhones.length ? uniqPhones : null,
+        p_limit: 200,
+      });
+      if (error) throw error;
+
+      const uniqueMatchedUsers = new Set<string>();
+      for (const row of (matches ?? []) as { user_id: string }[]) uniqueMatchedUsers.add(row.user_id);
+      setMatchesCount(uniqueMatchedUsers.size);
+      setContactsConnected(true);
+    } catch (err: any) {
+      Alert.alert("Connect contacts failed", err?.message ?? "Please try again.");
+    } finally {
+      setContactsLoading(false);
+    }
   };
 
   return (
@@ -60,13 +101,22 @@ export default function Invite() {
             onPress={onConnectContacts}
             style={[styles.primaryBtn, contactsConnected && styles.primaryBtnDisabled]}
             activeOpacity={0.9}
-            disabled={contactsConnected}
+            disabled={contactsConnected || contactsLoading}
           >
-            <Ionicons name="link" size={20} color={Colors.white} style={{ marginRight: 8 }} />
+            {contactsLoading ? (
+              <ActivityIndicator color={Colors.white} style={{ marginRight: 10 }} />
+            ) : (
+              <Ionicons name="link" size={20} color={Colors.white} style={{ marginRight: 8 }} />
+            )}
             <Text style={styles.primaryText}>
-              {contactsConnected ? "Connecting soon…" : "Connect contacts"}
+              {contactsConnected ? "Contacts connected" : contactsLoading ? "Connecting…" : "Connect contacts"}
             </Text>
           </TouchableOpacity>
+          {matchesCount !== null ? (
+            <Text style={styles.matchNote}>
+              {matchesCount === 0 ? "No matches yet — invite friends to join Winkly." : `${matchesCount} contact${matchesCount === 1 ? "" : "s"} already on Winkly.`}
+            </Text>
+          ) : null}
         </View>
 
         {/* Share invite */}
@@ -178,4 +228,5 @@ const styles = StyleSheet.create({
   secondaryText: { ...Typography.button, color: Colors.textPrimary },
 
   footerNote: { ...Typography.caption, color: Colors.gray500, textAlign: "center", marginTop: 8 },
+  matchNote: { ...Typography.caption, color: Colors.gray600, marginTop: 12 },
 });

@@ -2,6 +2,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { sendMessage } from "@/lib/chats/api";
+import type { Message } from "@/lib/chats/types";
 import { callConcierge, type ConciergeResponse } from "@/lib/ai/conciergeClient";
 
 export async function runMatchAgentForChat(params: {
@@ -12,8 +13,8 @@ export async function runMatchAgentForChat(params: {
   targetSlotIso?: string;
   searchRadiusMiles?: number;
 }): Promise<ConciergeResponse> {
-  const { data: auth } = await supabase.auth.getUser();
-  const uid = auth.user?.id;
+  const { data: { session } } = await supabase.auth.getSession();
+  const uid = session?.user?.id;
   if (!uid) return { message: "", error: "Not signed in" };
 
   const { data: core } = await supabase.from("profiles_core").select("city").eq("id", uid).maybeSingle();
@@ -53,7 +54,7 @@ export async function postMatchAgentCtaMessage(params: {
   partnerUserId: string;
   createdByUserId: string;
   mode: "romance" | "friends";
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+}): Promise<{ ok: true; inserted: Message } | { ok: false; error: string }> {
   const res = await runMatchAgentForChat({
     mode: params.mode,
     partnerUserId: params.partnerUserId,
@@ -78,8 +79,10 @@ export async function postMatchAgentCtaMessage(params: {
     privacy: ma?.privacy,
   };
 
-  await sendMessage(params.conversationId, JSON.stringify(payload), [], { messageType: "cta" });
-  return { ok: true };
+  const inserted = await sendMessage(params.conversationId, params.createdByUserId, JSON.stringify(payload), [], {
+    messageType: "cta",
+  });
+  return { ok: true, inserted };
 }
 
 export type MatchAgentApprovalStage = "primary_set" | "partner_set" | "confirmed";

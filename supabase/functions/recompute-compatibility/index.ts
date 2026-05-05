@@ -7,6 +7,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
 
 const MODES = ["romance", "friends", "business"] as const;
 
@@ -107,12 +108,13 @@ function computePair(
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization" } });
+    return withCorsEmpty(req, { status: 204 });
   }
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: { "Content-Type": "application/json" } });
   }
 
+  const cors = corsHeaders(req);
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceKey);
@@ -211,6 +213,6 @@ serve(async (req) => {
       processed,
       errors: errors.length > 0 ? errors.slice(0, 10) : undefined,
     }),
-    { status: 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+    { status: 200, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } }
   );
 });

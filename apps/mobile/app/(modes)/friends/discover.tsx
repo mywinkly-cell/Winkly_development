@@ -22,10 +22,16 @@ import {
   buildFriendsMatchTags,
   type FriendsProfile,
 } from "@/lib/ai/friendsInsights";
-import { getFriendsFilters, applyFriendsFiltersToFeed } from "@/lib/filters/friendsFiltersStorage";
-import { followUser } from "@/lib/access/connections";
+import {
+  getFriendsFilters,
+  applyFriendsFiltersToFeed,
+  getFriendsAiMatchingEnabled,
+} from "@/lib/filters/friendsFiltersStorage";
+import { friendsFollowProfile } from "@/lib/access/connections";
+import { combinedMatchScore, fetchBehaviorAffinityMap } from "@/lib/matching/behaviorAffinities";
 import { blockUser, reportUser } from "@/lib/chats";
 import { useModeContext } from "@/providers";
+import { getBlockedUserIdSet } from "@/lib/access/blocks";
 import {
   DiscoverPeopleWhoLikedYou,
   type PeopleWhoLikedYouItem,
@@ -110,22 +116,32 @@ export default function FriendsDiscover() {
 
   const loadRecommendations = useCallback(
     async (userId: string, self: FriendsProfile | null): Promise<RecommendedItem[]> => {
-      const { data: iFollow } = await supabase
-        .from("follows")
-        .select("followee_id")
-        .eq("follower_id", userId);
-      const iFollowIds = new Set((iFollow ?? []).map((r: { followee_id: string }) => r.followee_id));
+      const { data: feedData, error: rpcErr } = await supabase.rpc("friends_discover_feed", {
+        current_user_id: userId,
+        p_limit: 80,
+      });
 
-      const { data: fpData } = await supabase
-        .from("friend_profiles")
-        .select("id,user_id,display_name,city,vibe_tags,about_short,interests,main_photo_url,avatar_url")
-        .order("created_at", { ascending: false })
-        .limit(50);
+      let rows: FriendProfileRow[] = [];
+      if (!rpcErr && Array.isArray(feedData) && feedData.length > 0) {
+        rows = feedData as FriendProfileRow[];
+      } else {
+        const { data: iFollow } = await supabase
+          .from("follows")
+          .select("followee_id")
+          .eq("follower_id", userId);
+        const iFollowIds = new Set((iFollow ?? []).map((r: { followee_id: string }) => r.followee_id));
 
-      let rows: FriendProfileRow[] = (fpData ?? []).filter(
-        (r: { user_id?: string; id: string }) => (r.user_id ?? r.id) !== userId
-      ) as FriendProfileRow[];
-      rows = rows.filter((r) => !iFollowIds.has(r.user_id ?? r.id));
+        const { data: fpData } = await supabase
+          .from("friend_profiles")
+          .select("id,user_id,display_name,city,vibe_tags,about_short,interests,main_photo_url,avatar_url")
+          .order("created_at", { ascending: false })
+          .limit(50);
+
+        rows = (fpData ?? []).filter(
+          (r: { user_id?: string; id: string }) => (r.user_id ?? r.id) !== userId,
+        ) as FriendProfileRow[];
+        rows = rows.filter((r) => !iFollowIds.has(r.user_id ?? r.id));
+      }
 
       const scored = rows.map((r) => {
         const other: FriendsProfile = {
@@ -142,7 +158,25 @@ export default function FriendsDiscover() {
 
       const filters = await getFriendsFilters();
       const filtered = applyFriendsFiltersToFeed(scored, filters);
-      filtered.sort((a, b) => ((b as { compatibility?: number }).compatibility ?? 0) - ((a as { compatibility?: number }).compatibility ?? 0));
+
+      const aiFriends = await getFriendsAiMatchingEnabled();
+      if (aiFriends) {
+        const ids = filtered.map((r) => r.user_id ?? r.id).filter(Boolean) as string[];
+        const affMap = await fetchBehaviorAffinityMap(userId, ids, "friends");
+        filtered.sort((a, b) => {
+          const ca = (a as { compatibility?: number }).compatibility ?? 0;
+          const cb = (b as { compatibility?: number }).compatibility ?? 0;
+          const sa = combinedMatchScore(ca, affMap.get(a.user_id ?? "") ?? 0.5);
+          const sb = combinedMatchScore(cb, affMap.get(b.user_id ?? "") ?? 0.5);
+          return sb - sa;
+        });
+      } else {
+        filtered.sort(
+          (a, b) =>
+            ((b as { compatibility?: number }).compatibility ?? 0) -
+            ((a as { compatibility?: number }).compatibility ?? 0),
+        );
+      }
 
       const take = DISCOVER_LIMITS.recommendationsPerDay;
       return filtered.slice(0, take).map((r) => {
@@ -178,6 +212,7 @@ export default function FriendsDiscover() {
       if (!userData?.user) return;
 
       const uid = userData.user.id;
+      const blocked = await getBlockedUserIdSet(uid);
 
       const { data: me } = await supabase
         .from("profiles_mode")
@@ -201,8 +236,8 @@ export default function FriendsDiscover() {
         loadRecommendations(uid, self),
       ]);
 
-      setPeopleWhoWantToConnect(wantToConnectList);
-      setRecommendations(recList);
+      setPeopleWhoWantToConnect(wantToConnectList.filter((p) => !blocked.has(p.id)));
+      setRecommendations(recList.filter((r) => !blocked.has(r.id)));
 
       const used = await getRecommendationLikesSentToday("friends");
       setLikesUsedToday(used);
@@ -234,9 +269,12 @@ export default function FriendsDiscover() {
 
   const handleConnectBack = async (item: PeopleWhoLikedYouItem) => {
     try {
-      await followUser(item.id);
+      const res = await friendsFollowProfile(item.id);
       likedYouLikeBack(posthog ?? null, "friends", item.id);
       setPeopleWhoWantToConnect((prev) => prev.filter((p) => p.id !== item.id));
+      if (res.is_connection && res.chat_id) {
+        router.push(`/chats/${res.chat_id}`);
+      }
     } catch (e) {
       Alert.alert("Error", (e as Error).message ?? "Could not connect.");
     }
@@ -248,11 +286,14 @@ export default function FriendsDiscover() {
       return;
     }
     try {
-      await followUser(item.id);
+      const res = await friendsFollowProfile(item.id);
       await incrementRecommendationLikeSentToday("friends");
       setLikesUsedToday((c) => c + 1);
       recommendationLike(posthog ?? null, "friends", item.id);
       setRecommendations((prev) => prev.filter((p) => p.id !== item.id));
+      if (res.is_connection && res.chat_id) {
+        router.push(`/chats/${res.chat_id}`);
+      }
     } catch (e) {
       Alert.alert("Error", (e as Error).message ?? "Could not send like.");
     }

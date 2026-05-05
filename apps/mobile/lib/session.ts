@@ -9,7 +9,7 @@ export type WinklySession = {
   email?: string;
   verified?: boolean;
   accountType?: "personal" | "business";
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 export async function getSession(): Promise<WinklySession | null> {

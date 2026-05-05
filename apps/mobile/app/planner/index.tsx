@@ -35,6 +35,8 @@ import {
   dismissWeeklyWeekend,
   isWeekendIdeasPeriod,
   getWeeklyWeekendDismissedUntil,
+  enrichProactiveSuggestion,
+  scheduleSaturdayPlannerNudgeIfNeeded,
   type ProactiveSuggestion,
   type WeeklyWeekendSuggestion,
   type PlannerTabKey,
@@ -454,6 +456,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   useFocusEffect(
     useCallback(() => {
       getSavedIdeas().then((ideas) => setSavedIdeasCount(ideas.length));
+      void scheduleSaturdayPlannerNudgeIfNeeded();
       (async () => {
         if (activeTab === "archive") return;
         const [showProactive, weeklyDismissed] = await Promise.all([
@@ -468,7 +471,8 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
           setProactiveSuggestion(null);
           setShowProactiveCard(false);
         } else if (showProactive) {
-          const suggestion = getProactiveSuggestion(activeTab as PlannerTabKey);
+          const raw = getProactiveSuggestion(activeTab as PlannerTabKey);
+          const suggestion = await enrichProactiveSuggestion(raw, activeTab as PlannerTabKey);
           setProactiveSuggestion(suggestion);
           setShowProactiveCard(!!suggestion);
           setWeeklySuggestion(null);
@@ -544,17 +548,22 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     (suggestion: ProactiveSuggestion, step: "activity" | "social") => {
       const modeParam = activeTab === "dates" ? "romance" : activeTab === "meetups" ? "friends" : activeTab === "business" ? "business" : "events";
       const tabParam = activeTab === "archive" ? "all" : activeTab;
+      const params: Record<string, string | undefined> = {
+        source_screen: "planner",
+        mode: modeParam,
+        source_planner_tab: tabParam,
+        initial_step: step,
+        proactive_activity_label: suggestion.activityHint ?? suggestion.title,
+        proactive_date_preset: suggestion.datePreset ?? "today",
+        proactive_time_of_day: suggestion.timeOfDay ?? undefined,
+      };
+      if (step === "social" && suggestion.partner_user_id && suggestion.partner_display_name) {
+        params.partner_user_id = suggestion.partner_user_id;
+        params.partner_display_name = suggestion.partner_display_name;
+      }
       router.push({
         pathname: "/concierge",
-        params: {
-          source_screen: "planner",
-          mode: modeParam,
-          source_planner_tab: tabParam,
-          initial_step: step,
-          proactive_activity_label: suggestion.activityHint ?? suggestion.title,
-          proactive_date_preset: suggestion.datePreset ?? "today",
-          proactive_time_of_day: suggestion.timeOfDay ?? undefined,
-        },
+        params,
       });
     },
     [activeTab, router]

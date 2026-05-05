@@ -5,6 +5,11 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import type { AccountType } from "@/types";
+import {
+  initializeNotificationsRuntime,
+  registerForPushNotificationsAndSync,
+  resetNotificationsRuntime,
+} from "@/lib/notifications";
 
 function isAuthRecoverableError(err: unknown): boolean {
   const e = err as { name?: string; message?: string };
@@ -52,6 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } catch {
             // ignore signOut errors (e.g. AuthSessionMissingError)
           }
+          resetNotificationsRuntime();
           setState({ session: null, user: null, loading: false, accountType: null });
           return;
         }
@@ -62,6 +68,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           accountType: (session?.user?.user_metadata?.account_type as AccountType) ?? null,
           loading: false,
         }));
+        const u = session?.user?.id;
+        if (u) {
+          void initializeNotificationsRuntime().then(() => registerForPushNotificationsAndSync());
+        } else {
+          resetNotificationsRuntime();
+        }
       } catch (err) {
         if (isAuthRecoverableError(err)) {
           try {
@@ -70,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // ignore signOut errors
           }
         }
+        resetNotificationsRuntime();
         setState({ session: null, user: null, loading: false, accountType: null });
       }
     };
@@ -85,6 +98,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading: false,
         accountType: (session?.user?.user_metadata?.account_type as AccountType) ?? null,
       });
+      const uid = session?.user?.id;
+      if (uid) {
+        void initializeNotificationsRuntime().then(() => registerForPushNotificationsAndSync());
+      } else {
+        resetNotificationsRuntime();
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -96,6 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // AuthApiError / AuthSessionMissingError: still clear local state
     }
+    resetNotificationsRuntime();
     setState({ session: null, user: null, loading: false, accountType: null });
   };
 

@@ -37,14 +37,15 @@ import {
   type SavedIdea,
   type ConciergeFeedbackType,
 } from "@/lib/ai/conciergeStorage";
+import { useDefaultLocation } from "@/lib/ai/useDefaultCity";
 
 function isWinklyOption(opt: ExperienceOption): boolean {
   return (opt as { source?: string }).source === "winkly_event";
 }
-import { useDefaultLocation } from "@/lib/ai/useDefaultCity";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 import { useModeContext } from "@/providers";
 import type { Mode } from "@/types";
+import { recordPairBehaviorSignal } from "@/lib/matching/behaviorSignals";
 
 const VALID_MODES: Mode[] = ["romance", "friends", "business", "events"];
 
@@ -118,6 +119,23 @@ export default function ConciergeScreen() {
       });
     }
   }, [source_screen, params.partner_user_id, params.partner_display_name]);
+
+  const conciergePairSignalSentRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (source_screen !== "chats") return;
+    const pid = params.partner_user_id;
+    if (!pid) return;
+    const m = mode;
+    if (m !== "romance" && m !== "friends" && m !== "business") return;
+    const key = `${pid}:${m}`;
+    if (conciergePairSignalSentRef.current === key) return;
+    conciergePairSignalSentRef.current = key;
+    void recordPairBehaviorSignal({
+      partnerUserId: pid,
+      mode: m,
+      kind: "concierge_match_session",
+    });
+  }, [source_screen, params.partner_user_id, mode]);
 
   const [lastDate, setLastDate] = useState<string>(() => {
     const d = new Date();

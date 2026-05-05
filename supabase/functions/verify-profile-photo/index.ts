@@ -8,18 +8,18 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
+  const cors = corsHeaders(req, {
+    methods: "POST, OPTIONS",
+    headers: "authorization, x-client-info, apikey, content-type",
+  });
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
-      headers: { ...cors, "Content-Type": "application/json" },
+      headers: { ...Object.fromEntries(cors), "Content-Type": "application/json" },
     });
   }
 
@@ -27,7 +27,7 @@ serve(async (req) => {
   if (!authHeader?.startsWith("Bearer ")) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
-      headers: { ...cors, "Content-Type": "application/json" },
+      headers: { ...Object.fromEntries(cors), "Content-Type": "application/json" },
     });
   }
 
@@ -43,7 +43,7 @@ serve(async (req) => {
   if (userErr || !userData.user) {
     return new Response(JSON.stringify({ error: "Invalid session" }), {
       status: 401,
-      headers: { ...cors, "Content-Type": "application/json" },
+      headers: { ...Object.fromEntries(cors), "Content-Type": "application/json" },
     });
   }
   const uid = userData.user.id;
@@ -54,7 +54,7 @@ serve(async (req) => {
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON" }), {
       status: 400,
-      headers: { ...cors, "Content-Type": "application/json" },
+      headers: { ...Object.fromEntries(cors), "Content-Type": "application/json" },
     });
   }
 
@@ -63,7 +63,7 @@ serve(async (req) => {
   if (!selfiePath) {
     return new Response(JSON.stringify({ error: "selfie_path required" }), {
       status: 400,
-      headers: { ...cors, "Content-Type": "application/json" },
+      headers: { ...Object.fromEntries(cors), "Content-Type": "application/json" },
     });
   }
 
@@ -73,7 +73,7 @@ serve(async (req) => {
   if (!profileUrl) {
     return new Response(JSON.stringify({ error: "Profile photo not found at index" }), {
       status: 400,
-      headers: { ...cors, "Content-Type": "application/json" },
+      headers: { ...Object.fromEntries(cors), "Content-Type": "application/json" },
     });
   }
 

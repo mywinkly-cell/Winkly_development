@@ -1,7 +1,17 @@
 {
   "name": "winkly",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
+    "mobile:start": "npm run -w apps/mobile start",
+    "mobile:android": "npm run -w apps/mobile android",
+    "mobile:ios": "npm run -w apps/mobile ios",
+    "mobile:web": "npm run -w apps/mobile web",
+    "mobile:lint": "npm run -w apps/mobile lint",
+    "mobile:test": "npm run -w apps/mobile test",
     "supabase:deploy-auth-redirect": "supabase functions deploy auth-redirect --no-verify-jwt"
   },
   "devDependencies": {

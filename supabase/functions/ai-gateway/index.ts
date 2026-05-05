@@ -8,6 +8,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
 
 /**
  * Gemini model routing (Engineer Brief 2026):
@@ -2376,15 +2377,16 @@ Required JSON schema:
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: { "Access-Control-Allow-Origin": "*" } });
+    return withCorsEmpty(req, { status: 204 });
   }
 
   try {
+    const cors = corsHeaders(req);
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(
         JSON.stringify({ error: "Missing or invalid authorization" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
+        { status: 401, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } }
       );
     }
 
@@ -2398,7 +2400,7 @@ serve(async (req) => {
     if (authError || !user) {
       return new Response(
         JSON.stringify({ error: "Invalid session" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
+        { status: 401, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } }
       );
     }
 
@@ -2423,6 +2425,9 @@ serve(async (req) => {
 
     const safeContext = allowlistContext(context as Record<string, unknown>);
     const scrubbedSafeContext = scrubPiiInContext(safeContext);
+    if (typeof scrubbedSafeContext.user_prompt === "string") {
+      scrubbedSafeContext.user_prompt = scrubbedSafeContext.user_prompt.slice(0, 2000);
+    }
 
     // Redis-based rate limiter (prevents abuse + smooths bursts).
     // Free tier is blocked for AI tasks server-side even if client gating fails.
@@ -2431,7 +2436,7 @@ serve(async (req) => {
       if (!rl.ok) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded", retry_after: rl.retry_after }), {
           status: 429,
-          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+          headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
         });
       }
     }
@@ -2458,7 +2463,7 @@ serve(async (req) => {
         country: countryStr,
       });
       return new Response(JSON.stringify(out), {
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }
 
@@ -2521,7 +2526,7 @@ serve(async (req) => {
         agentic_planning_output,
         pending_plan_id: out.pending_plan_id,
         provider: out.provider,
-      }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+      }), { headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } });
     }
 
     if (task === "planner_theme_plans") {
@@ -2559,7 +2564,7 @@ serve(async (req) => {
       const cached = await redisGetJson<PlannerThemePlansOutput>(semKey);
       if (cached?.plan_options?.length) {
         return new Response(JSON.stringify(cached), {
-          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+          headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
         });
       }
 
@@ -2611,7 +2616,7 @@ serve(async (req) => {
 
       await redisSetJson(semKey, response, 86400).catch(() => {});
       return new Response(JSON.stringify(response), {
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }
 
@@ -2620,13 +2625,13 @@ serve(async (req) => {
       if (!partnerUserId || partnerUserId === user.id) {
         return new Response(JSON.stringify({ error: "partner_user_id required" }), {
           status: 400,
-          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+          headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
         });
       }
       if (mode !== "romance" && mode !== "friends") {
         return new Response(JSON.stringify({ error: "match_agent supports romance or friends only" }), {
           status: 400,
-          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+          headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
         });
       }
 
@@ -2694,7 +2699,7 @@ serve(async (req) => {
           },
           message: m.agent_message,
         }),
-        { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } },
+        { headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } },
       );
     }
 
@@ -2702,14 +2707,14 @@ serve(async (req) => {
       if (mode !== "romance") {
         return new Response(JSON.stringify({ error: "match_bridge requires mode romance" }), {
           status: 400,
-          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+          headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
         });
       }
       const partnerUserId = scrubbedSafeContext.partner_user_id as string | undefined;
       if (!partnerUserId || partnerUserId === user.id) {
         return new Response(JSON.stringify({ error: "partner_user_id required" }), {
           status: 400,
-          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+          headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
         });
       }
 
@@ -2801,7 +2806,7 @@ serve(async (req) => {
           message: bridge.bridge_message,
           request_id: requestIdMb,
         }),
-        { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } },
+        { headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } },
       );
     }
 
@@ -2958,7 +2963,7 @@ serve(async (req) => {
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
+            ...Object.fromEntries(cors),
           },
         });
       }
@@ -2970,7 +2975,7 @@ serve(async (req) => {
           no_options_reason: result.no_options_reason,
           request_id: requestId,
         }),
-        { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+        { headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } }
       );
     }
 
@@ -2983,7 +2988,7 @@ serve(async (req) => {
           retry_after: result.retry_after ?? 60,
           provider_status: result.provider_status,
         }),
-        { status: 429, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
+        { status: 429, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } }
       );
     }
 
@@ -3028,13 +3033,13 @@ serve(async (req) => {
       result.ranked = result.ranked;
     }
     return new Response(JSON.stringify(result), {
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
     });
   } catch (err) {
     console.error("ai-gateway error:", err);
     return new Response(
       JSON.stringify({ error: "Internal error" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { "Content-Type": "application/json", ...Object.fromEntries(corsHeaders(req)) } }
     );
   }
 });

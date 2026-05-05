@@ -36,7 +36,6 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
-import cities from "@/assets/cities.json";
 import { searchCities, type CityCountry } from "@/lib/location/citySearch";
 import {
   normalizeLocationDisplayString,
@@ -555,7 +554,7 @@ export default function ProfileCore() {
     return () => clearTimeout(t);
   }, [saveToSupabase, firstName, lastName]);
 
-  // ─────────────── CITY AUTOCOMPLETE (Nominatim + static fallback) ───────────────
+  // ─────────────── CITY AUTOCOMPLETE (Nominatim) ───────────────
   const onCityChange = useCallback((text: string) => {
     setCity(text);
     setCityConfirmed(false);
@@ -569,15 +568,7 @@ export default function ProfileCore() {
     if (citySearchTimer.current) clearTimeout(citySearchTimer.current);
     citySearchTimer.current = setTimeout(async () => {
       const fromApi = await searchCities(q, appLanguage);
-      if (fromApi.length > 0) {
-        setSuggestions(fromApi);
-        return;
-      }
-      const fromJson = (cities as any[])
-        .filter((c: any) => String(c.city).toLowerCase().startsWith(q.toLowerCase()))
-        .slice(0, 10)
-        .map((c: any) => ({ city: c.city, country: c.country || "" }));
-      setSuggestions(fromJson);
+      setSuggestions(fromApi);
     }, 400);
   }, [appLanguage]);
 
@@ -600,23 +591,6 @@ export default function ProfileCore() {
         }
       } catch (e) {
         console.warn("reverseGeocodeToDisplay:", e);
-      }
-      try {
-        const nearby = (cities as any[])
-          .map((c: any) => ({ ...c, dist: Math.hypot((c.lat ?? 0) - latitude, (c.lng ?? 0) - longitude) }))
-          .sort((a: any, b: any) => a.dist - b.dist)
-          .slice(0, 1);
-        if (nearby.length > 0) {
-          setCity(
-            formatDefaultLocationDisplay(
-              String(nearby[0].city),
-              String(nearby[0].country ?? ""),
-              appLanguage
-            )
-          );
-        }
-      } catch {
-        /* ignore */
       }
       setCityConfirmed(true);
       setSuggestions([]);

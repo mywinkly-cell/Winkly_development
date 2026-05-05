@@ -12,6 +12,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
+import { sendExpoPushMessages } from "../_shared/expoPush.ts";
 
 function isUuid(v: unknown): v is string {
   return typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
@@ -25,15 +27,16 @@ function addMinutesIso(iso: string, minutes: number): string {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: { "Access-Control-Allow-Origin": "*" } });
+    return withCorsEmpty(req, { status: 204 });
   }
 
   try {
+    const cors = corsHeaders(req);
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }
 
@@ -46,7 +49,7 @@ serve(async (req) => {
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Invalid session" }), {
         status: 401,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }
 
@@ -55,7 +58,7 @@ serve(async (req) => {
     if (!isUuid(pendingPlanId)) {
       return new Response(JSON.stringify({ error: "pending_plan_id required" }), {
         status: 400,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }
 
@@ -63,7 +66,7 @@ serve(async (req) => {
     if (confirmErr) {
       return new Response(JSON.stringify({ error: confirmErr.message }), {
         status: 400,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }
     const confirmRow = Array.isArray(confirmRows) ? confirmRows[0] as { all_participants_confirmed?: boolean } : null;
@@ -77,7 +80,7 @@ serve(async (req) => {
     if (pErr || !pRow) {
       return new Response(JSON.stringify({ error: "Pending plan not found" }), {
         status: 404,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }
 
@@ -105,7 +108,7 @@ serve(async (req) => {
       if (itemErr || !item) {
         return new Response(JSON.stringify({ error: itemErr?.message ?? "Failed to create planner item" }), {
           status: 500,
-          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+          headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
         });
       }
 
@@ -158,6 +161,34 @@ serve(async (req) => {
         planner_item_id: item.id,
         updated_at: new Date().toISOString(),
       }).eq("id", pendingPlanId);
+
+      // Notify participants (best-effort): plan fully confirmed and planner item created.
+      try {
+        const notifyIds = partIds.filter(isUuid);
+        if (notifyIds.length > 0) {
+          const { data: tokRows } = await supabase
+            .from("user_push_tokens")
+            .select("expo_push_token")
+            .in("user_id", notifyIds);
+          const uniqTok = [...new Set((tokRows ?? []).map((t: { expo_push_token: string }) => t.expo_push_token))];
+          if (uniqTok.length > 0) {
+            await sendExpoPushMessages(
+              uniqTok.map((to) => ({
+                to,
+                title: "Plan confirmed",
+                body: `${topic} is on your planner.`,
+                data: {
+                  winkly_kind: "plan_confirmed",
+                  planner_item_id: item.id,
+                  pending_plan_id: pendingPlanId,
+                },
+              })),
+            );
+          }
+        }
+      } catch (pushErr) {
+        console.warn("pending-plan-confirm push:", pushErr);
+      }
     }
 
     const { data: refreshed } = await supabase
@@ -175,12 +206,12 @@ serve(async (req) => {
         confirmed: (refreshed as { confirmed_count?: number } | null)?.confirmed_count,
         participants: (refreshed as { participant_count?: number } | null)?.participant_count,
       },
-    }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    }), { headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } });
   } catch (e) {
     console.error("pending-plan-confirm:", e);
     return new Response(JSON.stringify({ error: "Internal error" }), {
       status: 500,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", ...Object.fromEntries(corsHeaders(req)) },
     });
   }
 });

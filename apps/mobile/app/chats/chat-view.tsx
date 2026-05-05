@@ -1,7 +1,8 @@
 /**
  * Winkly 1:1 Direct Chat View
- * Full-featured: text, emoji, images, GIF, voice, reactions, reply, read receipts,
- * typing indicator, block, report, mute, delete for self
+ * Text, emoji, images, GIF (paste URL), voice notes, reactions, reply, read receipts,
+ * typing indicator, block, report, mute, delete for self.
+ * New messages merge from realtime INSERT + sendMessage returns (no full-list refetch per message).
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -9,6 +10,7 @@ import {
   View,
   Text,
   FlatList,
+  ScrollView,
   TextInput,
   Pressable,
   ActivityIndicator,
@@ -16,8 +18,16 @@ import {
   Platform,
   Image,
   Alert,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from "expo-audio";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { Colors } from "@/constants/tokens";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -43,7 +53,9 @@ import {
   useMessageReactions,
 } from "@/lib/chats/hooks";
 import type { Message, MessageAttachment, UserMini } from "@/lib/chats/types";
-import { pickAndUploadChatImages as pickImages } from "@/lib/uploadMedia";
+import { pickAndUploadChatImages as pickImages, uploadChatVoiceFromUri } from "@/lib/uploadMedia";
+import { VoiceMessageBubble } from "@/components/chats/VoiceMessageBubble";
+import { GifUrlSheet } from "@/components/chats/GifUrlSheet";
 import { InviteToPlanModal } from "@/components/chats/InviteToPlanModal";
 import type { InviteFormValues } from "@/components/chats/InviteToPlanModal";
 import { buildIcebreakerPayload, pickRandomIcebreaker } from "@/lib/communications/icebreakers";
@@ -68,6 +80,7 @@ import {
   recordMatchAgentApproval,
   type MatchAgentCtaPayload,
 } from "@/lib/ai/matchAgentClient";
+import { recordPairBehaviorSignal } from "@/lib/matching/behaviorSignals";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 import {
@@ -101,6 +114,8 @@ function formatName(u?: UserMini | null) {
 }
 
 const QUICK_REACTIONS = ["❤️", "👍", "😊", "😂", "😮", "🔥"];
+
+const MAX_VOICE_SECONDS = 180;
 
 const REPORT_REASONS: { key: string; label: string }[] = [
   { key: "spam", label: "Spam" },
@@ -137,6 +152,7 @@ export default function ChatView({ conversationId }: Props) {
   const [matchAgentApprovalStage, setMatchAgentApprovalStage] = useState<Record<string, string>>({});
   const [matchBridgeHandled, setMatchBridgeHandled] = useState(false);
   const matchBridgeOnceRef = useRef(false);
+  const matchAgentAutoOnceRef = useRef(false);
   const [staleNudgeVisible, setStaleNudgeVisible] = useState(false);
   const [staleNudgeHint, setStaleNudgeHint] = useState<string | null>(null);
   const [showStrategicHost, setShowStrategicHost] = useState(false);
@@ -146,10 +162,16 @@ export default function ChatView({ conversationId }: Props) {
   const [strategicPlanOptions, setStrategicPlanOptions] = useState<PlannerThemePlanOption[] | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
   const inputRef = useRef<TextInput>(null);
+  const chatRecordUriRef = useRef<string | null>(null);
 
   const { context: modeContext } = useModeContext();
 
-  const { messages, loading, error: loadErr, refetch, loadMore } = useMessages(convId);
+  const chatVoiceRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const chatVoiceRecorderState = useAudioRecorderState(chatVoiceRecorder);
+
+  const { messages, loading, error: loadErr, refetch, loadMore, mergeIncomingMessage } = useMessages(convId);
+
+  const [showGifSheet, setShowGifSheet] = useState(false);
   const { typingUserIds, setTyping } = useTypingIndicator(convId, meId);
   const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
   const reactionsByMessage = useMessageReactions(messageIds);
@@ -164,6 +186,21 @@ export default function ChatView({ conversationId }: Props) {
   const accentColor = isRomance ? Colors.romance.primary : Colors.primaryViolet;
   const conversationMode = (conversation?.mode ?? "romance") as Mode;
   const isDm = conversation?.type === "dm";
+
+  const recordDmFirstOutreachIfNeeded = useCallback(
+    async (hadMineBeforeSend: boolean) => {
+      if (hadMineBeforeSend) return;
+      if (!isDm || !otherUser?.id || !conversation) return;
+      const m = conversation.mode;
+      if (m !== "romance" && m !== "friends" && m !== "business") return;
+      await recordPairBehaviorSignal({
+        partnerUserId: otherUser.id,
+        mode: m,
+        kind: "dm_first_outreach",
+      });
+    },
+    [isDm, otherUser?.id, conversation],
+  );
 
   const showChatExperienceCard =
     isDm &&
@@ -253,11 +290,11 @@ export default function ChatView({ conversationId }: Props) {
     let cancelled = false;
     (async () => {
       try {
-        const ok = await postMatchBridgeCtaMessage({
+        const bridge = await postMatchBridgeCtaMessage({
           conversationId: convId,
           partnerUserId: otherUser.id,
         });
-        if (!cancelled && ok) refetch();
+        if (!cancelled && bridge.ok) mergeIncomingMessage(bridge.inserted);
       } catch {
         matchBridgeOnceRef.current = false;
       } finally {
@@ -278,7 +315,74 @@ export default function ChatView({ conversationId }: Props) {
     messages,
     matchBridgeHandled,
     convId,
-    refetch,
+    mergeIncomingMessage,
+  ]);
+
+  /** Default happy path: after Match Bridge runs (or romance match with no bridge), auto-post Match Agent CTA once. Friends: cold-start connection DM. */
+  useEffect(() => {
+    if (!meId || !otherUser || !isDm || loading) return;
+    if (!hasAnyAIAccess(modeContext.subscription_tier ?? "free")) return;
+    if (conversationMode !== "romance" && conversationMode !== "friends") return;
+
+    const hasAgentCta = messages.some((m) => {
+      if (m.message_type !== "cta") return false;
+      try {
+        const p = JSON.parse(m.content) as { type?: string };
+        return p.type === "match_agent";
+      } catch {
+        return false;
+      }
+    });
+    if (hasAgentCta) return;
+
+    const onlyCtasOrEmpty =
+      messages.length === 0 || messages.every((m) => m.message_type === "cta");
+
+    if (conversationMode === "romance") {
+      if (!isRomance || conversation?.dm_source !== "match") return;
+      if (!matchBridgeHandled) return;
+      if (!onlyCtasOrEmpty) return;
+    } else {
+      if (conversation?.dm_source !== "connection") return;
+      if (messages.length > 0) return;
+    }
+
+    if (matchAgentAutoOnceRef.current) return;
+    matchAgentAutoOnceRef.current = true;
+    let cancelled = false;
+    (async () => {
+      setMatchAgentLoading(true);
+      try {
+        const res = await postMatchAgentCtaMessage({
+          conversationId: convId,
+          partnerUserId: otherUser.id,
+          createdByUserId: meId,
+          mode: conversationMode === "romance" ? "romance" : "friends",
+        });
+        if (!res.ok) matchAgentAutoOnceRef.current = false;
+        if (!cancelled && res.ok) mergeIncomingMessage(res.inserted);
+      } catch {
+        matchAgentAutoOnceRef.current = false;
+      } finally {
+        if (!cancelled) setMatchAgentLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    meId,
+    otherUser?.id,
+    isDm,
+    loading,
+    conversationMode,
+    conversation?.dm_source,
+    isRomance,
+    matchBridgeHandled,
+    messages,
+    convId,
+    mergeIncomingMessage,
+    modeContext.subscription_tier,
   ]);
 
   const openConciergeFromChat = useCallback(() => {
@@ -345,7 +449,7 @@ export default function ChatView({ conversationId }: Props) {
     } finally {
       setStrategicLoading(false);
     }
-  }, [meId, conversation, conversationMode, participants, convId, refetch]);
+  }, [meId, conversation, conversationMode, participants, convId]);
 
   const draftPendingPlanFromStructuredOption = useCallback(async (opt: PlannerThemePlanOption) => {
     if (!meId || !conversation) return;
@@ -370,17 +474,17 @@ export default function ChatView({ conversationId }: Props) {
         pending_plan_id: res.pending_plan_id,
         ...res.winkly_plan,
       });
-      await sendMessage(convId, payload, [], { messageType: "cta" });
+      const inserted = await sendMessage(convId, meId, payload, [], { messageType: "cta" });
+      mergeIncomingMessage(inserted);
       setShowStrategicHost(false);
       setStrategicSelectedTopic(null);
       setStrategicPlanOptions(null);
-      refetch();
     } catch (e) {
       Alert.alert("Winkly AI", e instanceof Error ? e.message : "Could not draft a pending plan");
     } finally {
       setStrategicLoading(false);
     }
-  }, [meId, conversation, conversationMode, participants, convId, refetch]);
+  }, [meId, conversation, conversationMode, participants, convId, mergeIncomingMessage]);
 
   const openConciergeStaleNudge = useCallback(() => {
     if (!otherUser) return;
@@ -416,13 +520,13 @@ export default function ChatView({ conversationId }: Props) {
         Alert.alert("Match Agent", res.error);
         return;
       }
-      refetch();
+      mergeIncomingMessage(res.inserted);
     } catch (e) {
       Alert.alert("Match Agent", e instanceof Error ? e.message : "Try again");
     } finally {
       setMatchAgentLoading(false);
     }
-  }, [meId, otherUser, convId, conversationMode, refetch]);
+  }, [meId, otherUser, convId, conversationMode, mergeIncomingMessage]);
 
   const onMatchAgentApprove = useCallback(async (proposalId: string) => {
     const r = await recordMatchAgentApproval(proposalId);
@@ -474,9 +578,10 @@ export default function ChatView({ conversationId }: Props) {
     setConversation(conv as ConversationRow);
 
     const { data: cps } = await supabase
-      .from("conversation_participants")
+      .from("conversation_members")
       .select("user_id")
-      .eq("conversation_id", convId);
+      .eq("conversation_id", convId)
+      .is("left_at", null);
     const ids = (cps ?? []).map((x) => x.user_id).filter(Boolean) as string[];
 
     if (ids.length > 0) {
@@ -504,13 +609,18 @@ export default function ChatView({ conversationId }: Props) {
     if (loadErr) setError(loadErr);
   }, [loadErr]);
 
-  useMessageSubscription(convId, (msg) => {
-    refetch();
-    if (readReceiptsOn && meId && msg.sender_id !== meId) {
-      markMessagesAsRead([msg.id]);
-      markConversationRead(convId, msg.created_at);
-    }
-  });
+  const onRealtimeMessage = useCallback(
+    (msg: Message) => {
+      mergeIncomingMessage(msg);
+      if (readReceiptsOn && meId && msg.sender_id !== meId) {
+        markMessagesAsRead([msg.id]);
+        markConversationRead(convId, msg.created_at);
+      }
+    },
+    [mergeIncomingMessage, readReceiptsOn, meId, convId]
+  );
+
+  useMessageSubscription(convId, onRealtimeMessage);
 
   useEffect(() => {
     if (!readReceiptsOn || !meId) return;
@@ -526,23 +636,26 @@ export default function ChatView({ conversationId }: Props) {
     async (attachments: MessageAttachment[] = [], replyToId?: string | null) => {
       const content = draft.trim();
       if ((!content && attachments.length === 0) || sending) return;
+      if (!meId) return;
 
+      const hadMineBeforeSend = messages.some((m) => m.sender_id === meId);
       setSending(true);
       setError(null);
       try {
-        await sendMessage(convId, content, attachments, {
+        const inserted = await sendMessage(convId, meId, content, attachments, {
           replyToId: replyToId ?? replyTo?.id ?? null,
         });
+        mergeIncomingMessage(inserted);
+        void recordDmFirstOutreachIfNeeded(hadMineBeforeSend);
         setDraft("");
         setReplyTo(null);
-        refetch();
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Failed to send");
       } finally {
         setSending(false);
       }
     },
-    [convId, draft, replyTo, sending, refetch]
+    [convId, meId, draft, replyTo, sending, mergeIncomingMessage, messages, recordDmFirstOutreachIfNeeded]
   );
 
   const onSendText = useCallback(() => {
@@ -556,6 +669,59 @@ export default function ChatView({ conversationId }: Props) {
       await handleSend(attachments, replyTo?.id);
     }
   }, [meId, handleSend, replyTo]);
+
+  const onToggleVoiceNote = useCallback(async () => {
+    if (!meId || !convId || sending) return;
+    if (chatVoiceRecorderState.isRecording) {
+      const durMs = chatVoiceRecorderState.durationMillis ?? 0;
+      const hadMineBeforeSend = messages.some((m) => m.sender_id === meId);
+      try {
+        await chatVoiceRecorder.stop();
+        const uri = chatVoiceRecorder.uri ?? chatRecordUriRef.current;
+        chatRecordUriRef.current = uri ?? null;
+        if (durMs > (MAX_VOICE_SECONDS + 1) * 1000) {
+          Alert.alert("Voice message", `Please keep voice messages under ${MAX_VOICE_SECONDS} seconds.`);
+          return;
+        }
+        if (!uri) return;
+        setSending(true);
+        const att = await uploadChatVoiceFromUri(meId, uri);
+        if (!att) {
+          setSending(false);
+          return;
+        }
+        const inserted = await sendMessage(convId, meId, " ", [att], { replyToId: replyTo?.id ?? null });
+        mergeIncomingMessage(inserted);
+        void recordDmFirstOutreachIfNeeded(hadMineBeforeSend);
+        setReplyTo(null);
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Voice send failed");
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+    const perm = await AudioModule.requestRecordingPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Microphone", "Permission is required to record a voice message.");
+      return;
+    }
+    chatRecordUriRef.current = null;
+    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
+    await chatVoiceRecorder.prepareToRecordAsync();
+    chatVoiceRecorder.record();
+  }, [
+    meId,
+    convId,
+    sending,
+    chatVoiceRecorderState.isRecording,
+    chatVoiceRecorderState.durationMillis,
+    messages,
+    recordDmFirstOutreachIfNeeded,
+    chatVoiceRecorder,
+    replyTo?.id,
+    mergeIncomingMessage,
+  ]);
 
   const onAddReaction = useCallback(
     async (messageId: string, emoji: string) => {
@@ -697,17 +863,22 @@ export default function ChatView({ conversationId }: Props) {
 
   const onSendIcebreaker = useCallback(async () => {
     if (!convId) return;
+    if (!meId) return;
+    const hadMineBeforeSend = messages.some((m) => m.sender_id === meId);
     try {
       setSending(true);
       const prompt = pickRandomIcebreaker();
-      await sendMessage(convId, buildIcebreakerPayload(prompt), [], { messageType: "icebreaker" });
-      refetch();
+      const inserted = await sendMessage(convId, meId, buildIcebreakerPayload(prompt), [], {
+        messageType: "icebreaker",
+      });
+      mergeIncomingMessage(inserted);
+      void recordDmFirstOutreachIfNeeded(hadMineBeforeSend);
     } catch {
       setError("Could not send icebreaker");
     } finally {
       setSending(false);
     }
-  }, [convId, refetch]);
+  }, [convId, meId, messages, mergeIncomingMessage, recordDmFirstOutreachIfNeeded]);
 
   const onVideoCall = useCallback(async () => {
     if (!convId) return;
@@ -761,14 +932,14 @@ export default function ChatView({ conversationId }: Props) {
           ends_at: p.ends_at,
           source_mode: "romance",
         });
-        await sendMessage(convId, ctaPayload, [], { messageType: "cta" });
+        const inserted = await sendMessage(convId, meId, ctaPayload, [], { messageType: "cta" });
+        mergeIncomingMessage(inserted);
         setInvitationStatusMap((prev) => ({ ...prev, [planner_invitation_id]: "pending" }));
-        refetch();
       } catch (e) {
         Alert.alert("Could not create invite", e instanceof Error ? e.message : "Try again");
       }
     },
-    [meId, otherUser, convId, refetch]
+    [meId, otherUser, convId, mergeIncomingMessage]
   );
 
   const renderMessage = useCallback(
@@ -1166,7 +1337,17 @@ export default function ChatView({ conversationId }: Props) {
                 </View>
               ) : null}
 
-              {item.message_type !== "cta" && item.message_type !== "icebreaker" && (item.message_type === "image" || item.message_type === "gif") ? (
+              {item.message_type !== "cta" && item.message_type !== "icebreaker" && item.message_type === "audio" ? (
+                item.attachments?.[0]?.url ? (
+                  <VoiceMessageBubble
+                    audioUrl={item.attachments[0].url}
+                    mine={!!mine}
+                    accentColor={accentColor}
+                  />
+                ) : (
+                  <Text style={{ fontSize: 13, color: Colors.gray600 }}>Voice message unavailable</Text>
+                )
+              ) : item.message_type !== "cta" && item.message_type !== "icebreaker" && (item.message_type === "image" || item.message_type === "gif") ? (
                 <View style={{ borderRadius: 14, overflow: "hidden" }}>
                   <Image
                     source={{ uri: (item.attachments?.[0]?.url ?? item.content) || "" }}
@@ -1497,9 +1678,29 @@ export default function ChatView({ conversationId }: Props) {
             ends_at: values.ends_at ? values.ends_at.toISOString() : null,
             source_mode: conversationMode,
           });
-          await sendMessage(convId, ctaPayload, [], { messageType: "cta" });
-          refetch();
+          const insertedPlan = await sendMessage(convId, meId, ctaPayload, [], { messageType: "cta" });
+          mergeIncomingMessage(insertedPlan);
           setInvitationStatusMap((prev) => ({ ...prev, [planner_invitation_id]: "pending" }));
+        }}
+      />
+
+      <GifUrlSheet
+        visible={showGifSheet}
+        onClose={() => setShowGifSheet(false)}
+        onAttach={async (gifUrl) => {
+          if (!meId) return;
+          try {
+            setSending(true);
+            const insertedGif = await sendMessage(convId, meId, " ", [{ type: "gif", url: gifUrl }], {
+              replyToId: replyTo?.id ?? null,
+            });
+            mergeIncomingMessage(insertedGif);
+            setReplyTo(null);
+          } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : "Could not send GIF");
+          } finally {
+            setSending(false);
+          }
         }}
       />
 
@@ -1698,6 +1899,44 @@ export default function ChatView({ conversationId }: Props) {
               accessibilityLabel="Add photo"
             >
               <Ionicons name="image-outline" size={24} color={Colors.textPrimary} />
+            </Pressable>
+
+            <Pressable
+              onPress={() => setShowGifSheet(true)}
+              disabled={sending}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: Colors.gray100,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: sending ? 0.5 : 1,
+              }}
+              accessibilityLabel="Add GIF from URL"
+            >
+              <Ionicons name="happy-outline" size={24} color={Colors.textPrimary} />
+            </Pressable>
+
+            <Pressable
+              onPress={onToggleVoiceNote}
+              disabled={sending && !chatVoiceRecorderState.isRecording}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: chatVoiceRecorderState.isRecording ? Colors.errorRed + "22" : Colors.gray100,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: sending && !chatVoiceRecorderState.isRecording ? 0.5 : 1,
+              }}
+              accessibilityLabel={chatVoiceRecorderState.isRecording ? "Stop recording and send" : "Record voice message"}
+            >
+              <Ionicons
+                name={chatVoiceRecorderState.isRecording ? "stop-circle" : "mic-outline"}
+                size={24}
+                color={chatVoiceRecorderState.isRecording ? Colors.errorRed : Colors.textPrimary}
+              />
             </Pressable>
 
             {isDm && otherUser && (

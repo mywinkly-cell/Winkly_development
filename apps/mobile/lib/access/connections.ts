@@ -17,6 +17,29 @@ export async function followUser(followeeId: string) {
   if (error) throw error;
 }
 
+/** Friends discover / swipe — returns chat_id when mutual connection forms. */
+export async function friendsFollowProfile(targetUserId: string): Promise<{
+  followed: boolean;
+  is_connection: boolean;
+  chat_id?: string;
+}> {
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) throw new Error("Not signed in");
+
+  const { data, error } = await supabase.rpc("friends_follow_profile", {
+    current_user_id: uid,
+    target_user_id: targetUserId,
+  });
+  if (error) throw error;
+  const row = data as { followed?: boolean; is_connection?: boolean; chat_id?: string };
+  return {
+    followed: !!row?.followed,
+    is_connection: !!row?.is_connection,
+    chat_id: row?.chat_id,
+  };
+}
+
 export async function unfollowUser(followeeId: string) {
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;

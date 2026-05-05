@@ -4,6 +4,8 @@
  */
 
 import { supabase } from "@/lib/supabase";
+import { requestPeerPushNotification } from "@/lib/push/winklyPush";
+import { recordPairBehaviorSignal } from "@/lib/matching/behaviorSignals";
 import type { Mode } from "@/types";
 
 export type PlannerInvitationStatus = "pending" | "accepted" | "declined" | "reschedule";
@@ -122,6 +124,30 @@ export async function createPlannerInvite(
 
   if (invError || !inv) throw new Error(invError?.message ?? "Failed to create invitation");
 
+  void requestPeerPushNotification({
+    kind: "planner_invitation",
+    recipientUserId: inviteeId,
+    title: "Planner invitation",
+    body: `${payload.title} — tap to respond.`,
+    conversationId,
+    plannerInvitationId: inv.id,
+    data: {
+      planner_invitation_id: inv.id,
+      planner_item_id: item.id,
+      conversation_id: conversationId,
+    },
+  });
+
+  const mode = payload.source_mode;
+  if (mode === "romance" || mode === "friends" || mode === "business") {
+    void recordPairBehaviorSignal({
+      partnerUserId: inviteeId,
+      mode,
+      kind: "planner_from_chat",
+      payload: { conversation_id: conversationId },
+    });
+  }
+
   return { planner_item_id: item.id, planner_invitation_id: inv.id };
 }
 
@@ -133,13 +159,19 @@ export async function acceptPlannerInvite(invitationId: string): Promise<void> {
 
   const { data: inv, error: fetchErr } = await supabase
     .from("planner_invitations")
-    .select("planner_item_id, invitee_id, status")
+    .select("planner_item_id, invitee_id, inviter_id, status")
     .eq("id", invitationId)
     .single();
 
   if (fetchErr || !inv) throw new Error("Invitation not found");
   if (inv.invitee_id !== uid) throw new Error("You are not the invitee");
   if (inv.status !== "pending") throw new Error("Invitation is no longer pending");
+
+  const { data: itemRow } = await supabase
+    .from("planner_items")
+    .select("source_mode")
+    .eq("id", inv.planner_item_id)
+    .maybeSingle();
 
   const { error: updateErr } = await supabase
     .from("planner_invitations")
@@ -154,6 +186,15 @@ export async function acceptPlannerInvite(invitationId: string): Promise<void> {
     role: "attendee",
   });
   if (insertErr) throw new Error(insertErr.message);
+
+  const sm = (itemRow as { source_mode?: string } | null)?.source_mode;
+  if (sm === "romance" || sm === "friends" || sm === "business") {
+    void recordPairBehaviorSignal({
+      partnerUserId: inv.inviter_id,
+      mode: sm,
+      kind: "invite_accepted",
+    });
+  }
 }
 
 /** Decline: set invitation status only. */

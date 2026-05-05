@@ -3,6 +3,14 @@
 import { supabase } from "@/lib/supabase";
 import type { Mode } from "@/types";
 
+async function requireAuthedUserId(expected?: string) {
+  const { data } = await supabase.auth.getUser();
+  const uid = data?.user?.id;
+  if (!uid) throw new Error("Not signed in");
+  if (expected && expected !== uid) throw new Error("Caller userId mismatch");
+  return uid;
+}
+
 /** Get profiles for a mode — mode-locked, no cross-mode leakage */
 export async function getProfilesForMode(
   mode: Mode,
@@ -10,30 +18,43 @@ export async function getProfilesForMode(
   limit = 20
 ) {
   if (!mode || !userId) return [];
-  // TODO: Use RPC for secure search/discover feeds (mode-locked allowlist)
   if (mode === "business") {
-    const { data, error } = await supabase
-      .from("profiles_business")
-      .select("*")
-      .neq("id", userId)
-      .limit(limit);
+    const authed = await requireAuthedUserId(userId);
+    const { data, error } = await supabase.rpc("business_discover_feed", {
+      current_user_id: authed,
+      p_limit: limit,
+    });
     if (error) {
       console.warn("getProfilesForMode business error", error);
       return [];
     }
     return data ?? [];
   }
-  const { data, error } = await supabase
-    .from("profiles_mode")
-    .select("*")
-    .eq("mode", mode)
-    .neq("user_id", userId)
-    .limit(limit);
-  if (error) {
-    console.warn("getProfilesForMode error", error);
-    return [];
+  if (mode === "romance") {
+    const authed = await requireAuthedUserId(userId);
+    const { data, error } = await supabase.rpc("romance_discover_feed", {
+      current_user_id: authed,
+    });
+    if (error) {
+      console.warn("getProfilesForMode romance error", error);
+      return [];
+    }
+    return (data ?? []).slice(0, limit);
   }
-  return data ?? [];
+  if (mode === "friends") {
+    const authed = await requireAuthedUserId(userId);
+    const { data, error } = await supabase.rpc("friends_discover_feed", {
+      current_user_id: authed,
+      p_limit: limit,
+    });
+    if (error) {
+      console.warn("getProfilesForMode friends error", error);
+      return [];
+    }
+    return data ?? [];
+  }
+  // Mode not supported for discover feeds
+  return [];
 }
 
 export async function getOwnProfileCore(userId: string) {

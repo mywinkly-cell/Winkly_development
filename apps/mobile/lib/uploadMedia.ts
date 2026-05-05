@@ -156,3 +156,25 @@ export async function pickAndUploadChatImages(userId: string): Promise<{ type: "
     return [];
   }
 }
+
+/** Chat voice note: upload local recording (m4a) to shared bucket, return audio attachment. */
+export async function uploadChatVoiceFromUri(
+  userId: string,
+  fileUri: string
+): Promise<{ type: "audio"; url: string; name?: string } | null> {
+  try {
+    const response = await fetch(fileUri);
+    const blob = await response.blob();
+    const path = `${userId}/chat/voice_${Date.now()}.m4a`;
+    const { error } = await supabase.storage.from("user-videos").upload(path, blob, {
+      contentType: "audio/mp4",
+      upsert: true,
+    });
+    if (error) throw error;
+    const { data } = supabase.storage.from("user-videos").getPublicUrl(path);
+    return { type: "audio", url: data.publicUrl, name: "Voice message" };
+  } catch (err: unknown) {
+    Alert.alert("Upload failed", err instanceof Error ? err.message : "Could not send voice message.");
+    return null;
+  }
+}
