@@ -52,20 +52,22 @@ const HTML = `<!DOCTYPE html>
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
+    const { corsHeaders } = await import("../_shared/cors.ts");
     return new Response(null, {
       headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        ...Object.fromEntries(corsHeaders(req, { methods: "GET, OPTIONS", headers: "Content-Type" })),
       },
     });
   }
 
+  const { corsHeaders } = await import("../_shared/cors.ts");
   return new Response(HTML, {
     status: 200,
     headers: {
       "Content-Type": "text/html; charset=UTF-8",
       "X-Content-Type-Options": "nosniff",
       "Cache-Control": "no-store, no-cache",
+      ...Object.fromEntries(corsHeaders(req, { methods: "GET, OPTIONS", headers: "Content-Type" })),
     },
   });
 });

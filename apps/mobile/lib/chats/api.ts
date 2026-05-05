@@ -4,19 +4,28 @@
  */
 
 import { supabase } from "@/lib/supabase";
-import type { AppMode, DMSource, MessageAttachment, MessageType } from "./types";
+import { requestPeerPushNotification } from "@/lib/push/winklyPush";
+import { normalizeMessageRow } from "./normalizeMessage";
+import type { AppMode, DMSource, Message, MessageAttachment, MessageType } from "./types";
+
+function pushPreviewForMessage(content: string, messageType: MessageType): string {
+  if (messageType === "cta") return "New suggestion in chat";
+  const t = content.trim();
+  if (t.startsWith("{")) return "Update in your chat";
+  return t.length > 0 ? t.slice(0, 120) : "New message";
+}
 
 /** RPC name — use this constant to avoid typos (e.g. create_derect_chat). */
 const RPC_CREATE_DIRECT_CHAT = "create_direct_chat";
 
 export async function sendMessage(
   conversationId: string,
+  userId: string,
   content: string,
   attachments: MessageAttachment[] = [],
   options?: { messageType?: MessageType; replyToId?: string | null }
-) {
-  const { data: auth } = await supabase.auth.getUser();
-  const uid = auth.user?.id;
+): Promise<Message> {
+  const uid = userId;
   if (!uid) throw new Error("Not signed in");
 
   const messageType = options?.messageType ?? (attachments.length ? inferMessageType(attachments) : "text");
@@ -38,7 +47,28 @@ export async function sendMessage(
     .single();
 
   if (error) throw error;
-  return data;
+
+  const preview = pushPreviewForMessage(safeContent, messageType as MessageType);
+  const { data: members } = await supabase
+    .from("conversation_members")
+    .select("user_id")
+    .eq("conversation_id", conversationId)
+    .is("left_at", null);
+  const recipients = (members ?? [])
+    .map((m: { user_id: string }) => m.user_id)
+    .filter((id: string) => id && id !== uid);
+  for (const rid of recipients) {
+    void requestPeerPushNotification({
+      kind: "chat_message",
+      recipientUserId: rid,
+      title: "New message",
+      body: preview,
+      conversationId,
+      data: { conversation_id: conversationId, message_id: data.id },
+    });
+  }
+
+  return normalizeMessageRow(data as Message | Record<string, unknown>);
 }
 
 function inferMessageType(attachments: MessageAttachment[]): MessageType {
@@ -333,7 +363,22 @@ export async function romanceLikeProfile(
     p_super_like_message: options?.superLikeMessage ?? null,
   });
   if (error) throw error;
-  return data as { liked: boolean; is_match: boolean; chat_id?: string };
+  const result = data as { liked: boolean; is_match: boolean; chat_id?: string };
+
+  if (result?.is_match && targetUserId !== uid) {
+    void requestPeerPushNotification({
+      kind: "new_match",
+      recipientUserId: targetUserId,
+      title: "New match 💖",
+      body: "You matched on Winkly — open the app to chat and plan together.",
+      data: {
+        chat_id: result.chat_id ?? null,
+        kind: "new_match",
+      },
+    });
+  }
+
+  return result;
 }
 
 /** Read receipts preference (on/off) — stored in user_preferences */

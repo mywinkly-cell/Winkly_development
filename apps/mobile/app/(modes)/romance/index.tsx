@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { ModeHeader } from "@/components/layout/ModeHeader";
@@ -29,6 +29,8 @@ import { computeCompatibilityScore, buildMatchTags, type RomanceProfile } from "
 import { hasAnyAIAccess } from "@/lib/ai/aiFeatureGate";
 import { supabase } from "@/lib/supabase";
 import { SuperLikeInviteModal } from "@/components/romance/SuperLikeInviteModal";
+import { blockUser, recordSwipe, reportUser } from "@/lib/matching/actions";
+import { fetchRomanceSwipeDeckProfiles } from "@/lib/discover/romanceSwipeDeck";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const CARD_WIDTH = SCREEN_WIDTH * 0.9;
@@ -53,44 +55,14 @@ type Profile = {
   photoUrl: string;
 };
 
-const MOCK_PROFILES: Profile[] = [
-  {
-    id: "1",
-    name: "Ava",
-    age: 26,
-    city: "Berlin",
-    occupation: "Product Designer",
-    chipItems: ["Movies", "Art", "Long-term"],
-    photoUrl: "https://i.pravatar.cc/400?u=ava",
-  },
-  {
-    id: "2",
-    name: "Lucas",
-    age: 28,
-    city: "Berlin",
-    occupation: "Software Engineer",
-    chipItems: ["Coffee", "Hiking", "Serious relationship"],
-    photoUrl: "https://i.pravatar.cc/400?u=lucas",
-  },
-  {
-    id: "3",
-    name: "Mia",
-    age: 25,
-    city: "Berlin",
-    occupation: "Photographer",
-    chipItems: ["Art", "Travel", "Yoga"],
-    photoUrl: "https://i.pravatar.cc/400?u=mia",
-  },
-];
-
 export default function RomanceHome() {
   const router = useRouter();
   const { context } = useModeContext();
   const hasIntentSubscription = context.subscription_tier === "premium";
   const showAiHints = hasAnyAIAccess(context.subscription_tier ?? "free");
 
-  const [loading] = useState(false);
-  const [profiles] = useState<Profile[]>(MOCK_PROFILES);
+  const [deckLoading, setDeckLoading] = useState(true);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
   const [selfProfile, setSelfProfile] = useState<RomanceProfile | null>(null);
@@ -112,31 +84,59 @@ export default function RomanceHome() {
     }
   }, [context.subscription_tier]);
 
-  useEffect(() => {
-    if (!showAiHints) return;
-    (async () => {
+  const loadDeck = useCallback(async () => {
+    setDeckLoading(true);
+    try {
       const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user?.id) return;
-      const { data } = await supabase
-        .from("public_profile_view")
-        .select("id,first_name,age,city,romance_interests,languages,occupation,bio_romance")
-        .eq("id", userData.user.id)
-        .maybeSingle();
-      if (data) {
-        const row = data as any;
-        setSelfProfile({
-          id: row.id,
-          first_name: row.first_name,
-          age: row.age ?? undefined,
-          city: row.city ?? undefined,
-          interests: row.romance_interests ?? [],
-          languages: row.languages ?? [],
-          occupation: row.occupation ?? undefined,
-          bio_romance: row.bio_romance ?? undefined,
-        });
+      const uid = userData?.user?.id;
+      if (!uid) {
+        setProfiles([]);
+        setSelfProfile(null);
+        return;
       }
-    })();
-  }, [showAiHints]);
+
+      let selfForDeck: RomanceProfile | null = null;
+      if (showAiHints) {
+        const { data } = await supabase
+          .from("public_profile_view")
+          .select("id,first_name,age,city,romance_interests,languages,occupation,bio_romance")
+          .eq("id", uid)
+          .maybeSingle();
+        if (data) {
+          const row = data as Record<string, unknown>;
+          selfForDeck = {
+            id: row.id as string,
+            first_name: row.first_name as string,
+            age: (row.age as number | undefined) ?? undefined,
+            city: (row.city as string | undefined) ?? undefined,
+            interests: (row.romance_interests as string[]) ?? [],
+            languages: (row.languages as string[]) ?? [],
+            occupation: (row.occupation as string | undefined) ?? undefined,
+            bio_romance: (row.bio_romance as string | undefined) ?? undefined,
+          };
+          setSelfProfile(selfForDeck);
+        }
+      } else {
+        setSelfProfile(null);
+      }
+
+      const deck = await fetchRomanceSwipeDeckProfiles(uid, selfForDeck);
+      setProfiles(deck);
+      setCurrentIndex(0);
+      cardAnim.setValue({ x: 0, y: 0 });
+    } catch (e) {
+      console.warn("Romance deck load failed", e);
+      setProfiles([]);
+    } finally {
+      setDeckLoading(false);
+    }
+  }, [showAiHints, cardAnim]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadDeck();
+    }, [loadDeck]),
+  );
 
   const currentProfile = profiles[currentIndex];
 
@@ -162,8 +162,12 @@ export default function RomanceHome() {
   };
 
   /** Store preference and optionally re-insert profile (max 2 passes). Backend will handle ranking. */
-  const applyPass = (profileId: string) => {
-    // TODO: API — store negative preference; profile may reappear up to 2 times if passed again
+  const applyPass = async (profileId: string) => {
+    try {
+      await recordSwipe({ mode: "romance", targetUserId: profileId, action: "pass" });
+    } catch (e) {
+      console.warn("Pass failed", e);
+    }
   };
 
   const applyLike = async (profileId: string) => {
@@ -194,13 +198,32 @@ export default function RomanceHome() {
   };
 
   /** Block: remove from suggestions permanently for this user. */
-  const applyBlock = (profileId: string, reason: string) => {
-    // TODO: API — store block; profile never shown again as suggestion to this user
+  const applyBlock = async (profileId: string, reason: string) => {
+    try {
+      await blockUser({ targetUserId: profileId, reason });
+    } catch (e) {
+      console.warn("Block failed", e);
+    }
   };
 
   /** Report: same as block + notify Winkly admins with reason. */
-  const applyReport = (profileId: string, reason: string) => {
-    // TODO: API — store report, remove from suggestions; admins receive notification with reason
+  const applyReport = async (profileId: string, reason: string) => {
+    try {
+      const mapped =
+        reason === "Inappropriate content"
+          ? "inappropriate"
+          : reason === "Fake profile"
+            ? "fake_profile"
+            : reason === "Harassment"
+              ? "harassment"
+              : reason === "Spam"
+                ? "spam"
+                : "other";
+      await reportUser({ targetUserId: profileId, reason: mapped });
+      await blockUser({ targetUserId: profileId, reason: "Reported: " + reason });
+    } catch (e) {
+      console.warn("Report failed", e);
+    }
   };
 
   const BLOCK_REASONS = [
@@ -350,14 +373,12 @@ export default function RomanceHome() {
 
   const handlePass = () => {
     if (currentProfile) {
-      applyPass(currentProfile.id);
       animateCardOut("left", "pass");
     }
   };
 
   const handleLike = () => {
     if (currentProfile) {
-      applyLike(currentProfile.id);
       animateCardOut("right", "like");
     }
   };
@@ -390,7 +411,7 @@ export default function RomanceHome() {
     <View style={styles.container}>
       <ModeHeader currentMode="romance" leftSlot="filters" onFilterPress={() => router.push("/(modes)/romance/filters")} />
 
-      {loading ? (
+      {deckLoading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={Colors.primaryViolet} />
         </View>

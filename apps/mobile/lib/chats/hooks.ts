@@ -5,13 +5,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import type {
-  AppMode,
-  Conversation,
-  ConversationMember,
-  Message,
-  UserMini,
-} from "./types";
+import type { AppMode, Conversation, ConversationMember, Message, UserMini } from "./types";
+import { normalizeMessageRow } from "./normalizeMessage";
 
 /** Fetch conversations for current user, filtered by mode */
 export function useConversations(mode: AppMode | "all") {
@@ -73,9 +68,10 @@ export function useParticipants(conversationIds: string[]) {
 
     (async () => {
       const { data: rows } = await supabase
-        .from("conversation_participants")
+        .from("conversation_members")
         .select("id,conversation_id,user_id,role,joined_at,left_at,invited_by")
-        .in("conversation_id", conversationIds);
+        .in("conversation_id", conversationIds)
+        .is("left_at", null);
 
       const list = (rows ?? []) as ConversationMember[];
       const map: Record<string, ConversationMember[]> = {};
@@ -172,6 +168,17 @@ export function useMessages(conversationId: string | null, pageSize = 50) {
     if (oldest) load(true, oldest);
   }, [load]);
 
+  /** Merge one row from realtime or sendMessage — dedupes by id, keeps chronological order. */
+  const mergeIncomingMessage = useCallback((raw: Record<string, unknown> | Message) => {
+    const normalized = normalizeMessageRow(raw);
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === normalized.id)) return prev;
+      const next = [...prev, normalized];
+      next.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     if (!conversationId) {
       setMessages([]);
@@ -183,7 +190,7 @@ export function useMessages(conversationId: string | null, pageSize = 50) {
     load(false);
   }, [conversationId]);
 
-  return { messages, loading, error, hasMore, refetch, loadMore };
+  return { messages, loading, error, hasMore, refetch, loadMore, mergeIncomingMessage };
 }
 
 /** Subscribe to new messages in a conversation */
@@ -191,6 +198,9 @@ export function useMessageSubscription(
   conversationId: string | null,
   onInsert: (message: Message) => void
 ) {
+  const onInsertRef = useRef(onInsert);
+  onInsertRef.current = onInsert;
+
   useEffect(() => {
     if (!conversationId) return;
 
@@ -205,7 +215,8 @@ export function useMessageSubscription(
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
-          onInsert(payload.new as Message);
+          const msg = normalizeMessageRow(payload.new as Record<string, unknown>);
+          onInsertRef.current(msg);
         }
       )
       .subscribe();
@@ -213,7 +224,7 @@ export function useMessageSubscription(
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [conversationId, onInsert]);
+  }, [conversationId]);
 }
 
 /** Typing indicator — set/clear and subscribe */

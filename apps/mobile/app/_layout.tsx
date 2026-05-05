@@ -33,7 +33,6 @@ const FONT_LOAD_TIMEOUT_MS = 5000;
 if (typeof console !== "undefined" && "reportErrorsAsExceptions" in console) {
   (console as { reportErrorsAsExceptions?: boolean }).reportErrorsAsExceptions = false;
 }
-LogBox.ignoreAllLogs();
 
 // Suppress VirtualizedLists nesting warning (we fix root causes; this hides any edge-case remnants)
 LogBox.ignoreLogs(["VirtualizedLists should never be nested"]);
@@ -101,10 +100,10 @@ export default function RootLayout() {
           <RouteGuard>
             {POSTHOG_API_KEY ? <PostHogScreenTracker /> : null}
             <StatusBar style="dark" backgroundColor={Colors.backgroundMuted} />
+            {isSplash ? null : <ScreenTopSpacer />}
             <Stack
               screenOptions={() => ({
-                headerShown: !isSplash,
-                header: () => <ScreenTopSpacer />,
+                headerShown: false,
                 headerShadowVisible: false,
                 headerTitle: "",
                 contentStyle: {

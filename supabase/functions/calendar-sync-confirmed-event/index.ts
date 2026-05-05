@@ -12,6 +12,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
 
 function isUuid(v: unknown): v is string {
   return typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
@@ -19,15 +20,16 @@ function isUuid(v: unknown): v is string {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: { "Access-Control-Allow-Origin": "*" } });
+    return withCorsEmpty(req, { status: 204 });
   }
 
   try {
+    const cors = corsHeaders(req);
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }
 
@@ -40,7 +42,7 @@ serve(async (req) => {
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Invalid session" }), {
         status: 401,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }
 
@@ -49,7 +51,7 @@ serve(async (req) => {
     if (!isUuid(confirmedEventId)) {
       return new Response(JSON.stringify({ error: "confirmed_event_id required" }), {
         status: 400,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }
 
@@ -62,7 +64,7 @@ serve(async (req) => {
     if (!ce) {
       return new Response(JSON.stringify({ error: "Not found" }), {
         status: 404,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }
 
@@ -74,7 +76,7 @@ serve(async (req) => {
         message: "Calendar sync is not configured. Connect Google/Outlook (Nylas) or configure Workspace MCP.",
         confirmed_event_id: confirmedEventId,
         event_uid: ce.event_uid,
-      }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+      }), { headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } });
     }
 
     // Placeholder: calendar provider implementations will write provider-specific external_event_id per user
@@ -84,12 +86,12 @@ serve(async (req) => {
       message: "Calendar sync provider wiring pending (Nylas / Workspace MCP). DB models are ready.",
       confirmed_event_id: confirmedEventId,
       event_uid: ce.event_uid,
-    }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    }), { headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } });
   } catch (e) {
     console.error("calendar-sync-confirmed-event:", e);
     return new Response(JSON.stringify({ error: "Internal error" }), {
       status: 500,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", ...Object.fromEntries(corsHeaders(req)) },
     });
   }
 });

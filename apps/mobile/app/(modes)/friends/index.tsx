@@ -3,7 +3,7 @@
 // Same logic/functionality/view as Romance Home; Friends mode colors & sub-profile data
 // ────────────────────────────────────────────────
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import {
   PanResponder,
   Alert,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { ModeHeader } from "@/components/layout/ModeHeader";
@@ -27,6 +27,9 @@ import { supabase } from "@/lib/supabase";
 import { buildFriendsMatchTags, computeFriendsCompatibility, type FriendsProfile } from "@/lib/ai/friendsInsights";
 import { hasAnyAIAccess } from "@/lib/ai/aiFeatureGate";
 import { useModeContext } from "@/providers/ModeContextProvider";
+import { blockUser, recordSwipe, reportUser, sendFriendsRequest } from "@/lib/matching/actions";
+import { fetchFriendsSwipeDeckProfiles } from "@/lib/discover/friendsSwipeDeck";
+import { friendsFollowProfile } from "@/lib/access/connections";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const CARD_WIDTH = SCREEN_WIDTH * 0.9;
@@ -37,7 +40,6 @@ const ACTION_ICON_SIZE = 35;
 const CARD_RADIUS = 24;
 const STACK_OFFSET = 8;
 const STACK_SCALE = 0.96;
-const PAGE_SIZE = 20;
 const SUPER_LIKE_PER_DAY = 10;
 
 type Profile = {
@@ -52,18 +54,12 @@ type Profile = {
   about?: string;
 };
 
-const MOCK_PROFILES: Profile[] = [
-  { id: "1", display_name: "Alex", age: 28, city: "Berlin", occupation: "Designer", chipItems: ["Coffee", "Hiking", "Art"], photoUrl: "https://i.pravatar.cc/400?u=alex" },
-  { id: "2", display_name: "Jordan", age: 26, city: "Berlin", occupation: "Developer", chipItems: ["Music", "Travel", "Small groups"], photoUrl: "https://i.pravatar.cc/400?u=jordan" },
-  { id: "3", display_name: "Sam", age: 30, city: "Berlin", occupation: "Photographer", chipItems: ["Museums", "Coffee", "Cultural events"], photoUrl: "https://i.pravatar.cc/400?u=sam" },
-];
-
 export default function FriendsHome() {
   const router = useRouter();
   const { context } = useModeContext();
   const showAiHints = hasAnyAIAccess(context.subscription_tier ?? "free");
 
-  const [loading, setLoading] = useState(true);
+  const [deckLoading, setDeckLoading] = useState(true);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
@@ -72,101 +68,65 @@ export default function FriendsHome() {
 
   const cardAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
 
-  const loadData = async () => {
+  const loadDeck = useCallback(async () => {
+    setDeckLoading(true);
     try {
-      setLoading(true);
       const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) {
-        setProfiles(MOCK_PROFILES);
+      const uid = userData?.user?.id;
+      if (!uid) {
+        setProfiles([]);
+        setSelfProfile(null);
         return;
       }
 
       const { data: me } = await supabase
         .from("profiles_mode")
         .select("interests, meta")
-        .eq("user_id", userData.user.id)
+        .eq("user_id", uid)
         .eq("mode", "friends")
         .maybeSingle();
 
-      if (me?.interests) {
-        setSelfProfile({
-          id: userData.user.id,
-          interests: me.interests as string[],
-          vibe_tags: (me.meta as any)?.vibe_tags,
-          city: (me.meta as any)?.city,
-        });
-      }
-
-      let feedData: any[] | null = null;
-      const { data: fpData } = await supabase
-        .from("friend_profiles")
-        .select("id,user_id,display_name,city,occupation,age,vibe_tags,about_short,interests,main_photo_url,avatar_url")
-        .order("created_at", { ascending: false })
-        .limit(PAGE_SIZE + 5);
-
-      if (fpData?.length) {
-        const myId = userData.user.id;
-        feedData = fpData.filter((r: any) => (r.user_id ?? r.id) !== myId);
-      }
-
-      if (feedData?.length) {
-        const mapped: Profile[] = feedData.map((row: any) => {
-          const interests = row.interests ?? [];
-          const vibeTags = row.vibe_tags ?? [];
-          const chipItems = [...interests, ...vibeTags].slice(0, 3);
-          return {
-            id: row.user_id ?? row.id,
-            user_id: row.user_id ?? row.id,
-            display_name: row.display_name ?? "Friend",
-            age: row.age ?? null,
-            city: row.city ?? "City",
-            occupation: row.occupation ?? null,
-            chipItems,
-            photoUrl: row.main_photo_url ?? row.avatar_url ?? "https://i.pravatar.cc/400?u=default",
-            about: row.about_short ?? null,
-          };
-        });
-        setProfiles(mapped);
+      let selfForDeck: FriendsProfile | null = null;
+      if (me) {
+        selfForDeck = {
+          id: uid,
+          interests: (me.interests as string[]) ?? [],
+          vibe_tags: (me.meta as { vibe_tags?: string[] })?.vibe_tags,
+          city: (me.meta as { city?: string })?.city,
+        };
+        setSelfProfile(selfForDeck);
       } else {
-        const fb = await supabase
-          .from("user_profiles")
-          .select("id,first_name,last_name,city,about,main_photo_url,avatar_url,occupation,birthday")
-          .neq("id", userData.user.id)
-          .order("created_at", { ascending: false })
-          .limit(PAGE_SIZE);
-
-        if (fb.data?.length) {
-          const mapped: Profile[] = (fb.data as any[]).map((row) => {
-            const birthday = row.birthday;
-            const age = birthday ? new Date().getFullYear() - new Date(birthday).getFullYear() : null;
-            return {
-              id: row.id,
-              user_id: row.id,
-              display_name: [row.first_name, row.last_name].filter(Boolean).join(" ").trim() || "Friend",
-              age: age ?? null,
-              city: row.city ?? "City",
-              occupation: row.occupation ?? null,
-              chipItems: [],
-              photoUrl: row.main_photo_url ?? row.avatar_url ?? "https://i.pravatar.cc/400?u=default",
-              about: row.about ?? null,
-            };
-          });
-          setProfiles(mapped);
-        } else {
-          setProfiles(MOCK_PROFILES);
-        }
+        setSelfProfile(null);
       }
 
-    } catch (_e) {
-      setProfiles(MOCK_PROFILES);
+      const deck = await fetchFriendsSwipeDeckProfiles(uid, selfForDeck);
+      const mapped: Profile[] = deck.map((row) => ({
+        id: row.user_id,
+        user_id: row.user_id,
+        display_name: row.display_name,
+        age: row.age ?? null,
+        city: row.city || "City",
+        occupation: row.occupation ?? null,
+        chipItems: row.chipItems,
+        photoUrl: row.photoUrl,
+        about: row.about ?? undefined,
+      }));
+      setProfiles(mapped);
+      setCurrentIndex(0);
+      cardAnim.setValue({ x: 0, y: 0 });
+    } catch (e) {
+      console.warn("Friends deck load failed", e);
+      setProfiles([]);
     } finally {
-      setLoading(false);
+      setDeckLoading(false);
     }
-  };
+  }, [cardAnim]);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      void loadDeck();
+    }, [loadDeck]),
+  );
 
   const currentProfile = profiles[currentIndex];
 
@@ -176,24 +136,59 @@ export default function FriendsHome() {
     cardAnim.setValue({ x: 0, y: 0 });
   };
 
-  const applyPass = (_profileId: string) => {
-    // TODO: API — store negative preference
+  const applyPass = async (profileId: string) => {
+    try {
+      await recordSwipe({ mode: "friends", targetUserId: profileId, action: "pass" });
+    } catch (e) {
+      console.warn("Pass failed", e);
+    }
   };
 
-  const applyAddFriend = (_profileId: string) => {
-    // TODO: API — send friend request / like
+  const applyAddFriend = async (profileId: string) => {
+    try {
+      const res = await friendsFollowProfile(profileId);
+      if (res.is_connection && res.chat_id) {
+        router.push(`/chats/${res.chat_id}`);
+      }
+    } catch (e) {
+      console.warn("Follow failed", e);
+    }
   };
 
-  const applySuperConnect = (_profileId: string) => {
-    // TODO: API — priority friend request
+  const applySuperConnect = async (profileId: string) => {
+    try {
+      setSuperLikeRemainingToday((n) => Math.max(0, n - 1));
+      await sendFriendsRequest({ targetUserId: profileId, kind: "super_connect" });
+    } catch (e) {
+      console.warn("Super connect failed", e);
+    }
   };
 
-  const applyBlock = (_profileId: string, _reason: string) => {
-    // TODO: API — block
+  const applyBlock = async (profileId: string, reason: string) => {
+    try {
+      await blockUser({ targetUserId: profileId, reason });
+    } catch (e) {
+      console.warn("Block failed", e);
+    }
   };
 
-  const applyReport = (_profileId: string, _reason: string) => {
-    // TODO: API — report
+  const applyReport = async (profileId: string, reason: string) => {
+    try {
+      const mapped =
+        reason === "Inappropriate content"
+          ? "inappropriate"
+          : reason === "Fake profile"
+            ? "fake_profile"
+            : reason === "Harassment"
+              ? "harassment"
+              : reason === "Spam"
+                ? "spam"
+                : "other";
+      await reportUser({ targetUserId: profileId, reason: mapped });
+      await blockUser({ targetUserId: profileId, reason: "Reported: " + reason });
+    } catch (e) {
+      console.warn("Report failed", e);
+    }
   };
 
   const BLOCK_REASONS = ["Not what I'm looking for", "Card is repeating", "Other"] as const;
@@ -367,7 +362,7 @@ export default function FriendsHome() {
         onFilterPress={() => router.push("/(modes)/friends/filters")}
       />
 
-      {loading ? (
+      {deckLoading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={Colors.friends.primary} />
         </View>
@@ -462,7 +457,7 @@ export default function FriendsHome() {
             <View style={styles.actionRow}>
               <View style={styles.actionButtonColumn}>
                 <Pressable
-                  onPress={() => currentProfile && (applyPass(currentProfile.id), animateCardOut("left", "pass"))}
+                  onPress={() => currentProfile && animateCardOut("left", "pass")}
                   disabled={transitioning}
                   style={({ pressed }) => [styles.actionIconWrap, styles.actionIconGlowPass, pressed && styles.actionBtnPressed]}
                   accessibilityLabel="Pass"
@@ -476,7 +471,6 @@ export default function FriendsHome() {
                   onPress={() => {
                     if (currentProfile) {
                       if (superLikeRemainingToday <= 0) return;
-                      applySuperConnect(currentProfile.id);
                       animateCardOut("right", "superConnect");
                     }
                   }}
@@ -495,9 +489,7 @@ export default function FriendsHome() {
 
               <View style={styles.actionButtonColumn}>
                 <Pressable
-                  onPress={() =>
-                    currentProfile && (applyAddFriend(currentProfile.id), animateCardOut("right", "addFriend"))
-                  }
+                  onPress={() => currentProfile && animateCardOut("right", "addFriend")}
                   disabled={transitioning}
                   style={({ pressed }) => [styles.actionIconWrap, styles.actionIconGlowLike, pressed && styles.actionBtnPressed]}
                   accessibilityLabel="Add friend"

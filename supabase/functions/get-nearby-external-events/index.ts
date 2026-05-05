@@ -3,6 +3,7 @@
 // See docs/EXTERNAL_EVENTS_AND_FILTERING.md
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
 
 type ExternalEvent = {
   id: string;
@@ -203,15 +204,16 @@ async function fetchEventbriteEvents(
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: { "Access-Control-Allow-Origin": "*" } });
+    return withCorsEmpty(req, { status: 204 });
   }
 
   try {
+    const cors = corsHeaders(req);
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Missing authorization" }), {
         status: 401,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }
 
@@ -221,7 +223,7 @@ serve(async (req) => {
     if (typeof latitude !== "number" || typeof longitude !== "number") {
       return new Response(JSON.stringify({ error: "latitude and longitude required" }), {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }
 
@@ -271,7 +273,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({ events: result }), {
       headers: {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
+        ...Object.fromEntries(cors),
       },
     });
   } catch (e) {
@@ -280,7 +282,7 @@ serve(async (req) => {
       JSON.stringify({ error: "Internal error", events: [] }),
       {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(corsHeaders(req)) },
       }
     );
   }

@@ -5,6 +5,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { sendMessage } from "@/lib/chats/api";
+import type { Message } from "@/lib/chats/types";
 import { getFreeDaytimeSlotsForBridge } from "@/lib/ai/conciergeCalendar";
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -95,12 +96,15 @@ export async function callMatchBridge(params: {
 export async function postMatchBridgeCtaMessage(params: {
   conversationId: string;
   partnerUserId: string;
-}): Promise<boolean> {
+}): Promise<{ ok: true; inserted: Message } | { ok: false }> {
   const res = await callMatchBridge({ partnerUserId: params.partnerUserId });
   const bridge = res.match_bridge;
   if (!bridge?.bridge_message || !bridge.proposed_starts_at) {
-    return false;
+    return { ok: false };
   }
+  const { data: { session } } = await supabase.auth.getSession();
+  const meId = session?.user?.id;
+  if (!meId) return { ok: false };
 
   const startsAt = bridge.proposed_starts_at;
   const endsAt =
@@ -119,6 +123,6 @@ export async function postMatchBridgeCtaMessage(params: {
     activity_theme: bridge.activity_theme ?? "coffee",
   };
 
-  await sendMessage(params.conversationId, JSON.stringify(payload), [], { messageType: "cta" });
-  return true;
+  const inserted = await sendMessage(params.conversationId, meId, JSON.stringify(payload), [], { messageType: "cta" });
+  return { ok: true, inserted };
 }

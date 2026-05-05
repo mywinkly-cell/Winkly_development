@@ -18,6 +18,7 @@ import {
   applyBusinessFiltersToFeed,
   type BusinessFiltersState,
 } from "@/lib/filters/businessFiltersStorage";
+import { getBlockedUserIdSet } from "@/lib/access/blocks";
 
 type ResultType = "person" | "company" | "service";
 
@@ -101,6 +102,8 @@ export default function BusinessDiscover() {
       //
       // Later you can replace with ONE RPC: public.business_discover(p_query, p_type, ...)
       const batches: DiscoverResult[] = [];
+      const { data: auth } = await supabase.auth.getUser();
+      const blocked = auth?.user?.id ? await getBlockedUserIdSet(auth.user.id) : new Set<string>();
 
       // 1) People from business_profiles (or user_profiles fallback)
       if (activeType === "all" || activeType === "person") {
@@ -112,6 +115,7 @@ export default function BusinessDiscover() {
 
         if (!error && data) {
           for (const row of data as any[]) {
+            if (blocked.has(row.id)) continue;
             const title = row?.display_name ?? "Professional";
             const subtitle = [row?.role_title, row?.company_name].filter(Boolean).join(" · ");
             const meta = row?.city ?? undefined;

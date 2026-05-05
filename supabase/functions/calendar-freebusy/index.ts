@@ -8,18 +8,20 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: { "Access-Control-Allow-Origin": "*" } });
+    return withCorsEmpty(req, { status: 204 });
   }
 
   try {
+    const cors = corsHeaders(req);
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }
 
@@ -33,7 +35,7 @@ serve(async (req) => {
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Invalid session" }), {
         status: 401,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }
 
@@ -51,7 +53,7 @@ serve(async (req) => {
           message: "Connect Google Calendar in app settings to merge cloud busy times with device white space.",
           busy_blocks: [],
         }),
-        { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } },
+        { headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } },
       );
     }
 
@@ -61,13 +63,13 @@ serve(async (req) => {
         message: "Google FreeBusy will run here once OAuth refresh + KMS for tokens are wired.",
         busy_blocks: [],
       }),
-      { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } },
+      { headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } },
     );
   } catch (e) {
     console.error("calendar-freebusy:", e);
     return new Response(JSON.stringify({ error: "Internal error" }), {
       status: 500,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", ...Object.fromEntries(corsHeaders(req)) },
     });
   }
 });

@@ -4,9 +4,13 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "@/lib/supabase";
+import { getMergedDeviceWhiteSpaceSlots } from "@/lib/integrations/calendarWhiteSpace";
+import { notifications } from "@/lib/notifications";
 
 const KEY_DISMISSED_UNTIL = "winkly_proactive_suggestion_dismissed_until";
 const KEY_WEEKEND_DISMISSED = "winkly_weekly_weekend_dismissed";
+const KEY_SAT_PLANNER_NUDGE = "winkly_planner_sat_local_nudge_for";
 const DISMISS_HOURS = 24;
 
 export type PlannerTabKey = "all" | "dates" | "meetups" | "business" | "events" | "archive";
@@ -22,6 +26,9 @@ export type ProactiveSuggestion = {
   activityHint?: string;
   datePreset?: "today" | "tomorrow" | "weekend";
   timeOfDay?: "morning" | "lunch" | "afternoon" | "evening";
+  /** Recent DM partner — opens concierge with social context when user taps Invite. */
+  partner_user_id?: string;
+  partner_display_name?: string;
 };
 
 /** Weekend ideas (Fri/Sat/Sun) — shown Thu–Sun. */
@@ -291,4 +298,162 @@ export function getWeeklyWeekendSuggestion(): WeeklyWeekendSuggestion {
     title: "Your weekend ideas",
     ideas,
   };
+}
+
+export type RecentDmPartnerHint = {
+  userId: string;
+  displayName: string;
+  mode: "romance" | "friends" | "business";
+};
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** Next upcoming Saturday 10:00 local; if today is Sat before 10:00, use today. */
+function getNextSaturdayMorningTen(): Date {
+  const now = new Date();
+  const target = new Date(now);
+  const dow = now.getDay();
+  let add = (6 - dow + 7) % 7;
+  target.setDate(now.getDate() + add);
+  target.setHours(10, 0, 0, 0);
+  if (add === 0 && now.getTime() >= target.getTime()) {
+    target.setDate(target.getDate() + 7);
+  }
+  return target;
+}
+
+function pickSaturdaySlotSummary(slots: string[]): string | null {
+  for (const iso of slots) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) continue;
+    if (d.getDay() === 6) {
+      return `Saturday ~${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    }
+  }
+  return null;
+}
+
+/** Most recently active 1:1 DM (romance/friends/business) for planner copy + concierge routing. */
+export async function fetchRecentDmPartnerHint(): Promise<RecentDmPartnerHint | null> {
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return null;
+
+  const { data: mem } = await supabase
+    .from("conversation_members")
+    .select("conversation_id")
+    .eq("user_id", uid)
+    .is("left_at", null);
+
+  const convIds = [...new Set((mem ?? []).map((m: { conversation_id: string }) => m.conversation_id))];
+  if (convIds.length === 0) return null;
+
+  const { data: convs } = await supabase
+    .from("conversations")
+    .select("id,mode,last_message_at")
+    .in("id", convIds)
+    .eq("type", "dm")
+    .in("mode", ["romance", "friends", "business"])
+    .eq("archived", false)
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .limit(12);
+
+  const row = (convs ?? [])[0] as { id?: string; mode?: string } | undefined;
+  if (!row?.id || !row.mode) return null;
+
+  const { data: others } = await supabase
+    .from("conversation_members")
+    .select("user_id")
+    .eq("conversation_id", row.id)
+    .neq("user_id", uid)
+    .is("left_at", null)
+    .limit(1);
+
+  const oid = others?.[0]?.user_id as string | undefined;
+  if (!oid) return null;
+
+  const { data: prof } = await supabase
+    .from("user_profiles")
+    .select("first_name,last_name")
+    .eq("id", oid)
+    .maybeSingle();
+
+  const fn = ((prof as { first_name?: string | null } | null)?.first_name ?? "").trim();
+  const ln = ((prof as { last_name?: string | null } | null)?.last_name ?? "").trim();
+  const displayName = `${fn} ${ln}`.trim() || "Someone you’ve messaged";
+
+  return {
+    userId: oid,
+    displayName,
+    mode: row.mode as RecentDmPartnerHint["mode"],
+  };
+}
+
+function partnerMatchesTab(partner: RecentDmPartnerHint, tab: PlannerTabKey): boolean {
+  if (tab === "all" || tab === "events") return true;
+  if (tab === "dates") return partner.mode === "romance";
+  if (tab === "meetups") return partner.mode === "friends";
+  if (tab === "business") return partner.mode === "business";
+  return false;
+}
+
+/**
+ * Enrich heuristic suggestion with calendar Saturday hint + recent DM partner when relevant.
+ */
+export async function enrichProactiveSuggestion(
+  base: ProactiveSuggestion | null,
+  tab: PlannerTabKey,
+): Promise<ProactiveSuggestion | null> {
+  if (!base) return null;
+
+  const [slots, partner] = await Promise.all([getMergedDeviceWhiteSpaceSlots(), fetchRecentDmPartnerHint()]);
+
+  let subtitle = base.subtitle;
+  const sat = pickSaturdaySlotSummary(slots);
+  if (sat && (base.datePreset === "weekend" || tab === "all")) {
+    subtitle = `${subtitle} · ${sat} looks open on your calendar.`;
+  }
+
+  let partner_user_id: string | undefined;
+  let partner_display_name: string | undefined;
+  if (partner && partnerMatchesTab(partner, tab)) {
+    const first = partner.displayName.split(/\s+/)[0] ?? partner.displayName;
+    subtitle = `${subtitle} · You’ve been chatting with ${first}.`;
+    partner_user_id = partner.userId;
+    partner_display_name = partner.displayName;
+  }
+
+  return {
+    ...base,
+    subtitle,
+    partner_user_id,
+    partner_display_name,
+  };
+}
+
+/** One local notification per target Saturday (permission-gated). */
+export async function scheduleSaturdayPlannerNudgeIfNeeded(): Promise<void> {
+  try {
+    if (!(await notifications.isAvailable())) return;
+    const perm = await notifications.getPermissionStatus();
+    if (perm !== "granted") return;
+
+    const when = getNextSaturdayMorningTen();
+    const weekKey = when.toISOString().slice(0, 10);
+
+    const prev = await AsyncStorage.getItem(KEY_SAT_PLANNER_NUDGE);
+    if (prev === weekKey) return;
+
+    await notifications.scheduleLocal({
+      title: "Plan something this weekend",
+      body: "Open Winkly Planner for a personalized Saturday idea.",
+      data: { kind: "proactive_weekend_planner" },
+      triggerAt: when,
+    });
+    await AsyncStorage.setItem(KEY_SAT_PLANNER_NUDGE, weekKey);
+  } catch {
+    // ignore
+  }
 }

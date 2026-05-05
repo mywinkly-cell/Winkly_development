@@ -17,3 +17,4 @@ GRANT EXECUTE ON FUNCTION public.create_derect_chat(UUID, UUID, app_mode, dm_sou
 
 COMMENT ON FUNCTION public.create_derect_chat(UUID, UUID, app_mode, dm_source, UUID) IS
   'Alias for create_direct_chat (typo). Prefer create_direct_chat.';
+

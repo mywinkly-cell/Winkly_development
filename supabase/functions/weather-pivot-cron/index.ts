@@ -12,6 +12,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
 
 async function geocodeCity(city: string): Promise<{ lat: number; lng: number } | null> {
   const url = new URL("https://geocoding-api.open-meteo.com/v1/search");
@@ -70,14 +71,15 @@ async function findIndoorVenue(city: string, topic: string): Promise<{ name: str
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: { "Access-Control-Allow-Origin": "*" } });
+    return withCorsEmpty(req, { status: 204 });
   }
+  const cors = corsHeaders(req);
   const secret = Deno.env.get("CRON_SECRET") ?? "";
   const got = req.headers.get("x-cron-secret") ?? "";
   if (secret && got !== secret) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
     });
   }
 
@@ -96,7 +98,7 @@ serve(async (req) => {
     if (error) {
       return new Response(JSON.stringify({ error: error.message }), {
         status: 500,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }
 
@@ -171,13 +173,13 @@ serve(async (req) => {
     }
 
     return new Response(JSON.stringify({ ok: true, pivot_created: pivotCreated }), {
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
     });
   } catch (e) {
     console.error("weather-pivot-cron:", e);
     return new Response(JSON.stringify({ error: "Internal error" }), {
       status: 500,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+      headers: { "Content-Type": "application/json", ...Object.fromEntries(corsHeaders(req)) },
     });
   }
 });

@@ -259,7 +259,7 @@ export function ConciergeConfirmStep({
             ends_at,
             source_mode: mode,
           });
-          await sendMessage(conversationId, ctaPayload, [], { messageType: "cta" });
+          await sendMessage(conversationId, meId, ctaPayload, [], { messageType: "cta" });
         } else {
           const wp = planRes.winkly_plan;
           const ctaPayload = JSON.stringify({
@@ -272,7 +272,7 @@ export function ConciergeConfirmStep({
             location_details: wp.location_details,
             logic_reasoning: wp.logic_reasoning,
           });
-          await sendMessage(conversationId, ctaPayload, [], { messageType: "cta" });
+          await sendMessage(conversationId, meId, ctaPayload, [], { messageType: "cta" });
         }
       } else if (addRecurrence === "weekly") {
         const weeks = [0, 1, 2, 3];

@@ -54,6 +54,7 @@ import {
   DISCOVER_LIMITS,
 } from "@/lib/discover/storage";
 import { combinedMatchScore, fetchBehaviorAffinityMap } from "@/lib/matching/behaviorAffinities";
+import { getBlockedUserIdSet } from "@/lib/access/blocks";
 
 type RomanceLikeReceived = {
   id: string;
@@ -87,6 +88,13 @@ export default function RomanceDiscover() {
   const posthog = usePostHog();
   const { context } = useModeContext();
 
+  const requireAuthedUserId = useCallback(async (): Promise<string> => {
+    const { data } = await supabase.auth.getUser();
+    const uid = data?.user?.id;
+    if (!uid) throw new Error("Not signed in");
+    return uid;
+  }, []);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selfProfile, setSelfProfile] = useState<RomanceProfile | null>(null);
@@ -99,8 +107,12 @@ export default function RomanceDiscover() {
   const canLikeUnlimited = canViewFullLikedYou;
 
   const loadLikesReceived = useCallback(async (userId: string) => {
+    const authed = await requireAuthedUserId();
+    if (userId !== authed) {
+      throw new Error("romance_likes_received called with mismatched user id");
+    }
     const { data, error } = await supabase.rpc("romance_likes_received", {
-      current_user_id: userId,
+      current_user_id: authed,
     });
     if (error) return [];
     const list = (data ?? []) as RomanceLikeReceived[];
@@ -121,15 +133,19 @@ export default function RomanceDiscover() {
 
   const loadRecommendations = useCallback(
     async (userId: string, self: RomanceProfile | null): Promise<RecommendedItem[]> => {
+      const authed = await requireAuthedUserId();
+      if (userId !== authed) {
+        throw new Error("romance_discover_feed called with mismatched user id");
+      }
       const { data: feedData, error } = await supabase.rpc("romance_discover_feed", {
-        current_user_id: userId,
+        current_user_id: authed,
       });
       let rows: FeedRow[] = (feedData ?? []) as FeedRow[];
       if (error) {
         const { data: fallback } = await supabase
           .from("public_profile_view")
           .select("id, first_name, age, city, interests, languages, occupation, bio_romance, core_photos, romance_photos")
-          .neq("id", userId)
+          .neq("id", authed)
           .limit(50);
         rows = (fallback || []) as FeedRow[];
         rows = rows.filter(
@@ -137,6 +153,14 @@ export default function RomanceDiscover() {
             (Array.isArray(r.romance_photos) && r.romance_photos.some((p) => !!p)) ||
             (r.bio_romance != null && String(r.bio_romance).trim() !== "")
         );
+        // When the RPC fails, we lose server-side filtering (e.g. blocks).
+        // Apply a best-effort local exclusion to avoid showing blocked users.
+        try {
+          const blocked = await getBlockedUserIdSet(authed);
+          rows = rows.filter((r) => !blocked.has(r.id));
+        } catch {
+          // ignore
+        }
       }
 
       const scored = rows.map((r) => {
@@ -159,7 +183,7 @@ export default function RomanceDiscover() {
       const aiOn = await getRomanceAiMatchingEnabled();
       if (aiOn) {
         const ids = filtered.map((r) => r.id);
-        const affMap = await fetchBehaviorAffinityMap(userId, ids, "romance");
+        const affMap = await fetchBehaviorAffinityMap(authed, ids, "romance");
         filtered.sort((a, b) => {
           const ca = a.compatibility ?? 72;
           const cb = b.compatibility ?? 72;
@@ -196,7 +220,7 @@ export default function RomanceDiscover() {
         } as RecommendedItem;
       });
     },
-    []
+    [requireAuthedUserId]
   );
 
   const loadData = useCallback(async () => {
@@ -205,6 +229,7 @@ export default function RomanceDiscover() {
       if (!userData?.user) return;
 
       const uid = userData.user.id;
+      const blocked = await getBlockedUserIdSet(uid);
 
       const { data: me } = await supabase
         .from("public_profile_view")
@@ -231,8 +256,8 @@ export default function RomanceDiscover() {
         loadRecommendations(uid, self),
       ]);
 
-      setPeopleWhoLikedYou(likedYouList);
-      setRecommendations(recList);
+      setPeopleWhoLikedYou(likedYouList.filter((p) => !blocked.has(p.id)));
+      setRecommendations(recList.filter((r) => !blocked.has(r.id)));
 
       const used = await getRecommendationLikesSentToday("romance");
       setLikesUsedToday(used);

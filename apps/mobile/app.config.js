@@ -18,9 +18,19 @@ module.exports = {
       "expo-web-browser",
       "expo-apple-authentication",
       [
+        "expo-notifications",
+        {
+          icon: "./assets/icons/winkly-emoji-shadow.png",
+          color: "#7C3AED",
+          sounds: [],
+          enableBackgroundRemoteNotifications: false,
+        },
+      ],
+      [
         "expo-audio",
         {
-          microphonePermission: "Winkly uses your microphone to let you record a short voice prompt for your profile.",
+          microphonePermission:
+            "Winkly uses your microphone for voice prompts on your profile and optional voice messages in chat.",
           recordAudioAndroid: true,
           enableBackgroundPlayback: true,
           enableBackgroundRecording: false
@@ -31,6 +41,13 @@ module.exports = {
         {
           calendarPermission: "Winkly syncs your planner items with your device calendar so you never miss an event.",
           remindersPermission: "Winkly can add planner reminders to your device."
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          contactsPermission:
+            "Winkly can match your contacts to show you who’s already on Winkly. We only send hashed identifiers for matching."
         }
       ]
     ],
@@ -43,7 +60,12 @@ module.exports = {
       backgroundColor: "#FFFFFF"
     },
 
-    assetBundlePatterns: ["**/*"],
+    // Keep bundles lean: avoid pulling in large, rarely-used assets.
+    assetBundlePatterns: [
+      "assets/icons/*",
+      "assets/images/*",
+      "assets/fonts/*"
+    ],
 
     ios: {
       supportsTablet: true,
@@ -56,6 +78,9 @@ module.exports = {
           "Winkly syncs your planner items with your calendar so you never miss an event.",
         NSRemindersUsageDescription:
           "Winkly can add planner reminders to your device."
+        ,
+        NSContactsUsageDescription:
+          "Winkly can match your contacts to show you who’s already on Winkly. We only send hashed identifiers for matching."
       }
     },
 
@@ -71,7 +96,8 @@ module.exports = {
         "ACCESS_COARSE_LOCATION",
         "RECORD_AUDIO",
         "READ_CALENDAR",
-        "WRITE_CALENDAR"
+        "WRITE_CALENDAR",
+        "READ_CONTACTS"
       ]
     },
 

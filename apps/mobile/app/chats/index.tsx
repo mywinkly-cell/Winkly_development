@@ -104,66 +104,91 @@ export default function ChatsHome() {
       }
 
       const { data: auth } = await supabase.auth.getUser();
-      const uid = auth.user?.id;
-      if (uid) {
-        const { data: settings } = await supabase
-          .from("conversation_member_settings")
-          .select("conversation_id,pinned,last_read_at")
-          .in("conversation_id", convIds)
-          .eq("user_id", uid);
+      const uid = auth.user?.id ?? null;
+
+      const membersPromise = supabase
+        .from("conversation_members")
+        .select("conversation_id,user_id,role")
+        .in("conversation_id", convIds)
+        .is("left_at", null);
+
+      const msgsPromise = supabase
+        .from("messages")
+        .select("id,conversation_id,sender_id,content,message_type,attachments,reply_to_id,edited_at,deleted_at,delete_type,status,created_at")
+        .in("conversation_id", convIds)
+        .order("created_at", { ascending: false })
+        .limit(300);
+
+      const settingsPromise = uid
+        ? supabase
+            .from("conversation_member_settings")
+            .select("conversation_id,pinned,last_read_at")
+            .in("conversation_id", convIds)
+            .eq("user_id", uid)
+        : Promise.resolve({ data: [] as { conversation_id: string; pinned: boolean; last_read_at: string | null }[], error: null });
+
+      const unreadPromise = uid
+        ? supabase.rpc("get_conversation_unread_counts", {
+            p_conv_ids: convIds,
+            p_user_id: uid,
+          })
+        : Promise.resolve({ data: [] as { conversation_id: string; unread_count: number }[], error: null });
+
+      const [partsRes, msgsRes, settingsRes, unreadRes] = await Promise.all([
+        membersPromise,
+        msgsPromise,
+        settingsPromise,
+        unreadPromise,
+      ]);
+
+      if (partsRes.error) throw partsRes.error;
+      if (msgsRes.error) throw msgsRes.error;
+      if (settingsRes.error) throw settingsRes.error;
+      if (unreadRes.error) throw unreadRes.error;
+
+      const partsList = (partsRes.data ?? []) as ConversationMember[];
+      const byConvParts: Record<string, ConversationMember[]> = {};
+      for (const p of partsList) {
+        byConvParts[p.conversation_id] = byConvParts[p.conversation_id] ?? [];
+        byConvParts[p.conversation_id].push(p);
+      }
+      setParticipantsByConv(byConvParts);
+
+      if (uid && settingsRes.data) {
         const byConv: Record<string, { pinned: boolean; last_read_at: string | null }> = {};
-        for (const s of (settings ?? []) as { conversation_id: string; pinned: boolean; last_read_at: string | null }[]) {
+        for (const s of settingsRes.data as { conversation_id: string; pinned: boolean; last_read_at: string | null }[]) {
           byConv[s.conversation_id] = { pinned: s.pinned, last_read_at: s.last_read_at };
         }
         setMemberSettingsByConv(byConv);
 
-        const { data: unreadRows } = await supabase.rpc("get_conversation_unread_counts", {
-          p_conv_ids: convIds,
-          p_user_id: uid,
-        });
         const unreadMap: Record<string, number> = {};
-        for (const r of (unreadRows ?? []) as { conversation_id: string; unread_count: number }[]) {
+        for (const r of (unreadRes.data ?? []) as { conversation_id: string; unread_count: number }[]) {
           unreadMap[r.conversation_id] = Number(r.unread_count) || 0;
         }
         setUnreadByConv(unreadMap);
+      } else {
+        setMemberSettingsByConv({});
+        setUnreadByConv({});
       }
 
-      // 2) participants for these conversations
-      const { data: parts, error: partsErr } = await supabase
-        .from("conversation_participants")
-        .select("conversation_id,user_id,role")
-        .in("conversation_id", convIds);
-
-      if (partsErr) throw partsErr;
-
-      const partsList = (parts ?? []) as ConversationMember[];
-      const byConv: Record<string, ConversationMember[]> = {};
-      for (const p of partsList) {
-        byConv[p.conversation_id] = byConv[p.conversation_id] ?? [];
-        byConv[p.conversation_id].push(p);
-      }
-      setParticipantsByConv(byConv);
-
-      // 3) load user mini profiles + mode-specific photos for avatar consistency
       const userIds = Array.from(new Set(partsList.map((p) => p.user_id)));
       if (userIds.length > 0) {
-        const { data: minis, error: minisErr } = await supabase
-          .from("user_profiles")
-          .select("id,first_name,last_name,city,main_photo_url")
-          .in("id", userIds);
+        const [minisRes, modeProfilesRes] = await Promise.all([
+          supabase.from("user_profiles").select("id,first_name,last_name,city,main_photo_url").in("id", userIds),
+          supabase
+            .from("profiles_mode")
+            .select("user_id,mode,photos")
+            .in("user_id", userIds)
+            .in("mode", ["romance", "friends", "business"]),
+        ]);
 
-        if (minisErr) throw minisErr;
+        if (minisRes.error) throw minisRes.error;
+        if (modeProfilesRes.error) throw modeProfilesRes.error;
 
         const map: Record<string, UserMini> = {};
-        for (const u of (minis ?? []) as UserMini[]) map[u.id] = { ...u };
+        for (const u of (minisRes.data ?? []) as UserMini[]) map[u.id] = { ...u };
 
-        const { data: modeProfiles } = await supabase
-          .from("profiles_mode")
-          .select("user_id,mode,photos")
-          .in("user_id", userIds)
-          .in("mode", ["romance", "friends", "business"]);
-
-        for (const row of (modeProfiles ?? []) as { user_id: string; mode: string; photos: (string | null)[] }[]) {
+        for (const row of (modeProfilesRes.data ?? []) as { user_id: string; mode: string; photos: (string | null)[] }[]) {
           const u = map[row.user_id];
           if (!u) continue;
           if (row.mode === "romance") u.romance_photos = row.photos ?? [];
@@ -175,18 +200,8 @@ export default function ChatsHome() {
         setUsersById({});
       }
 
-      // 4) load last messages in batch (take newest per conversation in JS)
-      const { data: msgs, error: msgErr } = await supabase
-        .from("messages")
-        .select("id,conversation_id,sender_id,content,message_type,attachments,reply_to_id,edited_at,deleted_at,delete_type,status,created_at")
-        .in("conversation_id", convIds)
-        .order("created_at", { ascending: false })
-        .limit(300);
-
-      if (msgErr) throw msgErr;
-
       const lastMap: Record<string, Message> = {};
-      for (const m of (msgs ?? []) as Message[]) {
+      for (const m of (msgsRes.data ?? []) as Message[]) {
         if (!lastMap[m.conversation_id]) lastMap[m.conversation_id] = m;
       }
       setLastMessageByConv(lastMap);
