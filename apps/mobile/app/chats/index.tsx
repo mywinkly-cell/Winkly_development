@@ -1,0 +1,443 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { View, Text, Pressable, FlatList, ActivityIndicator, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
+import { Ionicons } from "@expo/vector-icons";
+import { supabase } from "@/lib/supabase";
+
+import type { AppMode, Conversation, ConversationMember, Message, UserMini } from "@/lib/chats";
+import { ChatPreviewCard } from "@/components/chats/ChatPreviewCard";
+import { Colors, Layout, Typography, FontFamily } from "@/constants/tokens";
+
+type ChatTabKey = "all" | AppMode;
+
+const TABS: Array<{ key: ChatTabKey; label: string; secondary: string; accent: string }> = [
+  { key: "all", label: "All", secondary: Colors.white, accent: Colors.primaryViolet },
+  { key: "romance", label: "Romance", secondary: Colors.romance.secondary, accent: Colors.romance.primary },
+  { key: "friends", label: "Friends", secondary: Colors.friends.secondary, accent: Colors.friends.primary },
+  { key: "business", label: "Business", secondary: Colors.business.secondary, accent: Colors.business.primary },
+  { key: "events", label: "Events", secondary: Colors.events.secondary, accent: Colors.events.primary },
+];
+
+function isChatMode(x: unknown): x is AppMode {
+  return x === "romance" || x === "friends" || x === "business" || x === "events";
+}
+
+function formatName(u?: UserMini | null) {
+  if (!u) return "Unknown";
+  const fn = (u.first_name ?? "").trim();
+  const ln = (u.last_name ?? "").trim();
+  const full = `${fn} ${ln}`.trim();
+  return full || "Unknown";
+}
+
+export default function ChatsHome() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ mode?: string }>();
+
+  const initialTab = useMemo<"all" | AppMode>(() => {
+    if (isChatMode(params.mode)) return params.mode;
+    return "all";
+  }, [params.mode]);
+
+  const [activeTab, setActiveTab] = useState<"all" | AppMode>(initialTab);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [items, setItems] = useState<Conversation[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  // hydrated UI maps
+  const [meId, setMeId] = useState<string | null>(null);
+  const [participantsByConv, setParticipantsByConv] = useState<Record<string, ConversationMember[]>>({});
+  const [usersById, setUsersById] = useState<Record<string, UserMini>>({});
+  const [lastMessageByConv, setLastMessageByConv] = useState<Record<string, Message>>({});
+  const [memberSettingsByConv, setMemberSettingsByConv] = useState<Record<string, { pinned: boolean; last_read_at: string | null }>>({});
+  const [unreadByConv, setUnreadByConv] = useState<Record<string, number>>({});
+
+  // Keep state synced with URL query
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      setMeId(data.user?.id ?? null);
+    })();
+  }, []);
+
+  const goNewChat = () => {
+    const m = activeTab === "all" ? "friends" : activeTab;
+    router.push(`/chats/new-chat?mode=${m}`);
+  };
+
+  async function loadConversationsAndMeta() {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // 1) conversations (RLS should ensure only participant conversations are returned)
+      let q = supabase
+        .from("conversations")
+        .select("id,type,mode,name,last_message_at,archived,related_event_id")
+        .eq("archived", false)
+        .order("last_message_at", { ascending: false, nullsFirst: false })
+        .limit(200);
+
+      if (activeTab !== "all") q = q.eq("mode", activeTab);
+
+      const { data: convs, error: convErr } = await q;
+      if (convErr) throw convErr;
+
+      const conversations = (convs ?? []) as Conversation[];
+      setItems(conversations);
+
+      const convIds = conversations.map((c) => c.id);
+      if (convIds.length === 0) {
+        setParticipantsByConv({});
+        setLastMessageByConv({});
+        setUsersById({});
+        setMemberSettingsByConv({});
+        setUnreadByConv({});
+        setLoading(false);
+        return;
+      }
+
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (uid) {
+        const { data: settings } = await supabase
+          .from("conversation_member_settings")
+          .select("conversation_id,pinned,last_read_at")
+          .in("conversation_id", convIds)
+          .eq("user_id", uid);
+        const byConv: Record<string, { pinned: boolean; last_read_at: string | null }> = {};
+        for (const s of (settings ?? []) as Array<{ conversation_id: string; pinned: boolean; last_read_at: string | null }>) {
+          byConv[s.conversation_id] = { pinned: s.pinned, last_read_at: s.last_read_at };
+        }
+        setMemberSettingsByConv(byConv);
+
+        const { data: unreadRows } = await supabase.rpc("get_conversation_unread_counts", {
+          p_conv_ids: convIds,
+          p_user_id: uid,
+        });
+        const unreadMap: Record<string, number> = {};
+        for (const r of (unreadRows ?? []) as Array<{ conversation_id: string; unread_count: number }>) {
+          unreadMap[r.conversation_id] = Number(r.unread_count) || 0;
+        }
+        setUnreadByConv(unreadMap);
+      }
+
+      // 2) participants for these conversations
+      const { data: parts, error: partsErr } = await supabase
+        .from("conversation_participants")
+        .select("conversation_id,user_id,role")
+        .in("conversation_id", convIds);
+
+      if (partsErr) throw partsErr;
+
+      const partsList = (parts ?? []) as ConversationMember[];
+      const byConv: Record<string, ConversationMember[]> = {};
+      for (const p of partsList) {
+        byConv[p.conversation_id] = byConv[p.conversation_id] ?? [];
+        byConv[p.conversation_id].push(p);
+      }
+      setParticipantsByConv(byConv);
+
+      // 3) load user mini profiles for all participant ids (Option B: user_profiles)
+      const userIds = Array.from(new Set(partsList.map((p) => p.user_id)));
+      if (userIds.length > 0) {
+        const { data: minis, error: minisErr } = await supabase
+          .from("user_profiles")
+          .select("id,first_name,last_name,city,main_photo_url")
+          .in("id", userIds);
+
+        if (minisErr) throw minisErr;
+
+        const map: Record<string, UserMini> = {};
+        for (const u of (minis ?? []) as UserMini[]) map[u.id] = u;
+        setUsersById(map);
+      } else {
+        setUsersById({});
+      }
+
+      // 4) load last messages in batch (take newest per conversation in JS)
+      const { data: msgs, error: msgErr } = await supabase
+        .from("messages")
+        .select("id,conversation_id,sender_id,content,message_type,attachments,reply_to_id,edited_at,deleted_at,delete_type,status,created_at")
+        .in("conversation_id", convIds)
+        .order("created_at", { ascending: false })
+        .limit(300);
+
+      if (msgErr) throw msgErr;
+
+      const lastMap: Record<string, Message> = {};
+      for (const m of (msgs ?? []) as Message[]) {
+        if (!lastMap[m.conversation_id]) lastMap[m.conversation_id] = m;
+      }
+      setLastMessageByConv(lastMap);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to load chats.");
+      setItems([]);
+      setParticipantsByConv({});
+      setLastMessageByConv({});
+      setUsersById({});
+      setMemberSettingsByConv({});
+      setUnreadByConv({});
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadConversationsAndMeta();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // realtime refresh (simple + reliable)
+  useEffect(() => {
+    const channel = supabase
+      .channel("chats_hub_updates")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "messages" },
+        () => loadConversationsAndMeta()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "conversations" },
+        () => loadConversationsAndMeta()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+
+  function getConversationTitle(conv: Conversation): string {
+    if (conv.type === "dm" || conv.type === "direct") {
+      const parts = participantsByConv[conv.id] ?? [];
+      const otherId = parts.find((p) => p.user_id !== meId)?.user_id ?? null;
+      return formatName(otherId ? usersById[otherId] : null);
+    }
+
+    if (conv.name) return conv.name;
+    if (conv.type === "event") {
+      // Later: join events table to show title.
+      return "Event chat";
+    }
+
+    return "Group chat";
+  }
+
+  function getParticipantAvatars(conv: Conversation): Array<{ userId: string; photoUrl?: string | null }> {
+    const parts = participantsByConv[conv.id] ?? [];
+    const others = parts.filter((p) => p.user_id !== meId);
+    return others.slice(0, 2).map((p) => ({
+      userId: p.user_id,
+      photoUrl: usersById[p.user_id]?.main_photo_url ?? null,
+    }));
+  }
+
+  function formatTimestamp(ts: string | null | undefined): string {
+    if (!ts) return "—";
+    const d = new Date(ts);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffMins < 1) return "Now";
+    if (diffMins < 60) return `${diffMins}m`;
+    if (diffHours < 24) return `${diffHours}h`;
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays}d`;
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.screen}>
+        <View style={styles.topHeader}>
+          <TouchableOpacity onPress={() => { Haptics.selectionAsync(); router.back(); }} style={styles.headerBtn} activeOpacity={0.9}>
+            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Chats</Text>
+          </View>
+          <View style={styles.headerRight} />
+        </View>
+        <View style={styles.tabBar} />
+        <View style={{ flex: 1, padding: 20, justifyContent: "center" }}>
+          <ActivityIndicator />
+          <Text style={{ textAlign: "center", marginTop: 8 }}>Loading chats…</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.screen}>
+      {/* TOP HEADER — same as Planner */}
+      <View style={styles.topHeader}>
+        <TouchableOpacity
+          onPress={() => { Haptics.selectionAsync(); router.back(); }}
+          style={styles.headerBtn}
+          activeOpacity={0.9}
+          accessibilityLabel="Back"
+        >
+          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Chats</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => { Haptics.selectionAsync(); goNewChat(); }}
+          style={styles.headerBtn}
+          activeOpacity={0.9}
+          accessibilityLabel="New chat"
+        >
+          <Ionicons name="add-circle-outline" size={26} color={Colors.primaryViolet} />
+        </TouchableOpacity>
+      </View>
+
+      {/* SUBHEADER — same tab bar as Planner */}
+      <View style={styles.tabBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabBarContent}
+          style={styles.tabBarScroll}
+        >
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.key;
+            const bgColor = tab.key === "all" ? Colors.white : tab.secondary;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                onPress={() => setActiveTab(tab.key)}
+                style={[styles.tab, { backgroundColor: bgColor }]}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    { fontWeight: isActive ? "700" : "400" },
+                    isActive && { color: tab.accent },
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      <View style={styles.contentArea}>
+      <Pressable
+        onPress={goNewChat}
+        style={{
+          paddingVertical: 10,
+          paddingHorizontal: 12,
+          borderWidth: 1,
+          borderRadius: 12,
+          marginBottom: 12,
+        }}
+      >
+        <Text style={{ fontWeight: "800" }}>+ New chat</Text>
+      </Pressable>
+
+      <FlatList
+        style={{ flex: 1 }}
+        data={items}
+        keyExtractor={(c) => c.id}
+        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+        renderItem={({ item }) => {
+          const last = lastMessageByConv[item.id];
+          const ts = last?.created_at ?? item.last_message_at ?? item.created_at;
+          const settings = memberSettingsByConv[item.id];
+          return (
+            <ChatPreviewCard
+              conversation={item}
+              chatName={getConversationTitle(item)}
+              lastMessage={last ?? null}
+              participantAvatars={getParticipantAvatars(item)}
+              timestamp={formatTimestamp(ts)}
+              unreadCount={unreadByConv[item.id] ?? 0}
+              isPinned={settings?.pinned ?? false}
+              onPress={() => router.push(`/chats/${item.id}`)}
+            />
+          );
+        }}
+        ListEmptyComponent={<Text style={{ opacity: 0.7, textAlign: "center" }}>There is no active chats yet. It's time to spark a conversation!</Text>}
+      />
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
+  topHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    ...Layout.topHeaderBar,
+    backgroundColor: Colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray200,
+    shadowColor: "#1C1C1E",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  headerBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  headerCenter: { flex: 1, alignItems: "center", justifyContent: "center" },
+  headerTitle: {
+    ...Typography.h3,
+    color: Colors.primaryViolet,
+    fontFamily: FontFamily.heading,
+  },
+  headerRight: { width: 44, height: 44 },
+  tabBar: {
+    backgroundColor: Colors.white,
+    minHeight: 48,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray200,
+    shadowColor: "#1C1C1E",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  tabBarScroll: { flex: 1 },
+  tabBarContent: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+    paddingHorizontal: 16,
+  },
+  contentArea: {
+    flex: 1,
+    padding: 20,
+  },
+  tab: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 20,
+    minHeight: 36,
+  },
+  tabLabel: {
+    ...Typography.caption,
+    fontSize: 13,
+    color: Colors.textPrimary,
+  },
+});

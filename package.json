@@ -1,0 +1,10 @@
+{
+  "name": "winkly",
+  "private": true,
+  "scripts": {
+    "supabase:deploy-auth-redirect": "supabase functions deploy auth-redirect --no-verify-jwt"
+  },
+  "devDependencies": {
+    "supabase": "^2.0.0"
+  }
+}

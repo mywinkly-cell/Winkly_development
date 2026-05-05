@@ -1,0 +1,955 @@
+import React, { useState, useRef, useEffect } from "react";
+import {
+  View,
+  Text,
+  Image,
+  Pressable,
+  ActivityIndicator,
+  Dimensions,
+  StyleSheet,
+  Animated,
+  PanResponder,
+  Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
+import { Ionicons } from "@expo/vector-icons";
+import { ModeHeader } from "@/components/layout/ModeHeader";
+import { RomanceBottomNav } from "@/components/layout/RomanceBottomNav";
+import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { useModeContext } from "@/providers/ModeContextProvider";
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const CARD_WIDTH = SCREEN_WIDTH * 0.9;
+const CARD_HEIGHT = Math.min(SCREEN_WIDTH * 0.9 * (4 / 3), SCREEN_HEIGHT * 0.52);
+const SWIPE_THRESHOLD = 80;
+const ACTION_BUTTON_SIZE = 64; // 10% bigger than 58
+const ACTION_ICON_SIZE = 35;  // 10% bigger than 32
+const CARD_RADIUS = 24;
+const INTENT_FREE_PER_DAY = 1;
+const INTENT_SUBSCRIBER_PER_DAY = 10;
+const STACK_OFFSET = 8;
+const STACK_SCALE = 0.96;
+
+type Profile = {
+  id: string;
+  name: string;
+  age: number;
+  city: string;
+  occupation?: string | null;
+  /** First 3 shown: interests + relationship goals combined */
+  chipItems: string[];
+  photoUrl: string;
+};
+
+type NextPlan = {
+  title: string;
+  time: string;
+  location: string;
+} | null;
+
+const MOCK_PROFILES: Profile[] = [
+  {
+    id: "1",
+    name: "Ava",
+    age: 26,
+    city: "Berlin",
+    occupation: "Product Designer",
+    chipItems: ["Movies", "Art", "Long-term"],
+    photoUrl: "https://i.pravatar.cc/400?u=ava",
+  },
+  {
+    id: "2",
+    name: "Lucas",
+    age: 28,
+    city: "Berlin",
+    occupation: "Software Engineer",
+    chipItems: ["Coffee", "Hiking", "Serious relationship"],
+    photoUrl: "https://i.pravatar.cc/400?u=lucas",
+  },
+  {
+    id: "3",
+    name: "Mia",
+    age: 25,
+    city: "Berlin",
+    occupation: "Photographer",
+    chipItems: ["Art", "Travel", "Yoga"],
+    photoUrl: "https://i.pravatar.cc/400?u=mia",
+  },
+];
+
+const MOCK_NEXT_PLAN: NextPlan = {
+  title: "Dinner with Lucas",
+  time: "19:00",
+  location: "Café Blüte",
+};
+
+export default function RomanceHome() {
+  const router = useRouter();
+  const { context } = useModeContext();
+  const hasIntentSubscription = context.subscription_tier === "premium";
+
+  const [loading, setLoading] = useState(false);
+  const [profiles, setProfiles] = useState<Profile[]>(MOCK_PROFILES);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [transitioning, setTransitioning] = useState(false);
+  const [nextPlan] = useState<NextPlan>(MOCK_NEXT_PLAN);
+  // Intent (Super Like): daily limit — 1 free/day; 10/day with subscription (Premium)
+  const [intentRemainingToday, setIntentRemainingToday] = useState(
+    hasIntentSubscription ? INTENT_SUBSCRIBER_PER_DAY : INTENT_FREE_PER_DAY
+  );
+  const [intentModalVisible, setIntentModalVisible] = useState(false);
+  const [intentMessage, setIntentMessage] = useState("");
+  const [intentAiIcebreaker] = useState("Your taste in coffee is *chef's kiss* — same!"); // TODO: AI-generated, user-confirmed
+
+  const cardAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const pendingIntentMessage = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (context.subscription_tier === "premium") {
+      setIntentRemainingToday(INTENT_SUBSCRIBER_PER_DAY);
+    }
+  }, [context.subscription_tier]);
+
+  const currentProfile = profiles[currentIndex];
+  const intentLimit = hasIntentSubscription ? INTENT_SUBSCRIBER_PER_DAY : INTENT_FREE_PER_DAY;
+
+  const advanceToNext = () => {
+    setCurrentIndex((i) => i + 1);
+    setTransitioning(false);
+    cardAnim.setValue({ x: 0, y: 0 });
+  };
+
+  /** Store preference and optionally re-insert profile (max 2 passes). Backend will handle ranking. */
+  const applyPass = (profileId: string) => {
+    // TODO: API — store negative preference; profile may reappear up to 2 times if passed again
+  };
+
+  const applyLike = (profileId: string) => {
+    // TODO: API — send like; if mutual → MATCH; else stored silently. Positive preference for ranking.
+  };
+
+  const applyIntent = (profileId: string, message?: string) => {
+    // TODO: API — priority like, profile higher in their stack; optional icebreaker/message
+    setIntentRemainingToday((n) => Math.max(0, n - 1));
+    pendingIntentMessage.current = undefined;
+  };
+
+  /** Block: remove from suggestions permanently for this user. */
+  const applyBlock = (profileId: string, reason: string) => {
+    // TODO: API — store block; profile never shown again as suggestion to this user
+  };
+
+  /** Report: same as block + notify Winkly admins with reason. */
+  const applyReport = (profileId: string, reason: string) => {
+    // TODO: API — store report, remove from suggestions; admins receive notification with reason
+  };
+
+  const BLOCK_REASONS = [
+    "Not what I'm looking for",
+    "Card is repeating",
+    "Other",
+  ] as const;
+  const REPORT_REASONS = [
+    "Inappropriate content",
+    "Fake profile",
+    "Harassment",
+    "Spam",
+    "Other",
+  ] as const;
+
+  const showBlockReportMenu = () => {
+    if (!currentProfile) return;
+    const profileId = currentProfile.id;
+    Haptics.selectionAsync();
+    Alert.alert(
+      "Block or report",
+      "Choose an action for this profile.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Block",
+          onPress: () => {
+            Alert.alert(
+              "Why do you want to block?",
+              "This profile will be removed from your suggestions and won't appear again.",
+              [
+                { text: "Cancel", style: "cancel" },
+                ...BLOCK_REASONS.map((reason) => ({
+                  text: reason,
+                  onPress: () => {
+                    applyBlock(profileId, reason);
+                    animateCardOut("left", "pass");
+                  },
+                })),
+              ]
+            );
+          },
+        },
+        {
+          text: "Report",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Why are you reporting?",
+              "This profile will be removed from your suggestions. Winkly admins will be notified and may take action.",
+              [
+                { text: "Cancel", style: "cancel" },
+                ...REPORT_REASONS.map((reason) => ({
+                  text: reason,
+                  onPress: () => {
+                    applyReport(profileId, reason);
+                    animateCardOut("left", "pass");
+                  },
+                })),
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCardPress = () => {
+    if (currentProfile) {
+      router.push(`/(modes)/romance/profile-view?id=${currentProfile.id}`);
+    }
+  };
+
+  type SwipeAction = "pass" | "like" | "intent";
+
+  const animateCardOut = (direction: "left" | "right" | "up" | "down", action?: SwipeAction) => {
+    if (transitioning) return;
+    const profileId = currentProfile?.id;
+    setTransitioning(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const toValue =
+      direction === "left"
+        ? { x: -SCREEN_WIDTH, y: 0 }
+        : direction === "right"
+          ? { x: SCREEN_WIDTH, y: 0 }
+          : direction === "up"
+            ? { x: 0, y: -SCREEN_HEIGHT }
+            : { x: 0, y: SCREEN_HEIGHT };
+
+    Animated.timing(cardAnim, {
+      toValue,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      if (profileId && action === "pass") applyPass(profileId);
+      if (profileId && action === "like") applyLike(profileId);
+      if (profileId && action === "intent") applyIntent(profileId, pendingIntentMessage.current);
+      advanceToNext();
+    });
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, { dx, dy }) => Math.abs(dx) > 10 || Math.abs(dy) > 10,
+      onPanResponderRelease: (_, gestureState) => {
+        const { dx, dy } = gestureState;
+        const isTap = Math.abs(dx) < 20 && Math.abs(dy) < 20;
+        if (isTap) {
+          handleCardPress();
+          Animated.spring(cardAnim, {
+            toValue: { x: 0, y: 0 },
+            useNativeDriver: true,
+            tension: 80,
+            friction: 10,
+          }).start();
+          return;
+        }
+        if (Math.abs(dx) > SWIPE_THRESHOLD) {
+          // Swipe right = Like, swipe left = Pass
+          animateCardOut(dx > 0 ? "right" : "left", dx > 0 ? "like" : "pass");
+        } else if (dy > SWIPE_THRESHOLD) {
+          handleCardPress();
+          Animated.spring(cardAnim, {
+            toValue: { x: 0, y: 0 },
+            useNativeDriver: true,
+            tension: 80,
+            friction: 10,
+          }).start();
+        } else if (dy < -SWIPE_THRESHOLD) {
+          animateCardOut("up");
+        } else {
+          Animated.spring(cardAnim, {
+            toValue: { x: 0, y: 0 },
+            useNativeDriver: true,
+            tension: 80,
+            friction: 10,
+          }).start();
+        }
+      },
+      onPanResponderMove: (_, gestureState) => {
+        cardAnim.setValue({ x: gestureState.dx, y: gestureState.dy });
+      },
+    })
+  ).current;
+
+  const handlePass = () => {
+    if (currentProfile) {
+      applyPass(currentProfile.id);
+      animateCardOut("left", "pass");
+    }
+  };
+
+  const handleLike = () => {
+    if (currentProfile) {
+      applyLike(currentProfile.id);
+      animateCardOut("right", "like");
+    }
+  };
+
+  const handleIntentPress = () => {
+    if (!currentProfile) return;
+    if (intentRemainingToday <= 0) {
+      Alert.alert(
+        "No Super Likes left",
+        "You've used your free Super Like for today. Get more with a subscription?",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "View plans", onPress: () => router.push("/account") },
+        ]
+      );
+      return;
+    }
+    setIntentMessage("");
+    setIntentModalVisible(true);
+  };
+
+  const sendIntent = (message?: string) => {
+    if (!currentProfile) return;
+    setIntentModalVisible(false);
+    pendingIntentMessage.current = message;
+    animateCardOut("right", "intent");
+  };
+
+  return (
+    <View style={styles.container}>
+      <ModeHeader currentMode="romance" rightSlot="filters" onFilterPress={() => router.push("/(modes)/romance/filters")} />
+
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={Colors.primaryViolet} />
+        </View>
+      ) : !currentProfile ? (
+        <View style={styles.center}>
+          <Text style={styles.emptyTitle}>
+            You've seen everyone nearby 💫
+          </Text>
+          <Pressable
+            onPress={() => {}}
+            style={styles.adjustFiltersBtn}
+            accessibilityLabel="Adjust filters"
+          >
+            <Text style={styles.adjustFiltersText}>Adjust filters</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <>
+          <View style={styles.cardContainer}>
+            <View style={[styles.cardStackWrap, { width: CARD_WIDTH, height: CARD_HEIGHT + STACK_OFFSET + 4 }]}>
+              {/* Stacked "next" card peek for depth */}
+              {profiles[currentIndex + 1] && (
+                <View
+                  style={[
+                    styles.card,
+                    styles.stackCard,
+                    {
+                      width: CARD_WIDTH,
+                      height: CARD_HEIGHT,
+                      borderRadius: CARD_RADIUS,
+                      position: "absolute",
+                      bottom: 0,
+                      left: 0,
+                      transform: [
+                        { scale: STACK_SCALE },
+                        { translateY: STACK_OFFSET },
+                      ],
+                    },
+                  ]}
+                  pointerEvents="none"
+                >
+                  <Image
+                    source={{ uri: profiles[currentIndex + 1].photoUrl }}
+                    style={[styles.cardImage, { borderTopLeftRadius: CARD_RADIUS, borderTopRightRadius: CARD_RADIUS }]}
+                    resizeMode="cover"
+                  />
+                </View>
+              )}
+
+              <View style={[styles.cardWrapper, { width: CARD_WIDTH, height: CARD_HEIGHT }]}>
+              <Animated.View
+                {...panResponder.panHandlers}
+                style={[
+                  styles.card,
+                  {
+                    width: CARD_WIDTH,
+                    height: CARD_HEIGHT,
+                    borderRadius: CARD_RADIUS,
+                    transform: [
+                      { translateX: cardAnim.x },
+                      { translateY: cardAnim.y },
+                    ],
+                  },
+                ]}
+              >
+                <View style={styles.mediaArea}>
+                  <Image
+                    source={{ uri: currentProfile.photoUrl }}
+                    style={[styles.cardImage, { borderTopLeftRadius: CARD_RADIUS, borderTopRightRadius: CARD_RADIUS }]}
+                    resizeMode="cover"
+                  />
+                </View>
+
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    showBlockReportMenu();
+                  }}
+                  style={styles.cardMenuBtn}
+                  accessibilityLabel="Block or report"
+                >
+                  <Ionicons name="ellipsis-vertical" size={22} color={Colors.romance.primary} />
+                </Pressable>
+
+                <View style={styles.infoOverlay}>
+                  <Text style={styles.nameAge}>
+                    {currentProfile.name}, {currentProfile.age}
+                  </Text>
+                  <Text style={styles.cityOverlay}>{currentProfile.city}</Text>
+                  {currentProfile.occupation ? (
+                    <Text style={styles.occupationOverlay}>{currentProfile.occupation}</Text>
+                  ) : null}
+                  {currentProfile.chipItems.length > 0 ? (
+                    <View style={styles.chipRow}>
+                      {currentProfile.chipItems.slice(0, 3).map((i) => (
+                        <View key={i} style={styles.chipOverlay}>
+                          <Text style={styles.chipTextOverlay}>{i}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              </Animated.View>
+            </View>
+            </View>
+          </View>
+
+          <View style={styles.actionBarContainer}>
+            <View style={styles.actionRow}>
+              <View style={styles.actionButtonColumn}>
+                <Pressable
+                  onPress={handlePass}
+                  disabled={transitioning}
+                  style={({ pressed }) => [styles.actionIconWrap, styles.actionIconGlowPass, pressed && styles.actionBtnPressed]}
+                  accessibilityLabel="Pass"
+                >
+                  <Ionicons name="close" size={ACTION_ICON_SIZE} color={Colors.romance.primary} />
+                </Pressable>
+              </View>
+
+              <View style={styles.actionButtonColumn}>
+                <Pressable
+                  onPress={handleIntentPress}
+                  disabled={transitioning || intentRemainingToday <= 0}
+                  style={({ pressed }) => [
+                    styles.actionIconWrap,
+                    styles.actionIconGlowIntent,
+                    (intentRemainingToday <= 0 || transitioning) && styles.actionBtnDisabled,
+                    pressed && styles.actionBtnPressed,
+                  ]}
+                  accessibilityLabel="Super Like"
+                >
+                  <Ionicons name="star" size={ACTION_ICON_SIZE} color="#E6B800" />
+                </Pressable>
+              </View>
+
+              <View style={styles.actionButtonColumn}>
+                <Pressable
+                  onPress={handleLike}
+                  disabled={transitioning}
+                  style={({ pressed }) => [styles.actionIconWrap, styles.actionIconGlowLike, pressed && styles.actionBtnPressed]}
+                  accessibilityLabel="Like"
+                >
+                  <Ionicons name="heart" size={ACTION_ICON_SIZE} color={Colors.romance.primary} />
+                </Pressable>
+              </View>
+            </View>
+            <View style={styles.actionBarSubtitle}>
+              <Text style={styles.intentSubtitleLine1}>
+                {intentRemainingToday <= 0
+                  ? "0 left"
+                  : hasIntentSubscription
+                    ? `You have ${intentRemainingToday} today`
+                    : "You have 1 free Super Spark for a day."}
+              </Text>
+              {!hasIntentSubscription && (
+                <>
+                  <Text style={styles.intentSubtitleLine2}>Choose a subscription to get more.</Text>
+                  <Pressable
+                    onPress={() => router.push("/account/subscription")}
+                    style={styles.intentSubtitleLink}
+                    accessibilityLabel="Subscription plans"
+                  >
+                    <Text style={styles.intentSubtitleLinkText}>Subscription plans</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+          </View>
+
+          <Modal
+            visible={intentModalVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setIntentModalVisible(false)}
+          >
+            <Pressable
+              style={styles.modalBackdrop}
+              onPress={() => setIntentModalVisible(false)}
+            >
+              <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
+                style={styles.modalContentWrap}
+              >
+                <Pressable style={styles.intentModalCard} onPress={(e) => e.stopPropagation()}>
+                  <Text style={styles.intentModalTitle}>Add a message? (optional)</Text>
+                  <Text style={styles.intentModalHint}>
+                    They'll see it when they see your profile. Use an AI icebreaker or write your own.
+                  </Text>
+                  <Pressable
+                    style={styles.icebreakerChip}
+                    onPress={() => setIntentMessage(intentAiIcebreaker)}
+                  >
+                    <Ionicons name="sparkles" size={16} color={Colors.primaryViolet} />
+                    <Text style={styles.icebreakerChipText}>Use AI icebreaker</Text>
+                  </Pressable>
+                  <TextInput
+                    style={styles.intentMessageInput}
+                    placeholder="Or write your own..."
+                    placeholderTextColor={Colors.gray500}
+                    value={intentMessage}
+                    onChangeText={setIntentMessage}
+                    multiline
+                    maxLength={200}
+                  />
+                  <View style={styles.intentModalActions}>
+                    <Pressable
+                      style={styles.intentModalBtnSecondary}
+                      onPress={() => sendIntent()}
+                    >
+                      <Text style={styles.intentModalBtnSecondaryText}>Skip</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.intentModalBtnPrimary}
+                      onPress={() => sendIntent(intentMessage.trim() || undefined)}
+                    >
+                      <Text style={styles.intentModalBtnPrimaryText}>Send</Text>
+                    </Pressable>
+                  </View>
+                </Pressable>
+              </KeyboardAvoidingView>
+            </Pressable>
+          </Modal>
+
+          {nextPlan && (
+            <Pressable
+              onPress={() => router.push("/planner")}
+              style={styles.plannerBanner}
+              accessibilityLabel="Open planner"
+            >
+              <View style={styles.plannerBannerContent}>
+                <Text style={styles.plannerLabel}>Next</Text>
+                <Text style={styles.plannerTitle} numberOfLines={1}>
+                  {nextPlan.title}
+                </Text>
+                <Text style={styles.plannerMeta}>
+                  {nextPlan.time} · {nextPlan.location}
+                </Text>
+              </View>
+              <View style={styles.openPlannerBtn}>
+                <Text style={styles.openPlannerText}>Open</Text>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textPrimary} />
+              </View>
+            </Pressable>
+          )}
+        </>
+      )}
+
+      <RomanceBottomNav />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.backgroundMuted,
+  },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  emptyTitle: {
+    ...Typography.h3,
+    fontFamily: FontFamily.heading,
+    color: Colors.textPrimary,
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  adjustFiltersBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: Colors.romance.primary,
+    minHeight: 48,
+    justifyContent: "center",
+  },
+  adjustFiltersText: {
+    ...Typography.button,
+    fontFamily: FontFamily.heading,
+    color: Colors.romance.primary,
+  },
+  cardContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: Layout.spacing.lg,
+    paddingBottom: 8,
+    minHeight: 0,
+  },
+  cardStackWrap: {
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+  cardWrapper: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  card: {
+    backgroundColor: Colors.white,
+    overflow: "hidden",
+    ...Shadow.card,
+    shadowRadius: 20,
+    shadowOpacity: 0.12,
+    elevation: 8,
+  },
+  stackCard: {
+    position: "absolute",
+    backgroundColor: Colors.gray100,
+    opacity: 0.95,
+  },
+  mediaArea: {
+    width: "100%",
+    flex: 1,
+    backgroundColor: Colors.gray200,
+    overflow: "hidden",
+  },
+  cardImage: {
+    width: "100%",
+    height: "100%",
+  },
+  cardMenuBtn: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  infoOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 18,
+    paddingTop: 32,
+    paddingBottom: 18,
+    borderBottomLeftRadius: CARD_RADIUS,
+    borderBottomRightRadius: CARD_RADIUS,
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  nameAge: {
+    ...Typography.h2,
+    fontSize: 24,
+    fontFamily: FontFamily.heading,
+    color: Colors.white,
+    marginBottom: 4,
+    textShadowColor: "rgba(0,0,0,0.3)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  cityOverlay: {
+    ...Typography.body,
+    fontSize: 15,
+    color: "rgba(255,255,255,0.92)",
+    marginBottom: 2,
+  },
+  occupationOverlay: {
+    ...Typography.caption,
+    color: "rgba(255,255,255,0.85)",
+    marginBottom: 10,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    alignItems: "center",
+  },
+  chipOverlay: {
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+  },
+  chipTextOverlay: {
+    ...Typography.caption,
+    fontSize: 12,
+    color: Colors.white,
+  },
+  actionBarContainer: {
+    alignItems: "center",
+    width: "100%",
+  },
+  actionRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
+  actionButtonColumn: {
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 40,
+  },
+  actionIconWrap: {
+    width: ACTION_BUTTON_SIZE,
+    height: ACTION_BUTTON_SIZE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionIconGlowPass: {
+    shadowColor: Colors.romance.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.38,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  actionIconGlowIntent: {
+    shadowColor: "#E6B800",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.42,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  actionIconGlowLike: {
+    shadowColor: Colors.romance.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.38,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  actionBarSubtitle: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+  },
+  actionBtnDisabled: {
+    opacity: 0.5,
+  },
+  actionBtnPressed: {
+    transform: [{ scale: 0.92 }],
+  },
+  intentSubtitleLine1: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.gray600,
+    marginTop: 0,
+    textAlign: "center",
+    width: "100%",
+  },
+  intentSubtitleLine2: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.gray600,
+    marginTop: 2,
+    textAlign: "center",
+    width: "100%",
+  },
+  intentSubtitleLink: {
+    marginTop: 4,
+  },
+  intentSubtitleLinkText: {
+    ...Typography.caption,
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.romance.primary,
+    textAlign: "center",
+    textDecorationLine: "underline",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalContentWrap: {
+    width: "100%",
+    maxWidth: 360,
+  },
+  intentModalCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    padding: 24,
+    ...Shadow.card,
+  },
+  intentModalTitle: {
+    ...Typography.h3,
+    fontFamily: FontFamily.heading,
+    color: Colors.textPrimary,
+    marginBottom: 8,
+  },
+  intentModalHint: {
+    ...Typography.caption,
+    color: Colors.gray600,
+    marginBottom: 14,
+  },
+  icebreakerChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.romance.secondary,
+    borderWidth: 1,
+    borderColor: "rgba(232,56,56,0.2)",
+    marginBottom: 12,
+  },
+  icebreakerChipText: {
+    ...Typography.caption,
+    fontWeight: "600",
+    color: Colors.romance.primary,
+  },
+  intentMessageInput: {
+    borderWidth: 1,
+    borderColor: Colors.gray300,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 88,
+    ...Typography.body,
+    color: Colors.textPrimary,
+    marginBottom: 20,
+    textAlignVertical: "top",
+  },
+  intentModalActions: {
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "flex-end",
+  },
+  intentModalBtnSecondary: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: Colors.gray100,
+  },
+  intentModalBtnSecondaryText: {
+    ...Typography.button,
+    color: Colors.gray700,
+  },
+  intentModalBtnPrimary: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.romance.primary,
+  },
+  intentModalBtnPrimaryText: {
+    ...Typography.button,
+    fontFamily: FontFamily.heading,
+    color: Colors.white,
+  },
+  plannerBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginHorizontal: 20,
+    marginBottom: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    backgroundColor: Colors.primaryViolet,
+    minHeight: 72,
+    overflow: "hidden",
+  },
+  plannerBannerContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  plannerLabel: {
+    ...Typography.caption,
+    fontSize: 11,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.8)",
+    letterSpacing: 0.5,
+    marginBottom: 2,
+    textTransform: "uppercase",
+  },
+  plannerTitle: {
+    ...Typography.body,
+    fontWeight: "600",
+    fontSize: 16,
+    color: Colors.white,
+    marginBottom: 2,
+  },
+  plannerMeta: {
+    ...Typography.caption,
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 13,
+  },
+  openPlannerBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: Colors.white,
+    minHeight: 44,
+    justifyContent: "center",
+  },
+  openPlannerText: {
+    ...Typography.button,
+    fontSize: 15,
+    fontFamily: FontFamily.heading,
+    color: Colors.textPrimary,
+  },
+});
