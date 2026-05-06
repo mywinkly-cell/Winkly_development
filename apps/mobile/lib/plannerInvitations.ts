@@ -19,6 +19,8 @@ export type PlannerInvitePayload = {
   activity?: string;
   location?: string;
   place?: string;
+  /** When set, stored as `planner_items.meta` (e.g. per-day trip slots). */
+  item_meta?: Record<string, unknown> | null;
 };
 
 export type PlannerInvitationRow = {
@@ -59,9 +61,12 @@ export async function createPlannerItemForSelf(
       description: payload.description ?? null,
       starts_at: payload.starts_at,
       ends_at: payload.ends_at ?? null,
-      meta: payload.activity || payload.location || payload.place
-        ? { activity: payload.activity, location: payload.location, place: payload.place }
-        : null,
+      meta:
+        payload.item_meta != null && Object.keys(payload.item_meta).length > 0
+          ? payload.item_meta
+          : payload.activity || payload.location || payload.place
+            ? { activity: payload.activity, location: payload.location, place: payload.place }
+            : null,
     })
     .select("id")
     .single();
@@ -95,9 +100,12 @@ export async function createPlannerInvite(
       description: payload.description ?? null,
       starts_at: payload.starts_at,
       ends_at: payload.ends_at ?? null,
-      meta: payload.activity || payload.location || payload.place
-        ? { activity: payload.activity, location: payload.location, place: payload.place }
-        : null,
+      meta:
+        payload.item_meta != null && Object.keys(payload.item_meta).length > 0
+          ? payload.item_meta
+          : payload.activity || payload.location || payload.place
+            ? { activity: payload.activity, location: payload.location, place: payload.place }
+            : null,
     })
     .select("id")
     .single();

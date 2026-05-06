@@ -14,6 +14,16 @@ function formatDateLine(dateFrom?: string, dateTo?: string, singleDay?: boolean)
   return `Dates: ${dateFrom} to ${dateTo ?? dateFrom}.`;
 }
 
+/** Inclusive day count for YYYY-MM-DD bounds (trip length). */
+export function inclusivePlanDayCount(dateFrom?: string, dateTo?: string): number {
+  if (!dateFrom?.trim() || !dateTo?.trim()) return 1;
+  const a = new Date(`${dateFrom.trim().slice(0, 10)}T12:00:00`);
+  const b = new Date(`${dateTo.trim().slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return 1;
+  const diff = Math.round((b.getTime() - a.getTime()) / 86400000);
+  return Math.max(1, diff + 1);
+}
+
 function timePreferenceLine(
   timePreference?: string,
   availableSlots?: string[]
@@ -178,6 +188,14 @@ export function buildPlanRequestText(i: BuildPlanRequestTextInput): string {
     formatDateLine(i.dateFrom, i.dateTo, i.singleDay),
     timePreferenceLine(i.timePreference, i.availableSlots),
   );
+
+  const numDays =
+    i.singleDay === false && i.dateFrom && i.dateTo ? inclusivePlanDayCount(i.dateFrom, i.dateTo) : 1;
+  if (numDays > 1) {
+    lines.push(
+      "Structure the plan as a day-by-day itinerary. Each day should have a morning, afternoon, and evening slot with specific venue suggestions.",
+    );
+  }
 
   if (i.singleDay !== false && i.exactTimeHm?.trim()) {
     lines.push(`Exact start time (local, single day): ${i.exactTimeHm.trim()}.`);

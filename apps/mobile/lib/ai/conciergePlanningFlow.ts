@@ -7,12 +7,30 @@ import type { Mode } from "@/types";
 
 export type ConciergeFlowStep =
   | "intent"
+  /** Trip-specific questions before activity details (location/dates). */
+  | "trip_planning"
   | "activity"
   | "social"
   | "summary"
   | "suggestions"
   | "invite"
   | "add_to_planner";
+
+/** Trip planning mini-flow (Step 1b for activity key `trip`). */
+export type TripScope = "own_city" | "nearby" | "new_destination";
+export type TripVibe = "culture" | "food" | "outdoors" | "entertainment" | "mixed";
+export type ActivityLevel = "easy" | "moderate" | "intense";
+export type TravelRadius = "1h" | "2-3h" | "3-5h" | "5h+";
+
+export interface TripPlanningAnswers {
+  scope: TripScope;
+  vibe: TripVibe;
+  activityLevel: ActivityLevel;
+  mustHaves: string[];
+  /** Only meaningful when scope === "new_destination". */
+  destinationDecided: boolean;
+  travelRadius?: TravelRadius;
+}
 
 /** Who is joining (Step 3). */
 export type WhoJoining =
@@ -74,58 +92,250 @@ export interface PlanningFlowState {
   partnerDisplayName: string | null;
 }
 
-/** Activity button definition for Step 1 (icon + label + key). */
-export interface ActivityButtonDef {
+const SURPRISE = "Surprise me";
+
+/** Broad intent buckets — Step 2 narrows via `subActivities` chips where listed. */
+export type ActivityCategory = {
   key: string;
   label: string;
-  icon: string; // Ionicons name
-}
-
-/**
- * General planning activities (shown in all modes).
- * Excludes event-type options (Concert, Workshop, Culture, Exhibition, Nightlife, Event/Party)
- * that duplicate Events mode — those can be suggested by the AI when they match a request.
- */
-export const GENERAL_ACTIVITIES: ActivityButtonDef[] = [
-  { key: "dinner_brunch", label: "Dinner / Brunch", icon: "restaurant-outline" },
-  { key: "coffee", label: "Coffee meetup", icon: "cafe-outline" },
-  { key: "fitness", label: "Fitness / Wellness", icon: "fitness-outline" },
-  { key: "outdoor", label: "Outdoor activity", icon: "leaf-outline" },
-  { key: "trip", label: "Trip", icon: "car-outline" },
-  { key: "custom", label: "Custom plan", icon: "create-outline" },
-];
-
-/** Mode-specific activities (prioritized when in that mode). */
-export const MODE_ACTIVITIES: Record<Mode, ActivityButtonDef[]> = {
-  romance: [
-    { key: "romantic_dinner", label: "Romantic dinner", icon: "heart-outline" },
-    { key: "wine_bar", label: "Wine bar", icon: "wine-outline" },
-    { key: "evening_walk", label: "Evening walk", icon: "moon-outline" },
-    { key: "museum_date", label: "Museum date", icon: "images-outline" },
-  ],
-  friends: [
-    { key: "brunch", label: "Brunch", icon: "restaurant-outline" },
-    { key: "sports_games", label: "Sports or games", icon: "game-controller-outline" },
-    { key: "hike", label: "Hike", icon: "trail-sign-outline" },
-    { key: "drinks", label: "Drinks", icon: "wine-outline" },
-  ],
-  business: [
-    { key: "coffee_chat", label: "Coffee chat", icon: "cafe-outline" },
-    { key: "lunch_meeting", label: "Lunch meeting", icon: "briefcase-outline" },
-    { key: "golf", label: "Golf", icon: "golf-outline" },
-    { key: "networking", label: "Networking event", icon: "people-outline" },
-  ],
-  /** No event-type cards (concert, workshop, culture, exhibition, nightlife, event/party):
-   *  they duplicate Events mode list/filter; AI can suggest them when they match a request. */
-  events: [],
+  icon: string;
+  subActivities: string[];
+  modes: Mode[];
+  /** Maps to `categoriesForInterest()` keys from ai-gateway. */
+  interestTags: string[];
+  subActivityPrompt?: string;
+  /** When true, Step 2 shows cuisine / atmosphere (food-led categories). */
+  foodRelated?: boolean;
 };
 
-/** Get activity buttons for Step 1: mode-specific first, then general (no duplicates by key). */
-export function getActivityButtonsForMode(mode: Mode): ActivityButtonDef[] {
-  const modeList = MODE_ACTIVITIES[mode] ?? [];
-  const seen = new Set(modeList.map((a) => a.key));
-  const general = GENERAL_ACTIVITIES.filter((a) => !seen.has(a.key));
-  return [...modeList, ...general];
+export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
+  {
+    key: "art_culture",
+    label: "Art & culture",
+    icon: "color-palette-outline",
+    subActivities: [
+      "Theatre / show",
+      "Museum / gallery",
+      "Cinema",
+      "Exhibition",
+      "Opera / classical",
+      SURPRISE,
+    ],
+    modes: ["romance", "events"],
+    interestTags: ["arts_culture"],
+    subActivityPrompt: "What kind of cultural experience?",
+  },
+  {
+    key: "dinner_drinks",
+    label: "Dinner & drinks",
+    icon: "wine-outline",
+    subActivities: [
+      "Fine dining",
+      "Wine bar",
+      "Cocktail lounge",
+      "Casual bistro",
+      "Rooftop or view spot",
+      SURPRISE,
+    ],
+    modes: ["romance"],
+    interestTags: ["food_drink"],
+    foodRelated: true,
+    subActivityPrompt: "What kind of dinner or drinks?",
+  },
+  {
+    key: "sport_activity",
+    label: "Sport & activity",
+    icon: "bicycle-outline",
+    subActivities: [
+      "Tennis / padel",
+      "Bowling",
+      "Cycling route",
+      "Evening stroll",
+      "Indoor climbing",
+      SURPRISE,
+    ],
+    modes: ["romance"],
+    interestTags: ["fitness_wellness", "outdoors", "play"],
+    subActivityPrompt: "What kind of activity?",
+  },
+  {
+    key: "dance_music",
+    label: "Dance & music",
+    icon: "musical-notes-outline",
+    subActivities: ["Social dance / class", "Live jazz bar", "Acoustic set", "Salsa / latin night", SURPRISE],
+    modes: ["romance"],
+    interestTags: ["music"],
+    subActivityPrompt: "What sounds fun?",
+  },
+  {
+    key: "experience",
+    label: "Experience",
+    icon: "star-outline",
+    subActivities: ["Cooking class", "Tasting flight", "Boat / mini-excursion", "Photography walk", SURPRISE],
+    modes: ["romance", "events"],
+    interestTags: ["food_drink", "arts_culture"],
+    subActivityPrompt: "What kind of experience?",
+  },
+  {
+    key: "wellness",
+    label: "Wellness",
+    icon: "leaf-outline",
+    subActivities: ["Spa / massage", "Sauna / bath", "Meditation / breathwork", "Thermal day pass", SURPRISE],
+    modes: ["romance"],
+    interestTags: ["fitness_wellness"],
+    subActivityPrompt: "What kind of wellness?",
+  },
+  {
+    key: "workshop_offsite",
+    label: "Workshop / offsite",
+    icon: "school-outline",
+    subActivities: ["Creative workshop", "Strategy day space", "Retreat-style venue", "Team rituals block", SURPRISE],
+    modes: ["romance", "events"],
+    interestTags: ["other"],
+    subActivityPrompt: "What kind of workshop or offsite?",
+  },
+  {
+    key: "outdoors",
+    label: "Outdoors",
+    icon: "trail-sign-outline",
+    subActivities: ["Hike", "Picnic", "Beach or waterfront", "Park stroll", "Scenic viewpoint", SURPRISE],
+    modes: ["friends"],
+    interestTags: ["outdoors"],
+    subActivityPrompt: "What kind of outdoor plan?",
+  },
+  {
+    key: "games_fun",
+    label: "Games & fun",
+    icon: "game-controller-outline",
+    subActivities: ["Board-game café", "Bowling", "Arcade", "Escape room", "Mini golf", SURPRISE],
+    modes: ["friends"],
+    interestTags: ["play"],
+    subActivityPrompt: "What kind of games or fun?",
+  },
+  {
+    key: "food_drinks",
+    label: "Food & drinks",
+    icon: "restaurant-outline",
+    subActivities: ["Brunch spot", "Shared plates dinner", "Street-food crawl", "Dessert tour", "Pub crawl (light)", SURPRISE],
+    modes: ["friends"],
+    interestTags: ["food_drink"],
+    foodRelated: true,
+    subActivityPrompt: "What kind of food or drinks?",
+  },
+  {
+    key: "sport",
+    label: "Sport",
+    icon: "trophy-outline",
+    subActivities: ["Watch a match", "Casual padel / hoops", "Running buddy laps", "Ice skating", SURPRISE],
+    modes: ["friends"],
+    interestTags: ["fitness_wellness", "play"],
+    subActivityPrompt: "What kind of sport?",
+  },
+  {
+    key: "music_nightlife",
+    label: "Music & nightlife",
+    icon: "moon-outline",
+    subActivities: ["Live gig", "DJ night", "Karaoke room", "Late bites after show", SURPRISE],
+    modes: ["friends", "events"],
+    interestTags: ["music"],
+    subActivityPrompt: "What kind of night out?",
+  },
+  {
+    key: "fitness_wellness",
+    label: "Fitness & wellness",
+    icon: "fitness-outline",
+    subActivities: ["Gym buddy slot", "Yoga / pilates", "HIIT class", "Recovery stretch / sauna", SURPRISE],
+    modes: ["friends"],
+    interestTags: ["fitness_wellness"],
+    subActivityPrompt: "What kind of fitness or wellness?",
+  },
+  {
+    key: "coffee_meeting",
+    label: "Coffee meeting",
+    icon: "cafe-outline",
+    subActivities: ["Quick espresso", "Long catch-up", "Quiet laptop-friendly café", "Specialty tasting flight", SURPRISE],
+    modes: ["business"],
+    interestTags: ["food_drink"],
+    foodRelated: true,
+    subActivityPrompt: "What kind of coffee meeting?",
+  },
+  {
+    key: "lunch_meeting",
+    label: "Lunch meeting",
+    icon: "fast-food-outline",
+    subActivities: ["Business lunch restaurant", "Casual counter-order", "Outdoor terrace lunch", SURPRISE],
+    modes: ["business"],
+    interestTags: ["food_drink"],
+    foodRelated: true,
+    subActivityPrompt: "What kind of lunch?",
+  },
+  {
+    key: "golf",
+    label: "Golf",
+    icon: "golf-outline",
+    subActivities: ["Full round", "Driving range session", "Clubhouse drinks round", "Short lesson + range", SURPRISE],
+    modes: ["business"],
+    interestTags: ["fitness_wellness"],
+    subActivityPrompt: "What kind of golf outing?",
+  },
+  {
+    key: "industry_event",
+    label: "Industry event",
+    icon: "people-outline",
+    subActivities: ["Conference / summit", "Meetup talk", "Trade fair floor", "Afterparty networking", SURPRISE],
+    modes: ["business", "events"],
+    interestTags: ["other"],
+    subActivityPrompt: "What kind of industry event?",
+  },
+  {
+    key: "walk_talk",
+    label: "Walk & talk",
+    icon: "navigate-outline",
+    subActivities: ["Park loop agenda", "Waterfront stride", "Coffee-to-stroll", "Standing walking meeting", SURPRISE],
+    modes: ["business"],
+    interestTags: ["outdoors", "fitness_wellness"],
+    subActivityPrompt: "What kind of walk & talk?",
+  },
+  {
+    key: "business_dinner",
+    label: "Business dinner",
+    icon: "restaurant-outline",
+    subActivities: ["Client dinner", "Team celebration", "Quiet steakhouse", "Chef's table style", SURPRISE],
+    modes: ["business"],
+    interestTags: ["food_drink"],
+    foodRelated: true,
+    subActivityPrompt: "What kind of business dinner?",
+  },
+  {
+    key: "trip",
+    label: "Trip",
+    icon: "car-outline",
+    subActivities: [],
+    modes: ["romance", "friends", "business", "events"],
+    interestTags: ["outdoors", "food_drink", "arts_culture"],
+  },
+  {
+    key: "custom",
+    label: "Custom",
+    icon: "create-outline",
+    subActivities: [],
+    modes: ["romance", "friends", "business", "events"],
+    interestTags: [],
+  },
+];
+
+const CATEGORY_BY_KEY: Record<string, ActivityCategory> = Object.fromEntries(
+  ALL_ACTIVITY_CATEGORIES.map((c) => [c.key, c])
+);
+
+export function getActivityCategoryByKey(key: string | null | undefined): ActivityCategory | undefined {
+  if (!key) return undefined;
+  return CATEGORY_BY_KEY[key];
+}
+
+/** Categories shown for the Step 1 grid when focused on one mode. */
+export function getCategoriesForMode(mode: Mode): ActivityCategory[] {
+  return ALL_ACTIVITY_CATEGORIES.filter((c) => c.modes.includes(mode));
 }
 
 /** Smart defaults inferred from activity (key + label). Used to pre-fill Step 2. */
@@ -137,49 +347,54 @@ export interface SmartDefaults {
   datePreset: DatePreset;
 }
 
-/** Infer time of day from activity: Brunch/Lunch → lunch, Dinner/Wine/Evening → evening, Fitness → morning, etc. */
+/** Infer time of day from activity category key. */
 const ACTIVITY_TIME: Record<string, TimeOfDay> = {
-  dinner_brunch: "lunch",
-  brunch: "lunch",
-  coffee: "afternoon",
-  coffee_chat: "morning",
-  fitness: "morning",
-  romantic_dinner: "evening",
-  wine_bar: "evening",
-  evening_walk: "evening",
+  art_culture: "afternoon",
+  dinner_drinks: "evening",
+  sport_activity: "afternoon",
+  dance_music: "evening",
+  experience: "afternoon",
+  wellness: "morning",
+  workshop_offsite: "morning",
+  outdoors: "afternoon",
+  games_fun: "afternoon",
+  food_drinks: "evening",
+  sport: "afternoon",
+  music_nightlife: "evening",
+  fitness_wellness: "morning",
+  coffee_meeting: "morning",
   lunch_meeting: "lunch",
-  drinks: "evening",
-  nightlife: "evening",
-  museum_date: "afternoon",
-  exhibition: "afternoon",
-  culture: "afternoon",
-  outdoor: "afternoon",
+  golf: "afternoon",
+  industry_event: "afternoon",
+  walk_talk: "afternoon",
+  business_dinner: "evening",
   trip: "morning",
-  event_party: "evening",
   custom: "any",
 };
 
-/** Median budget by category (restaurant ~50, coffee ~20, etc.). Currency-agnostic amount. */
+/** Median budget by category (currency-agnostic amounts). */
 const ACTIVITY_BUDGET: Record<string, number> = {
-  dinner_brunch: 50,
-  brunch: 45,
-  romantic_dinner: 80,
-  wine_bar: 40,
-  coffee: 20,
-  coffee_chat: 15,
-  lunch_meeting: 35,
-  fitness: 25,
-  museum_date: 25,
-  exhibition: 20,
-  concert: 45,
-  event_party: 50,
-  nightlife: 40,
+  art_culture: 28,
+  dinner_drinks: 75,
+  sport_activity: 25,
+  dance_music: 45,
+  experience: 55,
+  wellness: 85,
+  workshop_offsite: 45,
+  outdoors: 15,
+  games_fun: 30,
+  food_drinks: 45,
+  sport: 25,
+  music_nightlife: 50,
+  fitness_wellness: 28,
+  coffee_meeting: 15,
+  lunch_meeting: 38,
+  golf: 85,
+  industry_event: 40,
+  walk_talk: 12,
+  business_dinner: 85,
   trip: 60,
-  outdoor: 15,
-  hike: 10,
-  golf: 80,
-  networking: 30,
-  workshop: 35,
+  custom: 45,
 };
 
 /** Extract cuisine from label (e.g. "Japanese brunch" → Japanese, "Romantic dinner" → none). */
@@ -228,6 +443,51 @@ export function getCurrencySymbol(currency: string): string {
 }
 
 /** Inline AI hint for a field (short, subtle). */
+/** Merge trip questionnaire answers into Step 2 fields used by `buildPlanRequestText`. */
+export function tripAnswersToActivityDetails(
+  answers: TripPlanningAnswers,
+  existingDetails: Partial<ActivityDetails>
+): Partial<ActivityDetails> {
+  const vibeMap: Record<TripVibe, string> = {
+    culture: "culture and history",
+    food: "food and local dining",
+    outdoors: "outdoor activities and nature",
+    entertainment: "shopping and entertainment",
+    mixed: "a mixed day out",
+  };
+  const scopeMap: Record<TripScope, string> = {
+    own_city: "day trip in my own city/area",
+    nearby: "nearby getaway (short travel)",
+    new_destination: "travel to a new destination",
+  };
+  const destNote =
+    answers.scope === "new_destination"
+      ? answers.destinationDecided
+        ? "Destination is decided."
+        : `Still deciding on destination.${answers.travelRadius ? ` Travel radius: ${answers.travelRadius}.` : ""}`
+      : "";
+  const mustHaveStr = answers.mustHaves.length
+    ? `Must-haves: ${answers.mustHaves.join(", ")}.`
+    : "";
+  const radiusStr =
+    answers.travelRadius && answers.scope === "new_destination" && !answers.destinationDecided
+      ? `Willing to travel: ${answers.travelRadius}.`
+      : "";
+
+  return {
+    ...existingDetails,
+    intentNotes: [
+      `Trip scope: ${scopeMap[answers.scope]}.`,
+      `Trip vibe: ${vibeMap[answers.vibe]}. Activity level: ${answers.activityLevel}.`,
+      destNote,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    mustHaves: [mustHaveStr, radiusStr].filter(Boolean).join(" ") || existingDetails.mustHaves,
+    singleDay: existingDetails.singleDay ?? true,
+  };
+}
+
 export function getInlineHint(
   field: "location" | "cuisine" | "budget" | "date" | "time",
   context: {

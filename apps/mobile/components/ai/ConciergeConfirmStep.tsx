@@ -18,7 +18,7 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography } from "@/constants/tokens";
 import { callWinklyPlan, type ConciergeContext, type ExperienceOption } from "@/lib/ai/conciergeClient";
-import type { PlannerThemePlanOption } from "@/lib/ai/strategicHost";
+import type { PlannerThemePlanOption, PlannerTripDay } from "@/lib/ai/strategicHost";
 import type { Mode } from "@/types";
 import { createPlannerItemForSelf, createPlannerInvite } from "@/lib/plannerInvitations";
 import { createDirectChat, sendMessage } from "@/lib/chats";
@@ -137,14 +137,23 @@ export function ConciergeConfirmStep({
     (chosenOption?.why_this_fits as string) ||
     (chosenOption?.logic_bridge as string) ||
     "";
+  const tripDays: PlannerTripDay[] | undefined = structuredPlan?.trip_days;
+
   const schedule =
-    structuredPlan
-      ? [
-          `${new Date(structuredPlan.date_time).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} — ${structuredPlan.location.name}`,
-        ]
-      : chosenOption?.schedule ??
-        chosenOption?.itinerary?.map((s) => `${(s as { time?: string }).time ?? ""} ${(s as { activity?: string }).activity ?? ""}`.trim()) ??
-        [];
+    tripDays?.length
+      ? tripDays.flatMap((d) => [
+          `Day ${d.day} · ${d.date}`,
+          `Morning — ${d.morning.summary}`,
+          `Afternoon — ${d.afternoon.summary}`,
+          ...(d.evening ? [`Evening — ${d.evening.summary}`] : []),
+        ])
+      : structuredPlan
+        ? [
+            `${new Date(structuredPlan.date_time).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} — ${structuredPlan.location.name}`,
+          ]
+        : chosenOption?.schedule ??
+          chosenOption?.itinerary?.map((s) => `${(s as { time?: string }).time ?? ""} ${(s as { activity?: string }).activity ?? ""}`.trim()) ??
+          [];
 
   useEffect(() => {
     let cancelled = false;
@@ -155,26 +164,41 @@ export function ConciergeConfirmStep({
         setConflictChecked(true);
         return;
       }
-      const { starts_at, ends_at } = structuredPlan
-        ? (() => {
-            const start = new Date(structuredPlan.date_time);
-            const end = new Date(start);
-            end.setHours(end.getHours() + 2, end.getMinutes(), 0, 0);
-            return { starts_at: start.toISOString(), ends_at: end.toISOString() };
-          })()
-        : buildStartsEnds(dateForPlan, chosenOption as ExperienceOption, exactTimeHm);
+
+      let ranges: { starts_at: string; ends_at: string }[];
+      if (tripDays?.length) {
+        ranges = tripDays.map((d) => {
+          const start = new Date(`${d.date}T09:00:00`);
+          const end = new Date(`${d.date}T21:00:00`);
+          return { starts_at: start.toISOString(), ends_at: end.toISOString() };
+        });
+      } else if (structuredPlan) {
+        const start = new Date(structuredPlan.date_time);
+        const end = new Date(start);
+        end.setHours(end.getHours() + 2, end.getMinutes(), 0, 0);
+        ranges = [{ starts_at: start.toISOString(), ends_at: end.toISOString() }];
+      } else {
+        ranges = [buildStartsEnds(dateForPlan, chosenOption as ExperienceOption, exactTimeHm)];
+      }
+
       const items = await getPlannerItems(meId, undefined, 100);
       if (cancelled) return;
-      const overlapping = (items as PlannerItemRow[]).filter((it) =>
-        overlaps(starts_at, ends_at, it.starts_at, it.ends_at)
-      );
+      const overlapping: PlannerItemRow[] = [];
+      for (const r of ranges) {
+        for (const it of items as PlannerItemRow[]) {
+          if (overlaps(r.starts_at, r.ends_at, it.starts_at, it.ends_at)) {
+            overlapping.push(it);
+            break;
+          }
+        }
+      }
       setConflictingItems(overlapping);
       setConflictChecked(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [dateForPlan, chosenOption]);
+  }, [dateForPlan, chosenOption, structuredPlan, exactTimeHm]);
 
   const handleAddToPlanner = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -185,14 +209,26 @@ export function ConciergeConfirmStep({
       const meId = auth.user?.id;
       if (!meId) throw new Error("Not signed in");
 
-      const { starts_at, ends_at } = structuredPlan
-        ? (() => {
-            const start = new Date(structuredPlan.date_time);
-            const end = new Date(start);
-            end.setHours(end.getHours() + 2, end.getMinutes(), 0, 0);
-            return { starts_at: start.toISOString(), ends_at: end.toISOString() };
-          })()
-        : buildStartsEnds(dateForPlan, chosenOption as ExperienceOption, exactTimeHm);
+      let starts_at: string;
+      let ends_at: string;
+      if (structuredPlan?.trip_days?.length) {
+        const first = structuredPlan.trip_days[0];
+        const last = structuredPlan.trip_days[structuredPlan.trip_days.length - 1];
+        const start = new Date(`${first.date}T09:00:00`);
+        const end = new Date(`${last.date}T21:00:00`);
+        starts_at = start.toISOString();
+        ends_at = end.toISOString();
+      } else if (structuredPlan) {
+        const start = new Date(structuredPlan.date_time);
+        const end = new Date(start);
+        end.setHours(end.getHours() + 2, end.getMinutes(), 0, 0);
+        starts_at = start.toISOString();
+        ends_at = end.toISOString();
+      } else {
+        const se = buildStartsEnds(dateForPlan, chosenOption as ExperienceOption, exactTimeHm);
+        starts_at = se.starts_at;
+        ends_at = se.ends_at;
+      }
 
       const activity = structuredPlan?.topic || (chosenOption?.option_name as string) || title;
       const place = structuredPlan?.location?.name
@@ -218,6 +254,44 @@ export function ConciergeConfirmStep({
         place,
       };
 
+      if (structuredPlan?.trip_days?.length) {
+        const baseTitle = structuredPlan.topic || title;
+        for (const d of structuredPlan.trip_days) {
+          const dayStart = new Date(`${d.date}T09:00:00`);
+          const dayEnd = new Date(`${d.date}T21:00:00`);
+          const description = [
+            `Morning: ${d.morning.summary}`,
+            `Afternoon: ${d.afternoon.summary}`,
+            d.evening ? `Evening: ${d.evening.summary}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n");
+          await createPlannerItemForSelf(meId, {
+            title: `${baseTitle} · Day ${d.day}`,
+            description,
+            source_mode: mode,
+            starts_at: dayStart.toISOString(),
+            ends_at: dayEnd.toISOString(),
+            activity,
+            location,
+            place,
+            item_meta: {
+              concierge_trip: true,
+              trip_day: d.day,
+              trip_date: d.date,
+              morning: d.morning,
+              afternoon: d.afternoon,
+              evening: d.evening ?? null,
+              activity,
+              location,
+              place,
+            },
+          });
+        }
+        onDone();
+        return;
+      }
+
       if (inviteToo && partner) {
         const conversationId = await createDirectChat(partner.id, mode, "invite", meId);
         // New flow: create pending plan + require both to confirm before finalizing into Planner.
@@ -229,7 +303,7 @@ export function ConciergeConfirmStep({
             date_from: starts_at,
             budget_amount: (baseCtx as { budget_amount?: number }).budget_amount,
             budget_currency: (baseCtx as { budget_currency?: string }).budget_currency,
-            weather_snapshot: (baseCtx as { weather_snapshot?: unknown }).weather_snapshot,
+            weather_snapshot: (baseCtx as ConciergeContext).weather_snapshot,
             participant_user_ids: [meId, partner.id],
             partner_user_id: partner.id,
             // Use the chosen option as the "idea" seed.
@@ -276,10 +350,15 @@ export function ConciergeConfirmStep({
         }
       } else if (addRecurrence === "weekly") {
         const weeks = [0, 1, 2, 3];
+        const recurrenceSeed = (chosenOption ??
+          ({
+            option_name: structuredPlan?.topic ?? title,
+            itinerary: structuredPlan?.details ? [{ activity: structuredPlan.details }] : [{ activity: title }],
+          } as ExperienceOption));
         for (const weekOffset of weeks) {
           const startDate = new Date(dateForPlan);
           startDate.setDate(startDate.getDate() + weekOffset * 7);
-          const { starts_at: s, ends_at: e } = buildStartsEnds(startDate, chosenOption);
+          const { starts_at: s, ends_at: e } = buildStartsEnds(startDate, recurrenceSeed);
           await createPlannerItemForSelf(meId, {
             ...payload,
             starts_at: s,
@@ -313,13 +392,26 @@ export function ConciergeConfirmStep({
           <Text style={styles.why} numberOfLines={5}>{why}</Text>
         </>
       ) : null}
-      {schedule.length > 0 && (
+      {tripDays?.length ? (
+        <View style={styles.tripTimeline}>
+          {tripDays.map((d) => (
+            <View key={`${d.day}-${d.date}`} style={styles.tripDayCard}>
+              <Text style={styles.tripDayTitle}>
+                Day {d.day} · {d.date}
+              </Text>
+              <Text style={styles.tripSlot}>Morning — {d.morning.summary}</Text>
+              <Text style={styles.tripSlot}>Afternoon — {d.afternoon.summary}</Text>
+              {d.evening ? <Text style={styles.tripSlot}>Evening — {d.evening.summary}</Text> : null}
+            </View>
+          ))}
+        </View>
+      ) : schedule.length > 0 ? (
         <View style={styles.scheduleBlock}>
           {schedule.map((line, i) => (
             <Text key={i} style={styles.scheduleLine}>{line}</Text>
           ))}
         </View>
-      )}
+      ) : null}
 
       <TouchableOpacity
         style={styles.sharePlanBtn}
@@ -327,9 +419,10 @@ export function ConciergeConfirmStep({
           Haptics.selectionAsync();
           const dateStr = dateForPlan.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
           const placeLine =
-            (chosenOption as { place?: string }).place ??
-            (chosenOption.option_name as string) ??
-            (chosenOption.narrative as string) ??
+            structuredPlan?.location?.name ??
+            (chosenOption as { place?: string } | undefined)?.place ??
+            (chosenOption?.option_name as string) ??
+            (chosenOption?.narrative as string) ??
             "";
           const msg = [
             title,
@@ -363,7 +456,7 @@ export function ConciergeConfirmStep({
         </TouchableOpacity>
       )}
 
-      {!partner && (
+      {!partner && !tripDays?.length ? (
         <View style={styles.recurrenceSection}>
           <Text style={styles.recurrenceLabel}>Add to planner</Text>
           <View style={styles.recurrenceRow}>
@@ -383,7 +476,7 @@ export function ConciergeConfirmStep({
             </TouchableOpacity>
           </View>
         </View>
-      )}
+      ) : null}
 
       {conflictChecked && conflictingItems.length > 0 && (
         <View style={styles.conflictSection}>
@@ -560,6 +653,25 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.white,
     fontWeight: "600",
+  },
+  tripTimeline: { gap: 12, marginBottom: 16 },
+  tripDayCard: {
+    backgroundColor: Colors.gray100,
+    borderRadius: 12,
+    padding: 14,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.primaryViolet,
+  },
+  tripDayTitle: {
+    ...Typography.caption,
+    fontWeight: "700",
+    color: Colors.textPrimary,
+    marginBottom: 8,
+  },
+  tripSlot: {
+    ...Typography.caption,
+    color: Colors.gray600,
+    marginBottom: 6,
   },
   scheduleBlock: {
     backgroundColor: Colors.gray100,

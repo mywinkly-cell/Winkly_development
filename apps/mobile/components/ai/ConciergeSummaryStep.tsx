@@ -16,6 +16,14 @@ function dayKey(d: Date): string {
   return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
+function sameCalendarDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
 export type ConciergeSummaryStepProps = {
   activityLabel: string | null;
   details: Partial<ActivityDetails>;
@@ -36,7 +44,12 @@ export function ConciergeSummaryStep({
   showInlineBack = true,
 }: ConciergeSummaryStepProps) {
   const locationDisplay = useNormalizedLocation(details.location);
-  const dateStr = details.date ? dayKey(details.date) : "";
+  const dateStr =
+    details.date && details.singleDay === false && details.dateEnd && !sameCalendarDay(details.date, details.dateEnd)
+      ? `${dayKey(details.date)} → ${dayKey(details.dateEnd)}`
+      : details.date
+        ? dayKey(details.date)
+        : "";
   const timeLabel =
     details.timeOfDay === "any"
       ? ""

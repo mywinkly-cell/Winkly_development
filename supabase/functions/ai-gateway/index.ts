@@ -168,6 +168,8 @@ const ALLOWLISTED_CONTEXT_KEYS = [
   "mode_specific_cards",
   "free_time_slot",
   "weather_forecast",
+  /** Multi-day concierge trips: inclusive day count (2–7). */
+  "num_days",
 ];
 
 type AiGatewayRequest = {
@@ -187,6 +189,8 @@ type WinklyPlanInput = {
     weather?: Record<string, unknown> | null;
     city?: string | null;
     country?: string | null;
+    num_days?: number | null;
+    date_to?: string | null;
   };
 };
 
@@ -210,6 +214,14 @@ type ChatTopicsOutput = {
   suggested_topics: StrategicHostTopic[];
 };
 
+type PlannerTripDayOut = {
+  day: number;
+  date: string;
+  morning: { summary: string };
+  afternoon: { summary: string };
+  evening?: { summary: string };
+};
+
 type PlannerThemePlansOutput = {
   plan_options: Array<{
     topic: string;
@@ -219,6 +231,7 @@ type PlannerThemePlansOutput = {
     participants: string[];
     details: string;
     action_links: { booking?: string };
+    trip_days?: PlannerTripDayOut[];
   }>;
 };
 
@@ -2093,6 +2106,203 @@ function noVenueFoundPlan(seed: Omit<WinklyPlanOutput, "location_details">): Win
   };
 }
 
+function inclusiveDayCountIso(dateFrom: string, dateTo: string): number {
+  const a = new Date(`${dateFrom.slice(0, 10)}T12:00:00Z`);
+  const b = new Date(`${dateTo.slice(0, 10)}T12:00:00Z`);
+  if (isNaN(a.getTime()) || isNaN(b.getTime())) return 1;
+  const diff = Math.round((b.getTime() - a.getTime()) / 86400000);
+  return Math.max(1, diff + 1);
+}
+
+function slotSummaryFromUnknown(s: unknown): string {
+  if (!s || typeof s !== "object") return "";
+  const o = s as Record<string, unknown>;
+  const summary = typeof o.summary === "string" ? o.summary.trim() : "";
+  const title = typeof o.title === "string" ? o.title.trim() : "";
+  const activity = typeof o.activity === "string" ? o.activity.trim() : "";
+  return (summary || title || activity).slice(0, 500);
+}
+
+function parseMultiDayPlannerOutput(
+  text: string,
+  numDays: number,
+  startIsoDate: string,
+): { plan: WinklyPlanOutput; trip_days: PlannerTripDayOut[] } | null {
+  let raw = text.trim();
+  const codeBlock = raw.match(/^```(?:json)?\s*([\s\S]*?)```$/);
+  if (codeBlock) raw = codeBlock[1].trim();
+  let obj: unknown;
+  try {
+    obj = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!obj || typeof obj !== "object") return null;
+  const o = obj as Record<string, unknown>;
+  const topic = typeof o.topic === "string" ? o.topic.trim() : "";
+  const weather_context = typeof o.weather_context === "string" ? o.weather_context.trim() : "";
+  const logic_reasoning = typeof o.logic_reasoning === "string" ? o.logic_reasoning.trim() : "";
+  const booking_links = Array.isArray(o.booking_links)
+    ? o.booking_links.filter((x) => typeof x === "string").map((s) => s.trim()).filter(Boolean).slice(0, 6)
+    : [];
+  const ld = o.location_details;
+  let location_details: WinklyPlanOutput["location_details"] | null = null;
+  if (ld && typeof ld === "object") {
+    const ldo = ld as Record<string, unknown>;
+    const name = typeof ldo.name === "string" ? ldo.name.trim() : "";
+    const address = typeof ldo.address === "string" ? ldo.address.trim() : "";
+    const link = typeof ldo.google_maps_link === "string" ? ldo.google_maps_link.trim() : "";
+    if (name) location_details = { name, address, google_maps_link: link };
+  }
+  const daysRaw = o.days;
+  if (!topic || !weather_context || !logic_reasoning || !location_details || !Array.isArray(daysRaw)) {
+    return null;
+  }
+
+  const padDate = (idx: number): string => {
+    const base = new Date(`${startIsoDate.slice(0, 10)}T12:00:00Z`);
+    base.setUTCDate(base.getUTCDate() + idx);
+    return base.toISOString().slice(0, 10);
+  };
+
+  const trip_days: PlannerTripDayOut[] = [];
+  for (let i = 0; i < numDays; i++) {
+    const row = daysRaw[i];
+    const fallbackDate = padDate(i);
+    if (!row || typeof row !== "object") {
+      trip_days.push({
+        day: i + 1,
+        date: fallbackDate,
+        morning: { summary: "Flexible morning — explore the area." },
+        afternoon: { summary: "Flexible afternoon." },
+        evening: { summary: "Relax or light evening plans." },
+      });
+      continue;
+    }
+    const ro = row as Record<string, unknown>;
+    const dateStr = typeof ro.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(ro.date.slice(0, 10))
+      ? ro.date.slice(0, 10)
+      : fallbackDate;
+    const mSummary = slotSummaryFromUnknown(ro.morning);
+    const aSummary = slotSummaryFromUnknown(ro.afternoon);
+    const eSummary = ro.evening !== undefined ? slotSummaryFromUnknown(ro.evening) : "";
+    const day: PlannerTripDayOut = {
+      day: typeof ro.day === "number" && isFinite(ro.day) ? Math.round(ro.day) : i + 1,
+      date: dateStr,
+      morning: { summary: mSummary || "Morning exploration." },
+      afternoon: { summary: aSummary || "Afternoon plans." },
+    };
+    if (eSummary) day.evening = { summary: eSummary };
+    trip_days.push(day);
+  }
+
+  const date_time = `${startIsoDate.slice(0, 10)}T10:00:00.000Z`;
+  const plan: WinklyPlanOutput = {
+    topic: topic.slice(0, 120),
+    date_time,
+    duration: Math.min(24 * 60 * 7, Math.max(180, numDays * 8 * 60)),
+    location_details,
+    weather_context: weather_context.slice(0, 400),
+    booking_links,
+    logic_reasoning: logic_reasoning.slice(0, 600),
+  };
+  return { plan, trip_days };
+}
+
+async function runMultiDayWinklyGemini(params: {
+  geminiKey: string;
+  profiles: Array<Record<string, unknown>>;
+  city: string;
+  country?: string;
+  userIdea: string;
+  weather: unknown;
+  amount: number | null;
+  currency: string | null;
+  dtIso: string;
+  numDays: number;
+  mode: string;
+}): Promise<{ plan: WinklyPlanOutput; trip_days: PlannerTripDayOut[] }> {
+  const startIso = params.dtIso.slice(0, 10);
+  const SYSTEM = `You are Winkly Concierge Agent — multi-day trip planner.
+
+Rules:
+- Respect ALL participant allergies/constraints from profiles when naming activities.
+- Produce exactly ${params.numDays} consecutive calendar days starting ${startIso} (use ISO date YYYY-MM-DD for each day).
+- Each day MUST include morning and afternoon slots (specific venues or neighborhoods when possible). Evening is optional.
+- booking_links must be [] unless you have verified HTTPS URLs (usually empty).
+- Never fabricate booking URLs.
+- Use realistic venue or area names for ${params.city}${params.country ? ", " + params.country : ""}.
+
+Return JSON only:
+{
+  "topic": string,
+  "days": [
+    {
+      "day": number,
+      "date": string,
+      "morning": { "summary": string },
+      "afternoon": { "summary": string },
+      "evening"?: { "summary": string }
+    }
+  ],
+  "location_details": { "name": string, "address": string, "google_maps_link": string },
+  "weather_context": string,
+  "booking_links": string[],
+  "logic_reasoning": string
+}`;
+
+  const payload = {
+    mode: params.mode,
+    participant_profiles: params.profiles,
+    planning_hint: params.userIdea,
+    budget: { amount: params.amount, currency: params.currency },
+    weather: params.weather,
+    city: params.city,
+    country: params.country ?? null,
+    trip: { start_date: startIso, num_days: params.numDays },
+  };
+
+  const url =
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_PLAN}:generateContent?key=${encodeURIComponent(params.geminiKey)}`;
+  const body = {
+    systemInstruction: { parts: [{ text: SYSTEM }] },
+    contents: [{ role: "user", parts: [{ text: JSON.stringify(payload) }] }],
+    generationConfig: {
+      maxOutputTokens: 2048,
+      temperature: 0.45,
+      responseMimeType: "application/json",
+    },
+  };
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const wf = params.weather ? scrubPiiText(JSON.stringify(params.weather)).slice(0, 400) : "Weather not provided.";
+  if (!res.ok) {
+    const seed = noVenueFoundPlan({
+      topic: params.userIdea.slice(0, 120) || "Trip",
+      date_time: `${startIso}T10:00:00.000Z`,
+      duration: params.numDays * 8 * 60,
+      weather_context: wf,
+      booking_links: [],
+      logic_reasoning: "Could not generate multi-day plan (provider error).",
+    });
+    return { plan: seed, trip_days: [] };
+  }
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  const parsed = typeof text === "string" ? parseMultiDayPlannerOutput(text, params.numDays, startIso) : null;
+  if (!parsed) {
+    const seed = noVenueFoundPlan({
+      topic: params.userIdea.slice(0, 120) || "Trip",
+      date_time: `${startIso}T10:00:00.000Z`,
+      duration: params.numDays * 8 * 60,
+      weather_context: wf,
+      booking_links: [],
+      logic_reasoning: "AI returned invalid multi-day JSON.",
+    });
+    return { plan: seed, trip_days: [] };
+  }
+  return parsed;
+}
+
 /**
  * Winkly Concierge Agent — stateless plan generator
  * Implements: multi-profile context aggregation + Gemini with web/maps grounding (best-effort) + strict JSON output.
@@ -2106,8 +2316,11 @@ async function generateWinklyPlan(params: {
   persistDraft?: boolean;
   /** Grounding control: reduce Maps cost for previews. */
   maps_grounding?: "none" | "textsearch" | "verify";
+  /** When set with num_days > 1, returns a day-by-day itinerary (skips single-day Maps verify path). */
+  multiDay?: { num_days: number } | null;
 }): Promise<{
   plan: WinklyPlanOutput;
+  trip_days?: PlannerTripDayOut[];
   pending_plan_id: string | null;
   provider: "gemini" | "fallback";
   location_id: string | null;
@@ -2189,6 +2402,64 @@ async function generateWinklyPlan(params: {
   };
 
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
+
+  const multiReq = params.multiDay;
+  if (multiReq && multiReq.num_days > 1) {
+    if (!geminiKey) {
+      const fallback = noVenueFoundPlan({
+        ...planSeed,
+        logic_reasoning: "Multi-day planning requires AI configuration (missing GEMINI_API_KEY).",
+      });
+      return {
+        plan: fallback,
+        trip_days: [],
+        pending_plan_id: null,
+        provider: "fallback",
+        location_id: null,
+        booking_url: null,
+        participants: ensureRequester,
+      };
+    }
+    const mdOut = await runMultiDayWinklyGemini({
+      geminiKey,
+      profiles: profiles as unknown as Array<Record<string, unknown>>,
+      city,
+      country,
+      userIdea,
+      weather,
+      amount,
+      currency,
+      dtIso: dt,
+      numDays: Math.min(7, Math.max(2, Math.round(multiReq.num_days))),
+      mode: input.mode,
+    });
+    let pendingPlanId: string | null = null;
+    if (persistDraft) {
+      try {
+        const ins = await supabase.from("pending_plans").insert({
+          created_by: requesterUserId,
+          source_mode: input.mode,
+          participant_ids: ensureRequester,
+          conversation_id: conversationId ?? null,
+          plan_json: mdOut.plan,
+          status: "pending",
+        }).select("id").single();
+        if (!ins.error && ins.data) pendingPlanId = (ins.data as { id: string }).id;
+      } catch {
+        pendingPlanId = null;
+      }
+    }
+    return {
+      plan: mdOut.plan,
+      trip_days: mdOut.trip_days.length ? mdOut.trip_days : undefined,
+      pending_plan_id: pendingPlanId,
+      provider: "gemini",
+      location_id: null,
+      booking_url: null,
+      participants: ensureRequester,
+    };
+  }
+
   if (!geminiKey) {
     const fallback = noVenueFoundPlan({
       ...planSeed,
@@ -2545,6 +2816,19 @@ serve(async (req) => {
         ? (scrubbedSafeContext.weather_snapshot as Record<string, unknown>)
         : null;
 
+      const dateToRaw = typeof scrubbedSafeContext.date_to === "string" ? scrubbedSafeContext.date_to.trim() : "";
+      const dateFromRaw =
+        typeof scrubbedSafeContext.date_from === "string" && scrubbedSafeContext.date_from.trim()
+          ? scrubbedSafeContext.date_from.trim()
+          : dateTime;
+      const explicitNd = typeof scrubbedSafeContext.num_days === "number" ? scrubbedSafeContext.num_days : null;
+      let tripNumDays = 1;
+      if (explicitNd != null && explicitNd > 1) {
+        tripNumDays = Math.min(7, Math.max(2, Math.round(explicitNd)));
+      } else if (dateToRaw.length >= 10 && dateFromRaw.length >= 10) {
+        tripNumDays = inclusiveDayCountIso(dateFromRaw, dateToRaw);
+      }
+
       const pr = typeof scrubbedSafeContext.plan_request_text === "string" ? scrubbedSafeContext.plan_request_text.trim() : "";
       // Prefer the full Planner form text (includes anonymised persona + constraints) when present.
       const userIdeaBase = (pr || `${theme} plan`).trim();
@@ -2554,8 +2838,9 @@ serve(async (req) => {
           ? "Prefer indoor venues or weather-proof options."
           : "Prefer outdoor-friendly options when feasible.";
 
-      // Semantic caching: same theme/city/mode/day within 24h
-      const semKey = `sc:planner_theme_plans:${mode}:${normalizeTag(city)}:${normalizeTag(theme)}:${dateTime.slice(0, 10)}:${hashKeyMaterial(participantIds.slice().sort().join(","))}`;
+      // Semantic caching: same theme/city/mode/day/trip length within 24h
+      const semKey =
+        `sc:planner_theme_plans:${mode}:${normalizeTag(city)}:${normalizeTag(theme)}:${dateTime.slice(0, 10)}:${tripNumDays}:${hashKeyMaterial(participantIds.slice().sort().join(","))}`;
       const cached = await redisGetJson<PlannerThemePlansOutput>(semKey);
       if (cached?.plan_options?.length) {
         return new Response(JSON.stringify(cached), {
@@ -2583,12 +2868,34 @@ serve(async (req) => {
         planning_form: { ...inputA.planning_form, user_idea: `${userIdeaBase} (alternative). ${indoorOutdoorHint} ${weatherHint}`.trim() },
       };
 
+      const multiDayOpt = tripNumDays > 1 ? { num_days: tripNumDays } : null;
+
       const [outA, outB] = await Promise.all([
-        generateWinklyPlan({ supabase, requesterUserId: user.id, input: inputA, conversationId: null, persistDraft: false, maps_grounding: "textsearch" }),
-        generateWinklyPlan({ supabase, requesterUserId: user.id, input: inputB, conversationId: null, persistDraft: false, maps_grounding: "textsearch" }),
+        generateWinklyPlan({
+          supabase,
+          requesterUserId: user.id,
+          input: inputA,
+          conversationId: null,
+          persistDraft: false,
+          maps_grounding: "textsearch",
+          multiDay: multiDayOpt,
+        }),
+        generateWinklyPlan({
+          supabase,
+          requesterUserId: user.id,
+          input: inputB,
+          conversationId: null,
+          persistDraft: false,
+          maps_grounding: "textsearch",
+          multiDay: multiDayOpt,
+        }),
       ]);
 
-      const mapPlan = (p: WinklyPlanOutput, bookingUrl?: string | null): PlannerThemePlansOutput["plan_options"][number] => ({
+      const mapPlan = (
+        p: WinklyPlanOutput,
+        bookingUrl?: string | null,
+        tripDays?: PlannerTripDayOut[],
+      ): PlannerThemePlansOutput["plan_options"][number] => ({
         topic: p.topic,
         date_time: p.date_time,
         location: {
@@ -2600,12 +2907,13 @@ serve(async (req) => {
         participants: participantIds,
         details: p.logic_reasoning || "Structured plan option.",
         action_links: { booking: bookingUrl ?? undefined },
+        ...(tripDays?.length ? { trip_days: tripDays } : {}),
       });
 
       const response: PlannerThemePlansOutput = {
         plan_options: [
-          mapPlan(outA.plan, outA.booking_url),
-          mapPlan(outB.plan, outB.booking_url),
+          mapPlan(outA.plan, outA.booking_url, outA.trip_days),
+          mapPlan(outB.plan, outB.booking_url, outB.trip_days),
         ],
       };
 

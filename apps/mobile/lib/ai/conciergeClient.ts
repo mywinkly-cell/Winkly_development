@@ -208,6 +208,8 @@ export type ConciergeContext = {
   exact_time_hm?: string;
   /** Structured copy of sanitized persona line (also inside plan_request_text). */
   sanitized_requester_persona?: string;
+  /** Multi-day trips: inclusive day count (gateway switches planner_theme_plans shape when > 1). */
+  num_days?: number;
 }
 
 /** One step in an option's itinerary (detailed format). */
@@ -306,6 +308,7 @@ function optionsCacheKey(ctx: ConciergeContext): string | null {
     (ctx.activity_hint ?? "").slice(0, 80),
     (ctx.user_prompt ?? "").slice(0, 80),
     ctx.presentation ?? "",
+    String(ctx.num_days ?? ""),
   ];
   return "opt:" + parts.join("|");
 }

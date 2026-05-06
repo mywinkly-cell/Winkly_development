@@ -1,6 +1,6 @@
 # API Keys and Environment Variables — Winkly
 
-**Last updated:** 2026-04-05
+**Last updated:** 2026-05-06
 
 This doc lists every API key and env var used by Winkly, where they are used, and **how to set them**. You must set these yourself (in Supabase Dashboard / CLI and in the mobile app `.env`); the app cannot set them for you.
 
@@ -30,6 +30,8 @@ All mobile env vars are prefixed with `EXPO_PUBLIC_` so they are available at bu
 | `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` | No | Google OAuth iOS client ID. |
 | `EXPO_PUBLIC_FACEBOOK_APP_ID` | No | Facebook App ID (for Sign in with Facebook). |
 | `EXPO_PUBLIC_ABLY_KEY` | No | Optional Ably API key for future pub/sub (match notifications). When unset, `lib/realtime/ablyOptional.ts` is a no-op; chat uses Supabase Realtime. |
+| `EXPO_PUBLIC_EAS_PROJECT_ID` | No | **Expo Push:** must be your Expo/EAS **Project ID UUID** (Dashboard → Project settings). Wired into `app.config.js` `extra.eas.projectId` only when valid; omit or leave unset for local **Expo Go**—especially **Android** (SDK 53+ remote push is not supported there; use an **EAS development build** to test push). |
+
 
 **How to set (mobile):**
 
@@ -95,6 +97,7 @@ Run the commands **on your machine** in PowerShell or Command Prompt. When you t
 | `EXPO_PUBLIC_AUTH_REDIRECT_URL` | `constants/config.ts` |
 | `EXPO_PUBLIC_POSTHOG_*` | `constants/config.ts`, `app/_layout.tsx` |
 | `EXPO_PUBLIC_GOOGLE_*` / `EXPO_PUBLIC_FACEBOOK_*` | `app/(auth)/signin.tsx`, `app/(auth)/signup.tsx` |
+| `EXPO_PUBLIC_EAS_PROJECT_ID` | `app.config.js` (`extra.eas.projectId`), `lib/notifications.ts` (Expo Push token registration) |
 | `OPENAI_API_KEY` | `supabase/functions/ai-gateway/index.ts` (fallback when `GEMINI_API_KEY` also set; primary when Gemini unset). |
 | `GEMINI_API_KEY` | `supabase/functions/ai-gateway/index.ts` (primary when set). |
 | `GOOGLE_PLACES_API_KEY` / `GOOGLE_MAPS_API_KEY` | `supabase/functions/ai-gateway/index.ts` (optional Places Text Search for external venue hints). |
@@ -110,6 +113,7 @@ Run the commands **on your machine** in PowerShell or Command Prompt. When you t
 - [ ] **Google / Facebook sign-in:** Optional. Set the OAuth client/app IDs in `.env` and configure Supabase Auth providers.
 - [ ] **AI concierge:** Optional. In Supabase, set `GEMINI_API_KEY` and/or `OPENAI_API_KEY` and deploy `ai-gateway`. **Gemini is used first** when its key is set (free tier–friendly); OpenAI is fallback when both are set, or sole provider when only OpenAI is set. Apply migration `20260406120000_concierge_event_trgm_and_rpc.sql` for fuzzy event matching (`match_events_for_concierge`). Optional: `GOOGLE_PLACES_API_KEY` or `GOOGLE_MAPS_API_KEY` (Places API enabled) for richer **EXTERNAL_PLACE_HINTS**; otherwise Nominatim is used.
 - [ ] **External events (Meetup/Eventbrite):** Optional. Set `MEETUP_API_KEY` and/or `EVENTBRITE_PRIVATE_TOKEN` in Supabase secrets and deploy `get-nearby-external-events`. The Edge Function implements Meetup GraphQL and Eventbrite REST; when keys are set, Events home can show nearby external events.
+- [ ] **Expo Push / EAS:** Optional for dev in Expo Go. For **standalone / dev builds**, set `EXPO_PUBLIC_EAS_PROJECT_ID` to your Expo **project UUID** if you need remote push tokens; **Android Expo Go** cannot exercise remote push (SDK 53+) — build with **EAS** (`eas build`) when testing pushes end-to-end.
 
 ---
 
