@@ -32,6 +32,7 @@ import { getDeviceLocationDisplay } from "@/lib/location/deviceLocation";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import {
   type ActivityDetails,
+  type ActivityCategory,
   type DatePreset,
   type TimeOfDay,
   BUDGET_QUICK_AMOUNTS,
@@ -105,6 +106,10 @@ export type ConciergeActivityDetailsStepProps = {
   /** Custom plan: optional text + five profile-based chips above location/date/time/budget. */
   profilePromptVariant?: "custom";
   mode?: Mode;
+  /** When `trip`, show a 1–7 day length picker (sets `singleDay` / `dateEnd`). */
+  activityKey?: string | null;
+  /** Category metadata from intent step (sub-activity chips, food flags). */
+  activityCategory?: ActivityCategory | null;
 };
 
 export function ConciergeActivityDetailsStep({
@@ -116,6 +121,8 @@ export function ConciergeActivityDetailsStep({
   showInlineBack = true,
   profilePromptVariant,
   mode = "romance",
+  activityKey = null,
+  activityCategory = null,
 }: ConciergeActivityDetailsStepProps) {
   const { i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
@@ -136,6 +143,17 @@ export function ConciergeActivityDetailsStep({
     return end;
   });
   const [singleDay, setSingleDay] = useState(initialDetails.singleDay ?? true);
+  const computeTripLenFromInitial = () => {
+    if (initialDetails.singleDay !== false) return 1;
+    const start = initialDetails.date ?? new Date();
+    const end = initialDetails.dateEnd ?? start;
+    const ms = end.getTime() - start.getTime();
+    const days = Math.round(ms / 86400000) + 1;
+    return Math.min(7, Math.max(1, days));
+  };
+  const [tripLengthDays, setTripLengthDays] = useState(
+    activityKey === "trip" ? computeTripLenFromInitial() : 1
+  );
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(initialDetails.timeOfDay ?? "any");
   const [budgetAmount, setBudgetAmount] = useState(initialDetails.budgetAmount ?? "");
   const [budgetCurrency, setBudgetCurrency] = useState(initialDetails.budgetCurrency ?? "EUR");
@@ -168,6 +186,24 @@ export function ConciergeActivityDetailsStep({
     return d;
   });
   const [showExactTimePicker, setShowExactTimePicker] = useState(false);
+
+  const subActivities = activityCategory?.subActivities ?? [];
+  const subActivityPrompt =
+    activityCategory?.subActivityPrompt?.trim() ||
+    (subActivities.length ? `What kind of ${activityCategory?.label.toLowerCase() ?? "plan"}?` : "");
+
+  const [subActivityChoice, setSubActivityChoice] = useState<string>(() => {
+    if (!subActivities.length) return "";
+    return subActivities.includes("Surprise me") ? "Surprise me" : subActivities[0];
+  });
+
+  useEffect(() => {
+    if (!subActivities.length) {
+      setSubActivityChoice("");
+      return;
+    }
+    setSubActivityChoice(subActivities.includes("Surprise me") ? "Surprise me" : subActivities[0]);
+  }, [activityKey, activityCategory?.key]);
 
   const showProfilePrompt = profilePromptVariant === "custom";
 
@@ -295,6 +331,25 @@ export function ConciergeActivityDetailsStep({
     };
   }, [location, dateStr, dateEndStr, singleDay]);
 
+  // Trip: day-count picker keeps `dateEnd` and `singleDay` aligned.
+  useEffect(() => {
+    if (activityKey !== "trip") return;
+    if (tripLengthDays <= 1) {
+      setSingleDay(true);
+      setDateEnd((prev) => {
+        const next = new Date(date);
+        next.setHours(0, 0, 0, 0);
+        return next;
+      });
+      return;
+    }
+    setSingleDay(false);
+    const end = new Date(date);
+    end.setHours(0, 0, 0, 0);
+    end.setDate(end.getDate() + tripLengthDays - 1);
+    setDateEnd(end);
+  }, [activityKey, tripLengthDays, date]);
+
   const applyDatePreset = useCallback((preset: DatePreset) => {
     Haptics.selectionAsync();
     setDatePreset(preset);
@@ -329,11 +384,17 @@ export function ConciergeActivityDetailsStep({
     const pad = (n: number) => String(n).padStart(2, "0");
     const exactTimeHm =
       singleDay && exactTimeEnabled ? `${pad(exactTime.getHours())}:${pad(exactTime.getMinutes())}` : undefined;
+    const specificsLine =
+      subActivities.length && subActivityChoice
+        ? `${activityCategory?.label ?? activityLabel ?? "Plan"}: ${subActivityChoice}.`
+        : "";
+    const mergedIntentNotes = [specificsLine, intentNotesText.trim()].filter(Boolean).join("\n\n");
+
     onNext({
       location: locLine,
       city: parsed.city || undefined,
       country: parsed.country,
-      intentNotes: intentNotesText.trim() || undefined,
+      intentNotes: mergedIntentNotes || undefined,
       additionalInfo: additionalInfo.trim() || undefined,
       mustHaves: mustHaves.trim() || undefined,
       datePreset,
@@ -352,9 +413,11 @@ export function ConciergeActivityDetailsStep({
     });
   };
 
-  const isRestaurantLike =
-    activityLabel &&
-    /dinner|brunch|coffee|lunch|wine|restaurant|cafe/i.test(activityLabel);
+  const showFoodFields =
+    !!activityCategory?.foodRelated ||
+    (!activityCategory &&
+      !!activityLabel &&
+      /dinner|brunch|coffee|lunch|wine|restaurant|cafe/i.test(activityLabel));
 
   const locationHint = getInlineHint("location", {
     hasLocation: !!location.trim(),
@@ -435,6 +498,32 @@ export function ConciergeActivityDetailsStep({
       <Text style={styles.stepTitle}>Activity details</Text>
       {activityLabel ? (
         <Text style={styles.activityLabel} numberOfLines={1}>{activityLabel}</Text>
+      ) : null}
+
+      {subActivities.length > 0 ? (
+        <View style={styles.subActivityBlock}>
+          <Text style={styles.subActivityPrompt}>{subActivityPrompt}</Text>
+          <View style={styles.chipsRow}>
+            {subActivities.map((opt) => {
+              const active = subActivityChoice === opt;
+              return (
+                <TouchableOpacity
+                  key={opt}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setSubActivityChoice(opt);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={2}>
+                    {opt}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
       ) : null}
 
       {/* Location */}
@@ -541,7 +630,7 @@ export function ConciergeActivityDetailsStep({
               {date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
             </Text>
           </TouchableOpacity>
-          {!singleDay && (
+          {!singleDay && activityKey !== "trip" && (
             <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDateEndPicker(true)}>
               <Ionicons name="calendar-outline" size={20} color={Colors.gray600} />
               <Text style={styles.dateBtnText}>
@@ -550,6 +639,36 @@ export function ConciergeActivityDetailsStep({
             </TouchableOpacity>
           )}
         </View>
+      )}
+
+      {activityKey === "trip" && (
+        <>
+          <Text style={styles.label}>Trip length</Text>
+          <Text style={styles.inlineHint}>Choose how many days — we’ll shape an itinerary for each day.</Text>
+          <View style={styles.chipsRow}>
+            {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+              <TouchableOpacity
+                key={n}
+                style={[styles.chip, tripLengthDays === n && styles.chipActive]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setTripLengthDays(n);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.chipText, tripLengthDays === n && styles.chipTextActive]}>
+                  {n === 1 ? "1 day" : `${n} days`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {tripLengthDays > 1 ? (
+            <Text style={styles.changeHint}>
+              Ends{" "}
+              {dateEnd.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+            </Text>
+          ) : null}
+        </>
       )}
       {showDatePicker && (
         <Modal visible transparent animationType="fade">
@@ -732,8 +851,8 @@ export function ConciergeActivityDetailsStep({
         </Pressable>
       </Modal>
 
-      {/* Activity-specific (restaurant-like) */}
-      {isRestaurantLike && (
+      {/* Activity-specific (restaurant-like / food-led categories) */}
+      {showFoodFields && (
         <>
           <Text style={styles.label}>Cuisine (optional)</Text>
           <TextInput
@@ -789,7 +908,14 @@ const styles = StyleSheet.create({
   },
   backText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
   stepTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 4 },
-  activityLabel: { ...Typography.caption, color: Colors.gray600, marginBottom: 20 },
+  activityLabel: { ...Typography.caption, color: Colors.gray600, marginBottom: 10 },
+  subActivityBlock: { marginBottom: 20 },
+  subActivityPrompt: {
+    ...Typography.caption,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+    marginBottom: 10,
+  },
   customPromptBlock: { marginBottom: 20 },
   customPromptLabel: {
     ...Typography.caption,

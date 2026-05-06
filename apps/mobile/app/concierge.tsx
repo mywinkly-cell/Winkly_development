@@ -248,6 +248,10 @@ export default function ConciergeScreen() {
           mode={mode}
           source_screen="planner"
           source_planner_tab={(params.source_planner_tab as "all" | "dates" | "meetups" | "business" | "events") ?? "all"}
+          partnerUserId={typeof params.partner_user_id === "string" ? params.partner_user_id : undefined}
+          partnerDisplayNameHint={
+            typeof params.partner_display_name === "string" ? params.partner_display_name : undefined
+          }
           defaultCity={defaultCity ?? undefined}
           defaultCountry={defaultCountry ?? undefined}
           initialStep={

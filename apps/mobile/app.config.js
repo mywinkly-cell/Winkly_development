@@ -3,6 +3,16 @@
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
+/** Expo Push / EAS expects a real UUID project id — never use a placeholder string. */
+function isLikelyUuid(value) {
+  const s = String(value ?? "").trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+}
+
+const easProjectId = isLikelyUuid(process.env.EXPO_PUBLIC_EAS_PROJECT_ID)
+  ? String(process.env.EXPO_PUBLIC_EAS_PROJECT_ID).trim()
+  : undefined;
+
 module.exports = {
   expo: {
     name: "Winkly",
@@ -117,9 +127,7 @@ module.exports = {
     },
 
     extra: {
-      eas: {
-        projectId: "winkly-local-dev-id"
-      },
+      ...(easProjectId ? { eas: { projectId: easProjectId } } : {}),
       supabaseUrl: SUPABASE_URL,
       supabaseAnonKey: SUPABASE_ANON_KEY
     }

@@ -34,6 +34,16 @@ export async function getChatStrategicHostTopics(params: {
   return Array.isArray(raw) ? raw : [];
 }
 
+export type PlannerTripDaySlot = { summary: string };
+
+export type PlannerTripDay = {
+  day: number;
+  date: string;
+  morning: PlannerTripDaySlot;
+  afternoon: PlannerTripDaySlot;
+  evening?: PlannerTripDaySlot;
+};
+
 export type PlannerThemePlanOption = {
   topic: string;
   date_time: string;
@@ -42,6 +52,8 @@ export type PlannerThemePlanOption = {
   participants: string[];
   details: string;
   action_links: { booking?: string };
+  /** Populated for multi-day concierge trips (`num_days` > 1). */
+  trip_days?: PlannerTripDay[];
 };
 
 export async function getPlannerThemePlans(params: {

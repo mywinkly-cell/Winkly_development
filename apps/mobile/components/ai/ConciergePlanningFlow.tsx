@@ -27,7 +27,7 @@ import {
   type ConciergeContext,
   type ExperienceOption,
 } from "@/lib/ai/conciergeClient";
-import { getWeatherForCityAndDate } from "@/lib/weatherClient";
+import { getWeatherForCityAndDate, getWeatherForCityAndDateRange } from "@/lib/weatherClient";
 import { formatDefaultLocationDisplay, normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { ConciergeIntentStep } from "@/components/ai/ConciergeIntentStep";
 import { ConciergeActivityDetailsStep } from "@/components/ai/ConciergeActivityDetailsStep";
@@ -35,6 +35,7 @@ import { ConciergeSocialStep } from "@/components/ai/ConciergeSocialStep";
 import { ConciergeSummaryStep } from "@/components/ai/ConciergeSummaryStep";
 import { ConciergeInviteStep } from "@/components/ai/ConciergeInviteStep";
 import { ConciergeConfirmStep } from "@/components/ai/ConciergeConfirmStep";
+import { TripPlanningFlow } from "@/components/ai/TripPlanningFlow";
 import { getPlannerThemePlans, type PlannerThemePlanOption } from "@/lib/ai/strategicHost";
 import {
   type ConciergeFlowStep,
@@ -43,8 +44,11 @@ import {
   type DatePreset,
   type TimeOfDay,
   getSmartDefaultsForActivity,
+  getCategoriesForMode,
+  getActivityCategoryByKey,
 } from "@/lib/ai/conciergePlanningFlow";
-import { buildPlanRequestText } from "@/lib/ai/buildPlanRequestText";
+import { rankActivityCategories, type RankedCategory } from "@/lib/ai/rankActivityCategories";
+import { buildPlanRequestText, inclusivePlanDayCount } from "@/lib/ai/buildPlanRequestText";
 import { loadPlanningProfileContext, formatSanitizedPersonaForConciergePrompt } from "@/lib/ai/customPlanPresets";
 import { supabase } from "@/lib/supabase";
 import { addRecentRequest, getRecentRequests, saveConciergeFeedback, type ConciergeFeedbackType } from "@/lib/ai/conciergeStorage";
@@ -81,6 +85,9 @@ export type ConciergePlanningFlowProps = {
   source_planner_tab?: "all" | "dates" | "meetups" | "business" | "events";
   defaultCity?: string;
   defaultCountry?: string;
+  /** Optional match / connection for profile-aware ranking + gateway partner context. */
+  partnerUserId?: string;
+  partnerDisplayNameHint?: string;
   /** When opening from proactive "View plan" / "Invite someone": start at this step with pre-fill */
   initialStep?: "activity" | "social";
   proactiveActivityLabel?: string;
@@ -96,6 +103,8 @@ export function ConciergePlanningFlow({
   source_planner_tab,
   defaultCity,
   defaultCountry,
+  partnerUserId,
+  partnerDisplayNameHint,
   initialStep,
   proactiveActivityLabel,
   proactiveDatePreset,
@@ -105,6 +114,12 @@ export function ConciergePlanningFlow({
 }: ConciergePlanningFlowProps) {
   const { i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
+  /** Planner Events tab (and similar): grouped catalogue; chosen category sets planning mode for the rest of the flow. */
+  const genericCategoryCatalog = source_screen === "planner" && mode === "events";
+  const [effectiveMode, setEffectiveMode] = useState<Mode>(mode);
+  const [rankedIntentCategories, setRankedIntentCategories] = useState<RankedCategory[]>(() =>
+    getCategoriesForMode(mode).map((c) => ({ ...c, boosted: false }))
+  );
   const [flowStep, setFlowStep] = useState<ConciergeFlowStep>("intent");
   /** Mirrors last generate request; used to label Primary / Backup in decisive mode. */
   const [lastPresentation, setLastPresentation] = useState<"menu" | "decisive" | undefined>(undefined);
@@ -120,8 +135,8 @@ export function ConciergePlanningFlow({
     budgetCurrency: "EUR",
   });
   const [whoJoining, setWhoJoining] = useState<WhoJoining | null>(null);
-  const [partnerId, setPartnerId] = useState<string | null>(null);
-  const [partnerDisplayName, setPartnerDisplayName] = useState<string | null>(null);
+  const [partnerId, setPartnerId] = useState<string | null>(() => partnerUserId ?? null);
+  const [partnerDisplayName, setPartnerDisplayName] = useState<string | null>(() => partnerDisplayNameHint ?? null);
   const [partners, setPartners] = useState<ConciergePartner[]>([]);
   const [suggestions, setSuggestions] = useState<ExperienceOption[] | null>(null);
   const [structuredPlans, setStructuredPlans] = useState<PlannerThemePlanOption[] | null>(null);
@@ -155,9 +170,88 @@ export function ConciergePlanningFlow({
   );
 
   useEffect(() => {
-    if (mode === "events") return;
-    getPartnersForConcierge(mode).then(setPartners);
-  }, [mode]);
+    if (genericCategoryCatalog) return;
+    setEffectiveMode(mode);
+  }, [mode, genericCategoryCatalog]);
+
+  useEffect(() => {
+    if (effectiveMode === "events") return;
+    getPartnersForConcierge(effectiveMode).then(setPartners);
+  }, [effectiveMode]);
+
+  useEffect(() => {
+    if (genericCategoryCatalog) {
+      setRankedIntentCategories(getCategoriesForMode(mode).map((c) => ({ ...c, boosted: false })));
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (!uid) {
+        if (!cancelled) {
+          setRankedIntentCategories(
+            rankActivityCategories(getCategoriesForMode(mode), {
+              selfInterests: [],
+              selfLifestyle: [],
+              mode,
+            })
+          );
+        }
+        return;
+      }
+      const { data: selfRow } = await supabase
+        .from("profiles_mode")
+        .select("interests, meta")
+        .eq("user_id", uid)
+        .eq("mode", mode)
+        .maybeSingle();
+
+      let partnerInterests: string[] | undefined;
+      let partnerLifestyle: string[] | undefined;
+      if (partnerUserId) {
+        const { data: partnerRow } = await supabase
+          .from("profiles_mode")
+          .select("interests, meta")
+          .eq("user_id", partnerUserId)
+          .eq("mode", mode)
+          .maybeSingle();
+        partnerInterests = Array.isArray(partnerRow?.interests)
+          ? partnerRow.interests.filter((x): x is string => typeof x === "string")
+          : [];
+        const plMeta = partnerRow?.meta as { lifestyle?: unknown } | undefined;
+        const pl = plMeta?.lifestyle;
+        partnerLifestyle = Array.isArray(pl)
+          ? pl.filter((x): x is string => typeof x === "string")
+          : typeof pl === "string"
+            ? [pl]
+            : [];
+      }
+
+      const selfInterests = Array.isArray(selfRow?.interests)
+        ? selfRow.interests.filter((x): x is string => typeof x === "string")
+        : [];
+      const sm = selfRow?.meta as { lifestyle?: unknown } | undefined;
+      const sl = sm?.lifestyle;
+      const selfLifestyle = Array.isArray(sl)
+        ? sl.filter((x): x is string => typeof x === "string")
+        : typeof sl === "string"
+          ? [sl]
+          : [];
+
+      const ranked = rankActivityCategories(getCategoriesForMode(mode), {
+        selfInterests,
+        selfLifestyle,
+        partnerInterests,
+        partnerLifestyle,
+        mode,
+      });
+      if (!cancelled) setRankedIntentCategories(ranked);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, partnerUserId, genericCategoryCatalog]);
 
   useEffect(() => {
     if (invitePickerChoice !== "contacts") return;
@@ -236,7 +330,10 @@ export function ConciergePlanningFlow({
         : undefined;
     let weather_snapshot;
     if (city) {
-      const w = await getWeatherForCityAndDate(city, dateStr, country);
+      const w =
+        details.singleDay === false && dateEndStr && dateEndStr !== dateStr
+          ? await getWeatherForCityAndDateRange(city, dateStr, dateEndStr, country)
+          : await getWeatherForCityAndDate(city, dateStr, country);
       weather_snapshot = w
         ? {
             summary: w.summary,
@@ -262,12 +359,25 @@ export function ConciergePlanningFlow({
     let sanitizedPersona = "";
     const { data: auth } = await supabase.auth.getUser();
     if (auth.user?.id) {
-      const pctx = await loadPlanningProfileContext(auth.user.id, mode);
+      const pctx = await loadPlanningProfileContext(auth.user.id, effectiveMode);
       sanitizedPersona = formatSanitizedPersonaForConciergePrompt(pctx);
     }
 
+    const nd =
+      details.singleDay === false && dateEndStr && dateEndStr !== dateStr
+        ? inclusivePlanDayCount(dateStr, dateEndStr)
+        : 1;
+    const extraNotes = [
+      details.intentNotes?.trim(),
+      details.mustHaves?.trim(),
+      details.additionalInfo?.trim(),
+      nd > 1 ? `Trip length: ${nd} day(s).` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
     const plan_request_text = buildPlanRequestText({
-      mode,
+      mode: effectiveMode,
       planningEntrySurface: "planner",
       activityOrTopic,
       city,
@@ -287,17 +397,18 @@ export function ConciergePlanningFlow({
       weatherSnapshot: weather_snapshot,
       partnerDisplayName: partnerDisplayName ?? undefined,
       sanitizedRequesterPersona: sanitizedPersona,
+      extraNotes: extraNotes || undefined,
     });
     const [slots] = await Promise.all([getMergedDeviceWhiteSpaceSlots()]);
     const calStr = formatCalendarWhiteSpaceForGateway(slots);
     const booking = buildBookingContextForAi({
-      venueQuery: mode === "business" ? "professional lunch or quiet cafe" : "casual restaurant or cafe",
+      venueQuery: effectiveMode === "business" ? "professional lunch or quiet cafe" : "casual restaurant or cafe",
       city: city ? city.split(",")[0]?.trim() : undefined,
       dateIso: dateStr,
     });
 
     return {
-      mode,
+      mode: effectiveMode,
       source_screen,
       source_planner_tab,
       /** Short label for analytics; full verbatim request is plan_request_text. */
@@ -316,7 +427,7 @@ export function ConciergePlanningFlow({
       weather_snapshot,
       origin_context: buildOriginContext({
         source_screen,
-        mode,
+        mode: effectiveMode,
         source_planner_tab,
         hasPartner: !!partnerId,
       }),
@@ -327,8 +438,9 @@ export function ConciergePlanningFlow({
       sanitized_requester_persona: sanitizedPersona || undefined,
       ...(calStr ? { calendar_white_space: calStr } : {}),
       booking_context: booking,
+      ...(nd > 1 ? { num_days: nd } : {}),
     };
-  }, [mode, source_screen, source_planner_tab, details, activityLabel, activityKey, partnerId, partnerDisplayName, appLanguage]);
+  }, [effectiveMode, source_screen, source_planner_tab, details, activityLabel, activityKey, partnerId, partnerDisplayName, appLanguage]);
 
   const trace = useCallback((event: string, data?: Record<string, unknown>) => {
     if (!__DEV__) return;
@@ -351,7 +463,7 @@ export function ConciergePlanningFlow({
     setFlowStep("suggestions");
     trace("generate:start", {
       genId,
-      mode,
+      mode: effectiveMode,
       source_screen,
       source_planner_tab,
       activityKey,
@@ -361,6 +473,7 @@ export function ConciergePlanningFlow({
     try {
       // Structured output (plan_options[]) per template. Theme = current intent/activity.
       const fullCtx = await buildContext();
+      lastContextRef.current = fullCtx;
       let city = details.city;
       let country = details.country;
       if (details.location?.trim()) {
@@ -384,7 +497,7 @@ export function ConciergePlanningFlow({
         dateTimeIso: dt.toISOString(),
       });
       const plans = await getPlannerThemePlans({
-        mode,
+        mode: effectiveMode,
         theme,
         partnerUserId: partnerId ?? undefined,
         city: city ?? undefined,
@@ -417,7 +530,7 @@ export function ConciergePlanningFlow({
       trace("generate:error", { message: msg });
       setError(msg);
     }
-  }, [trace, mode, source_screen, source_planner_tab, activityKey, activityLabel, partnerId, details, appLanguage]);
+  }, [trace, effectiveMode, buildContext, source_screen, source_planner_tab, activityKey, activityLabel, partnerId, details, appLanguage]);
 
   const handleCorrectDetails = useCallback(
     (refinementHint: string) => {
@@ -445,8 +558,12 @@ export function ConciergePlanningFlow({
       onBack();
       return;
     }
-    if (flowStep === "activity") {
+    if (flowStep === "trip_planning") {
       setFlowStep("intent");
+      return;
+    }
+    if (flowStep === "activity") {
+      setFlowStep(activityKey === "trip" ? "trip_planning" : "intent");
       return;
     }
     if (flowStep === "social") {
@@ -476,6 +593,7 @@ export function ConciergePlanningFlow({
 
   const stepIndexMap: Record<ConciergeFlowStep, number> = {
     intent: 1,
+    trip_planning: 2,
     activity: 2,
     social: 3,
     summary: 4,
@@ -488,17 +606,19 @@ export function ConciergePlanningFlow({
   const headerTitle =
     flowStep === "intent"
       ? "Ask Winkly AI"
-      : flowStep === "activity"
-        ? "Activity details"
-        : flowStep === "social"
-          ? "Who's joining?"
-          : flowStep === "summary"
-            ? "Summary"
-            : flowStep === "suggestions"
-              ? "Your plans"
-              : flowStep === "invite"
-                ? "Invite"
-                : "Add to planner";
+      : flowStep === "trip_planning"
+        ? "Trip preferences"
+        : flowStep === "activity"
+          ? "Activity details"
+          : flowStep === "social"
+            ? "Who's joining?"
+            : flowStep === "summary"
+              ? "Summary"
+              : flowStep === "suggestions"
+                ? "Your plans"
+                : flowStep === "invite"
+                  ? "Invite"
+                  : "Add to planner";
 
   return (
     <View style={styles.container}>
@@ -544,15 +664,19 @@ export function ConciergePlanningFlow({
       {flowStep === "intent" && (
         <ConciergeIntentStep
           mode={mode}
-          onContinue={({ key, label }) => {
+          categories={rankedIntentCategories}
+          genericCatalog={genericCategoryCatalog}
+          onContinue={({ key, label, flowMode }) => {
             const clearWishlist =
               activityKey != null && activityKey !== key;
+            setEffectiveMode(flowMode);
             setActivityKey(key);
             setActivityLabel(label);
             const smart = getSmartDefaultsForActivity(key, label, details.budgetCurrency || "EUR");
             setDetails((prev) => ({
               ...prev,
               ...(clearWishlist ? { customPromptExtra: undefined } : {}),
+              intentNotes: undefined,
               timeOfDay: smart.timeOfDay,
               budgetAmount: smart.budgetAmount || prev.budgetAmount,
               budgetCurrency: smart.budgetCurrency,
@@ -561,16 +685,33 @@ export function ConciergePlanningFlow({
               date: prev.date ?? new Date(),
               singleDay: true,
             }));
+            if (key === "trip") {
+              setFlowStep("trip_planning");
+            } else {
+              setFlowStep("activity");
+            }
+          }}
+        />
+      )}
+
+      {flowStep === "trip_planning" && (
+        <TripPlanningFlow
+          existingDetails={details}
+          onComplete={(patch) => {
+            setDetails((prev) => ({ ...prev, ...patch }));
             setFlowStep("activity");
           }}
+          onBack={() => setFlowStep("intent")}
         />
       )}
 
       {flowStep === "activity" && (
         <ConciergeActivityDetailsStep
+          activityKey={activityKey}
           activityLabel={activityLabel}
+          activityCategory={activityKey ? getActivityCategoryByKey(activityKey) : undefined}
           initialDetails={details}
-          mode={mode}
+          mode={effectiveMode}
           profilePromptVariant={activityKey === "custom" ? "custom" : undefined}
           onNext={(d) => {
             setDetails((prev) => ({ ...prev, ...d }));
@@ -583,7 +724,7 @@ export function ConciergePlanningFlow({
 
       {flowStep === "social" && (
         <ConciergeSocialStep
-          mode={mode}
+          mode={effectiveMode}
           planSummary={{
             activity: activityLabel ?? undefined,
             location: locationLineDisplay || undefined,
@@ -596,7 +737,7 @@ export function ConciergePlanningFlow({
           suggestedPeople={partners.slice(0, 2).map((p): SuggestedPerson => ({
             id: p.id,
             displayName: p.displayName,
-            type: mode === "romance" ? "match" : mode === "business" ? "business" : "friend",
+            type: effectiveMode === "romance" ? "match" : effectiveMode === "business" ? "business" : "friend",
             avatar_url: p.avatar_url,
           }))}
           onSelect={(who, selectedPersonId) => {
@@ -730,9 +871,21 @@ export function ConciergePlanningFlow({
                         {[p.location.name, p.location.address].filter(Boolean).join(" • ")}
                       </Text>
                       <View style={styles.planItinerary}>
-                        <View style={styles.planItineraryRow}>
-                          <Text style={styles.planItineraryActivity} numberOfLines={3}>{p.details}</Text>
-                        </View>
+                        {p.trip_days?.length ? (
+                          p.trip_days.map((d) => (
+                            <View key={`${idx}-d${d.day}`} style={styles.planItineraryRow}>
+                              <Text style={styles.planItineraryTime}>D{d.day}</Text>
+                              <Text style={styles.planItineraryActivity} numberOfLines={5}>
+                                {d.date}: {d.morning.summary} · {d.afternoon.summary}
+                                {d.evening ? ` · ${d.evening.summary}` : ""}
+                              </Text>
+                            </View>
+                          ))
+                        ) : (
+                          <View style={styles.planItineraryRow}>
+                            <Text style={styles.planItineraryActivity} numberOfLines={3}>{p.details}</Text>
+                          </View>
+                        )}
                       </View>
                       <View style={styles.planMeta}>
                         <Text style={styles.planMetaText} numberOfLines={2}>{p.weather_guard}</Text>
@@ -885,7 +1038,7 @@ export function ConciergePlanningFlow({
 
       {flowStep === "invite" && (
         <ConciergeInviteStep
-          mode={mode}
+          mode={effectiveMode}
           planTitle={chosenOption ? String(chosenOption.option_name ?? chosenOption.narrative) : undefined}
           planLocation={locationLineDisplay || undefined}
           planDate={details.date ? details.date.toLocaleDateString() : undefined}
@@ -913,7 +1066,7 @@ export function ConciergePlanningFlow({
                 {invitePickerChoice === "matches"
                   ? "Choose a match"
                   : invitePickerChoice === "friends"
-                    ? mode === "business"
+                    ? effectiveMode === "business"
                       ? "Choose a business contact"
                       : "Choose a friend"
                     : "Choose a contact"}
@@ -998,7 +1151,7 @@ export function ConciergePlanningFlow({
           dateForPlan={details.date ?? new Date(lastDateRef.current)}
           locationLineDisplay={locationLineDisplay || undefined}
           exactTimeHm={details.singleDay !== false ? details.exactTimeHm : undefined}
-          mode={mode}
+          mode={effectiveMode}
           contextForPendingPlan={lastContextRef.current}
           onDone={() => {
             reportConciergeOutcome(lastRequestId, "added_to_planner").catch(() => {});
@@ -1030,7 +1183,7 @@ export function ConciergePlanningFlow({
                       await saveConciergeFeedback(
                         String(showFeedbackFor.option_name ?? showFeedbackFor.narrative ?? "Plan"),
                         fb,
-                        mode
+                        effectiveMode
                       );
                     }
                     setShowFeedbackFor(null);

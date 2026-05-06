@@ -6,6 +6,8 @@
     "packages/*"
   ],
   "scripts": {
+    "start": "npm run mobile:start",
+    "start:clear": "npm run -w apps/mobile start:clear",
     "mobile:start": "npm run -w apps/mobile start",
     "mobile:android": "npm run -w apps/mobile android",
     "mobile:ios": "npm run -w apps/mobile ios",

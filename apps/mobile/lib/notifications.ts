@@ -37,6 +37,17 @@ async function tryImportExpoNotifications() {
   }
 }
 
+function isLikelyEasProjectId(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const s = value.trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+}
+
+/** SDK 53+: Android Expo Go does not support remote push; requesting a token spams errors. */
+function shouldSkipExpoPushTokenOnAndroidExpoGo(): boolean {
+  return Platform.OS === "android" && Constants.appOwnership === "expo";
+}
+
 let runtimeInitialized = false;
 
 /** Call once per app boot — foreground presentation defaults. */
@@ -81,6 +92,7 @@ export async function registerForPushNotificationsAndSync(): Promise<string | nu
   await ensureAndroidNotificationChannelAsync();
 
   if (!Device.isDevice) return null;
+  if (shouldSkipExpoPushTokenOnAndroidExpoGo()) return null;
 
   const { status: existing } = await mod.getPermissionsAsync();
   let finalStatus = existing;
@@ -90,12 +102,11 @@ export async function registerForPushNotificationsAndSync(): Promise<string | nu
   }
   if (finalStatus !== "granted") return null;
 
-  const projectId =
+  const rawProjectId =
     (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId ??
     Constants.easConfig?.projectId;
-  const tokenRes = await mod.getExpoPushTokenAsync(
-    projectId ? { projectId: String(projectId) } : undefined,
-  );
+  const projectId = isLikelyEasProjectId(rawProjectId) ? rawProjectId.trim() : undefined;
+  const tokenRes = await mod.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
   const token = tokenRes.data;
   const platform =
     Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "unknown";
