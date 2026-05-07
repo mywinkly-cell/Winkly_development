@@ -2,7 +2,7 @@
 // Root layout: Providers + Route guards (spec v8.1)
 
 import React, { useCallback, useEffect, useState } from "react";
-import { View, ActivityIndicator, LogBox } from "react-native";
+import { View, ActivityIndicator, LogBox, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -43,6 +43,13 @@ if (!__DEV__) {
     "Unable to activate keep awake",
     "Unable to deactivate keep awake",
   ]);
+}
+
+/** Native-stack: horizontal transition enables swipe-to-go-back on Android; fade disables it. */
+function stackAnimation(): "default" | "slide_from_right" | "fade" {
+  if (Platform.OS === "ios") return "default";
+  if (Platform.OS === "android") return "slide_from_right";
+  return "fade";
 }
 
 export default function RootLayout() {
@@ -110,9 +117,18 @@ export default function RootLayout() {
                 contentStyle: {
                   backgroundColor: isSplash ? Colors.primaryViolet : Colors.backgroundMuted,
                 },
-                animation: "fade",
+                animation: stackAnimation(),
+                gestureEnabled: true,
               })}
-            />
+            >
+              <Stack.Screen
+                name="concierge"
+                options={{
+                  // In-flow back is handled inside `ConciergePlanningFlow`; native swipe would exit the whole screen.
+                  gestureEnabled: false,
+                }}
+              />
+            </Stack>
           </RouteGuard>
         </ThemeProvider>
       </ModeContextProvider>

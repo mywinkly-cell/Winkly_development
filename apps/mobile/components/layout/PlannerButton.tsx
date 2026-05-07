@@ -24,7 +24,7 @@ export function PlannerButton({ title, icon = "star", onPress, style }: PlannerB
       style={[styles.btn, style]}
       accessibilityRole="button"
     >
-      <Ionicons name={icon} size={18} color={Colors.accentYellow} />
+      <Ionicons name={icon} size={18} color={Colors.white} />
       <Text style={styles.text} numberOfLines={1}>
         {title}
       </Text>
@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
   },
   text: {
     ...Typography.button,
-    color: Colors.accentYellow,
+    color: Colors.white,
     fontSize: 14,
     lineHeight: 18,
   },

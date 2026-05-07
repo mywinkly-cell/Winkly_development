@@ -16,6 +16,17 @@
     "mobile:test": "npm run -w apps/mobile test",
     "supabase:deploy-auth-redirect": "supabase functions deploy auth-redirect --no-verify-jwt"
   },
+  "overrides": {
+    "@expo/vector-icons": "15.1.1",
+    "expo-file-system": "19.0.22",
+    "expo-image-loader": "6.0.0",
+    "expo-image-manipulator": "14.0.8",
+    "@neilromblon/expo-image-manipulator-view": {
+      "expo-file-system": "19.0.22",
+      "expo-image-manipulator": "14.0.8",
+      "expo-image-loader": "6.0.0"
+    }
+  },
   "devDependencies": {
     "supabase": "^2.0.0"
   }

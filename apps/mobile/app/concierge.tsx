@@ -28,6 +28,10 @@ import { callConciergeStream, reportConciergeOutcome } from "@/lib/ai/conciergeC
 import { getMergedDeviceWhiteSpaceSlots, formatCalendarWhiteSpaceForGateway } from "@/lib/integrations/calendarWhiteSpace";
 import { buildBookingContextForAi } from "@/lib/integrations/bookingLinks";
 import { supabase } from "@/lib/supabase";
+import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
+import { useModeContext } from "@/providers";
+import type { Mode } from "@/types";
+import { recordPairBehaviorSignal } from "@/lib/matching/behaviorSignals";
 import {
   getRecentRequests,
   addRecentRequest,
@@ -43,10 +47,6 @@ import { useDefaultLocation } from "@/lib/ai/useDefaultCity";
 function isWinklyOption(opt: ExperienceOption): boolean {
   return (opt as { source?: string }).source === "winkly_event";
 }
-import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
-import { useModeContext } from "@/providers";
-import type { Mode } from "@/types";
-import { recordPairBehaviorSignal } from "@/lib/matching/behaviorSignals";
 
 const VALID_MODES: Mode[] = ["romance", "friends", "business", "events"];
 
@@ -249,6 +249,17 @@ export default function ConciergeScreen() {
             ? "Add to planner"
             : "Use this suggestion";
 
+  const backOrFallback = useCallback(
+    (fallback: `/(modes)/${Mode}/chats` | `/(modes)/${Mode}/planner`) => {
+      if (typeof router.canGoBack === "function" && router.canGoBack()) {
+        router.back();
+        return;
+      }
+      router.replace(fallback);
+    },
+    [router]
+  );
+
   const handleBack = useCallback(() => {
     Haptics.selectionAsync();
     if (step === "confirm") {
@@ -259,34 +270,38 @@ export default function ConciergeScreen() {
       setError(null);
       setNoOptionsReason(null);
     } else {
-      router.back();
+      backOrFallback(source_screen === "planner" ? `/(modes)/${mode}/planner` : `/(modes)/${mode}/chats`);
     }
-  }, [step, router]);
+  }, [step, backOrFallback, source_screen, mode]);
 
   const panGesture = useMemo(
     () =>
-      Gesture.Pan()
-        .onStart((e) => {
-          swipeStartX.current = e.x;
-        })
-        .activeOffsetX(20)
-        .failOffsetY(-15)
-        .minDistance(40)
-        .onEnd((e) => {
-          // Support both directions: swipe left (anywhere) or edge-swipe right.
-          if (step === "form") return;
-          if (e.translationX < -60) {
-            handleBack();
-            return;
-          }
-          if (swipeStartX.current < 50 && e.translationX > 60) handleBack();
-        }),
+      Gesture.Simultaneous(
+        Gesture.Pan()
+          .onStart((e) => {
+            swipeStartX.current = e.x;
+          })
+          .failOffsetY([-15, 15])
+          // Require a more deliberate horizontal swipe so vertical scroll stays smooth.
+          .activeOffsetX([-44, 44])
+          .minDistance(72)
+          .onEnd((e) => {
+            // Support both directions: swipe left (anywhere) or edge-swipe right.
+            if (step === "form") return;
+            if (e.translationX < -60) {
+              handleBack();
+              return;
+            }
+            if (swipeStartX.current < 50 && e.translationX > 60) handleBack();
+          }),
+        Gesture.Native()
+      ),
     [step, handleBack]
   );
 
   const handleClose = () => {
     Haptics.selectionAsync();
-    router.back();
+    backOrFallback(source_screen === "planner" ? `/(modes)/${mode}/planner` : `/(modes)/${mode}/chats`);
   };
 
   if (usePlanningFlow) {
@@ -332,7 +347,9 @@ export default function ConciergeScreen() {
               : undefined
           }
           onClose={handleClose}
-          onBack={() => router.back()}
+          onBack={() =>
+            backOrFallback(source_screen === "planner" ? `/(modes)/${mode}/planner` : `/(modes)/${mode}/chats`)
+          }
         />
       </KeyboardAvoidingView>
     );
@@ -521,7 +538,8 @@ export default function ConciergeScreen() {
                 style={styles.chatModeBackdrop}
                 onPress={() => {
                   Haptics.selectionAsync();
-                  setChatMode("assist");
+                  // Dismiss without choosing: keep sheet decision pending.
+                  // User explicitly chooses Plan/Assist or taps Close.
                 }}
               >
                 <Pressable style={styles.chatModeSheet} onPress={(e) => e.stopPropagation()}>
@@ -559,6 +577,17 @@ export default function ConciergeScreen() {
                   >
                     <Text style={styles.chatModeOptionTitle}>Help with the conversation</Text>
                     <Text style={styles.chatModeOptionSub}>Quick templates to draft your next message</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.chatModeCloseRow}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setChatMode("assist");
+                    }}
+                    activeOpacity={0.9}
+                    accessibilityLabel="Close without choosing"
+                  >
+                    <Text style={styles.chatModeCloseText}>Close</Text>
                   </TouchableOpacity>
                 </Pressable>
               </Pressable>
@@ -627,6 +656,7 @@ export default function ConciergeScreen() {
             loading={loading}
             onPartnerChange={setSelectedPartner}
             presentation={chatPresentation}
+            selectedTopicLabel={undefined}
           />
           {isConnected === false && (
             <View style={styles.offlineBanner}>
@@ -1000,6 +1030,18 @@ const styles = StyleSheet.create({
   chatModeOptionSub: {
     ...Typography.caption,
     color: Colors.gray600,
+  },
+  chatModeCloseRow: {
+    marginTop: 6,
+    paddingVertical: 14,
+    alignItems: "center",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.gray200,
+  },
+  chatModeCloseText: {
+    ...Typography.caption,
+    color: Colors.gray600,
+    fontWeight: "700",
   },
   chatAssistChipsWrap: {
     marginHorizontal: 24,

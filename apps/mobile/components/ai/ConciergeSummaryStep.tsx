@@ -1,5 +1,5 @@
 /**
- * Step 4 — Plan Summary: show summary card and "Generate plans" button.
+ * Step 4 — Plan Summary: show summary card and "Plan" button.
  * Confirms intent before running AI generation.
  */
 
@@ -135,7 +135,7 @@ export function ConciergeSummaryStep({
         {loading ? (
           <ActivityIndicator color={Colors.white} />
         ) : (
-          <Text style={styles.generateBtnText}>Generate plans</Text>
+          <Text style={styles.generateBtnText}>Plan</Text>
         )}
       </TouchableOpacity>
     </View>

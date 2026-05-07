@@ -29,7 +29,16 @@ export type NotificationsFacade = {
   cancelScheduled: (id: string) => Promise<void>;
 };
 
+/**
+ * `expo-notifications` registers push token listeners at module load.
+ * On Android Expo Go (SDK 53+), that side effect throws and spams the dev console.
+ */
+function shouldAvoidLoadingExpoNotificationsModule(): boolean {
+  return Platform.OS === "android" && Constants.appOwnership === "expo";
+}
+
 async function tryImportExpoNotifications() {
+  if (shouldAvoidLoadingExpoNotificationsModule()) return null;
   try {
     return await import("expo-notifications");
   } catch {
@@ -41,11 +50,6 @@ function isLikelyEasProjectId(value: unknown): value is string {
   if (typeof value !== "string") return false;
   const s = value.trim();
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
-}
-
-/** SDK 53+: Android Expo Go does not support remote push; requesting a token spams errors. */
-function shouldSkipExpoPushTokenOnAndroidExpoGo(): boolean {
-  return Platform.OS === "android" && Constants.appOwnership === "expo";
 }
 
 let runtimeInitialized = false;
@@ -94,7 +98,6 @@ export async function registerForPushNotificationsAndSync(): Promise<string | nu
   await ensureAndroidNotificationChannelAsync();
 
   if (!Device.isDevice) return null;
-  if (shouldSkipExpoPushTokenOnAndroidExpoGo()) return null;
 
   const { status: existing } = await mod.getPermissionsAsync();
   let finalStatus = existing;

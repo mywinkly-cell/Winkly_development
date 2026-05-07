@@ -105,8 +105,14 @@ serve(async (req) => {
     let pivotCreated = 0;
     for (const r of (rows ?? []) as Array<Record<string, unknown>>) {
       const plan = (r.plan_json ?? {}) as Record<string, unknown>;
+      const primary =
+        Array.isArray(plan.options) && plan.options[0] && typeof plan.options[0] === "object"
+          ? (plan.options[0] as Record<string, unknown>)
+          : null;
       const dateTime = typeof plan.date_time === "string" ? plan.date_time : null;
-      const topic = typeof plan.topic === "string" ? plan.topic : "Plan";
+      const topic =
+        (typeof primary?.title === "string" && primary.title.trim()) ||
+        (typeof plan.topic === "string" ? plan.topic : "Plan");
       if (!dateTime) continue;
       const startsMs = new Date(dateTime).getTime();
       const now = Date.now();

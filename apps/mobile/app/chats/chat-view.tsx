@@ -67,7 +67,7 @@ import {
   reschedulePlannerInvite,
   getPlannerInvitationsForUser,
 } from "@/lib/plannerInvitations";
-import { confirmPendingPlan } from "@/lib/ai/conciergeClient";
+import { callWinklyPlan, confirmPendingPlan } from "@/lib/ai/conciergeClient";
 import type { Mode } from "@/types";
 import { useModeContext } from "@/providers";
 import { hasAnyAIAccess } from "@/lib/ai/aiFeatureGate";
@@ -88,7 +88,6 @@ import {
   dismissStaleConciergeNudge,
 } from "@/lib/chats/conciergeNudge";
 import { getSharedInterestHintForPair } from "@/lib/ai/preferenceEngine";
-import { callWinklyPlan } from "@/lib/ai/conciergeClient";
 import {
   getChatStrategicHostTopics,
   getPlannerThemePlans,
@@ -186,6 +185,14 @@ export default function ChatView({ conversationId }: Props) {
   const accentColor = isRomance ? Colors.romance.primary : Colors.primaryViolet;
   const conversationMode = (conversation?.mode ?? "romance") as Mode;
   const isDm = conversation?.type === "dm";
+
+  const backToModeChats = useCallback(() => {
+    if (typeof router.canGoBack === "function" && router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace(`/(modes)/${conversationMode}/chats`);
+  }, [router, conversationMode]);
 
   const recordDmFirstOutreachIfNeeded = useCallback(
     async (hadMineBeforeSend: boolean) => {
@@ -458,13 +465,15 @@ export default function ChatView({ conversationId }: Props) {
       null;
     setStrategicLoading(true);
     try {
+      const dt = new Date(Date.now() + 48 * 3600_000);
+      dt.setMinutes(0, 0, 0);
       const res = await callWinklyPlan({
         context: {
           mode: conversationMode,
           city: city ?? undefined,
-          date_from: opt.date_time,
-          user_prompt: opt.topic,
-          activity_hint: opt.topic,
+          date_from: dt.toISOString(),
+          user_prompt: opt.title,
+          activity_hint: opt.title,
           participant_user_ids: participants.map((p) => p.id),
           conversation_id: convId,
         },
@@ -830,7 +839,7 @@ export default function ChatView({ conversationId }: Props) {
         onPress: async () => {
           try {
             await blockUser(otherUser.id);
-            router.back();
+            backToModeChats();
           } catch {
             setError("Could not block");
           }
@@ -838,7 +847,7 @@ export default function ChatView({ conversationId }: Props) {
       },
     ]);
     setShowMenu(false);
-  }, [otherUser, router]);
+  }, [otherUser, backToModeChats]);
 
   const handleReportMessage = useCallback(
     (messageId: string) => {
@@ -1497,7 +1506,7 @@ export default function ChatView({ conversationId }: Props) {
         }}
       >
         <Pressable
-          onPress={() => router.back()}
+          onPress={backToModeChats}
           style={{
             width: 44,
             height: 44,
@@ -1754,7 +1763,7 @@ export default function ChatView({ conversationId }: Props) {
                     ) : null}
                     {strategicPlanOptions.slice(0, 2).map((p, idx) => (
                       <Pressable
-                        key={`${p.topic}-${idx}`}
+                        key={`${p.title}-${idx}`}
                         onPress={() => draftPendingPlanFromStructuredOption(p)}
                         style={{
                           padding: 12,
@@ -1769,13 +1778,13 @@ export default function ChatView({ conversationId }: Props) {
                           Plan option {idx + 1}
                         </Text>
                         <Text style={{ fontSize: 14, fontWeight: "900", color: Colors.textPrimary, marginBottom: 4 }}>
-                          {p.topic}
+                          {p.title}
                         </Text>
                         <Text style={{ fontSize: 12, color: Colors.gray600, lineHeight: 17, marginBottom: 8 }}>
-                          {[p.location.name, p.location.address].filter(Boolean).join(" • ")}
+                          {[p.venue.name, p.venue.address].filter(Boolean).join(" • ")}
                         </Text>
                         <Text style={{ fontSize: 12, color: Colors.gray600, lineHeight: 17 }}>
-                          {p.details}
+                          {p.why_this_fits}
                         </Text>
                         <Text style={{ marginTop: 10, fontSize: 12, fontWeight: "800", color: Colors.primaryViolet }}>
                           Draft pending plan →
@@ -1994,7 +2003,7 @@ export default function ChatView({ conversationId }: Props) {
                 }}
                 accessibilityLabel="Strategic Host: topic suggestions"
               >
-                <Ionicons name={"sparkles-outline" as never} size={22} color={Colors.primaryViolet} />
+                <Ionicons name="star-outline" size={22} color={Colors.primaryViolet} />
               </Pressable>
             )}
 

@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import type { AppMode, Conversation, ConversationMember, Message, UserMini } from "@/lib/chats";
 import { ChatPreviewCard } from "@/components/chats/ChatPreviewCard";
 import { ChatsHeader } from "@/components/layout/ChatsHeader";
+import { Button } from "@/components/ui/Button";
 import { Colors, Layout, Typography } from "@/constants/tokens";
 import { useModeContext } from "@/providers";
 
@@ -360,18 +361,7 @@ export default function ChatsHome() {
       </View>
 
       <View style={styles.contentArea}>
-      <Pressable
-        onPress={goNewChat}
-        style={{
-          paddingVertical: 10,
-          paddingHorizontal: 12,
-          borderWidth: 1,
-          borderRadius: 12,
-          marginBottom: 12,
-        }}
-      >
-        <Text style={{ fontWeight: "800" }}>+ New chat</Text>
-      </Pressable>
+        <Button title="+ New chat" variant="secondary" onPress={goNewChat} style={styles.newChatBtn} />
 
       <FlatList
         style={{ flex: 1 }}
@@ -435,6 +425,10 @@ const styles = StyleSheet.create({
   contentArea: {
     flex: 1,
     padding: 20,
+  },
+  newChatBtn: {
+    marginBottom: 12,
+    borderColor: Colors.gray200,
   },
   tab: {
     paddingVertical: 8,

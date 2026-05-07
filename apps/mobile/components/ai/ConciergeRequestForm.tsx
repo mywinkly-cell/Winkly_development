@@ -18,7 +18,7 @@ import { useTranslation } from "react-i18next";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography } from "@/constants/tokens";
+import { Colors, Typography, Layout } from "@/constants/tokens";
 import type { ConciergeContext } from "@/lib/ai/conciergeClient";
 import { buildOriginContext } from "@/lib/ai/conciergeClient";
 import { buildPlanRequestText } from "@/lib/ai/buildPlanRequestText";
@@ -38,6 +38,7 @@ import { formatDefaultLocationDisplay, normalizeLocationDisplayString } from "@/
 import { supabase } from "@/lib/supabase";
 import { loadPlanningProfileContext, formatSanitizedPersonaForConciergePrompt } from "@/lib/ai/customPlanPresets";
 import { getDeviceLocationDisplay } from "@/lib/location/deviceLocation";
+import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 
 function dayKey(d: Date): string {
   const y = d.getFullYear();
@@ -175,6 +176,8 @@ export type ConciergeRequestFormProps = {
   initialPrompt?: string;
   /** "decisive" = primary + backup; omit / "menu" = three options. */
   presentation?: "menu" | "decisive";
+  /** Optional highlighted topic from a selected card (planner flow -> form). */
+  selectedTopicLabel?: string | null;
 };
 
 export function ConciergeRequestForm({
@@ -193,9 +196,11 @@ export function ConciergeRequestForm({
   recentRequests,
   initialPrompt,
   presentation,
+  selectedTopicLabel,
 }: ConciergeRequestFormProps) {
   const { i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
+  const insets = useSafeAreaInsets();
   const [prompt, setPrompt] = useState("");
   const [extraNotes, setExtraNotes] = useState("");
   const [timePreference, setTimePreference] = useState<string>("any");
@@ -469,13 +474,19 @@ export function ConciergeRequestForm({
     ((dateRangePreset === "single" && (weatherSnapshot.precipitation ?? 0) > 2 && weatherSnapshot.date) ||
       (dateRangePreset !== "single" && (weatherSnapshot.rainy_days ?? 0) > 0));
 
+  const footerReserve = Layout.touchTargetMin + 12 + 12 + Math.max(12, insets.bottom + 10);
+
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.scrollContent}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.container}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: footerReserve }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
+        keyboardDismissMode="on-drag"
+        contentInsetAdjustmentBehavior="always"
+      >
       {showModeLabel && (
         <View style={styles.modeLabelRow}>
           <Text style={styles.modeLabelText}>
@@ -490,6 +501,15 @@ export function ConciergeRequestForm({
             ? "Describe what you want (e.g. “date night”, “weekend brunch”) or add details below."
             : "Write a short request or fill in the details. We’ll suggest options and show weather for your date and location."}
       </Text>
+
+      {selectedTopicLabel?.trim() ? (
+        <View style={styles.selectedTopicPill}>
+          <Ionicons name="pricetag-outline" size={16} color={Colors.primaryViolet} />
+          <Text style={styles.selectedTopicText} numberOfLines={1}>
+            Topic: {selectedTopicLabel.trim()}
+          </Text>
+        </View>
+      ) : null}
       {recentRequests && recentRequests.length > 0 && (
         <View style={styles.recentWrap}>
           <Text style={styles.recentLabel}>Recent ideas</Text>
@@ -534,8 +554,9 @@ export function ConciergeRequestForm({
         </ScrollView>
       )}
       <View style={styles.promptRow}>
+        <Text style={styles.fieldLabel}>What are you planning?</Text>
         <TextInput
-          style={styles.promptInput}
+          style={[styles.promptInput, styles.promptPrimary]}
           placeholder={
             refinementPlaceholder
               ? refinementPlaceholder
@@ -546,15 +567,6 @@ export function ConciergeRequestForm({
           placeholderTextColor={Colors.gray500}
           value={prompt}
           onChangeText={setPrompt}
-          multiline
-          maxLength={300}
-        />
-        <TextInput
-          style={[styles.promptInput, { minHeight: 56 }]}
-          placeholder="Additional info (optional) — allergies, vibe, constraints…"
-          placeholderTextColor={Colors.gray500}
-          value={extraNotes}
-          onChangeText={setExtraNotes}
           multiline
           maxLength={300}
         />
@@ -630,6 +642,16 @@ export function ConciergeRequestForm({
 
       {showDetails && (
         <View style={styles.details}>
+          <Text style={styles.fieldLabel}>Extra notes (optional)</Text>
+          <TextInput
+            style={[styles.promptInput, styles.promptSecondary]}
+            placeholder="Allergies, vibe, constraints, dress code…"
+            placeholderTextColor={Colors.gray500}
+            value={extraNotes}
+            onChangeText={setExtraNotes}
+            multiline
+            maxLength={300}
+          />
           {rainAdvisory ? (
             <View style={styles.advisoryBox}>
               <Ionicons name="rainy-outline" size={20} color={Colors.primaryViolet} />
@@ -1047,28 +1069,33 @@ export function ConciergeRequestForm({
           )}
         </View>
       )}
+      </ScrollView>
 
-      <TouchableOpacity
-        onPress={handleSubmit}
-        style={[styles.submitBtn, (loading || !canSubmit) && styles.submitBtnDisabled]}
-        disabled={loading || !canSubmit}
-        activeOpacity={0.9}
-      >
-        {loading ? (
-          <ActivityIndicator color={Colors.white} />
-        ) : (
-          <Text style={styles.submitBtnText}>
-            {source_screen === "chats" ? "Get chat suggestions" : "Get suggestions"}
-          </Text>
-        )}
-      </TouchableOpacity>
-    </ScrollView>
+      {/* Sticky footer CTA so form is always usable + scrolling stays vertical */}
+      <View style={[styles.footer, { paddingBottom: Math.max(12, insets.bottom + 10) }]}>
+        <TouchableOpacity
+          onPress={handleSubmit}
+          style={[styles.submitBtn, (loading || !canSubmit) && styles.submitBtnDisabled]}
+          disabled={loading || !canSubmit}
+          activeOpacity={0.9}
+        >
+          {loading ? (
+            <ActivityIndicator color={Colors.white} />
+          ) : (
+            <Text style={styles.submitBtnText}>
+              {source_screen === "chats" ? "Get chat suggestions" : "Get suggestions"}
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: { flex: 1 },
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 24, paddingBottom: 24 },
+  scrollContent: { paddingHorizontal: 24, paddingBottom: 16 },
   modeLabelRow: { marginBottom: 8 },
   modeLabelText: {
     ...Typography.caption,
@@ -1167,6 +1194,30 @@ const styles = StyleSheet.create({
     color: Colors.gray600,
     marginBottom: 12,
   },
+  fieldLabel: {
+    ...Typography.caption,
+    color: Colors.gray600,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  selectedTopicPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: Colors.romance.secondary,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    marginBottom: 12,
+  },
+  selectedTopicText: {
+    ...Typography.caption,
+    color: Colors.textPrimary,
+    fontWeight: "700",
+    flex: 1,
+  },
   promptRow: {
     marginBottom: 12,
   },
@@ -1179,6 +1230,12 @@ const styles = StyleSheet.create({
     minHeight: 80,
     textAlignVertical: "top",
     marginBottom: 8,
+  },
+  promptPrimary: {
+    minHeight: 92,
+  },
+  promptSecondary: {
+    minHeight: 64,
   },
   voiceInputBtn: {
     flexDirection: "row",
@@ -1539,11 +1596,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: "center",
-    marginTop: 8,
   },
   submitBtnDisabled: { opacity: 0.6 },
   submitBtnText: {
     ...Typography.button,
     color: Colors.white,
+  },
+  footer: {
+    paddingTop: 10,
+    paddingHorizontal: 24,
+    backgroundColor: Colors.backgroundMuted,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.gray200,
   },
 });

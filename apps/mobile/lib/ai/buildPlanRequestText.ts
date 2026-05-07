@@ -241,8 +241,8 @@ export function buildPlanRequestText(i: BuildPlanRequestTextInput): string {
       ? `Venue hint: ${[i.venueName?.trim(), i.venueOpenHoursHint?.trim()].filter(Boolean).join(" — ")}.`
       : null;
 
+  // IMPORTANT: Start with the activity/topic so downstream title seeding doesn't become "Mode: Planner…".
   const lines: string[] = [
-    modeLine(i),
     `Topic / activity: ${i.activityOrTopic.trim() || "Not specified"}.`,
     originLine,
     dest,
@@ -282,6 +282,9 @@ export function buildPlanRequestText(i: BuildPlanRequestTextInput): string {
     const s = serializeCategoryExtras(i.categoryExtras).trim();
     if (s) lines.push(s);
   }
+
+  // Mode context goes last — it's metadata, not the topic.
+  lines.push(modeLine(i));
 
   lines.push(
     "Constraints — verify together before finalizing options: (1) Date and time fit the user’s request. (2) Weather suits the activity (e.g. move outdoor plans indoor if rain/wind). (3) Venue opening hours must contain the requested arrival time — avoid proposing arrival near closing (e.g. <45 min before stated closing) unless the user asked for a short visit. (4) If anything conflicts, say so and suggest a concrete adjustment (different time, day, or venue).",
