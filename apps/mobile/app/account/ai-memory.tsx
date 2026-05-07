@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: Colors.gray50,
+    backgroundColor: Colors.gray100,
   },
   choiceRowActive: { backgroundColor: Colors.primaryViolet + "12" },
   choiceTitle: { ...Typography.body, fontWeight: "600", color: Colors.textPrimary },
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
   switchRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   switchHint: { ...Typography.caption, color: Colors.gray600, marginTop: 4, lineHeight: 18 },
   dangerBtn: {
-    backgroundColor: Colors.danger,
+    backgroundColor: Colors.errorRed,
     borderRadius: 14,
     paddingVertical: 14,
     paddingHorizontal: 14,

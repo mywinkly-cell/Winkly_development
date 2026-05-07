@@ -17,7 +17,7 @@ import {
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography } from "@/constants/tokens";
-import { callWinklyPlan, type ConciergeContext, type ExperienceOption } from "@/lib/ai/conciergeClient";
+import { callWinklyPlan, type ConciergeContext, type ExperienceOption, type WinklyPlanOption } from "@/lib/ai/conciergeClient";
 import type { PlannerThemePlanOption, PlannerTripDay } from "@/lib/ai/strategicHost";
 import type { Mode } from "@/types";
 import { createPlannerItemForSelf, createPlannerInvite } from "@/lib/plannerInvitations";
@@ -335,16 +335,16 @@ export function ConciergeConfirmStep({
           });
           await sendMessage(conversationId, meId, ctaPayload, [], { messageType: "cta" });
         } else {
-          const wp = planRes.winkly_plan;
+          const wp: WinklyPlanOption = planRes.options?.[1] ?? planRes.options?.[0];
           const ctaPayload = JSON.stringify({
             type: "pending_plan",
             pending_plan_id: pendingPlanId,
             source_mode: mode,
-            topic: wp.topic,
-            date_time: wp.date_time,
-            duration: wp.duration,
-            location_details: wp.location_details,
-            logic_reasoning: wp.logic_reasoning,
+            topic: wp.title,
+            date_time: starts_at,
+            duration: wp.duration_minutes,
+            location_details: { name: wp.venue.name, address: wp.venue.address, google_maps_link: wp.venue.google_maps_link },
+            logic_reasoning: wp.why_this_fits,
           });
           await sendMessage(conversationId, meId, ctaPayload, [], { messageType: "cta" });
         }

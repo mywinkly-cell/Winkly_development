@@ -32,7 +32,7 @@ export function ModeCard({ label, description, color, icon, iconImage, active, o
           ) : icon ? (
             <Ionicons name={icon} size={26} color={color} />
           ) : (
-            <Ionicons name="sparkles" size={26} color={color} />
+            <Ionicons name="star" size={26} color={color} />
           )}
         </View>
 

@@ -324,12 +324,12 @@ export default function RomanceFiltersScreen() {
               step={1}
               initialFromValue={ageMin}
               initialToValue={ageMax}
-              fromValueOnChange={(v) => {
+              fromValueOnChange={(v: number) => {
                 const n = Math.round(v);
                 setAgeMin(n);
                 Haptics.selectionAsync();
               }}
-              toValueOnChange={(v) => {
+              toValueOnChange={(v: number) => {
                 const n = Math.round(v);
                 setAgeMax(n);
                 Haptics.selectionAsync();

@@ -28,18 +28,25 @@ const AI_GATEWAY_TASKS = [
 ] as const;
 export type ConciergeTask = (typeof AI_GATEWAY_TASKS)[number];
 
-export type WinklyPlan = {
-  topic: string;
-  date_time: string; // ISO
-  duration: number; // minutes
-  location_details: { name: string; address: string; google_maps_link: string };
-  weather_context: string;
-  booking_links: string[];
-  logic_reasoning: string;
+export type WinklyPlanOption = {
+  option_id: "A" | "B";
+  character_label: string;
+  title: string;
+  why_this_fits: string;
+  itinerary: { time: string; description: string }[];
+  venue: {
+    name: string;
+    address: string;
+    google_maps_link: string;
+    estimated_cost: string;
+    booking_url?: string;
+  };
+  weather_note: string;
+  duration_minutes: number;
 };
 
 export type WinklyPlanResponse = {
-  winkly_plan: WinklyPlan;
+  options: [WinklyPlanOption, WinklyPlanOption];
   pending_plan_id: string | null;
   provider: "gemini" | "fallback";
 };
@@ -80,7 +87,7 @@ export async function callWinklyPlan(params: {
   if (!res.ok) {
     throw new Error((typeof data?.error === "string" ? data.error : undefined) ?? `Request failed: ${res.status}`);
   }
-  if (!data?.winkly_plan) throw new Error("No plan returned");
+  if (!data?.options || !Array.isArray(data.options) || data.options.length !== 2) throw new Error("No plan options returned");
   return data as WinklyPlanResponse;
 }
 

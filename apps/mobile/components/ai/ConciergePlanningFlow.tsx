@@ -45,6 +45,7 @@ import {
   type ActivityDetails,
   type DatePreset,
   type TimeOfDay,
+  type ActivityCategory,
   getSmartDefaultsForActivity,
   getActivityCategoryByKey,
   getIntentCards,

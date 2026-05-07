@@ -194,18 +194,25 @@ type WinklyPlanInput = {
   };
 };
 
-type WinklyPlanOutput = {
-  topic: string;
-  date_time: string; // ISO
-  duration: number; // minutes
-  location_details: {
+type WinklyPlanOptionOut = {
+  option_id: "A" | "B";
+  character_label: string;
+  title: string;
+  why_this_fits: string;
+  itinerary: Array<{ time: string; description: string }>;
+  venue: {
     name: string;
     address: string;
     google_maps_link: string;
-  } | { name: "No suitable venue found"; address: ""; google_maps_link: "" };
-  weather_context: string;
-  booking_links: string[];
-  logic_reasoning: string;
+    estimated_cost: string;
+    booking_url?: string;
+  };
+  weather_note: string;
+  duration_minutes: number;
+};
+
+type WinklyPlanOutput = {
+  options: [WinklyPlanOptionOut, WinklyPlanOptionOut];
 };
 
 type StrategicHostTopic = { title: string; type: "Synergy" | "Lifestyle" | "General"; pitch: string };
@@ -2067,43 +2074,99 @@ function parseWinklyPlanOutput(text: string): WinklyPlanOutput | null {
   if (!obj || typeof obj !== "object") return null;
   const o = obj as Record<string, unknown>;
 
-  const topic = typeof o.topic === "string" ? o.topic.trim() : "";
-  const date_time = safeIsoOrNull(o.date_time) ?? "";
-  const duration = typeof o.duration === "number" && isFinite(o.duration) ? Math.round(o.duration) : NaN;
-  const weather_context = typeof o.weather_context === "string" ? o.weather_context.trim() : "";
-  const logic_reasoning = typeof o.logic_reasoning === "string" ? o.logic_reasoning.trim() : "";
-  const booking_links = Array.isArray(o.booking_links) ? o.booking_links.filter((x) => typeof x === "string").map((s) => s.trim()).filter(Boolean).slice(0, 6) : [];
+  const optionsRaw = o.options;
+  if (!Array.isArray(optionsRaw) || optionsRaw.length !== 2) return null;
 
-  const ld = o.location_details;
-  let location_details: WinklyPlanOutput["location_details"] | null = null;
-  if (ld && typeof ld === "object") {
-    const ldo = ld as Record<string, unknown>;
-    const name = typeof ldo.name === "string" ? ldo.name.trim() : "";
-    const address = typeof ldo.address === "string" ? ldo.address.trim() : "";
-    const link = typeof ldo.google_maps_link === "string" ? ldo.google_maps_link.trim() : "";
-    if (name) location_details = { name, address, google_maps_link: link };
-  }
+  const parseOpt = (v: unknown, id: "A" | "B"): WinklyPlanOptionOut | null => {
+    if (!v || typeof v !== "object") return null;
+    const x = v as Record<string, unknown>;
 
-  if (!topic || !date_time || !isFinite(duration) || duration <= 0 || !location_details || !weather_context || !logic_reasoning) {
-    return null;
-  }
+    const option_id = x.option_id === "A" || x.option_id === "B" ? (x.option_id as "A" | "B") : id;
+    const character_label = typeof x.character_label === "string" ? x.character_label.trim() : "";
+    const title = typeof x.title === "string" ? x.title.trim() : "";
+    const why_this_fits = typeof x.why_this_fits === "string" ? x.why_this_fits.trim() : "";
+    const weather_note = typeof x.weather_note === "string" ? x.weather_note.trim() : "";
+    const duration_minutes =
+      typeof x.duration_minutes === "number" && isFinite(x.duration_minutes) ? Math.round(x.duration_minutes) : NaN;
 
-  return {
-    topic: topic.slice(0, 120),
-    date_time,
-    duration: Math.min(24 * 60, Math.max(30, duration)),
-    location_details,
-    weather_context: weather_context.slice(0, 400),
-    booking_links,
-    logic_reasoning: logic_reasoning.slice(0, 600),
+    const venueRaw = x.venue;
+    if (!venueRaw || typeof venueRaw !== "object") return null;
+    const venue = venueRaw as Record<string, unknown>;
+    const vname = typeof venue.name === "string" ? venue.name.trim() : "";
+    const vaddr = typeof venue.address === "string" ? venue.address.trim() : "";
+    const vmap = typeof venue.google_maps_link === "string" ? venue.google_maps_link.trim() : "";
+    const estimated_cost = typeof venue.estimated_cost === "string" ? venue.estimated_cost.trim() : "";
+    const booking_url =
+      typeof venue.booking_url === "string" && /^https?:\/\//i.test(venue.booking_url)
+        ? String(venue.booking_url).slice(0, 600)
+        : undefined;
+
+    const itinRaw = x.itinerary;
+    const itinerary =
+      Array.isArray(itinRaw)
+        ? itinRaw
+            .filter((r) => r && typeof r === "object")
+            .map((r) => {
+              const rr = r as Record<string, unknown>;
+              return {
+                time: typeof rr.time === "string" ? rr.time.trim().slice(0, 12) : "",
+                description: typeof rr.description === "string" ? rr.description.trim().slice(0, 220) : "",
+              };
+            })
+            .filter((r) => r.time && r.description)
+            .slice(0, 10)
+        : [];
+
+    if (
+      !title ||
+      !character_label ||
+      !why_this_fits ||
+      !vname ||
+      !vmap ||
+      !estimated_cost ||
+      !weather_note ||
+      !isFinite(duration_minutes) ||
+      duration_minutes <= 0
+    ) {
+      return null;
+    }
+
+    return {
+      option_id,
+      character_label: character_label.slice(0, 40),
+      title: title.slice(0, 140),
+      why_this_fits: why_this_fits.slice(0, 340),
+      itinerary,
+      venue: {
+        name: vname.slice(0, 120),
+        address: vaddr.slice(0, 180),
+        google_maps_link: vmap.slice(0, 600),
+        estimated_cost: estimated_cost.slice(0, 60),
+        ...(booking_url ? { booking_url } : {}),
+      },
+      weather_note: weather_note.slice(0, 220),
+      duration_minutes: Math.min(24 * 60, Math.max(30, duration_minutes)),
+    };
   };
+
+  const a = parseOpt(optionsRaw[0], "A");
+  const b = parseOpt(optionsRaw[1], "B");
+  if (!a || !b) return null;
+  return { options: [a, b] };
 }
 
-function noVenueFoundPlan(seed: Omit<WinklyPlanOutput, "location_details">): WinklyPlanOutput {
-  return {
-    ...seed,
-    location_details: { name: "No suitable venue found", address: "", google_maps_link: "" },
-  };
+function noVenueFoundPlan(seedTitle: string): WinklyPlanOutput {
+  const mk = (id: "A" | "B", label: string): WinklyPlanOptionOut => ({
+    option_id: id,
+    character_label: label,
+    title: seedTitle.slice(0, 140) || "Plan",
+    why_this_fits: "No suitable venue found.",
+    itinerary: [{ time: "19:30", description: "Pick a different location or broaden constraints and try again." }],
+    venue: { name: "No suitable venue found", address: "", google_maps_link: "", estimated_cost: "" },
+    weather_note: "Weather not available.",
+    duration_minutes: 120,
+  });
+  return { options: [mk("A", "Bolder pick"), mk("B", "Reliable pick")] };
 }
 
 function inclusiveDayCountIso(dateFrom: string, dateTo: string): number {
@@ -2392,24 +2455,14 @@ async function generateWinklyPlan(params: {
   const userIdea = (input.planning_form.user_idea ?? "").trim();
   const weather = input.planning_form.weather ?? null;
 
-  const planSeed: Omit<WinklyPlanOutput, "location_details"> = {
-    topic: userIdea ? userIdea.slice(0, 120) : "Plan",
-    date_time: dt,
-    duration: 120,
-    weather_context: weather ? scrubPiiText(JSON.stringify(weather)).slice(0, 400) : "Weather not provided.",
-    booking_links: [],
-    logic_reasoning: "Generated from shared profile overlaps and constraints.",
-  };
+  const planSeedTitle = userIdea ? userIdea.slice(0, 120) : "Plan";
 
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
 
   const multiReq = params.multiDay;
   if (multiReq && multiReq.num_days > 1) {
     if (!geminiKey) {
-      const fallback = noVenueFoundPlan({
-        ...planSeed,
-        logic_reasoning: "Multi-day planning requires AI configuration (missing GEMINI_API_KEY).",
-      });
+      const fallback = noVenueFoundPlan(planSeedTitle);
       return {
         plan: fallback,
         trip_days: [],
@@ -2461,10 +2514,7 @@ async function generateWinklyPlan(params: {
   }
 
   if (!geminiKey) {
-    const fallback = noVenueFoundPlan({
-      ...planSeed,
-      logic_reasoning: "AI is not configured (missing GEMINI_API_KEY). No suitable venue found.",
-    });
+    const fallback = noVenueFoundPlan(planSeedTitle);
     return {
       plan: fallback,
       pending_plan_id: null,
@@ -2540,20 +2590,34 @@ You will receive: multiple participant profiles (interests, allergies, lifestyle
 
 Rules:
 - Validate the user's idea against ALL participant constraints.
-- If the idea is empty, propose ONE best option based on profile overlaps (do not list 5; we need a single plan object).
-- Never invent a venue. If VERIFIED_VENUE is missing, you MUST set location_details.name = "No suitable venue found" and leave address and google_maps_link empty.
-- booking_links must be empty unless BOOKING_URL is provided.
+- Return exactly two plan options as JSON: { "options": [ {...}, {...} ] }.
+- Option A — the bolder, more memorable choice. character_label: pick from ["Bolder pick","Surprising choice","Hidden gem","Local favourite"].
+- Option B — the safer, reliable choice. character_label: pick from ["Classic choice","Safe & solid","Reliable pick","Crowd pleaser"].
+- Never invent a venue: both options MUST use VERIFIED_VENUE when provided. If VERIFIED_VENUE is null, return \"No suitable venue found\" venue fields.
+- booking_url inside venue must be omitted unless BOOKING_URL is provided.
 - Output MUST be valid JSON and follow the required schema exactly.
 
 Required JSON schema:
 {
-  "topic": string,
-  "date_time": string (ISO),
-  "duration": number (minutes),
-  "location_details": { "name": string, "address": string, "google_maps_link": string },
-  "weather_context": string,
-  "booking_links": string[],
-  "logic_reasoning": string
+  "options": [
+    {
+      "option_id": "A" | "B",
+      "character_label": string,
+      "title": string,
+      "why_this_fits": string,
+      "itinerary": [{ "time": string, "description": string }],
+      "venue": {
+        "name": string,
+        "address": string,
+        "google_maps_link": string,
+        "estimated_cost": string,
+        "booking_url"?: string
+      },
+      "weather_note": string,
+      "duration_minutes": number
+    },
+    { ... }
+  ]
 }`;
 
   const payload = {
@@ -2599,17 +2663,11 @@ Required JSON schema:
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   const parsed = typeof text === "string" ? parseWinklyPlanOutput(text) : null;
 
-  let finalPlan: WinklyPlanOutput = parsed ?? noVenueFoundPlan({
-    ...planSeed,
-    logic_reasoning: "AI returned invalid JSON. No suitable venue found.",
-  });
+  let finalPlan: WinklyPlanOutput = parsed ?? noVenueFoundPlan(planSeedTitle);
 
-  // Guardrail: enforce "no venue" if not verified.
+  // Guardrail: if not verified, force fallback options.
   if (!verifiedVenue) {
-    finalPlan = noVenueFoundPlan({
-      ...finalPlan,
-      logic_reasoning: finalPlan.logic_reasoning || "No suitable venue found.",
-    });
+    finalPlan = noVenueFoundPlan(planSeedTitle);
   }
 
   // Persist to pending_plans (draft) only when requested.
@@ -2780,15 +2838,15 @@ serve(async (req) => {
         maps_grounding: "verify",
       });
       const agentic_planning_output = {
-        topic: out.plan.topic,
-        date_time: out.plan.date_time,
+        topic: out.plan.options?.[0]?.title ?? "Plan",
+        date_time: typeof scrubbedSafeContext.date_from === "string" ? scrubbedSafeContext.date_from : null,
         location_id: out.location_id,
         weather_check: true,
         booking_url: out.booking_url,
         participants: out.participants,
       };
       return new Response(JSON.stringify({
-        winkly_plan: out.plan,
+        options: out.plan.options,
         agentic_planning_output,
         pending_plan_id: out.pending_plan_id,
         provider: out.provider,

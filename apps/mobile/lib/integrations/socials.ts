@@ -38,7 +38,7 @@ export async function signInWithApple(): Promise<AppleSignInResult> {
     return {
       ok: true,
       idToken: res.identityToken,
-      nonce: res.nonce,
+      nonce: (res as unknown as { nonce?: string | null }).nonce,
       email: res.email,
       fullName: res.fullName,
     };
@@ -70,7 +70,7 @@ export type OAuthStartResult =
 
 export async function startOAuthAuthorizationCodeFlow(params: OAuthStartParams): Promise<OAuthStartResult> {
   try {
-    const redirectUri = params.redirectUri ?? AuthSession.makeRedirectUri({ useProxy: true });
+    const redirectUri = params.redirectUri ?? AuthSession.makeRedirectUri();
 
     const request = new AuthSession.AuthRequest({
       clientId: params.clientId,
