@@ -1,6 +1,6 @@
 /**
- * Winkly AI Concierge — 7-step planning flow container.
- * Step 1 Intent → 2 Activity Details → 3 Social → 4 Summary → 5 Suggestions → 6 Invite (optional) → 7 Add to Planner
+ * Winkly AI Concierge — planning flow container.
+ * Step 1 Intent → 2 Activity Details (incl. who’s joining) → 3 Summary → 4 Suggestions/Invite → 5 Add to Planner
  */
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
@@ -16,14 +16,13 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  Animated,
 } from "react-native";
 import { GestureDetector, Gesture } from "react-native-gesture-handler";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import {
-  callConciergeStream,
-  reportConciergeOutcome,
   buildOriginContext,
   type ConciergeContext,
   type ExperienceOption,
@@ -33,7 +32,6 @@ import { formatDefaultLocationDisplay, normalizeLocationDisplayString } from "@/
 import { ConciergeIntentStep } from "@/components/ai/ConciergeIntentStep";
 import { ConciergeSubActivityStep } from "@/components/ai/ConciergeSubActivityStep";
 import { ConciergeActivityDetailsStep } from "@/components/ai/ConciergeActivityDetailsStep";
-import { ConciergeSocialStep } from "@/components/ai/ConciergeSocialStep";
 import { ConciergeSummaryStep } from "@/components/ai/ConciergeSummaryStep";
 import { ConciergeInviteStep } from "@/components/ai/ConciergeInviteStep";
 import { ConciergeConfirmStep } from "@/components/ai/ConciergeConfirmStep";
@@ -51,16 +49,15 @@ import {
   getIntentCards,
   type IntentSection,
   type RankInput,
+  FOOD_AND_DRINKS_FORMAT_PROMPTS,
 } from "@/lib/ai/conciergePlanningFlow";
-import { rankActivityCategories, type RankedCategory } from "@/lib/ai/rankActivityCategories";
 import { buildPlanRequestText, inclusivePlanDayCount } from "@/lib/ai/buildPlanRequestText";
 import { loadPlanningProfileContext, formatSanitizedPersonaForConciergePrompt } from "@/lib/ai/customPlanPresets";
 import { supabase } from "@/lib/supabase";
-import { addRecentRequest, getRecentRequests, saveConciergeFeedback, type ConciergeFeedbackType } from "@/lib/ai/conciergeStorage";
+import { saveConciergeFeedback, type ConciergeFeedbackType } from "@/lib/ai/conciergeStorage";
 import { getPartnersForConcierge, searchWinklyUsersForInvite, type ConciergePartner } from "@/lib/ai/conciergePartners";
 import { getMergedDeviceWhiteSpaceSlots, formatCalendarWhiteSpaceForGateway } from "@/lib/integrations/calendarWhiteSpace";
 import { buildBookingContextForAi } from "@/lib/integrations/bookingLinks";
-import type { SuggestedPerson } from "@/components/ai/ConciergeSocialStep";
 import { Avatar } from "@/components/ui/Avatar";
 import { Colors, Typography, HEADER, HEADER_BAR_HEIGHT, Layout } from "@/constants/tokens";
 import type { Mode } from "@/types";
@@ -134,9 +131,8 @@ export function ConciergePlanningFlow({
   const [selectedCategory, setSelectedCategory] = useState<ActivityCategory | null>(null);
   const [subActivityKey, setSubActivityKey] = useState<string | null>(null);
   const [subActivityLabel, setSubActivityLabel] = useState<string | null>(null);
+  const [selectedTopic, setSelectedTopic] = useState<{ topic: string; subtopic: string } | null>(null);
   const [flowStep, setFlowStep] = useState<ConciergeFlowStep>("intent");
-  /** Mirrors last generate request; used to label Primary / Backup in decisive mode. */
-  const [lastPresentation, setLastPresentation] = useState<"menu" | "decisive" | undefined>(undefined);
   const [activityKey, setActivityKey] = useState<string | null>(null);
   const [activityLabel, setActivityLabel] = useState<string | null>(null);
   const [details, setDetails] = useState<Partial<ActivityDetails>>({
@@ -148,7 +144,8 @@ export function ConciergePlanningFlow({
     budgetAmount: "",
     budgetCurrency: "EUR",
   });
-  const [whoJoining, setWhoJoining] = useState<WhoJoining | null>(null);
+  // Default to decide_later so the selection actually affects Summary/Invite even if user never taps it.
+  const [whoJoining, setWhoJoining] = useState<WhoJoining>("decide_later");
   const [partnerId, setPartnerId] = useState<string | null>(() => partnerUserId ?? null);
   const [partnerDisplayName, setPartnerDisplayName] = useState<string | null>(() => partnerDisplayNameHint ?? null);
   const [partners, setPartners] = useState<ConciergePartner[]>([]);
@@ -160,7 +157,6 @@ export function ConciergePlanningFlow({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [noOptionsReason, setNoOptionsReason] = useState<string | null>(null);
-  const [lastRequestId, setLastRequestId] = useState<string | undefined>();
   const lastContextRef = useRef<ConciergeContext | null>(null);
   const [showFeedbackFor, setShowFeedbackFor] = useState<ExperienceOption | null>(null);
   const [invitePickerChoice, setInvitePickerChoice] = useState<"matches" | "friends" | "contacts" | null>(null);
@@ -168,15 +164,13 @@ export function ConciergePlanningFlow({
   const [contactsQuery, setContactsQuery] = useState("");
   const [contactsResults, setContactsResults] = useState<ConciergePartner[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
-  const [debugOpen, setDebugOpen] = useState(false);
-  const [debugTrace, setDebugTrace] = useState<
-    { ts: string; event: string; data?: Record<string, unknown> }[]
-  >([]);
   const lastDateRef = useRef<string>(dayKey(new Date()));
   const autoGenerateRef = useRef(false);
   const genAttemptRef = useRef(0);
-  const [lastRefinement, setLastRefinement] = useState<string | null>(null);
   const swipeStartX = useRef(0);
+
+  const [loadingPhaseIdx, setLoadingPhaseIdx] = useState(0);
+  const loadingFade = useRef(new Animated.Value(0)).current;
 
   /** Single line for UI (cards, share, maps) — always expand ISO in "City, XX". */
   const locationLineDisplay = useMemo(
@@ -217,7 +211,6 @@ export function ConciergePlanningFlow({
         .maybeSingle();
 
       let partnerInterests: string[] | undefined;
-      let partnerLifestyle: string[] | undefined;
       if (partnerUserId) {
         const { data: partnerRow } = await supabase
           .from("profiles_mode")
@@ -228,25 +221,11 @@ export function ConciergePlanningFlow({
         partnerInterests = Array.isArray(partnerRow?.interests)
           ? partnerRow.interests.filter((x): x is string => typeof x === "string")
           : [];
-        const plMeta = partnerRow?.meta as { lifestyle?: unknown } | undefined;
-        const pl = plMeta?.lifestyle;
-        partnerLifestyle = Array.isArray(pl)
-          ? pl.filter((x): x is string => typeof x === "string")
-          : typeof pl === "string"
-            ? [pl]
-            : [];
       }
 
       const selfInterests = Array.isArray(selfRow?.interests)
         ? selfRow.interests.filter((x): x is string => typeof x === "string")
         : [];
-      const sm = selfRow?.meta as { lifestyle?: unknown } | undefined;
-      const sl = sm?.lifestyle;
-      const selfLifestyle = Array.isArray(sl)
-        ? sl.filter((x): x is string => typeof x === "string")
-        : typeof sl === "string"
-          ? [sl]
-          : [];
 
       const rankInput: RankInput = {
         selfInterests,
@@ -451,10 +430,13 @@ export function ConciergePlanningFlow({
 
   const trace = useCallback((event: string, data?: Record<string, unknown>) => {
     if (!__DEV__) return;
-    setDebugTrace((prev) => {
-      const next = [...prev, { ts: new Date().toISOString(), event, data }];
-      return next.length > 80 ? next.slice(next.length - 80) : next;
-    });
+    // Terminal-first debugging: avoid rendering trace inside the app UI.
+    // Keep logs high-signal and avoid dumping full prompts / PII.
+    try {
+      console.log(`[ConciergePlan] ${event}`, data ?? {});
+    } catch {
+      // no-op
+    }
   }, []);
 
   const handleGenerate = useCallback(async (opts?: { refinementFeedback?: string; previousOptions?: ExperienceOption[] | null }) => {
@@ -468,6 +450,7 @@ export function ConciergePlanningFlow({
     setChosenStructuredIndex(null);
     setLoading(true);
     setFlowStep("suggestions");
+    // refinement feedback is passed directly into the request; we don't currently display it.
     trace("generate:start", {
       genId,
       mode: effectiveMode,
@@ -480,6 +463,7 @@ export function ConciergePlanningFlow({
     try {
       // Structured output (plan_options[]) per template. Theme = current intent/activity.
       const fullCtx = await buildContext();
+      const refinement_feedback = opts?.refinementFeedback?.trim() || undefined;
       lastContextRef.current = fullCtx;
       let city = details.city;
       let country = details.country;
@@ -502,6 +486,7 @@ export function ConciergePlanningFlow({
         city: city ?? null,
         country: country ?? null,
         dateTimeIso: dt.toISOString(),
+        refinement_feedback: refinement_feedback ?? null,
       });
       const plans = await getPlannerThemePlans({
         mode: effectiveMode,
@@ -518,10 +503,15 @@ export function ConciergePlanningFlow({
           country: country ?? fullCtx.country,
           date_from: dt.toISOString(),
           selected_date_time: dt.toISOString(),
+          ...(refinement_feedback ? { refinement_feedback } : {}),
         },
       });
       if (genId !== genAttemptRef.current) return;
-      trace("generate:response", { count: plans.length });
+      trace("generate:response", {
+        count: plans.length,
+        venues: plans.slice(0, 2).map((p) => p?.venue?.name).filter(Boolean),
+        providerFallback: plans.some((p) => p?.venue?.name === "No suitable venue found"),
+      });
       setLoading(false);
       setStructuredPlans(plans.slice(0, 2));
       if (!plans.length) {
@@ -529,7 +519,7 @@ export function ConciergePlanningFlow({
       } else {
         setMessage(null);
       }
-      setLastRefinement(null);
+      // reset refinement (not currently displayed)
     } catch (e) {
       if (genId !== genAttemptRef.current) return;
       setLoading(false);
@@ -542,11 +532,23 @@ export function ConciergePlanningFlow({
   const handleCorrectDetails = useCallback(
     (refinementHint: string) => {
       const prev = suggestions;
-      setLastRefinement(refinementHint);
       handleGenerate({ refinementFeedback: refinementHint, previousOptions: prev ?? null });
     },
     [handleGenerate, suggestions]
   );
+
+  useEffect(() => {
+    if (!loading || flowStep !== "suggestions") return;
+    setLoadingPhaseIdx(0);
+    loadingFade.setValue(0);
+    Animated.timing(loadingFade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+    let idx = 0;
+    const t = setInterval(() => {
+      idx = (idx + 1) % 3;
+      setLoadingPhaseIdx(idx);
+    }, 1150);
+    return () => clearInterval(t);
+  }, [loading, flowStep, loadingFade]);
 
   useEffect(() => {
     if (flowStep === "summary" && autoGenerateRef.current) {
@@ -557,7 +559,7 @@ export function ConciergePlanningFlow({
 
   const chosenOption = chosenIndex != null && suggestions?.length ? suggestions[chosenIndex] : null;
   const showInviteStepBeforePlanner =
-    (whoJoining === "just_me" || whoJoining === "decide_later") && suggestions?.length;
+    (whoJoining === "decide_later" || whoJoining === "share") && structuredPlans?.length;
 
   const handleFlowBack = useCallback(() => {
     Haptics.selectionAsync();
@@ -571,10 +573,6 @@ export function ConciergePlanningFlow({
     }
     if (flowStep === "activity") {
       setFlowStep(activityKey === "trip" ? "trip_planning" : "intent");
-      return;
-    }
-    if (flowStep === "social") {
-      setFlowStep("activity");
       return;
     }
     if (flowStep === "summary") {
@@ -596,26 +594,32 @@ export function ConciergePlanningFlow({
       setChosenIndex(null);
       setFlowStep(showInviteStepBeforePlanner ? "invite" : "suggestions");
     }
-  }, [flowStep, onBack, showInviteStepBeforePlanner]);
+  }, [flowStep, onBack, showInviteStepBeforePlanner, activityKey]);
 
   const panGesture = useMemo(
     () =>
-      Gesture.Pan()
-        .onStart((e) => {
-          swipeStartX.current = e.x;
-        })
-        .activeOffsetX(20)
-        .failOffsetY(-15)
-        .minDistance(40)
-        .onEnd((e) => {
-          // Swipe left anywhere to go back, or edge-swipe right (iOS-style).
-          if (e.translationX < -60) {
-            handleFlowBack();
-            return;
-          }
-          if (swipeStartX.current < 50 && e.translationX > 60) handleFlowBack();
-        }),
-    [handleFlowBack]
+      Gesture.Simultaneous(
+        Gesture.Pan()
+          .onStart((e) => {
+            swipeStartX.current = e.x;
+          })
+          // Allow a little vertical jitter while swiping horizontally (important inside ScrollViews).
+          .failOffsetY([-15, 15])
+          // Require a more deliberate horizontal swipe so vertical scroll stays smooth.
+          .activeOffsetX([-44, 44])
+          .minDistance(72)
+          .onEnd((e) => {
+            // Swipe left to go back. Never allow a swipe gesture to exit the flow.
+            if (flowStep === "intent") return;
+            // Consistent + reliable: allow a deliberate left swipe without requiring extreme velocity.
+            // (ScrollViews often reduce reported velocity.)
+            if (e.translationX < -80) handleFlowBack();
+            // Optional: iOS-style edge swipe right
+            else if (swipeStartX.current < 50 && e.translationX > 70) handleFlowBack();
+          }),
+        Gesture.Native()
+      ),
+    [handleFlowBack, flowStep]
   );
 
   const stepIndexMap: Record<ConciergeFlowStep, number> = {
@@ -623,30 +627,28 @@ export function ConciergePlanningFlow({
     sub_activity: 2,
     trip_planning: 2,
     activity: 2,
+    // Kept for type completeness; UI flow no longer routes to this step.
     social: 3,
-    summary: 4,
-    suggestions: 5,
-    invite: 6,
-    add_to_planner: 7,
+    summary: 3,
+    suggestions: 4,
+    invite: 4,
+    add_to_planner: 5,
   };
   const currentStepIndex = stepIndexMap[flowStep];
 
   const headerTitle =
-    flowStep === "intent"
-      ? "Ask Winkly AI"
-      : flowStep === "trip_planning"
-        ? "Trip preferences"
-        : flowStep === "activity"
-          ? "Activity details"
-          : flowStep === "social"
-            ? "Who's joining?"
-            : flowStep === "summary"
-              ? "Summary"
-              : flowStep === "suggestions"
-                ? "Your plans"
-                : flowStep === "invite"
-                  ? "Invite"
-                  : "Add to planner";
+    flowStep === "intent" ||
+    flowStep === "sub_activity" ||
+    flowStep === "trip_planning" ||
+    flowStep === "activity"
+      ? "Winkly AI Planner"
+      : flowStep === "summary"
+        ? "Summary"
+        : flowStep === "suggestions"
+          ? "Your plans"
+          : flowStep === "invite"
+            ? "Invite"
+            : "Add to planner";
 
   return (
     <GestureDetector gesture={panGesture}>
@@ -676,9 +678,9 @@ export function ConciergePlanningFlow({
         </TouchableOpacity>
       </View>
 
-      {/* Step indicator: 7 dots */}
+      {/* Step indicator: 5 dots */}
       <View style={styles.stepRow}>
-        {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+        {[1, 2, 3, 4, 5].map((i) => (
           <View
             key={i}
             style={[
@@ -694,7 +696,7 @@ export function ConciergePlanningFlow({
         <ConciergeIntentStep
           mode={mode}
           sections={intentSections}
-          onContinue={({ key, label, flowMode }) => {
+          onContinue={({ key, label, sectionLabel, flowMode }) => {
             const normalizeKey = (k: string): string => {
               const map: Record<string, string> = {
                 // Generic groups
@@ -735,6 +737,7 @@ export function ConciergePlanningFlow({
             setEffectiveMode(flowMode);
             setActivityKey(resolvedKey);
             setActivityLabel(label);
+            setSelectedTopic({ topic: sectionLabel, subtopic: label });
             setSelectedCategory(getActivityCategoryByKey(resolvedKey) ?? null);
             setSubActivityKey(null);
             setSubActivityLabel(null);
@@ -772,13 +775,26 @@ export function ConciergePlanningFlow({
           onContinue={({ subKey, subLabel }) => {
             setSubActivityKey(subKey);
             setSubActivityLabel(subLabel);
-            setDetails((prev) => ({
-              ...prev,
-              intentNotes: subKey !== "any" ? `${activityLabel ?? selectedCategory.label}: ${subLabel}` : activityLabel ?? undefined,
-            }));
+            setDetails((prev) => {
+              if (selectedCategory.key === "food_drinks") {
+                const prompt = FOOD_AND_DRINKS_FORMAT_PROMPTS[subLabel];
+                const intentNotes = prompt
+                  ? `Food & drinks format: ${subLabel}. ${prompt}`
+                  : `Food & drinks format: ${subLabel}.`;
+                return { ...prev, intentNotes };
+              }
+              return {
+                ...prev,
+                intentNotes:
+                  subKey !== "any"
+                    ? `${activityLabel ?? selectedCategory.label}: ${subLabel}`
+                    : activityLabel ?? undefined,
+              };
+            });
             setFlowStep("activity");
           }}
           onBack={() => setFlowStep("intent")}
+          showInlineBack={false}
         />
       )}
 
@@ -799,58 +815,21 @@ export function ConciergePlanningFlow({
           activityLabel={activityLabel}
           activityCategory={selectedCategory ?? (activityKey ? getActivityCategoryByKey(activityKey) : undefined)}
           initialDetails={details}
+          intentNotes={details.intentNotes}
           mode={effectiveMode}
           detailsVariant={selectedCategory?.detailsVariant ?? "standard"}
           subActivityKey={subActivityKey}
+          subActivityLabel={subActivityLabel}
+          topicLabel={selectedTopic?.topic ?? null}
+          subTopicLabel={selectedTopic?.subtopic ?? null}
           profilePromptVariant={activityKey === "custom" ? "custom" : undefined}
+          whoJoining={whoJoining}
+          onWhoJoiningChange={(w) => setWhoJoining(w)}
           onNext={(d) => {
             setDetails((prev) => ({ ...prev, ...d }));
-            setFlowStep("social");
+            setFlowStep("summary");
           }}
           onBack={() => setFlowStep((selectedCategory?.subActivities?.length ?? 0) > 0 ? "sub_activity" : "intent")}
-          showInlineBack={false}
-        />
-      )}
-
-      {flowStep === "social" && (
-        <ConciergeSocialStep
-          mode={effectiveMode}
-          planSummary={{
-            activity: activityLabel ?? undefined,
-            location: locationLineDisplay || undefined,
-            date: details.date ? details.date.toLocaleDateString() : undefined,
-            time:
-              details.timeOfDay && details.timeOfDay !== "any"
-                ? details.timeOfDay
-                : undefined,
-          }}
-          suggestedPeople={partners.slice(0, 2).map((p): SuggestedPerson => ({
-            id: p.id,
-            displayName: p.displayName,
-            type: effectiveMode === "romance" ? "match" : effectiveMode === "business" ? "business" : "friend",
-            avatar_url: p.avatar_url,
-          }))}
-          onSelect={(who, selectedPersonId) => {
-            setWhoJoining(who);
-            if (selectedPersonId) {
-              const p = partners.find((x) => x.id === selectedPersonId);
-              if (p) {
-                setPartnerId(p.id);
-                setPartnerDisplayName(p.displayName);
-              }
-              setFlowStep("summary");
-            } else if (who === "just_me" || who === "decide_later" || who === "share") {
-              setPartnerId(null);
-              setPartnerDisplayName(null);
-              setFlowStep("summary");
-            } else if (who === "invite_match" || who === "invite_friends" || who === "invite_business" || who === "invite_contacts") {
-              setInvitePickerFromStep("social");
-              setInvitePickerChoice(
-                who === "invite_match" ? "matches" : who === "invite_contacts" ? "contacts" : "friends"
-              );
-            }
-          }}
-          onBack={() => setFlowStep("activity")}
           showInlineBack={false}
         />
       )}
@@ -877,43 +856,7 @@ export function ConciergePlanningFlow({
 
       {flowStep === "suggestions" && (
         <View style={styles.suggestionsWrap}>
-          {__DEV__ ? (
-            <View style={styles.devDebugRow}>
-              <TouchableOpacity
-                style={styles.devDebugBtn}
-                onPress={() => setDebugOpen((v) => !v)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.devDebugBtnText}>{debugOpen ? "Hide debug trace" : "Show debug trace"}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.devDebugBtnSecondary}
-                onPress={() => setDebugTrace([])}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.devDebugBtnSecondaryText}>Clear</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-          {__DEV__ && debugOpen ? (
-            <ScrollView style={styles.devDebugBox} contentContainerStyle={styles.devDebugBoxContent}>
-              {debugTrace.length === 0 ? (
-                <Text style={styles.devDebugEmpty}>No trace yet. Tap Generate to capture steps.</Text>
-              ) : (
-                debugTrace.slice().reverse().map((ev, i) => (
-                  <Text key={`${ev.ts}-${i}`} style={styles.devDebugLine}>
-                    {ev.ts}  {ev.event}{ev.data ? `  ${JSON.stringify(ev.data)}` : ""}
-                  </Text>
-                ))
-              )}
-            </ScrollView>
-          ) : null}
-          {loading && !suggestions?.length && !structuredPlans?.length ? (
-            <View style={styles.loadingWrap}>
-              <ActivityIndicator size="large" color={Colors.primaryViolet} />
-              <Text style={styles.loadingText}>Winkly is preparing your plan.</Text>
-            </View>
-          ) : error ? (
+          {error ? (
             <ScrollView contentContainerStyle={styles.errorContent}>
               <Text style={styles.errorText}>{error}</Text>
               <TouchableOpacity style={styles.retryBtn} onPress={() => handleGenerate()} activeOpacity={0.9}>
@@ -944,25 +887,81 @@ export function ConciergePlanningFlow({
             </ScrollView>
           ) : structuredPlans && structuredPlans.length > 0 ? (
             <ScrollView style={styles.optionsScroll} contentContainerStyle={styles.optionsContent} showsVerticalScrollIndicator={false}>
-              <Text style={styles.optionsIntro}>Two structured plan options</Text>
-              {structuredPlans.slice(0, 2).map((p, idx) => {
-                const timeStr = new Date(p.date_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                const mapQuery = [p.location.name, p.location.address].filter(Boolean).join(", ");
+              <View style={styles.optionsHeaderRow}>
+                <Text style={styles.optionsIntro}>Two options</Text>
+                <TouchableOpacity
+                  style={styles.tryDifferentBtn}
+                  onPress={() => handleGenerate({ refinementFeedback: "Different vibe" })}
+                  activeOpacity={0.9}
+                >
+                  <Text style={styles.tryDifferentBtnText}>Try different options</Text>
+                </TouchableOpacity>
+              </View>
+              {structuredPlans
+                .map((raw) => {
+                  // Backward-compatible guard: old cached schema had { topic, location, weather_guard, details }.
+                  const anyP = raw as any;
+                  if (anyP?.venue?.name && anyP?.title) return raw;
+                  if (anyP?.location?.name && anyP?.topic) {
+                    const mapped = {
+                      option_id: "A",
+                      character_label: "",
+                      title: String(anyP.topic),
+                      why_this_fits: typeof anyP.details === "string" ? anyP.details : "",
+                      itinerary: [],
+                      venue: {
+                        name: String(anyP.location.name ?? ""),
+                        address: String(anyP.location.address ?? ""),
+                        google_maps_link: String(anyP.location.maps_link ?? ""),
+                        estimated_cost: "",
+                      },
+                      weather_note: typeof anyP.weather_guard === "string" ? anyP.weather_guard : "",
+                      duration_minutes: 120,
+                      ...(Array.isArray(anyP.trip_days) ? { trip_days: anyP.trip_days } : {}),
+                    };
+                    return mapped as any;
+                  }
+                  return null;
+                })
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((p: any, idx) => {
+                const isOptionA = p.option_id === "A" || idx === 0;
+                const modeAccent = (Colors as any)[effectiveMode]?.primary ?? Colors.primaryViolet;
+                const characterLabel = p.character_label || (isOptionA ? "Bolder pick" : "Classic choice");
                 return (
-                  <View key={idx} style={styles.planCard}>
+                  <View
+                    key={idx}
+                    style={[
+                      styles.planCard,
+                      isOptionA && { borderLeftWidth: 6, borderLeftColor: modeAccent, paddingLeft: 14, elevation: 5, shadowOpacity: 0.1 },
+                    ]}
+                  >
                     <TouchableOpacity
                       style={styles.planCardTouch}
                       onPress={() => { Haptics.selectionAsync(); setChosenStructuredIndex(idx); }}
                       activeOpacity={0.9}
                     >
-                      <Text style={styles.planTime}>{timeStr}</Text>
-                      <Text style={styles.planTitle} numberOfLines={1}>{p.topic}</Text>
+                      <View style={styles.optionTopRow}>
+                        <View style={[styles.optionChip, isOptionA ? { backgroundColor: modeAccent } : null]}>
+                          <Text style={[styles.optionChipText, isOptionA ? { color: Colors.white } : null]}>
+                            {isOptionA ? "Option A" : "Option B"}
+                          </Text>
+                        </View>
+                        <View style={styles.characterChip}>
+                          <Text style={styles.characterChipText}>{characterLabel}</Text>
+                        </View>
+                      </View>
+                      {p.why_this_fits ? (
+                        <Text style={styles.planPlace} numberOfLines={2}>{p.why_this_fits}</Text>
+                      ) : null}
+                      <Text style={styles.planTitle} numberOfLines={1}>{p.title}</Text>
                       <Text style={styles.planPlace} numberOfLines={2}>
-                        {[p.location.name, p.location.address].filter(Boolean).join(" • ")}
+                        {[p.venue?.name, p.venue?.address, p.venue?.estimated_cost].filter(Boolean).join(" • ")}
                       </Text>
                       <View style={styles.planItinerary}>
                         {p.trip_days?.length ? (
-                          p.trip_days.map((d) => (
+                          p.trip_days.map((d: { day: number; date: string; morning: { summary: string }; afternoon: { summary: string }; evening?: { summary: string } }) => (
                             <View key={`${idx}-d${d.day}`} style={styles.planItineraryRow}>
                               <Text style={styles.planItineraryTime}>D{d.day}</Text>
                               <Text style={styles.planItineraryActivity} numberOfLines={5}>
@@ -973,12 +972,14 @@ export function ConciergePlanningFlow({
                           ))
                         ) : (
                           <View style={styles.planItineraryRow}>
-                            <Text style={styles.planItineraryActivity} numberOfLines={3}>{p.details}</Text>
+                            <Text style={styles.planItineraryActivity} numberOfLines={4}>
+                              {(p.itinerary ?? []).slice(0, 3).map((s: { time: string; description: string }) => `${s.time} ${s.description}`.trim()).join(" · ")}
+                            </Text>
                           </View>
                         )}
                       </View>
                       <View style={styles.planMeta}>
-                        <Text style={styles.planMetaText} numberOfLines={2}>{p.weather_guard}</Text>
+                        <Text style={styles.planMetaText} numberOfLines={2}>{p.weather_note}</Text>
                       </View>
                     </TouchableOpacity>
                     <View style={styles.planActions}>
@@ -1002,18 +1003,8 @@ export function ConciergePlanningFlow({
                       >
                         <Ionicons name="person-add-outline" size={20} color={Colors.primaryViolet} />
                       </TouchableOpacity>
-                      {p.location.maps_link ? (
-                        <TouchableOpacity
-                          style={styles.planActionIcon}
-                          onPress={() => Linking.openURL(p.location.maps_link)}
-                        >
-                          <Ionicons name="map-outline" size={20} color={Colors.primaryViolet} />
-                        </TouchableOpacity>
-                      ) : mapQuery ? (
-                        <TouchableOpacity
-                          style={styles.planActionIcon}
-                          onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`)}
-                        >
+                      {p.venue?.google_maps_link ? (
+                        <TouchableOpacity style={styles.planActionIcon} onPress={() => Linking.openURL(p.venue.google_maps_link)}>
                           <Ionicons name="map-outline" size={20} color={Colors.primaryViolet} />
                         </TouchableOpacity>
                       ) : null}
@@ -1032,7 +1023,12 @@ export function ConciergePlanningFlow({
                 const timeStr = schedule && typeof schedule === "object" ? (schedule as { time?: string }).time : String(schedule ?? "");
                 const placeName = (opt as { place?: string }).place ?? opt.option_name ?? opt.narrative ?? "";
                 const mapQuery = [placeName, locationLineDisplay].filter(Boolean).join(", ");
-                const itinerarySteps = opt.itinerary ?? (opt.schedule ?? []).map((s) => (typeof s === "string" ? { time: "", activity: s } : s));
+                const scheduleArr = Array.isArray(opt.schedule)
+                  ? (opt.schedule as (string | { time?: string; activity?: string })[])
+                  : [];
+                const itinerarySteps =
+                  opt.itinerary ??
+                  scheduleArr.map((s) => (typeof s === "string" ? { time: "", activity: s } : s));
                 return (
                   <View key={idx} style={styles.planCard}>
                     <TouchableOpacity
@@ -1060,12 +1056,7 @@ export function ConciergePlanningFlow({
                         </View>
                       ) : null}
                       <View style={styles.planMeta}>
-                        {lastPresentation === "decisive" && suggestions.length >= 2 ? (
-                          <View style={styles.planRating}>
-                            <Ionicons name="star" size={14} color={Colors.accentYellow} />
-                            <Text style={styles.planMetaText}>{idx === 0 ? "Primary pick" : "Backup"}</Text>
-                          </View>
-                        ) : opt.why_this_fits ? (
+                        {opt.why_this_fits ? (
                           <View style={styles.planRating}>
                             <Ionicons name="star" size={14} color={Colors.accentYellow} />
                             <Text style={styles.planMetaText}>Picked for you</Text>
@@ -1122,6 +1113,21 @@ export function ConciergePlanningFlow({
                 );
               })}
             </ScrollView>
+          ) : null}
+          {loading ? (
+            <Animated.View style={[styles.loadingOverlay, { opacity: loadingFade }]}>
+              <View style={styles.loadingOverlayCard}>
+                <ActivityIndicator size="large" color={Colors.primaryViolet} />
+                <Text style={styles.loadingOverlayTitle}>Winkly is thinking</Text>
+                <Text style={styles.loadingOverlaySub}>
+                  {loadingPhaseIdx === 0
+                    ? "Choosing the vibe…"
+                    : loadingPhaseIdx === 1
+                      ? "Finding the best spots…"
+                      : "Finalizing two options…"}
+                </Text>
+              </View>
+            </Animated.View>
           ) : null}
         </View>
       )}
@@ -1244,7 +1250,6 @@ export function ConciergePlanningFlow({
           mode={effectiveMode}
           contextForPendingPlan={lastContextRef.current}
           onDone={() => {
-            reportConciergeOutcome(lastRequestId, "added_to_planner").catch(() => {});
             if (chosenOption) setShowFeedbackFor(chosenOption);
             else onClose();
           }}
@@ -1268,7 +1273,6 @@ export function ConciergePlanningFlow({
                   style={styles.feedbackBtn}
                   onPress={async () => {
                     Haptics.selectionAsync();
-                    reportConciergeOutcome(lastRequestId, fb).catch(() => {});
                     if (showFeedbackFor) {
                       await saveConciergeFeedback(
                         String(showFeedbackFor.option_name ?? showFeedbackFor.narrative ?? "Plan"),
@@ -1310,6 +1314,8 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.gray200,
     backgroundColor: Colors.white,
     minHeight: HEADER_BAR_HEIGHT,
+    zIndex: 50,
+    elevation: 10,
   },
   flowHeaderBtn: {
     width: HEADER.buttonSize,
@@ -1350,46 +1356,34 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   suggestionsWrap: { flex: 1 },
-  devDebugRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 6,
-  },
-  devDebugBtn: {
-    backgroundColor: Colors.gray100,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  devDebugBtnText: { ...Typography.caption, color: Colors.textPrimary, fontWeight: "700" },
-  devDebugBtnSecondary: {
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  devDebugBtnSecondaryText: { ...Typography.caption, color: Colors.gray600, fontWeight: "700" },
-  devDebugBox: {
-    marginHorizontal: 24,
-    marginBottom: 6,
-    maxHeight: 180,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    borderRadius: 12,
-    backgroundColor: Colors.white,
-  },
-  devDebugBoxContent: { padding: 10 },
-  devDebugEmpty: { ...Typography.caption, color: Colors.gray600, fontStyle: "italic" },
-  devDebugLine: { ...Typography.caption, color: Colors.gray700, marginBottom: 6 },
   loadingWrap: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
   loadingText: { ...Typography.caption, color: Colors.gray600 },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255,255,255,0.78)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  loadingOverlayCard: {
+    width: "100%",
+    maxWidth: 320,
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 18,
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    shadowColor: "#1C1C1E",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 6,
+  },
+  loadingOverlayTitle: { ...Typography.h3, color: Colors.textPrimary },
+  loadingOverlaySub: { ...Typography.caption, color: Colors.gray600, textAlign: "center" },
   errorContent: { padding: 24 },
   errorText: { ...Typography.body, color: Colors.errorRed, marginBottom: 12 },
   retryBtn: {
@@ -1414,6 +1408,16 @@ const styles = StyleSheet.create({
   optionsScroll: { flex: 1 },
   optionsContent: { paddingHorizontal: 24, paddingBottom: 24 },
   optionsIntro: { ...Typography.body, color: Colors.textPrimary, marginBottom: 16 },
+  optionsHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 },
+  tryDifferentBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+  },
+  tryDifferentBtnText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "700" },
   planCard: {
     backgroundColor: Colors.white,
     borderRadius: 20,
@@ -1431,6 +1435,23 @@ const styles = StyleSheet.create({
   planTime: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600", marginBottom: 4 },
   planTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 4 },
   planPlace: { ...Typography.caption, color: Colors.gray600, marginBottom: 8 },
+  optionTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8, flexWrap: "wrap" },
+  optionChip: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: Colors.gray100,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+  },
+  optionChipText: { ...Typography.caption, color: Colors.gray700, fontWeight: "800" },
+  characterChip: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: Colors.gray100,
+  },
+  characterChipText: { ...Typography.caption, color: Colors.gray700, fontWeight: "700" },
   planItinerary: { marginTop: 8, marginBottom: 8, paddingLeft: 4 },
   planItineraryRow: { flexDirection: "row", alignItems: "center", marginBottom: 4, gap: 10 },
   planItineraryTime: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600", minWidth: 36 },

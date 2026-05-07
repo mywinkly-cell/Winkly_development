@@ -45,13 +45,20 @@ export type PlannerTripDay = {
 };
 
 export type PlannerThemePlanOption = {
-  topic: string;
-  date_time: string;
-  location: { name: string; address: string; maps_link: string };
-  weather_guard: string;
-  participants: string[];
-  details: string;
-  action_links: { booking?: string };
+  option_id: "A" | "B";
+  character_label: string;
+  title: string;
+  why_this_fits: string;
+  itinerary: Array<{ time: string; description: string }>;
+  venue: {
+    name: string;
+    address: string;
+    google_maps_link: string;
+    estimated_cost: string;
+    booking_url?: string;
+  };
+  weather_note: string;
+  duration_minutes: number;
   /** Populated for multi-day concierge trips (`num_days` > 1). */
   trip_days?: PlannerTripDay[];
 };

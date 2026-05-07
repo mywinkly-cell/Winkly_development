@@ -231,13 +231,20 @@ type PlannerTripDayOut = {
 
 type PlannerThemePlansOutput = {
   plan_options: Array<{
-    topic: string;
-    date_time: string;
-    location: { name: string; address: string; maps_link: string };
-    weather_guard: string;
-    participants: string[];
-    details: string;
-    action_links: { booking?: string };
+    option_id: "A" | "B";
+    character_label: string;
+    title: string;
+    why_this_fits: string;
+    itinerary: Array<{ time: string; description: string }>;
+    venue: {
+      name: string;
+      address: string;
+      google_maps_link: string;
+      estimated_cost: string;
+      booking_url?: string;
+    };
+    weather_note: string;
+    duration_minutes: number;
     trip_days?: PlannerTripDayOut[];
   }>;
 };
@@ -2169,12 +2176,63 @@ function noVenueFoundPlan(seedTitle: string): WinklyPlanOutput {
   return { options: [mk("A", "Bolder pick"), mk("B", "Reliable pick")] };
 }
 
+/** When Places verification succeeded, force both options onto the grounded venue (booking URL optional). */
+function applyVerifiedVenueToOptions(
+  plan: WinklyPlanOutput,
+  vv: { name: string; address: string; google_maps_link: string },
+  bookingUrl: string | null,
+): WinklyPlanOutput {
+  const mergeOpt = (opt: WinklyPlanOptionOut): WinklyPlanOptionOut => ({
+    ...opt,
+    venue: {
+      name: vv.name,
+      address: vv.address,
+      google_maps_link: vv.google_maps_link,
+      estimated_cost: opt.venue.estimated_cost,
+      ...(bookingUrl ? { booking_url: bookingUrl } : {}),
+    },
+  });
+  return {
+    options: [mergeOpt(plan.options[0]), mergeOpt(plan.options[1])],
+  };
+}
+
 function inclusiveDayCountIso(dateFrom: string, dateTo: string): number {
   const a = new Date(`${dateFrom.slice(0, 10)}T12:00:00Z`);
   const b = new Date(`${dateTo.slice(0, 10)}T12:00:00Z`);
   if (isNaN(a.getTime()) || isNaN(b.getTime())) return 1;
   const diff = Math.round((b.getTime() - a.getTime()) / 86400000);
   return Math.max(1, diff + 1);
+}
+
+/** Readable weather for prompts and fallbacks — avoids raw JSON in model output / cards. */
+function formatWeatherSnapshotProse(w: unknown): string {
+  if (!w || typeof w !== "object") return "Weather: not provided.";
+  const o = w as Record<string, unknown>;
+  const parts: string[] = [];
+  const period = typeof o.period_summary === "string" ? o.period_summary.trim() : "";
+  const summary = typeof o.summary === "string" ? o.summary.trim() : "";
+  if (period) parts.push(period);
+  else if (summary) parts.push(summary);
+  const amin = o.avg_temp_min;
+  const amax = o.avg_temp_max;
+  const tmin = o.temp_min;
+  const tmax = o.temp_max;
+  if (typeof amin === "number" && typeof amax === "number") {
+    parts.push(`Typical temps ~${amin}–${amax}°C.`);
+  } else if (typeof tmin === "number" && typeof tmax === "number") {
+    parts.push(`Temps ${tmin}–${tmax}°C.`);
+  }
+  const rainy = o.rainy_days;
+  const total = o.total_days;
+  if (typeof rainy === "number" && typeof total === "number" && total > 1) {
+    parts.push(`Rain on ${rainy} of ${total} day(s).`);
+  } else if (typeof o.precipitation === "number") {
+    parts.push(`Precipitation indicator: ${o.precipitation}.`);
+  }
+  const d = typeof o.date === "string" ? o.date.trim() : "";
+  if (d) parts.push(`(Forecast anchor: ${d}.)`);
+  return parts.length ? parts.join(" ") : "Weather: not provided.";
 }
 
 function slotSummaryFromUnknown(s: unknown): string {
@@ -2209,7 +2267,7 @@ function parseMultiDayPlannerOutput(
     ? o.booking_links.filter((x) => typeof x === "string").map((s) => s.trim()).filter(Boolean).slice(0, 6)
     : [];
   const ld = o.location_details;
-  let location_details: WinklyPlanOutput["location_details"] | null = null;
+  let location_details: { name: string; address: string; google_maps_link: string } | null = null;
   if (ld && typeof ld === "object") {
     const ldo = ld as Record<string, unknown>;
     const name = typeof ldo.name === "string" ? ldo.name.trim() : "";
@@ -2260,7 +2318,7 @@ function parseMultiDayPlannerOutput(
   }
 
   const date_time = `${startIsoDate.slice(0, 10)}T10:00:00.000Z`;
-  const plan: WinklyPlanOutput = {
+  const planLegacy = {
     topic: topic.slice(0, 120),
     date_time,
     duration: Math.min(24 * 60 * 7, Math.max(180, numDays * 8 * 60)),
@@ -2269,7 +2327,7 @@ function parseMultiDayPlannerOutput(
     booking_links,
     logic_reasoning: logic_reasoning.slice(0, 600),
   };
-  return { plan, trip_days };
+  return { plan: planLegacy as unknown as WinklyPlanOutput, trip_days };
 }
 
 async function runMultiDayWinklyGemini(params: {
@@ -2319,7 +2377,7 @@ Return JSON only:
     participant_profiles: params.profiles,
     planning_hint: params.userIdea,
     budget: { amount: params.amount, currency: params.currency },
-    weather: params.weather,
+    weather_summary: formatWeatherSnapshotProse(params.weather),
     city: params.city,
     country: params.country ?? null,
     trip: { start_date: startIso, num_days: params.numDays },
@@ -2337,30 +2395,15 @@ Return JSON only:
     },
   };
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const wf = params.weather ? scrubPiiText(JSON.stringify(params.weather)).slice(0, 400) : "Weather not provided.";
   if (!res.ok) {
-    const seed = noVenueFoundPlan({
-      topic: params.userIdea.slice(0, 120) || "Trip",
-      date_time: `${startIso}T10:00:00.000Z`,
-      duration: params.numDays * 8 * 60,
-      weather_context: wf,
-      booking_links: [],
-      logic_reasoning: "Could not generate multi-day plan (provider error).",
-    });
+    const seed = noVenueFoundPlan(params.userIdea.slice(0, 120) || "Trip");
     return { plan: seed, trip_days: [] };
   }
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   const parsed = typeof text === "string" ? parseMultiDayPlannerOutput(text, params.numDays, startIso) : null;
   if (!parsed) {
-    const seed = noVenueFoundPlan({
-      topic: params.userIdea.slice(0, 120) || "Trip",
-      date_time: `${startIso}T10:00:00.000Z`,
-      duration: params.numDays * 8 * 60,
-      weather_context: wf,
-      booking_links: [],
-      logic_reasoning: "AI returned invalid multi-day JSON.",
-    });
+    const seed = noVenueFoundPlan(params.userIdea.slice(0, 120) || "Trip");
     return { plan: seed, trip_days: [] };
   }
   return parsed;
@@ -2489,12 +2532,18 @@ async function generateWinklyPlan(params: {
     let pendingPlanId: string | null = null;
     if (persistDraft) {
       try {
+        const planJsonEnvelope = {
+          ...(mdOut.plan as unknown as Record<string, unknown>),
+          date_time: dt,
+          city,
+          country: country ?? null,
+        };
         const ins = await supabase.from("pending_plans").insert({
           created_by: requesterUserId,
           source_mode: input.mode,
           participant_ids: ensureRequester,
           conversation_id: conversationId ?? null,
-          plan_json: mdOut.plan,
+          plan_json: planJsonEnvelope,
           status: "pending",
         }).select("id").single();
         if (!ins.error && ins.data) pendingPlanId = (ins.data as { id: string }).id;
@@ -2552,7 +2601,8 @@ async function generateWinklyPlan(params: {
     }
   }
 
-  // Grounded venue payload (Text Search). For verify phase we still require this to exist.
+  // Grounded venue payload (Text Search). Optional: when GOOGLE_PLACES_API_KEY is set, Gemini can be
+  // aligned to a verified place + optional booking_url; without a key, Gemini still produces venues from world knowledge.
   const verifiedVenue =
     placeCandidate?.name && placeCandidate.place_id
       ? {
@@ -2593,8 +2643,11 @@ Rules:
 - Return exactly two plan options as JSON: { "options": [ {...}, {...} ] }.
 - Option A — the bolder, more memorable choice. character_label: pick from ["Bolder pick","Surprising choice","Hidden gem","Local favourite"].
 - Option B — the safer, reliable choice. character_label: pick from ["Classic choice","Safe & solid","Reliable pick","Crowd pleaser"].
-- Never invent a venue: both options MUST use VERIFIED_VENUE when provided. If VERIFIED_VENUE is null, return \"No suitable venue found\" venue fields.
-- booking_url inside venue must be omitted unless BOOKING_URL is provided.
+- Use your world knowledge to suggest real, specific venues in the city and country provided (named restaurants, cafés, cultural venues, etc.). Do not invent fake URLs.
+- When VERIFIED_VENUE is non-null, BOTH options MUST use that exact venue name, address, and google_maps_link for their venue objects (still vary titles, itinerary tone, and why_this_fits).
+- When VERIFIED_VENUE is null, propose two distinct real venues. For google_maps_link use a Maps search URL: https://www.google.com/maps/search/?api=1&query=ENCODED_VENUE_NAME_AND_CITY (encode spaces as +).
+- Put human-readable weather in weather_note — never paste raw JSON.
+- booking_url inside venue must be omitted unless BOOKING_URL is provided (non-null).
 - Output MUST be valid JSON and follow the required schema exactly.
 
 Required JSON schema:
@@ -2626,12 +2679,12 @@ Required JSON schema:
       user_idea: userIdea || null,
       date_time: dt,
       budget: { amount, currency },
-      weather,
+      weather_summary: formatWeatherSnapshotProse(weather),
       city,
       country,
     },
-    VERIFIED_VENUE: verifiedVenue,
-    NOTE: "If VERIFIED_VENUE is null, location_details must be No suitable venue found.",
+    ...(verifiedVenue ? { VERIFIED_VENUE: verifiedVenue } : {}),
+    ...(verifiedBookingUrl ? { BOOKING_URL: verifiedBookingUrl } : {}),
   };
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(geminiKey)}`;
@@ -2646,10 +2699,7 @@ Required JSON schema:
   };
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!res.ok) {
-    const fallback = noVenueFoundPlan({
-      ...planSeed,
-      logic_reasoning: "AI provider error. No suitable venue found.",
-    });
+    const fallback = noVenueFoundPlan(planSeedTitle);
     return {
       plan: fallback,
       pending_plan_id: null,
@@ -2665,10 +2715,16 @@ Required JSON schema:
 
   let finalPlan: WinklyPlanOutput = parsed ?? noVenueFoundPlan(planSeedTitle);
 
-  // Guardrail: if not verified, force fallback options.
-  if (!verifiedVenue) {
-    finalPlan = noVenueFoundPlan(planSeedTitle);
+  if (verifiedVenue) {
+    finalPlan = applyVerifiedVenueToOptions(finalPlan, verifiedVenue, verifiedBookingUrl);
   }
+
+  const planJsonEnvelope = {
+    options: finalPlan.options,
+    date_time: dt,
+    city,
+    country: country ?? null,
+  };
 
   // Persist to pending_plans (draft) only when requested.
   // Topic/option generation in UI should not create pending plans until user confirms.
@@ -2680,7 +2736,7 @@ Required JSON schema:
         source_mode: input.mode,
         participant_ids: ensureRequester,
         conversation_id: conversationId ?? null,
-        plan_json: finalPlan,
+        plan_json: planJsonEnvelope,
         status: "pending",
       }).select("id").single();
       if (!ins.error && ins.data) pendingPlanId = (ins.data as { id: string }).id;
@@ -2890,7 +2946,19 @@ serve(async (req) => {
       const pr = typeof scrubbedSafeContext.plan_request_text === "string" ? scrubbedSafeContext.plan_request_text.trim() : "";
       // Prefer the full Planner form text (includes anonymised persona + constraints) when present.
       const userIdeaBase = (pr || `${theme} plan`).trim();
-      const weatherHint = wf ? `Weather: ${JSON.stringify(wf).slice(0, 400)}` : "";
+      const weatherHint = (() => {
+        if (!wf) return "";
+        const summary = typeof (wf as any).summary === "string"
+          ? String((wf as any).summary)
+          : typeof (wf as any).period_summary === "string"
+          ? String((wf as any).period_summary)
+          : "";
+        const tMin = typeof (wf as any).temp_min === "number" ? (wf as any).temp_min : null;
+        const tMax = typeof (wf as any).temp_max === "number" ? (wf as any).temp_max : null;
+        const range = tMin != null && tMax != null ? `${tMin}–${tMax}°C` : "";
+        const s = [summary, range].filter(Boolean).join(" ").trim();
+        return s ? `Weather: ${s}.` : "";
+      })();
       const indoorOutdoorHint =
         typeof scrubbedSafeContext.weather_forecast === "string" && scrubbedSafeContext.weather_forecast.toLowerCase().includes("rain")
           ? "Prefer indoor venues or weather-proof options."
@@ -2898,7 +2966,8 @@ serve(async (req) => {
 
       // Semantic caching: same theme/city/mode/day/trip length within 24h
       const semKey =
-        `sc:planner_theme_plans:${mode}:${normalizeTag(city)}:${normalizeTag(theme)}:${dateTime.slice(0, 10)}:${tripNumDays}:${hashKeyMaterial(participantIds.slice().sort().join(","))}`;
+        // v2: schema unified with winkly_plan options (venue/itinerary/etc.)
+        `sc:planner_theme_plans:v3:${mode}:${normalizeTag(city)}:${normalizeTag(theme)}:${dateTime.slice(0, 10)}:${tripNumDays}:${hashKeyMaterial(participantIds.slice().sort().join(","))}`;
       const cached = await redisGetJson<PlannerThemePlansOutput>(semKey);
       if (cached?.plan_options?.length) {
         return new Response(JSON.stringify(cached), {
@@ -2921,58 +2990,25 @@ serve(async (req) => {
           country: countryStr ?? null,
         },
       };
-      const inputB: WinklyPlanInput = {
-        ...inputA,
-        planning_form: { ...inputA.planning_form, user_idea: `${userIdeaBase} (alternative). ${indoorOutdoorHint} ${weatherHint}`.trim() },
-      };
-
       const multiDayOpt = tripNumDays > 1 ? { num_days: tripNumDays } : null;
 
-      const [outA, outB] = await Promise.all([
-        generateWinklyPlan({
-          supabase,
-          requesterUserId: user.id,
-          input: inputA,
-          conversationId: null,
-          persistDraft: false,
-          maps_grounding: "textsearch",
-          multiDay: multiDayOpt,
-        }),
-        generateWinklyPlan({
-          supabase,
-          requesterUserId: user.id,
-          input: inputB,
-          conversationId: null,
-          persistDraft: false,
-          maps_grounding: "textsearch",
-          multiDay: multiDayOpt,
-        }),
-      ]);
-
-      const mapPlan = (
-        p: WinklyPlanOutput,
-        bookingUrl?: string | null,
-        tripDays?: PlannerTripDayOut[],
-      ): PlannerThemePlansOutput["plan_options"][number] => ({
-        topic: p.topic,
-        date_time: p.date_time,
-        location: {
-          name: (p.location_details as { name: string }).name,
-          address: (p.location_details as { address: string }).address,
-          maps_link: (p.location_details as { google_maps_link: string }).google_maps_link,
-        },
-        weather_guard: p.weather_context || indoorOutdoorHint,
-        participants: participantIds,
-        details: p.logic_reasoning || "Structured plan option.",
-        action_links: { booking: bookingUrl ?? undefined },
-        ...(tripDays?.length ? { trip_days: tripDays } : {}),
+      // Single canonical plan generator: returns two options (A/B) in the WinklyPlanOption shape.
+      const out = await generateWinklyPlan({
+        supabase,
+        requesterUserId: user.id,
+        input: inputA,
+        conversationId: null,
+        persistDraft: false,
+        maps_grounding: "textsearch",
+        multiDay: multiDayOpt,
       });
 
+      const options = Array.isArray(out.plan?.options) ? out.plan.options : [];
       const response: PlannerThemePlansOutput = {
-        plan_options: [
-          mapPlan(outA.plan, outA.booking_url, outA.trip_days),
-          mapPlan(outB.plan, outB.booking_url, outB.trip_days),
-        ],
+        plan_options: options.slice(0, 2).map((opt: WinklyPlanOptionOut) => ({
+          ...opt,
+          ...(out.trip_days?.length ? { trip_days: out.trip_days } : {}),
+        })),
       };
 
       await redisSetJson(semKey, response, 86400).catch(() => {});

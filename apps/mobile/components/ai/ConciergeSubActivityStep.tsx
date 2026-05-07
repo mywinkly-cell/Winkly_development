@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Colors, Typography, Layout, Shadow } from "@/constants/tokens";
 import type { ActivityCategory } from "@/lib/ai/conciergePlanningFlow";
 
 export type SubActivityContinuePayload = {
@@ -14,14 +14,26 @@ export type ConciergeSubActivityStepProps = {
   category: ActivityCategory;
   onContinue: (payload: SubActivityContinuePayload) => void;
   onBack: () => void;
+  /** When false, parent shows the back control (e.g. flow header). */
+  showInlineBack?: boolean;
 };
 
-export function ConciergeSubActivityStep({ category, onContinue, onBack }: ConciergeSubActivityStepProps) {
+export function ConciergeSubActivityStep({
+  category,
+  onContinue,
+  onBack,
+  showInlineBack = true,
+}: ConciergeSubActivityStepProps) {
   const options = useMemo(() => {
     const list = category.subActivities ?? [];
     if (!list.length) return [{ key: "any", label: "Any" }];
     return list.map((label) => ({
-      key: label === "Surprise me" ? "any" : label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, ""),
+      key:
+        label === "Surprise me"
+          ? category.key === "food_drinks"
+            ? "surprise_me"
+            : "any"
+          : label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, ""),
       label,
     }));
   }, [category.subActivities]);
@@ -30,24 +42,35 @@ export function ConciergeSubActivityStep({ category, onContinue, onBack }: Conci
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
-        <Ionicons name="arrow-back" size={22} color={Colors.primaryViolet} />
-        <Text style={styles.backText}>Back</Text>
-      </TouchableOpacity>
+      {showInlineBack ? (
+        <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
+          <Ionicons name="arrow-back" size={22} color={Colors.primaryViolet} />
+          <Text style={styles.backText}>Back</Text>
+        </TouchableOpacity>
+      ) : null}
 
-      <Text style={styles.title}>{prompt}</Text>
-      <View style={styles.wrap}>
+      <View style={styles.heroCard}>
+        <Text style={styles.heroTitle} numberOfLines={2}>
+          {prompt}
+        </Text>
+        <Text style={styles.subtitle}>Choose one option</Text>
+      </View>
+
+      <View style={styles.list}>
         {options.map((opt) => (
           <TouchableOpacity
             key={opt.key}
-            style={styles.chip}
+            style={styles.optionCard}
             onPress={() => {
               Haptics.selectionAsync();
               onContinue({ subKey: opt.key, subLabel: opt.label });
             }}
-            activeOpacity={0.85}
+            activeOpacity={0.9}
           >
-            <Text style={styles.chipText}>{opt.label}</Text>
+            <Text style={styles.optionText} numberOfLines={2}>
+              {opt.label}
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={Colors.gray500} />
           </TouchableOpacity>
         ))}
       </View>
@@ -56,20 +79,37 @@ export function ConciergeSubActivityStep({ category, onContinue, onBack }: Conci
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  content: { paddingHorizontal: Layout.spacing.xl, paddingBottom: Layout.spacing.xxl },
+  scroll: { flex: 1, backgroundColor: Colors.backgroundMuted },
+  content: { paddingHorizontal: Layout.spacing.xl, paddingBottom: Layout.spacing.xxl, paddingTop: 14 },
   backRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 16 },
   backText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
-  title: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 14 },
-  wrap: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  chip: {
-    backgroundColor: Colors.gray100,
-    borderRadius: 999,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+  heroCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Layout.radii.card,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: Colors.gray200,
+    marginBottom: 14,
+    ...Shadow.card,
   },
-  chipText: { ...Typography.caption, color: Colors.textPrimary, fontWeight: "600" },
+  heroTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 6 },
+  subtitle: { ...Typography.caption, color: Colors.gray600 },
+  list: { gap: 10 },
+  optionCard: {
+    width: "100%",
+    backgroundColor: Colors.white,
+    borderRadius: Layout.radii.card,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    ...Shadow.card,
+  },
+  optionText: { ...Typography.body, fontWeight: "600", color: Colors.textPrimary, flex: 1 },
 });
 

@@ -195,14 +195,64 @@ function resolveFullCountryNameToAlpha2(country: string): string | null {
 }
 
 function regionDisplayName(alpha2: string, language: string): string {
+  const FALLBACK_ENGLISH: Record<string, string> = {
+    DE: "Germany",
+    AT: "Austria",
+    CH: "Switzerland",
+    PL: "Poland",
+    NL: "Netherlands",
+    BE: "Belgium",
+    FR: "France",
+    ES: "Spain",
+    IT: "Italy",
+    PT: "Portugal",
+    IE: "Ireland",
+    DK: "Denmark",
+    SE: "Sweden",
+    NO: "Norway",
+    FI: "Finland",
+    CZ: "Czechia",
+    SK: "Slovakia",
+    HU: "Hungary",
+    RO: "Romania",
+    BG: "Bulgaria",
+    HR: "Croatia",
+    SI: "Slovenia",
+    GR: "Greece",
+    EE: "Estonia",
+    LV: "Latvia",
+    LT: "Lithuania",
+    UA: "Ukraine",
+    RU: "Russia",
+    GB: "United Kingdom",
+    US: "United States",
+    CA: "Canada",
+    AU: "Australia",
+    NZ: "New Zealand",
+    AE: "United Arab Emirates",
+    TR: "Turkey",
+    IL: "Israel",
+    MX: "Mexico",
+    BR: "Brazil",
+    AR: "Argentina",
+    IN: "India",
+    JP: "Japan",
+    KR: "South Korea",
+    CN: "China",
+  };
   try {
     const dn = new Intl.DisplayNames([language, "en"], { type: "region" });
-    return dn.of(alpha2) ?? alpha2;
+    const v = dn.of(alpha2) ?? alpha2;
+    // Some JS engines (notably some RN/Hermes builds) return the alpha-2 code unchanged.
+    if (v === alpha2) return FALLBACK_ENGLISH[alpha2] ?? alpha2;
+    return v;
   } catch {
     try {
-      return new Intl.DisplayNames(["en"], { type: "region" }).of(alpha2) ?? alpha2;
+      const v = new Intl.DisplayNames(["en"], { type: "region" }).of(alpha2) ?? alpha2;
+      if (v === alpha2) return FALLBACK_ENGLISH[alpha2] ?? alpha2;
+      return v;
     } catch {
-      return alpha2;
+      return FALLBACK_ENGLISH[alpha2] ?? alpha2;
     }
   }
 }

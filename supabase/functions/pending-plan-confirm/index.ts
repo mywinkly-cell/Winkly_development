@@ -25,6 +25,14 @@ function addMinutesIso(iso: string, minutes: number): string {
   return d.toISOString();
 }
 
+function firstPlanOption(plan: Record<string, unknown>): Record<string, unknown> | null {
+  const opts = plan.options;
+  if (Array.isArray(opts) && opts[0] && typeof opts[0] === "object") {
+    return opts[0] as Record<string, unknown>;
+  }
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return withCorsEmpty(req, { status: 204 });
@@ -87,10 +95,42 @@ serve(async (req) => {
     // Finalize once, idempotently.
     if (allConfirmed && !pRow.planner_item_id && (pRow.status === "pending" || pRow.status === "pivot_pending")) {
       const plan = pRow.plan_json as Record<string, unknown>;
-      const topic = typeof plan.topic === "string" ? plan.topic : "Plan";
-      const dt = typeof plan.date_time === "string" ? plan.date_time : new Date().toISOString();
-      const duration = typeof plan.duration === "number" && isFinite(plan.duration) ? Math.round(plan.duration) : 120;
+      const primary = firstPlanOption(plan);
+      const topic =
+        (typeof primary?.title === "string" && primary.title.trim()) ||
+        (typeof plan.topic === "string" && plan.topic.trim()) ||
+        "Plan";
+      const dt =
+        (typeof plan.date_time === "string" && plan.date_time.trim()) ||
+        new Date().toISOString();
+      const durationFromPlan =
+        typeof plan.duration === "number" && isFinite(plan.duration) ? Math.round(plan.duration) : null;
+      const durationFromOpt =
+        primary && typeof primary.duration_minutes === "number" && isFinite(primary.duration_minutes)
+          ? Math.round(primary.duration_minutes as number)
+          : null;
+      const duration = durationFromPlan ?? durationFromOpt ?? 120;
       const endsAt = addMinutesIso(dt, Math.min(24 * 60, Math.max(30, duration)));
+
+      const venue = primary?.venue as Record<string, unknown> | undefined;
+      const fromVenue =
+        venue && typeof venue === "object"
+          ? {
+            name: typeof venue.name === "string" ? venue.name : "",
+            address: typeof venue.address === "string" ? venue.address : "",
+            google_maps_link: typeof venue.google_maps_link === "string" ? venue.google_maps_link : "",
+          }
+          : null;
+      const legacyLoc = plan.location_details as Record<string, unknown> | undefined;
+      const locationDetails =
+        fromVenue ??
+        (legacyLoc && typeof legacyLoc === "object"
+          ? {
+            name: typeof legacyLoc.name === "string" ? legacyLoc.name : "",
+            address: typeof legacyLoc.address === "string" ? legacyLoc.address : "",
+            google_maps_link: typeof legacyLoc.google_maps_link === "string" ? legacyLoc.google_maps_link : "",
+          }
+          : { name: "", address: "", google_maps_link: "" });
 
       const { data: item, error: itemErr } = await supabase
         .from("planner_items")
@@ -98,7 +138,9 @@ serve(async (req) => {
           created_by: pRow.created_by,
           source_mode: pRow.source_mode,
           title: topic,
-          description: typeof plan.logic_reasoning === "string" ? plan.logic_reasoning : null,
+          description:
+            (typeof primary?.why_this_fits === "string" && primary.why_this_fits.trim()) ||
+            (typeof plan.logic_reasoning === "string" ? plan.logic_reasoning : null),
           starts_at: dt,
           ends_at: endsAt,
           meta: { winkly_plan: plan },
@@ -124,8 +166,8 @@ serve(async (req) => {
 
       // Create a canonical confirmed_event (shared UID) for cross-calendar linking.
       // Provider-specific event IDs (Google/Outlook/etc) can be written into confirmed_event_participants later.
-      const locationDetails = (plan.location_details ?? {}) as Record<string, unknown>;
-      const mapsLink = typeof locationDetails.google_maps_link === "string" ? locationDetails.google_maps_link : "";
+      const locationDetailsTyped = locationDetails as Record<string, unknown>;
+      const mapsLink = typeof locationDetailsTyped.google_maps_link === "string" ? locationDetailsTyped.google_maps_link : "";
       const m = mapsLink.match(/place_id:([A-Za-z0-9_-]+)/);
       const locationId = m?.[1] ?? null;
       const eventUid = `winkly:${item.id}`;

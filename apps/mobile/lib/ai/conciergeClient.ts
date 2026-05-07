@@ -219,6 +219,122 @@ export type ConciergeContext = {
   num_days?: number;
 }
 
+/** Context object sent to ai-gateway (must stay in sync with allowlist server-side). */
+function serializeConciergeContextForGateway(context: ConciergeContext) {
+  return {
+    mode: context.mode,
+    theme: context.theme,
+    participant_user_ids: context.participant_user_ids,
+    city: context.city,
+    country: context.country,
+    date_from: context.date_from,
+    date_to: context.date_to,
+    activity_hint: context.activity_hint,
+    budget_tier: context.budget_tier,
+    budget_amount: context.budget_amount,
+    budget_currency: context.budget_currency,
+    latitude: context.latitude,
+    longitude: context.longitude,
+    timezone: context.timezone,
+    limit_events: context.limit_events,
+    source_mode: context.source_mode,
+    partner_user_id: context.partner_user_id,
+    refinement_feedback: context.refinement_feedback,
+    refinement_structured: context.refinement_structured,
+    previous_options: context.previous_options,
+    source_screen: context.source_screen,
+    source_planner_tab: context.source_planner_tab,
+    user_prompt: context.user_prompt,
+    plan_request_text: context.plan_request_text,
+    time_preference: context.time_preference,
+    available_slots: context.available_slots,
+    weather_snapshot: context.weather_snapshot,
+    weather_forecast: context.weather_forecast,
+    origin_context: context.origin_context,
+    compatibility_context: context.compatibility_context,
+    preference_engine_summary: context.preference_engine_summary,
+    calendar_white_space: context.calendar_white_space,
+    booking_context: context.booking_context,
+    presentation: context.presentation,
+    conversation_id: context.conversation_id,
+    target_slot_iso: context.target_slot_iso,
+    search_radius_miles: context.search_radius_miles,
+    selected_date_time: context.selected_date_time,
+    planning_entry_surface: context.planning_entry_surface,
+    origin_location_label: context.origin_location_label,
+    travel_from_origin_summary: context.travel_from_origin_summary,
+    exact_time_hm: context.exact_time_hm,
+    sanitized_requester_persona: context.sanitized_requester_persona,
+    num_days: context.num_days,
+  };
+}
+
+/** Dev-only: log gateway calls to the Expo/Metro terminal without dumping full prompts in the UI. */
+function conciergeContextSummaryForLog(ctx: ConciergeContext): Record<string, unknown> {
+  const df = ctx.date_from;
+  const dto = ctx.date_to;
+  return {
+    mode: ctx.mode,
+    theme: ctx.theme,
+    city: ctx.city,
+    country: ctx.country,
+    date_from_preview: typeof df === "string" ? df.slice(0, 19) : undefined,
+    date_to_preview: typeof dto === "string" ? dto.slice(0, 19) : undefined,
+    num_days: ctx.num_days,
+    source_screen: ctx.source_screen,
+    origin_context: ctx.origin_context,
+    has_plan_request_text: !!(ctx.plan_request_text && ctx.plan_request_text.trim()),
+    plan_request_chars: typeof ctx.plan_request_text === "string" ? ctx.plan_request_text.length : 0,
+    plan_request_preview: (ctx.plan_request_text ?? "").slice(0, 200),
+    has_partner_user_id: !!ctx.partner_user_id,
+    participant_user_ids_count: Array.isArray(ctx.participant_user_ids) ? ctx.participant_user_ids.length : 0,
+    refinement_feedback: ctx.refinement_feedback,
+    presentation: ctx.presentation,
+    selected_date_time_preview:
+      typeof ctx.selected_date_time === "string" ? ctx.selected_date_time.slice(0, 19) : undefined,
+    exact_time_hm: ctx.exact_time_hm,
+  };
+}
+
+function summarizeGatewayJsonForLog(task: ConciergeTask, data: Record<string, unknown>): Record<string, unknown> {
+  const planOptions = Array.isArray(data.plan_options) ? data.plan_options : [];
+  const optionsAlt = Array.isArray(data.options) ? data.options : [];
+  const sug = Array.isArray(data.suggestions) ? data.suggestions : [];
+  const topics = Array.isArray(data.suggested_topics) ? data.suggested_topics : [];
+  const trimmed: Record<string, unknown> = {
+    task,
+    keys: Object.keys(data).sort(),
+    error: typeof data.error === "string" ? data.error : undefined,
+    request_id: typeof data.request_id === "string" ? data.request_id : undefined,
+    no_options_reason: typeof data.no_options_reason === "string" ? data.no_options_reason : undefined,
+    message_chars: typeof data.message === "string" ? data.message.length : 0,
+    suggestions_count: sug.length,
+    suggested_topics_count: topics.length,
+    plan_options_count: planOptions.length,
+    /** e.g. winkly_plan */
+    plain_options_count: optionsAlt.length,
+    provider: typeof data.provider === "string" ? data.provider : undefined,
+    pending_plan_id:
+      typeof data.pending_plan_id === "string" || data.pending_plan_id === null
+        ? (data.pending_plan_id as string | null)
+        : undefined,
+  };
+  if (planOptions.length) {
+    trimmed.plan_summary = planOptions.slice(0, 2).map((o: unknown, i: number) => {
+      const row = (o ?? {}) as Record<string, unknown>;
+      const venue = (row.venue ?? {}) as Record<string, unknown>;
+      const why = row.why_this_fits;
+      return {
+        i,
+        title: typeof row.title === "string" ? row.title.slice(0, 80) : undefined,
+        venue_name: typeof venue.name === "string" ? venue.name : undefined,
+        why_preview: typeof why === "string" ? why.slice(0, 120) : undefined,
+      };
+    });
+  }
+  return trimmed;
+}
+
 /** One step in an option's itinerary (detailed format). */
 export type ConciergeItineraryStep = {
   time?: string;
@@ -329,15 +445,19 @@ export async function callConcierge(params: {
   context: ConciergeContext;
 }): Promise<ConciergeResponse> {
   const { task, context } = params;
+  const logPrefix = "[ai-gateway]";
   if (!SUPABASE_URL) {
+    if (__DEV__) console.warn(logPrefix, "callConcierge aborted: missing EXPO_PUBLIC_SUPABASE_URL", { task });
     return { message: "", error: "Missing Supabase URL" };
   }
   if (!AI_GATEWAY_TASKS.includes(task)) {
+    if (__DEV__) console.warn(logPrefix, "callConcierge aborted: invalid task", { task });
     return { message: "", error: "Invalid task" };
   }
 
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
   if (sessionError || !session?.access_token) {
+    if (__DEV__) console.warn(logPrefix, "callConcierge aborted: no session", { task });
     return { message: "", error: "Not signed in" };
   }
 
@@ -345,8 +465,20 @@ export async function callConcierge(params: {
   if (cacheKey) {
     const entry = optionsCache.get(cacheKey);
     if (entry && Date.now() - entry.ts < OPTIONS_CACHE_TTL_MS) {
+      if (__DEV__) {
+        console.log(logPrefix, `← ${task} (cache hit)`, {
+          cacheKeySnippet: cacheKey.slice(0, 80),
+          plan_options: entry.data.plan_options?.length ?? 0,
+          suggestions: entry.data.suggestions?.length ?? 0,
+          error: entry.data.error ?? null,
+        });
+      }
       return entry.data;
     }
+  }
+
+  if (__DEV__) {
+    console.log(logPrefix, `→ ${task}`, conciergeContextSummaryForLog(context));
   }
 
   const url = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/ai-gateway`;
@@ -358,55 +490,17 @@ export async function callConcierge(params: {
       body: JSON.stringify({
         mode: context.mode,
         task,
-        context: {
-          mode: context.mode,
-          theme: context.theme,
-          participant_user_ids: context.participant_user_ids,
-          city: context.city,
-          country: context.country,
-          date_from: context.date_from,
-          date_to: context.date_to,
-          activity_hint: context.activity_hint,
-          budget_tier: context.budget_tier,
-          budget_amount: context.budget_amount,
-          budget_currency: context.budget_currency,
-          latitude: context.latitude,
-          longitude: context.longitude,
-          timezone: context.timezone,
-          limit_events: context.limit_events,
-          source_mode: context.source_mode,
-          partner_user_id: context.partner_user_id,
-          refinement_feedback: context.refinement_feedback,
-          refinement_structured: context.refinement_structured,
-          previous_options: context.previous_options,
-          source_screen: context.source_screen,
-          source_planner_tab: context.source_planner_tab,
-          user_prompt: context.user_prompt,
-          plan_request_text: context.plan_request_text,
-          time_preference: context.time_preference,
-          available_slots: context.available_slots,
-          weather_snapshot: context.weather_snapshot,
-          weather_forecast: context.weather_forecast,
-          origin_context: context.origin_context,
-          compatibility_context: context.compatibility_context,
-          preference_engine_summary: context.preference_engine_summary,
-          calendar_white_space: context.calendar_white_space,
-          booking_context: context.booking_context,
-          presentation: context.presentation,
-          conversation_id: context.conversation_id,
-          target_slot_iso: context.target_slot_iso,
-          search_radius_miles: context.search_radius_miles,
-          selected_date_time: context.selected_date_time,
-          planning_entry_surface: context.planning_entry_surface,
-          origin_location_label: context.origin_location_label,
-          travel_from_origin_summary: context.travel_from_origin_summary,
-          exact_time_hm: context.exact_time_hm,
-          sanitized_requester_persona: context.sanitized_requester_persona,
-        },
+        context: serializeConciergeContextForGateway(context),
       }),
     });
   } catch (e) {
     const isNetwork = e instanceof TypeError && (e.message === "Failed to fetch" || (e as Error).message?.includes("network"));
+    if (__DEV__) {
+      console.warn(logPrefix, `✗ ${task} fetch threw`, {
+        isNetwork,
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
     return {
       message: "",
       error: "Check connection and try again.",
@@ -414,7 +508,15 @@ export async function callConcierge(params: {
     };
   }
 
-  const data = await res.json().catch(() => ({}));
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (__DEV__) {
+    const summary = summarizeGatewayJsonForLog(task, data);
+    if (res.ok) {
+      console.log(logPrefix, `← ${task} HTTP ${res.status}`, summary);
+    } else {
+      console.warn(logPrefix, `← ${task} HTTP ${res.status}`, summary);
+    }
+  }
   if (!res.ok) {
     const retryAfter = typeof data?.retry_after === "number" ? data.retry_after : undefined;
     const rateLimitMessage =
@@ -428,13 +530,13 @@ export async function callConcierge(params: {
     };
   }
   const response: ConciergeResponse = {
-    message: data.message ?? "",
+    message: typeof data.message === "string" ? data.message : "",
     suggestions: coerceSuggestions(Array.isArray(data.suggestions) ? data.suggestions : undefined),
-    ranked: data.ranked,
+    ranked: Array.isArray(data.ranked) ? (data.ranked as ConciergeResponse["ranked"]) : undefined,
     suggested_topics: Array.isArray(data.suggested_topics) ? data.suggested_topics : undefined,
     plan_options: Array.isArray(data.plan_options) ? data.plan_options : undefined,
     no_options_reason: typeof data.no_options_reason === "string" ? data.no_options_reason : undefined,
-    concierge_note: data.concierge_note,
+    concierge_note: typeof data.concierge_note === "string" ? data.concierge_note : undefined,
     request_id: typeof data.request_id === "string" ? data.request_id : undefined,
     match_agent: pickMatchAgentFromResponse(data),
   };
@@ -479,6 +581,9 @@ export async function callConciergeStream(
   }
   const url = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/ai-gateway`;
   let res: Response;
+  if (__DEV__) {
+    console.log("[ai-gateway]", `→ ${task} (stream)`, conciergeContextSummaryForLog(context));
+  }
   try {
     res = await fetch(url, {
       method: "POST",
@@ -487,51 +592,7 @@ export async function callConciergeStream(
         mode: context.mode,
         task,
         stream: true,
-        context: {
-          mode: context.mode,
-          theme: context.theme,
-          participant_user_ids: context.participant_user_ids,
-          city: context.city,
-          country: context.country,
-          date_from: context.date_from,
-          date_to: context.date_to,
-          activity_hint: context.activity_hint,
-          budget_tier: context.budget_tier,
-          budget_amount: context.budget_amount,
-          budget_currency: context.budget_currency,
-          latitude: context.latitude,
-          longitude: context.longitude,
-          timezone: context.timezone,
-          limit_events: context.limit_events,
-          source_mode: context.source_mode,
-          partner_user_id: context.partner_user_id,
-          refinement_feedback: context.refinement_feedback,
-          refinement_structured: context.refinement_structured,
-          previous_options: context.previous_options,
-          source_screen: context.source_screen,
-          source_planner_tab: context.source_planner_tab,
-          user_prompt: context.user_prompt,
-          plan_request_text: context.plan_request_text,
-          time_preference: context.time_preference,
-          available_slots: context.available_slots,
-          weather_snapshot: context.weather_snapshot,
-          weather_forecast: context.weather_forecast,
-          origin_context: context.origin_context,
-          compatibility_context: context.compatibility_context,
-          preference_engine_summary: context.preference_engine_summary,
-          calendar_white_space: context.calendar_white_space,
-          booking_context: context.booking_context,
-          presentation: context.presentation,
-          conversation_id: context.conversation_id,
-          target_slot_iso: context.target_slot_iso,
-          search_radius_miles: context.search_radius_miles,
-          selected_date_time: context.selected_date_time,
-          planning_entry_surface: context.planning_entry_surface,
-          origin_location_label: context.origin_location_label,
-          travel_from_origin_summary: context.travel_from_origin_summary,
-          exact_time_hm: context.exact_time_hm,
-          sanitized_requester_persona: context.sanitized_requester_persona,
-        },
+        context: serializeConciergeContextForGateway(context),
       }),
     });
   } catch {
@@ -543,39 +604,49 @@ export async function callConciergeStream(
     return;
   }
   if (!res.ok) {
-    let data: { error?: string; retry_after?: number } = {};
     let rawText = "";
+    let parsedBody: Record<string, unknown> = {};
     try {
       rawText = await res.text();
-      if (rawText) data = (JSON.parse(rawText) as typeof data) || {};
+      if (rawText.trim()) parsedBody = JSON.parse(rawText) as Record<string, unknown>;
     } catch {
-      // ignore parse errors
+      parsedBody = {};
     }
     if (__DEV__) {
       console.warn(
-        "[conciergeClient] ai-gateway HTTP error",
-        res.status,
-        (data?.error as string) ?? rawText.slice(0, 300)
+        "[ai-gateway]",
+        `← ${task} (stream) HTTP ${res.status}`,
+        Object.keys(parsedBody).length
+          ? summarizeGatewayJsonForLog(task, parsedBody)
+          : { rawSnippet: rawText.slice(0, 400) }
       );
     }
     onDone({
       message: "",
-      error: (data?.error as string) ?? `Request failed: ${res.status}`,
+      error:
+        (typeof parsedBody.error === "string" ? parsedBody.error : undefined) ?? `Request failed: ${res.status}`,
       error_code: res.status === 429 ? "rate_limit" : "unknown",
-      retry_after: data?.retry_after,
+      retry_after: typeof parsedBody.retry_after === "number" ? parsedBody.retry_after : undefined,
     });
     return;
   }
   // If no body stream (e.g. some RN environments), treat as JSON response
   if (!res.body) {
-    const data = await res.json().catch(() => ({})) as { message?: string; suggestions?: unknown[]; options?: unknown[]; no_options_reason?: string; request_id?: string; error?: string; match_agent?: unknown };
-    const list = Array.isArray(data.suggestions) ? data.suggestions : Array.isArray(data.options) ? data.options : undefined;
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (__DEV__) {
+      console.log("[ai-gateway]", `← ${task} (stream) no body; JSON`, summarizeGatewayJsonForLog(task, data));
+    }
+    const list = Array.isArray(data.suggestions)
+      ? data.suggestions
+      : Array.isArray(data.options)
+        ? data.options
+        : undefined;
     onDone({
-      message: data.message ?? "",
+      message: typeof data.message === "string" ? data.message : "",
       suggestions: coerceSuggestions(list),
-      no_options_reason: data.no_options_reason,
-      request_id: data.request_id,
-      error: data.error,
+      no_options_reason: typeof data.no_options_reason === "string" ? data.no_options_reason : undefined,
+      request_id: typeof data.request_id === "string" ? data.request_id : undefined,
+      error: typeof data.error === "string" ? data.error : undefined,
       match_agent: pickMatchAgentFromResponse(data),
     });
     return;

@@ -3,7 +3,7 @@
  * Weather auto-refreshes when location, date, or time of day changes.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -14,13 +14,12 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
-  Platform,
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Colors, Typography, Layout, Shadow } from "@/constants/tokens";
 import {
   getWeatherForCityAndDate,
   getWeatherForCityAndDateRange,
@@ -37,6 +36,7 @@ import {
   type CategoryExtras,
   type DatePreset,
   type TimeOfDay,
+  type WhoJoining,
   BUDGET_QUICK_AMOUNTS,
   getCurrencySymbol,
   getInlineHint,
@@ -44,7 +44,6 @@ import {
 import type { Mode } from "@/types";
 import { supabase } from "@/lib/supabase";
 import {
-  loadPlanningProfileContext,
   buildProfileAwareSuggestionChips,
   loadProfileAwareSuggestionChips,
 } from "@/lib/ai/customPlanPresets";
@@ -116,6 +115,15 @@ export type ConciergeActivityDetailsStepProps = {
   detailsVariant?: CategoryDetailsVariant;
   /** Selected sub-activity key (from sub_activity step). */
   subActivityKey?: string | null;
+  /** Selected sub-activity label (used for on-screen context + AI prompt via intentNotes). */
+  subActivityLabel?: string | null;
+  /** Highlighted topic context from the chosen intent card. */
+  topicLabel?: string | null;
+  /** Highlighted sub-topic (the chosen intent card label). */
+  subTopicLabel?: string | null;
+  /** Inline social context (moved into Step 2 to remove a full step). */
+  whoJoining?: WhoJoining;
+  onWhoJoiningChange?: (who: WhoJoining) => void;
 };
 
 export function ConciergeActivityDetailsStep({
@@ -131,6 +139,11 @@ export function ConciergeActivityDetailsStep({
   activityCategory = null,
   detailsVariant = "standard",
   subActivityKey = null,
+  subActivityLabel = null,
+  topicLabel = null,
+  subTopicLabel = null,
+  whoJoining = "decide_later",
+  onWhoJoiningChange,
 }: ConciergeActivityDetailsStepProps) {
   const { i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
@@ -140,7 +153,7 @@ export function ConciergeActivityDetailsStep({
   /** True after user taps the locate button; cleared when they edit the field or pick from list. */
   const [locationFromGps, setLocationFromGps] = useState(false);
   const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestion[]>([]);
-  const [locationLoading, setLocationLoading] = useState(false);
+  const [, setLocationLoading] = useState(false);
   const [deviceLocationLoading, setDeviceLocationLoading] = useState(false);
   const [datePreset, setDatePreset] = useState<DatePreset>(initialDetails.datePreset ?? "today");
   const [date, setDate] = useState<Date>(initialDetails.date ?? new Date());
@@ -195,6 +208,8 @@ export function ConciergeActivityDetailsStep({
   });
   const [showExactTimePicker, setShowExactTimePicker] = useState(false);
 
+  const [customCuisineOpen, setCustomCuisineOpen] = useState(false);
+
   const [categoryExtras, setCategoryExtras] = useState<CategoryExtras | null>(() => {
     const fromInitial = initialDetails.categoryExtras as CategoryExtras | undefined;
     if (fromInitial && typeof fromInitial === "object") return fromInitial;
@@ -235,7 +250,7 @@ export function ConciergeActivityDetailsStep({
     return () => {
       cancelled = true;
     };
-  }, [profilePromptVariant, mode]);
+  }, [showProfilePrompt, mode]);
 
   const appendCustomChip = useCallback((line: string) => {
     Haptics.selectionAsync();
@@ -325,7 +340,7 @@ export function ConciergeActivityDetailsStep({
     return () => {
       cancelled = true;
     };
-  }, [location, dateStr, dateEndStr, singleDay]);
+  }, [cityPart, countryPart, dateStr, dateEndStr, singleDay]);
 
   // Trip: day-count picker keeps `dateEnd` and `singleDay` aligned.
   useEffect(() => {
@@ -386,7 +401,6 @@ export function ConciergeActivityDetailsStep({
       country: parsed.country,
       intentNotes: intentNotesText.trim() || undefined,
       additionalInfo: additionalInfo.trim() || undefined,
-      mustHaves: mustHaves.trim() || undefined,
       datePreset,
       date,
       dateEnd: singleDay ? undefined : dateEnd,
@@ -405,6 +419,89 @@ export function ConciergeActivityDetailsStep({
   };
 
   const showFoodFields = detailsVariant === "food_drink" || !!activityCategory?.foodRelated;
+
+  const setExtra = useCallback(
+    <K extends keyof CategoryExtras>(key: K, value: CategoryExtras[K]) => {
+      setCategoryExtras((prev) => ({ ...(prev ?? {}), [key]: value }));
+    },
+    []
+  );
+
+  const keyQuestion = useMemo(() => {
+    // Minimal but high-impact coverage: Dinner & drinks, Coffee meeting, Sport & activity, plus food-led categories.
+    if (showFoodFields) {
+      return {
+        title: "Vibe",
+        subtitle: "",
+        options: [
+          { id: "cozy", label: "Cozy" },
+          { id: "romantic", label: "Romantic" },
+          { id: "lively", label: "Lively" },
+          { id: "chic", label: "Chic" },
+          { id: "casual", label: "Casual" },
+        ] as const,
+        selected: (categoryExtras?.atmosphere || "").trim(),
+        onSelect: (label: string) => {
+          Haptics.selectionAsync();
+          setAtmosphere(label);
+          setExtra("atmosphere", label);
+        },
+      };
+    }
+    if (activityKey === "coffee_meeting" || activityKey === "lunch_meeting") {
+      return {
+        title: "Goal",
+        subtitle: "What’s the goal?",
+        options: [
+          { id: "intro", label: "Quick intro" },
+          { id: "catchup", label: "Catch up" },
+          { id: "work", label: "Work chat" },
+          { id: "pitch", label: "Pitch / deal" },
+          { id: "network", label: "Network" },
+        ] as const,
+        selected: (categoryExtras?.meetingGoal || "").trim(),
+        onSelect: (label: string) => {
+          Haptics.selectionAsync();
+          setExtra("meetingGoal", label);
+        },
+      };
+    }
+    if (activityKey === "sport_activity" || activityKey === "sport") {
+      const opts = (activityCategory?.subActivities ?? []).filter((x) => x && x !== "Surprise me");
+      const fallback = ["Tennis / padel", "Bowling", "Cycling route", "Evening stroll", "Indoor climbing"];
+      const list = (opts.length ? opts : fallback).slice(0, 6);
+      return {
+        title: "Type",
+        subtitle: "What type of activity?",
+        options: list.map((label, idx) => ({ id: String(idx), label })),
+        selected: (categoryExtras?.sportSubType || "").trim(),
+        onSelect: (label: string) => {
+          Haptics.selectionAsync();
+          setExtra("sportSubType", label);
+        },
+      };
+    }
+    if (activityKey === "art_culture") {
+      const opts = (activityCategory?.subActivities ?? []).filter((x) => x && x !== "Surprise me");
+      const list = (opts.length ? opts : ["Museum / gallery", "Theatre / show", "Cinema", "Exhibition"]).slice(0, 6);
+      return {
+        title: "Type",
+        subtitle: "What kind of culture?",
+        options: list.map((label, idx) => ({ id: String(idx), label })),
+        selected: (categoryExtras?.artSubType || "").trim(),
+        onSelect: (label: string) => {
+          Haptics.selectionAsync();
+          setExtra("artSubType", label);
+        },
+      };
+    }
+    return null;
+  }, [activityKey, activityCategory?.subActivities, categoryExtras?.artSubType, categoryExtras?.atmosphere, categoryExtras?.meetingGoal, categoryExtras?.sportSubType, setExtra, showFoodFields]);
+
+  const cuisineChips = useMemo(
+    () => ["Italian", "Japanese", "Mexican", "Thai", "Indian", "French", "Greek", "Korean", "Spanish", "Other…"],
+    []
+  );
 
   const locationHint = getInlineHint("location", {
     hasLocation: !!location.trim(),
@@ -465,142 +562,212 @@ export function ConciergeActivityDetailsStep({
           <View style={styles.customDivider} />
         </View>
       ) : (
-        <View style={{ marginBottom: 18 }}>
-          <Text style={styles.customPromptLabel}>
-            Is there any specific idea or request on your mind? Please add for a better planning.
-          </Text>
-          <TextInput
-            style={styles.customPromptInput}
-            value={additionalInfo}
-            onChangeText={setAdditionalInfo}
-            placeholder="e.g. specific venue, dietary needs, vibe, accessibility…"
-            placeholderTextColor={Colors.gray500}
-            multiline
-            textAlignVertical="top"
-            maxLength={600}
-          />
+        <View style={{ marginBottom: 8 }}>
+          {/* Removed helper copy; optional fields live in "More details". */}
         </View>
       )}
 
-      <Text style={styles.stepTitle}>Activity details</Text>
-      {activityLabel ? (
-        <Text style={styles.activityLabel} numberOfLines={1}>{activityLabel}</Text>
+      {subTopicLabel?.trim() ? (
+        <View style={styles.topicHero}>
+          <Text style={styles.topicHeroLabel}>Topic</Text>
+          <Text style={styles.topicHeroTitle} numberOfLines={1}>
+            {subTopicLabel.trim()}
+            {subActivityLabel?.trim() ? ` — ${subActivityLabel.trim()}` : ""}
+          </Text>
+        </View>
       ) : null}
 
-      {/* Location */}
-      <Text style={styles.label}>Location</Text>
-      <View style={styles.locationRow}>
-        <TextInput
-          style={styles.locationInput}
-          placeholder="City, Country"
-          placeholderTextColor={Colors.gray500}
-          value={location}
-          onChangeText={(text) => {
-            setLocationFromGps(false);
-            setLocation(text);
-          }}
-          onFocus={() => setShowLocationDropdown(true)}
-          onBlur={() => {
-            setLocation((prev) => normalizeLocationDisplayString(prev, appLanguage));
-            setTimeout(() => setShowLocationDropdown(false), 200);
-          }}
-        />
-        <TouchableOpacity
-          style={styles.useLocationBtn}
-          onPress={() => {
-            if (deviceLocationLoading) return;
-            setDeviceLocationLoading(true);
-            getDeviceLocationDisplay(appLanguage).then((res) => {
-              if (res.ok && res.display) {
-                setLocation(normalizeLocationDisplayString(res.display, appLanguage));
-                setLocationFromGps(true);
-              }
-              setDeviceLocationLoading(false);
-            });
-          }}
-          disabled={deviceLocationLoading}
-        >
-          {deviceLocationLoading ? (
-            <ActivityIndicator size="small" color={Colors.primaryViolet} />
-          ) : (
-            <Ionicons name="locate" size={20} color={Colors.primaryViolet} />
-          )}
-        </TouchableOpacity>
-      </View>
-      {locationSuggestions.length > 0 && showLocationDropdown && (
-        <View style={styles.suggestionsList}>
-          {locationSuggestions.slice(0, 5).map((s) => (
-            <TouchableOpacity
-              key={s.display}
-              style={styles.suggestionItem}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setLocationFromGps(false);
-                setLocation(s.display);
-                setLocationSuggestions([]);
-              }}
-            >
-              <Ionicons name="location-outline" size={18} color={Colors.gray500} />
-              <Text style={styles.suggestionText} numberOfLines={1}>{s.display}</Text>
-            </TouchableOpacity>
-          ))}
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Who’s joining?</Text>
         </View>
-      )}
-      {locationHint ? <Text style={styles.inlineHint}>{locationHint}</Text> : null}
+        <View style={styles.surfaceCard}>
+          <View style={styles.whoGrid}>
+            {([
+              { key: "just_me" as const, title: "Solo", sub: "Just for me", icon: "person-outline" as const },
+              { key: "share" as const, title: "With someone", sub: "Invite or share", icon: "people-outline" as const },
+              { key: "decide_later" as const, title: "Decide later", sub: "Keep it flexible", icon: "time-outline" as const },
+            ] as const).map((opt) => {
+              const active = whoJoining === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.whoCard, active && styles.whoCardActive]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    onWhoJoiningChange?.(opt.key);
+                  }}
+                  activeOpacity={0.9}
+                >
+                  <View style={styles.whoCardTop}>
+                    <View style={[styles.whoIconWrap, active && styles.whoIconWrapActive]}>
+                      <Ionicons name={opt.icon} size={18} color={active ? Colors.white : Colors.primaryViolet} />
+                    </View>
+                    <Text style={[styles.whoTitle, active && styles.whoTitleActive]}>{opt.title}</Text>
+                  </View>
+                  <Text style={[styles.whoSub, active && styles.whoSubActive]}>{opt.sub}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      </View>
 
-      {/* Weather */}
-      {cityPart && (
-        <View style={styles.weatherRow}>
-          {weatherLoading ? (
-            <ActivityIndicator size="small" color={Colors.primaryViolet} />
-          ) : weatherSnapshot ? (
-            <>
-              <Ionicons name="partly-sunny-outline" size={20} color={Colors.gray600} />
-              <Text style={styles.weatherText}>
-                {singleDay
-                  ? `${dateStr}: ${weatherSnapshot.summary ?? ""}${weatherSnapshot.temp_min != null && weatherSnapshot.temp_max != null ? ` · ${weatherSnapshot.temp_min}–${weatherSnapshot.temp_max}°C` : ""}`
-                  : `${weatherSnapshot.period_summary ?? ""}${weatherSnapshot.avg_temp_min != null && weatherSnapshot.avg_temp_max != null ? ` · Avg ${weatherSnapshot.avg_temp_min}–${weatherSnapshot.avg_temp_max}°C` : ""}`}
-              </Text>
-            </>
+      {/* Key question (dominant choice) */}
+      {keyQuestion ? (
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>{keyQuestion.title}</Text>
+          </View>
+          {keyQuestion.subtitle ? (
+            <Text style={styles.sectionSubTitle}>{keyQuestion.subtitle}</Text>
+          ) : null}
+          <View style={styles.surfaceCard}>
+            <View style={styles.keyQuestionGrid}>
+              {keyQuestion.options.map((opt) => {
+                const active = keyQuestion.selected === opt.label;
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={[styles.keyChip, active && styles.keyChipActive]}
+                    onPress={() => keyQuestion.onSelect(opt.label)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.keyChipText, active && styles.keyChipTextActive]}>{opt.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Location</Text>
+          <TouchableOpacity
+            style={styles.locatePillBtn}
+            onPress={() => {
+              if (deviceLocationLoading) return;
+              Haptics.selectionAsync();
+              setDeviceLocationLoading(true);
+              getDeviceLocationDisplay(appLanguage).then((res) => {
+                if (res.ok && res.display) {
+                  setLocation(normalizeLocationDisplayString(res.display, appLanguage));
+                  setLocationFromGps(true);
+                }
+                setDeviceLocationLoading(false);
+              });
+            }}
+            disabled={deviceLocationLoading}
+            activeOpacity={0.85}
+          >
+            {deviceLocationLoading ? (
+              <ActivityIndicator size="small" color={Colors.primaryViolet} />
+            ) : (
+              <>
+                <Ionicons name="locate" size={18} color={Colors.primaryViolet} />
+                <Text style={styles.locatePillBtnText}>Use current</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.surfaceCard}>
+          <TextInput
+            style={styles.textField}
+            placeholder="City, Country"
+            placeholderTextColor={Colors.gray500}
+            value={location}
+            onChangeText={(text) => {
+              setLocationFromGps(false);
+              setLocation(text);
+            }}
+            onFocus={() => setShowLocationDropdown(true)}
+            onBlur={() => {
+              setLocation((prev) => normalizeLocationDisplayString(prev, appLanguage));
+              setTimeout(() => setShowLocationDropdown(false), 200);
+            }}
+          />
+
+          {locationSuggestions.length > 0 && showLocationDropdown ? (
+            <View style={styles.suggestionsList}>
+              {locationSuggestions.slice(0, 5).map((s) => (
+                <TouchableOpacity
+                  key={s.display}
+                  style={styles.suggestionItem}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setLocationFromGps(false);
+                    setLocation(s.display);
+                    setLocationSuggestions([]);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="location-outline" size={18} color={Colors.gray500} />
+                  <Text style={styles.suggestionText} numberOfLines={1}>{s.display}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+          {locationHint ? <Text style={styles.inlineHint}>{locationHint}</Text> : null}
+        </View>
+
+        {cityPart ? (
+          <View style={styles.weatherRow}>
+            {weatherLoading ? (
+              <ActivityIndicator size="small" color={Colors.primaryViolet} />
+            ) : weatherSnapshot ? (
+              <>
+                <Ionicons name="partly-sunny-outline" size={18} color={Colors.gray600} />
+                <Text style={styles.weatherText}>
+                  {singleDay
+                    ? `${dateStr}: ${weatherSnapshot.summary ?? ""}${weatherSnapshot.temp_min != null && weatherSnapshot.temp_max != null ? ` · ${weatherSnapshot.temp_min}–${weatherSnapshot.temp_max}°C` : ""}`
+                    : `${weatherSnapshot.period_summary ?? ""}${weatherSnapshot.avg_temp_min != null && weatherSnapshot.avg_temp_max != null ? ` · Avg ${weatherSnapshot.avg_temp_min}–${weatherSnapshot.avg_temp_max}°C` : ""}`}
+                </Text>
+              </>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Date</Text>
+        </View>
+        <View style={styles.surfaceCard}>
+          <View style={[styles.chipsRow, { marginBottom: 0 }]}>
+            {DATE_PRESETS.map(({ key, label }) => (
+              <TouchableOpacity
+                key={key}
+                style={[styles.chip, datePreset === key && styles.chipActive]}
+                onPress={() => applyDatePreset(key)}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.chipText, datePreset === key && styles.chipTextActive]}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {(datePreset === "custom" || datePreset === "weekend") ? (
+            <View style={[styles.dateRow, { marginTop: 12, marginBottom: 0 }]}>
+              <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.85}>
+                <Ionicons name="calendar-outline" size={18} color={Colors.gray600} />
+                <Text style={styles.dateBtnText}>
+                  {date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                </Text>
+              </TouchableOpacity>
+              {!singleDay && activityKey !== "trip" ? (
+                <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDateEndPicker(true)} activeOpacity={0.85}>
+                  <Ionicons name="calendar-outline" size={18} color={Colors.gray600} />
+                  <Text style={styles.dateBtnText}>
+                    To: {dateEnd.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
           ) : null}
         </View>
-      )}
-
-      {/* Date */}
-      <Text style={styles.label}>Date</Text>
-      {getInlineHint("date", {}) ? (
-        <Text style={styles.inlineHint}>{getInlineHint("date", {})}</Text>
-      ) : null}
-      <View style={styles.chipsRow}>
-        {DATE_PRESETS.map(({ key, label }) => (
-          <TouchableOpacity
-            key={key}
-            style={[styles.chip, datePreset === key && styles.chipActive]}
-            onPress={() => applyDatePreset(key)}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.chipText, datePreset === key && styles.chipTextActive]}>{label}</Text>
-          </TouchableOpacity>
-        ))}
       </View>
-      {(datePreset === "custom" || datePreset === "weekend") && (
-        <View style={styles.dateRow}>
-          <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDatePicker(true)}>
-            <Ionicons name="calendar-outline" size={20} color={Colors.gray600} />
-            <Text style={styles.dateBtnText}>
-              {date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-            </Text>
-          </TouchableOpacity>
-          {!singleDay && activityKey !== "trip" && (
-            <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDateEndPicker(true)}>
-              <Ionicons name="calendar-outline" size={20} color={Colors.gray600} />
-              <Text style={styles.dateBtnText}>
-                To: {dateEnd.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
 
       {activityKey === "trip" && (
         <>
@@ -668,77 +835,63 @@ export function ConciergeActivityDetailsStep({
         </Modal>
       )}
 
-      {/* Time of day (single day only) */}
-      {singleDay && (
-        <>
-          <Text style={styles.label}>Time of day</Text>
-          <View style={styles.chipsRow}>
+      {singleDay ? (
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Time</Text>
+          </View>
+          <View style={styles.surfaceCard}>
+          <View style={[styles.chipsRow, { marginBottom: 0 }]}>
             {TIME_OPTIONS.map(({ key, label }) => (
               <TouchableOpacity
                 key={key}
                 style={[styles.chip, timeOfDay === key && styles.chipActive]}
                 onPress={() => { Haptics.selectionAsync(); setTimeOfDay(key); }}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
               >
                 <Text style={[styles.chipText, timeOfDay === key && styles.chipTextActive]}>{label}</Text>
               </TouchableOpacity>
             ))}
           </View>
-          {timeOfDay !== "any" && getInlineHint("time", { activityLabel: activityLabel ?? undefined }) ? (
-            <Text style={styles.inlineHint}>{getInlineHint("time", { activityLabel: activityLabel ?? undefined })}</Text>
-          ) : null}
-          <View style={{ marginTop: 12 }}>
-            <TouchableOpacity
-              onPress={() => {
-                Haptics.selectionAsync();
-                setExactTimeEnabled((v) => !v);
-              }}
-              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-            >
-              <Ionicons
-                name={exactTimeEnabled ? "checkbox" : "square-outline"}
-                size={22}
-                color={exactTimeEnabled ? Colors.primaryViolet : Colors.gray500}
-              />
-              <Text style={styles.label}>Set exact start time (HH:mm)</Text>
-            </TouchableOpacity>
-            {exactTimeEnabled ? (
-              <>
-                <TouchableOpacity
-                  style={[styles.dateBtn, { marginTop: 8 }]}
-                  onPress={() => setShowExactTimePicker(true)}
-                >
-                  <Ionicons name="time-outline" size={20} color={Colors.gray600} />
-                  <Text style={styles.dateBtnText}>
-                    {`${String(exactTime.getHours()).padStart(2, "0")}:${String(exactTime.getMinutes()).padStart(2, "0")}`}
-                  </Text>
-                </TouchableOpacity>
-                {showExactTimePicker && (
-                  <Modal visible transparent animationType="fade">
-                    <Pressable style={styles.pickerOverlay} onPress={() => setShowExactTimePicker(false)}>
-                      <View style={styles.pickerSheet}>
-                        <DateTimePicker
-                          value={exactTime}
-                          mode="time"
-                          display="spinner"
-                          onChange={(_, d) => d && setExactTime(d)}
-                        />
-                        <TouchableOpacity onPress={() => setShowExactTimePicker(false)} style={styles.pickerDone}>
-                          <Text style={styles.pickerDoneText}>Done</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </Pressable>
-                  </Modal>
-                )}
-              </>
-            ) : null}
-          </View>
-        </>
-      )}
 
-      {/* Budget */}
-      <Text style={styles.label}>Budget</Text>
-      <View style={styles.chipsRow}>
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.selectionAsync();
+              setExactTimeEnabled((v) => !v);
+            }}
+            style={[styles.locatePillBtn, { marginTop: 12, alignSelf: "flex-start" }]}
+            activeOpacity={0.85}
+          >
+            <Ionicons
+              name={exactTimeEnabled ? "checkbox" : "square-outline"}
+              size={18}
+              color={exactTimeEnabled ? Colors.primaryViolet : Colors.gray600}
+            />
+            <Text style={styles.locatePillBtnText}>Set exact start time</Text>
+          </TouchableOpacity>
+
+          {exactTimeEnabled ? (
+            <TouchableOpacity
+              style={[styles.dateBtn, { marginTop: 10, marginBottom: 0 }]}
+              onPress={() => setShowExactTimePicker(true)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="time-outline" size={18} color={Colors.gray600} />
+              <Text style={styles.dateBtnText}>
+                {`${String(exactTime.getHours()).padStart(2, "0")}:${String(exactTime.getMinutes()).padStart(2, "0")}`}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+          </View>
+        </View>
+      ) : null}
+
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Budget</Text>
+        </View>
+        <View style={styles.surfaceCard}>
+        <View style={[styles.chipsRow, { marginBottom: 12 }]}>
         {BUDGET_QUICK_AMOUNTS.map((amount) => {
           const symbol = getCurrencySymbol(budgetCurrency);
           const isActive = budgetAmount === String(amount);
@@ -747,7 +900,7 @@ export function ConciergeActivityDetailsStep({
               key={amount}
               style={[styles.chip, isActive && styles.chipActive]}
               onPress={() => { Haptics.selectionAsync(); setBudgetAmount(String(amount)); }}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
               <Text style={[styles.chipText, isActive && styles.chipTextActive]}>{symbol}{amount}</Text>
             </TouchableOpacity>
@@ -761,7 +914,7 @@ export function ConciergeActivityDetailsStep({
               styles.chipActive,
           ]}
           onPress={() => { Haptics.selectionAsync(); setBudgetAmount(""); }}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
         >
           <Text
             style={[
@@ -774,8 +927,8 @@ export function ConciergeActivityDetailsStep({
             Custom
           </Text>
         </TouchableOpacity>
-      </View>
-      <View style={styles.budgetRow}>
+        </View>
+        <View style={[styles.budgetRow, { marginBottom: 0 }]}>
         <TextInput
           style={styles.budgetInput}
           placeholder="Or enter amount (optional)"
@@ -787,14 +940,14 @@ export function ConciergeActivityDetailsStep({
         <TouchableOpacity
           style={styles.currencyBtn}
           onPress={() => { Haptics.selectionAsync(); setShowCurrencyPicker(true); }}
+          activeOpacity={0.85}
         >
           <Text style={styles.currencyText}>{budgetCurrency}</Text>
           <Ionicons name="chevron-down" size={16} color={Colors.gray600} />
         </TouchableOpacity>
       </View>
-      {getInlineHint("budget", {}) ? (
-        <Text style={styles.inlineHint}>{getInlineHint("budget", {})}</Text>
-      ) : null}
+      </View>
+      </View>
       <Modal visible={showCurrencyPicker} transparent animationType="fade">
         <Pressable style={styles.pickerOverlay} onPress={() => setShowCurrencyPicker(false)}>
           <View style={styles.pickerSheet}>
@@ -812,51 +965,105 @@ export function ConciergeActivityDetailsStep({
         </Pressable>
       </Modal>
 
-      {/* Activity-specific (restaurant-like / food-led categories) */}
-      {showFoodFields && (
-        <>
-          <Text style={styles.label}>Cuisine (optional)</Text>
-          <TextInput
-            style={styles.optionalInput}
-            placeholder="e.g. Japanese, Italian"
-            placeholderTextColor={Colors.gray500}
-            value={cuisine}
-            onChangeText={setCuisine}
-          />
-          {cuisine && getInlineHint("cuisine", { cuisine }) ? (
-            <Text style={styles.inlineHint}>{getInlineHint("cuisine", { cuisine })}</Text>
-          ) : null}
-          <Text style={styles.label}>Atmosphere (optional)</Text>
-          <TextInput
-            style={styles.optionalInput}
-            placeholder="e.g. Cozy, Romantic"
-            placeholderTextColor={Colors.gray500}
-            value={atmosphere}
-            onChangeText={setAtmosphere}
-          />
-          <View style={styles.chipsRow}>
-            {(["any", "indoor", "outdoor"] as const).map((key) => (
-              <TouchableOpacity
-                key={key}
-                style={[styles.chip, indoorOutdoor === key && styles.chipActive]}
-                onPress={() => { Haptics.selectionAsync(); setIndoorOutdoor(key); }}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.chipText, indoorOutdoor === key && styles.chipTextActive]}>
-                  {key === "any" ? "Any" : key === "indoor" ? "Indoor" : "Outdoor"}
-                </Text>
-              </TouchableOpacity>
-            ))}
+      {showFoodFields ? (
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Cuisine</Text>
           </View>
-        </>
-      )}
+          <View style={styles.surfaceCard}>
+            <View style={[styles.keyQuestionGrid, { marginBottom: 0 }]}>
+              {cuisineChips.map((label) => {
+                const active = cuisine === label || (label === "Other…" && customCuisineOpen);
+                return (
+                  <TouchableOpacity
+                    key={label}
+                    style={[styles.keyChip, active && styles.keyChipActive]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      if (label === "Other…") {
+                        setCustomCuisineOpen(true);
+                        setCuisine("");
+                        return;
+                      }
+                      setCustomCuisineOpen(false);
+                      setCuisine(label);
+                      setExtra("cuisine", label);
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.keyChipText, active && styles.keyChipTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {customCuisineOpen ? (
+              <TextInput
+                style={[styles.textField, { marginTop: 12, marginBottom: 0 }]}
+                placeholder="Type cuisine (e.g. Japanese, Italian)"
+                placeholderTextColor={Colors.gray500}
+                value={cuisine}
+                onChangeText={(t) => {
+                  setCuisine(t);
+                  setExtra("cuisine", t.trim() || undefined);
+                }}
+              />
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+
+      {showFoodFields ? (
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Indoor / outdoor</Text>
+          </View>
+          <View style={styles.surfaceCard}>
+            <View style={[styles.chipsRow, { marginBottom: 0 }]}>
+              {(["any", "indoor", "outdoor"] as const).map((key) => (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.chip, indoorOutdoor === key && styles.chipActive]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setIndoorOutdoor(key);
+                    setExtra("indoorOutdoor", key);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.chipText, indoorOutdoor === key && styles.chipTextActive]}>
+                    {key === "any" ? "Any" : key === "indoor" ? "Indoor" : "Outdoor"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Notes</Text>
+        </View>
+        <View style={styles.surfaceCard}>
+          <TextInput
+            style={[styles.textField, { minHeight: 90, marginBottom: 0, textAlignVertical: "top" }]}
+            placeholder="Anything else the AI should know? (max 150)"
+            placeholderTextColor={Colors.gray500}
+            value={additionalInfo}
+            onChangeText={setAdditionalInfo}
+            multiline
+            maxLength={150}
+          />
+        </View>
+      </View>
 
       {/* Category extras — keep minimal for now (food fields already collected above). */}
       {detailsVariant === "food_drink" ? (
         <View style={{ marginTop: 4 }} />
       ) : null}
 
-      <TouchableOpacity style={styles.nextBtn} onPress={handleNext} activeOpacity={0.9}>
+      <TouchableOpacity style={styles.nextBtn} onPress={handleNext} activeOpacity={0.92}>
         <Text style={styles.nextBtnText}>Continue</Text>
       </TouchableOpacity>
     </ScrollView>
@@ -864,8 +1071,9 @@ export function ConciergeActivityDetailsStep({
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  content: { paddingHorizontal: Layout.spacing.xl, paddingBottom: Layout.spacing.xxl },
+  // Match Step 1 (Intent) feel: clean white canvas + section blocks.
+  scroll: { flex: 1, backgroundColor: Colors.white },
+  content: { paddingHorizontal: Layout.spacing.xl, paddingBottom: Layout.spacing.xxl, paddingTop: 6 },
   backRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -873,8 +1081,67 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   backText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
-  stepTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 4 },
-  activityLabel: { ...Typography.caption, color: Colors.gray600, marginBottom: 10 },
+  // Hero stays as a premium card (topic anchor).
+  topicHero: {
+    backgroundColor: Colors.white,
+    borderRadius: Layout.radii.card,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    marginBottom: 18,
+    ...Shadow.card,
+  },
+  topicHeroLabel: { ...Typography.caption, color: Colors.gray600, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.6 },
+  topicHeroTitle: { ...Typography.h3, color: Colors.textPrimary, marginTop: 4 },
+
+  // Section block styling mirrors Step 1 (left accent border + uppercase label).
+  sectionCard: {
+    marginBottom: 20,
+  },
+  sectionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 },
+  sectionTitle: {
+    ...Typography.caption,
+    fontWeight: "800",
+    color: Colors.gray600,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  sectionSubTitle: { ...Typography.body, color: Colors.textPrimary, fontWeight: "700", marginBottom: 10 },
+
+  // Standard surface card inside a section (same as Step 1 cards).
+  surfaceCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Layout.radii.card,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    ...Shadow.card,
+  },
+  locatePillBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: Colors.gray100,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+  },
+  locatePillBtnText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "700" },
+  textField: {
+    ...Typography.body,
+    color: Colors.textPrimary,
+    backgroundColor: Colors.gray100,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    marginBottom: 10,
+  },
   subActivityBlock: { marginBottom: 20 },
   subActivityPrompt: {
     ...Typography.caption,
@@ -943,6 +1210,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontStyle: "italic",
   },
+  // Legacy (kept until all callers removed)
   locationRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
   locationInput: {
     flex: 1,
@@ -986,6 +1254,7 @@ const styles = StyleSheet.create({
   },
   weatherText: { ...Typography.caption, color: Colors.gray600, flex: 1 },
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
+  chipsRowTight: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     paddingVertical: 8,
     paddingHorizontal: 14,
@@ -995,6 +1264,57 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: Colors.primaryViolet },
   chipText: { ...Typography.caption, color: Colors.gray700, fontWeight: "500" },
   chipTextActive: { color: Colors.white },
+  keyQuestionBlock: {
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    marginBottom: 16,
+  },
+  keyQuestionTitle: { ...Typography.caption, color: Colors.gray600, fontWeight: "700" },
+  keyQuestionSub: { ...Typography.body, color: Colors.textPrimary, fontWeight: "700", marginTop: 4, marginBottom: 10 },
+  keyQuestionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  keyChip: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: Colors.gray100,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+  },
+  keyChipActive: { backgroundColor: Colors.primaryViolet, borderColor: Colors.primaryViolet },
+  keyChipText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "700" },
+  keyChipTextActive: { color: Colors.white },
+  whoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  whoCard: {
+    flexGrow: 1,
+    minWidth: 140,
+    flexBasis: "31%",
+    backgroundColor: Colors.gray100,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+  },
+  whoCardActive: { backgroundColor: Colors.primaryViolet, borderColor: Colors.primaryViolet },
+  whoCardTop: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 },
+  whoIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.white,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+  },
+  whoIconWrapActive: { backgroundColor: "rgba(255,255,255,0.22)", borderColor: "rgba(255,255,255,0.22)" },
+  whoTitle: { ...Typography.caption, color: Colors.textPrimary, fontWeight: "800" },
+  whoTitleActive: { color: Colors.white },
+  whoSub: { ...Typography.caption, color: Colors.gray600 },
+  whoSubActive: { color: "rgba(255,255,255,0.9)" },
   dateRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
   dateBtn: {
     flex: 1,

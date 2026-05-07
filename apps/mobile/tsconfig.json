@@ -7,7 +7,7 @@
     "allowJs": true,
     "noEmit": true,
     "resolveJsonModule": true,
-    "module": "ESNext",
+    "module": "esnext",
     "moduleResolution": "bundler",
     "skipLibCheck": true,
     "baseUrl": ".",

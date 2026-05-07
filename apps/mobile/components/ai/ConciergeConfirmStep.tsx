@@ -128,16 +128,17 @@ export function ConciergeConfirmStep({
   const [addRecurrence, setAddRecurrence] = useState<"once" | "weekly">("once");
 
   const title =
-    structuredPlan?.topic ||
+    structuredPlan?.title ||
     (chosenOption?.option_name as string) ||
     (chosenOption?.narrative as string) ||
     "Plan";
   const why =
-    structuredPlan?.details ||
+    structuredPlan?.why_this_fits ||
     (chosenOption?.why_this_fits as string) ||
     (chosenOption?.logic_bridge as string) ||
     "";
   const tripDays: PlannerTripDay[] | undefined = structuredPlan?.trip_days;
+  const structuredItinerary = Array.isArray(structuredPlan?.itinerary) ? structuredPlan!.itinerary : [];
 
   const schedule =
     tripDays?.length
@@ -148,9 +149,9 @@ export function ConciergeConfirmStep({
           ...(d.evening ? [`Evening — ${d.evening.summary}`] : []),
         ])
       : structuredPlan
-        ? [
-            `${new Date(structuredPlan.date_time).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} — ${structuredPlan.location.name}`,
-          ]
+        ? structuredItinerary.length
+          ? structuredItinerary.map((s) => `${s.time} ${s.description}`.trim())
+          : []
         : chosenOption?.schedule ??
           chosenOption?.itinerary?.map((s) => `${(s as { time?: string }).time ?? ""} ${(s as { activity?: string }).activity ?? ""}`.trim()) ??
           [];
@@ -173,10 +174,11 @@ export function ConciergeConfirmStep({
           return { starts_at: start.toISOString(), ends_at: end.toISOString() };
         });
       } else if (structuredPlan) {
-        const start = new Date(structuredPlan.date_time);
-        const end = new Date(start);
-        end.setHours(end.getHours() + 2, end.getMinutes(), 0, 0);
-        ranges = [{ starts_at: start.toISOString(), ends_at: end.toISOString() }];
+        const pseudo: ExperienceOption = {
+          option_name: structuredPlan.title,
+          itinerary: structuredItinerary.map((s) => ({ time: s.time, activity: s.description })),
+        };
+        ranges = [buildStartsEnds(dateForPlan, pseudo, exactTimeHm)];
       } else {
         ranges = [buildStartsEnds(dateForPlan, chosenOption as ExperienceOption, exactTimeHm)];
       }
@@ -219,27 +221,29 @@ export function ConciergeConfirmStep({
         starts_at = start.toISOString();
         ends_at = end.toISOString();
       } else if (structuredPlan) {
-        const start = new Date(structuredPlan.date_time);
-        const end = new Date(start);
-        end.setHours(end.getHours() + 2, end.getMinutes(), 0, 0);
-        starts_at = start.toISOString();
-        ends_at = end.toISOString();
+        const pseudo: ExperienceOption = {
+          option_name: structuredPlan.title,
+          itinerary: structuredItinerary.map((s) => ({ time: s.time, activity: s.description })),
+        };
+        const se = buildStartsEnds(dateForPlan, pseudo, exactTimeHm);
+        starts_at = se.starts_at;
+        ends_at = se.ends_at;
       } else {
         const se = buildStartsEnds(dateForPlan, chosenOption as ExperienceOption, exactTimeHm);
         starts_at = se.starts_at;
         ends_at = se.ends_at;
       }
 
-      const activity = structuredPlan?.topic || (chosenOption?.option_name as string) || title;
-      const place = structuredPlan?.location?.name
-        ? structuredPlan.location.name
+      const activity = structuredPlan?.title || (chosenOption?.option_name as string) || title;
+      const place = structuredPlan?.venue?.name
+        ? structuredPlan.venue.name
         : (chosenOption as { place?: string })?.place ??
           (chosenOption as { venue_name?: string })?.venue_name ??
           (chosenOption?.option_name as string) ??
           (chosenOption?.narrative as string) ??
           undefined;
-      const location = structuredPlan?.location?.address
-        ? structuredPlan.location.address
+      const location = structuredPlan?.venue?.address
+        ? structuredPlan.venue.address
         : locationLineDisplay?.trim()
           ? locationLineDisplay.trim()
           : undefined;
@@ -255,7 +259,7 @@ export function ConciergeConfirmStep({
       };
 
       if (structuredPlan?.trip_days?.length) {
-        const baseTitle = structuredPlan.topic || title;
+        const baseTitle = structuredPlan.title || title;
         for (const d of structuredPlan.trip_days) {
           const dayStart = new Date(`${d.date}T09:00:00`);
           const dayEnd = new Date(`${d.date}T21:00:00`);
@@ -307,8 +311,8 @@ export function ConciergeConfirmStep({
             participant_user_ids: [meId, partner.id],
             partner_user_id: partner.id,
             // Use the chosen option as the "idea" seed.
-            user_prompt: String(structuredPlan?.topic ?? chosenOption?.option_name ?? title ?? "Plan"),
-            activity_hint: String(structuredPlan?.topic ?? chosenOption?.option_name ?? title ?? "Plan"),
+            user_prompt: String(structuredPlan?.title ?? chosenOption?.option_name ?? title ?? "Plan"),
+            activity_hint: String(structuredPlan?.title ?? chosenOption?.option_name ?? title ?? "Plan"),
           },
         });
 
@@ -352,8 +356,10 @@ export function ConciergeConfirmStep({
         const weeks = [0, 1, 2, 3];
         const recurrenceSeed = (chosenOption ??
           ({
-            option_name: structuredPlan?.topic ?? title,
-            itinerary: structuredPlan?.details ? [{ activity: structuredPlan.details }] : [{ activity: title }],
+            option_name: structuredPlan?.title ?? title,
+            itinerary: structuredItinerary.length
+              ? structuredItinerary.map((s) => ({ time: s.time, activity: s.description }))
+              : [{ activity: title }],
           } as ExperienceOption));
         for (const weekOffset of weeks) {
           const startDate = new Date(dateForPlan);
@@ -419,7 +425,7 @@ export function ConciergeConfirmStep({
           Haptics.selectionAsync();
           const dateStr = dateForPlan.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
           const placeLine =
-            structuredPlan?.location?.name ??
+            structuredPlan?.venue?.name ??
             (chosenOption as { place?: string } | undefined)?.place ??
             (chosenOption?.option_name as string) ??
             (chosenOption?.narrative as string) ??

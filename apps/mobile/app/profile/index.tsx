@@ -7,6 +7,8 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, Alert } fr
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { supabase } from "@/lib/supabase";
 
 export default function ProfileIndex() {
@@ -34,7 +36,7 @@ export default function ProfileIndex() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.heroCard}>
+        <Card style={styles.heroCard} elevated={false}>
           <View style={styles.avatarWrap}>
             <Image
               source={require("../../assets/icons/winkly-emoji-shadow.png")}
@@ -46,15 +48,9 @@ export default function ProfileIndex() {
             <Text style={styles.name}>Your Winkly Profile</Text>
             <Text style={styles.meta}>Edit your core profile and mode-specific sections.</Text>
 
-            <TouchableOpacity
-              onPress={() => router.push("/profile/view-profile")}
-              style={styles.primaryBtn}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.primaryText}>View profile</Text>
-            </TouchableOpacity>
+            <Button title="View profile" onPress={() => router.push("/profile/view-profile")} />
           </View>
-        </View>
+        </Card>
 
         <Text style={styles.sectionTitle}>Edit sections</Text>
 
@@ -103,12 +99,14 @@ function Row({
   onPress: () => void;
 }) {
   return (
-    <TouchableOpacity onPress={onPress} style={styles.rowCard} activeOpacity={0.9}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        <Text style={styles.rowSubtitle}>{subtitle}</Text>
-      </View>
-      <Text style={styles.rowCTA}>Open</Text>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
+      <Card style={styles.rowCard} elevated={false}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowTitle}>{title}</Text>
+          <Text style={styles.rowSubtitle}>{subtitle}</Text>
+        </View>
+        <Text style={styles.rowCTA}>Open</Text>
+      </Card>
     </TouchableOpacity>
   );
 }
@@ -145,7 +143,6 @@ const styles = StyleSheet.create({
   ghostText: { ...Typography.caption, color: Colors.textPrimary },
 
   heroCard: {
-    backgroundColor: "#FFF",
     borderRadius: Layout.radii.card,
     borderWidth: 1,
     borderColor: Colors.gray200,
@@ -169,23 +166,13 @@ const styles = StyleSheet.create({
   name: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 4 },
   meta: { ...Typography.body, color: Colors.gray700, marginBottom: 10 },
 
-  primaryBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  primaryText: { ...Typography.button, color: Colors.accentYellow },
-
   sectionTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 10 },
 
   rowCard: {
-    backgroundColor: "#FFF",
     borderRadius: Layout.radii.card,
     borderWidth: 1,
     borderColor: Colors.gray200,
     padding: 16,
-    marginBottom: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",

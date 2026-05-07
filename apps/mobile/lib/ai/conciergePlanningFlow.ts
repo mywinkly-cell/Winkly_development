@@ -153,6 +153,19 @@ export interface PlanningFlowState {
 
 const SURPRISE = "Surprise me";
 
+export const FOOD_AND_DRINKS_FORMAT_PROMPTS: Record<string, string> = {
+  "Dinner / Brunch":
+    "Sit-down meal — the meal itself is the social occasion. Time of day and atmosphere from the form determine whether this is dinner or brunch in feel.",
+  "Drinks & bar":
+    "Drinks-led — bar, wine bar, cocktail spot or pub. Food is optional. Pick a venue where the drinks and atmosphere are the draw.",
+  Coffee:
+    "Café meet — relaxed, no meal commitment. Pick a café with good seating and a conversation-friendly environment.",
+  "Street food or market":
+    "Casual food market, stalls or food hall — grazing and exploring rather than sitting down. Walkable, social, no booking required.",
+  [SURPRISE]:
+    "Choose the best food-related format for this person, mode, weather and time of day. Pick one and plan it.",
+} as const;
+
 /** Broad intent buckets — Step 2 narrows via `subActivities` chips where listed. */
 export type ActivityCategory = {
   key: string;
@@ -278,7 +291,13 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     key: "food_drinks",
     label: "Food & drinks",
     icon: "restaurant-outline",
-    subActivities: ["Brunch spot", "Shared plates dinner", "Street-food crawl", "Dessert tour", "Pub crawl (light)", SURPRISE],
+    subActivities: [
+      "Dinner / Brunch",
+      "Drinks & bar",
+      "Coffee",
+      "Street food or market",
+      SURPRISE,
+    ],
     modes: ["friends"],
     interestTags: ["food_drink"],
     foodRelated: true,
@@ -521,7 +540,7 @@ export const PLANNER_GROUPS: PlannerGroup[] = [
       {
         key: "surprise_me",
         label: "Surprise me",
-        icon: "sparkles-outline",
+        icon: "star-outline",
         sub: "AI picks based on your profile & weather",
         interestTags: [],
       },
@@ -689,7 +708,7 @@ export const MODE_CARDS: Record<Mode, ActivityCardDef[]> = {
 
 // ─── 3. Generic tail cards (always appended after mode-specific in mode contexts) ──
 export const GENERIC_TAIL: ActivityCardDef[] = [
-  { key: "surprise_me", label: "Surprise me", icon: "sparkles-outline", sub: "AI picks the perfect plan", interestTags: [] },
+  { key: "surprise_me", label: "Surprise me", icon: "star-outline", sub: "AI picks the perfect plan", interestTags: [] },
   { key: "custom", label: "Custom plan", icon: "create-outline", sub: "Your own idea", interestTags: [] },
 ];
 
@@ -844,6 +863,27 @@ const ACTIVITY_TIME: Record<string, TimeOfDay> = {
   business_dinner: "evening",
   trip: "morning",
   custom: "any",
+  // ── Mode-specific intent keys (new taxonomy) ─────────────────────────────
+  food_drinks_r: "evening",
+  arts_culture_r: "afternoon",
+  dance_music_r: "evening",
+  sport_activity_r: "afternoon",
+  experience_r: "afternoon",
+  wellness_r: "morning",
+  trip_r: "morning",
+  food_drinks_f: "evening",
+  outdoors_f: "afternoon",
+  games_fun_f: "afternoon",
+  sport_f: "afternoon",
+  music_nightlife_f: "evening",
+  trip_f: "morning",
+  coffee_b: "morning",
+  lunch_b: "lunch",
+  golf_b: "afternoon",
+  industry_event_b: "afternoon",
+  walk_talk_b: "afternoon",
+  business_dinner_b: "evening",
+  workshop_b: "morning",
 };
 
 /** Median budget by category (currency-agnostic amounts). */
@@ -869,6 +909,30 @@ const ACTIVITY_BUDGET: Record<string, number> = {
   business_dinner: 85,
   trip: 60,
   custom: 45,
+  // ── Mode-specific intent keys (new taxonomy) ─────────────────────────────
+  // Romance
+  food_drinks_r: 85,
+  arts_culture_r: 35,
+  dance_music_r: 55,
+  sport_activity_r: 30,
+  experience_r: 65,
+  wellness_r: 95,
+  trip_r: 70,
+  // Friends
+  food_drinks_f: 55,
+  outdoors_f: 20,
+  games_fun_f: 35,
+  sport_f: 30,
+  music_nightlife_f: 60,
+  trip_f: 70,
+  // Business
+  coffee_b: 18,
+  lunch_b: 45,
+  golf_b: 95,
+  industry_event_b: 50,
+  walk_talk_b: 15,
+  business_dinner_b: 95,
+  workshop_b: 60,
 };
 
 /** Extract cuisine from label (e.g. "Japanese brunch" → Japanese, "Romantic dinner" → none). */
@@ -984,9 +1048,9 @@ export function getInlineHint(
     case "budget":
       return "Typical range for this category";
     case "date":
-      return "Quick picks — or choose custom";
+      return undefined;
     case "time":
-      return "We matched this to your activity";
+      return undefined;
     default:
       return undefined;
   }

@@ -13,6 +13,8 @@ import type { IntentSection, RankedCard } from "@/lib/ai/conciergePlanningFlow";
 export type IntentContinuePayload = {
   key: string;
   label: string;
+  /** The section/group title the card was selected from (used for UI context). */
+  sectionLabel: string;
   /** Planning mode for the rest of the flow (generic catalogue picks parent section). */
   flowMode: Mode;
 };
@@ -77,6 +79,7 @@ export function ConciergeIntentStep({
                   onContinue({
                     key: card.key,
                     label: card.label,
+                    sectionLabel: section.label,
                     flowMode: mode,
                   });
                 }}
