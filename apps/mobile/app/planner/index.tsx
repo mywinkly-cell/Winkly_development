@@ -539,14 +539,14 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   }, []);
 
   const openConcierge = useCallback(() => {
-    const modeParam = activeTab === "dates" ? "romance" : activeTab === "meetups" ? "friends" : activeTab === "business" ? "business" : "events";
+    const modeParam = activeTab === "all" || activeTab === "archive" ? "all" : activeTab === "dates" ? "romance" : activeTab === "meetups" ? "friends" : activeTab === "business" ? "business" : "events";
     const tabParam = activeTab === "archive" ? "all" : activeTab;
     router.push({ pathname: "/concierge", params: { source_screen: "planner", mode: modeParam, source_planner_tab: tabParam } });
   }, [activeTab, router]);
 
   const openConciergeWithProactive = useCallback(
     (suggestion: ProactiveSuggestion, step: "activity" | "social") => {
-      const modeParam = activeTab === "dates" ? "romance" : activeTab === "meetups" ? "friends" : activeTab === "business" ? "business" : "events";
+      const modeParam = activeTab === "all" || activeTab === "archive" ? "all" : activeTab === "dates" ? "romance" : activeTab === "meetups" ? "friends" : activeTab === "business" ? "business" : "events";
       const tabParam = activeTab === "archive" ? "all" : activeTab;
       const params: Record<string, string | undefined> = {
         source_screen: "planner",

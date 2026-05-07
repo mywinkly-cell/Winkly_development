@@ -9,6 +9,7 @@ import type { AppMode, Conversation, ConversationMember, Message, UserMini } fro
 import { ChatPreviewCard } from "@/components/chats/ChatPreviewCard";
 import { ChatsHeader } from "@/components/layout/ChatsHeader";
 import { Colors, Layout, Typography } from "@/constants/tokens";
+import { useModeContext } from "@/providers";
 
 type ChatTabKey = "all" | AppMode;
 
@@ -35,6 +36,7 @@ function formatName(u?: UserMini | null) {
 export default function ChatsHome() {
   const router = useRouter();
   const params = useLocalSearchParams<{ mode?: string }>();
+  const { context: modeContext } = useModeContext();
 
   const initialTab = useMemo<"all" | AppMode>(() => {
     if (isChatMode(params.mode)) return params.mode;
@@ -309,7 +311,7 @@ export default function ChatsHome() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <ChatsHeader />
+        <ChatsHeader mode={modeContext.active_mode ?? undefined} />
         <View style={styles.tabBar} />
         <View style={{ flex: 1, padding: 20, justifyContent: "center" }}>
           <ActivityIndicator />
@@ -322,7 +324,7 @@ export default function ChatsHome() {
   return (
     <View style={styles.screen}>
       {/* TOP HEADER — Filter (left) | Chats | Winkly AI (right) */}
-      <ChatsHeader />
+      <ChatsHeader mode={modeContext.active_mode ?? undefined} />
 
       {/* SUBHEADER — same tab bar as Planner */}
       <View style={styles.tabBar}>

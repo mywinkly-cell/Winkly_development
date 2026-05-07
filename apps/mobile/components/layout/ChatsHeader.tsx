@@ -8,13 +8,15 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Layout, Shadow, Typography, FontFamily, HEADER } from "@/constants/tokens";
 import { WinklyAISpark } from "@/components/ui/WinklyAISpark";
+import type { Mode } from "@/types";
 
 type ChatsHeaderProps = {
   /** When true, show back button on the left instead of + (e.g. when chats is a stacked screen). */
   showBack?: boolean;
+  mode?: Mode;
 };
 
-export function ChatsHeader({ showBack = false }: ChatsHeaderProps) {
+export function ChatsHeader({ showBack = false, mode }: ChatsHeaderProps) {
   const router = useRouter();
 
   const handleAddPress = () => {
@@ -24,7 +26,13 @@ export function ChatsHeader({ showBack = false }: ChatsHeaderProps) {
 
   const handleAIPress = () => {
     Haptics.selectionAsync();
-    router.push({ pathname: "/concierge", params: { source_screen: "chats" } });
+    router.push({
+      pathname: "/concierge",
+      params: {
+        source_screen: "chats",
+        ...(mode ? { mode } : {}),
+      },
+    });
   };
 
   return (

@@ -4,6 +4,7 @@
  */
 
 import type { Mode } from "@/types";
+import { categoriesForInterest } from "@/lib/ai/categoriesForInterest";
 
 export type ConciergeFlowStep =
   | "intent"
@@ -389,6 +390,413 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     interestTags: [],
   },
 ];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Intent card catalogue (new routing + UI model)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ActivityCardDef = {
+  key: string;
+  label: string;
+  icon: string;
+  sub: string;
+  /** Maps to `categoriesForInterest()` keys from ai-gateway (used for boosting). */
+  interestTags: string[];
+};
+
+export type PlannerGroup = {
+  key: string;
+  label: string;
+  cards: ActivityCardDef[];
+};
+
+// ─── 1. Generic planner (All tab, no mode context) ─────────────────────────
+// 11 cards in 5 named groups. No overlap between cards.
+export const PLANNER_GROUPS: PlannerGroup[] = [
+  {
+    key: "food_social",
+    label: "Food & social",
+    cards: [
+      {
+        key: "food_drinks",
+        label: "Food & drinks",
+        icon: "restaurant-outline",
+        sub: "Dinner, brunch, coffee, wine, cocktails",
+        interestTags: ["food_drink"],
+      },
+      {
+        key: "social_hangout",
+        label: "Social hangout",
+        icon: "people-outline",
+        sub: "Group catch-up, games night, party",
+        interestTags: ["play"],
+      },
+    ],
+  },
+  {
+    key: "arts_entertainment",
+    label: "Arts & entertainment",
+    cards: [
+      {
+        key: "arts_culture",
+        label: "Arts & culture",
+        icon: "color-palette-outline",
+        sub: "Museum, cinema, theatre, gallery",
+        interestTags: ["arts_culture"],
+      },
+      {
+        key: "music_nightlife",
+        label: "Music & nightlife",
+        icon: "musical-notes-outline",
+        sub: "Concert, live music, club, festival",
+        interestTags: ["music"],
+      },
+      {
+        key: "experience",
+        label: "Experience",
+        icon: "rocket-outline",
+        sub: "Cooking class, escape room, pottery",
+        interestTags: ["play", "arts_culture"],
+      },
+    ],
+  },
+  {
+    key: "active_outdoors",
+    label: "Active & outdoors",
+    cards: [
+      {
+        key: "sport_activity",
+        label: "Sport & activity",
+        icon: "fitness-outline",
+        sub: "Tennis, bowling, padel, cycling, climbing",
+        interestTags: ["fitness_wellness", "outdoors", "play"],
+      },
+      {
+        key: "outdoors_nature",
+        label: "Outdoors & nature",
+        icon: "leaf-outline",
+        sub: "Hike, kayak, park day, camping",
+        interestTags: ["outdoors"],
+      },
+      {
+        key: "wellness",
+        label: "Wellness",
+        icon: "heart-outline",
+        sub: "Spa, yoga, gym class, sauna",
+        interestTags: ["fitness_wellness"],
+      },
+    ],
+  },
+  {
+    key: "work_networking",
+    label: "Work & networking",
+    cards: [
+      {
+        key: "work_meeting",
+        label: "Work meeting",
+        icon: "briefcase-outline",
+        sub: "Coffee chat, lunch, walk & talk, golf",
+        interestTags: [],
+      },
+      {
+        key: "industry_event",
+        label: "Industry event",
+        icon: "people-circle-outline",
+        sub: "Meetup, conference, networking drinks",
+        interestTags: ["other"],
+      },
+    ],
+  },
+  {
+    key: "travel_other",
+    label: "Travel & other",
+    cards: [
+      {
+        key: "trip",
+        label: "Trip",
+        icon: "car-outline",
+        sub: "Day trip or weekend away (1–n days)",
+        interestTags: ["outdoors", "food_drink", "arts_culture"],
+      },
+      {
+        key: "surprise_me",
+        label: "Surprise me",
+        icon: "sparkles-outline",
+        sub: "AI picks based on your profile & weather",
+        interestTags: [],
+      },
+      {
+        key: "custom",
+        label: "Custom plan",
+        icon: "create-outline",
+        sub: "Describe exactly what you have in mind",
+        interestTags: [],
+      },
+    ],
+  },
+];
+
+// ─── 2. Mode-specific cards (shown highlighted in Section 1) ─────────────────
+export const MODE_CARDS: Record<Mode, ActivityCardDef[]> = {
+  romance: [
+    {
+      key: "food_drinks_r",
+      label: "Dinner & drinks",
+      icon: "restaurant-outline",
+      sub: "Romantic dinner, wine bar, cocktails, brunch",
+      interestTags: ["food_drink"],
+    },
+    {
+      key: "arts_culture_r",
+      label: "Arts & culture",
+      icon: "color-palette-outline",
+      sub: "Museum, cinema, theatre, gallery, opera, exhibition",
+      interestTags: ["arts_culture"],
+    },
+    {
+      key: "dance_music_r",
+      label: "Dance & music",
+      icon: "musical-notes-outline",
+      sub: "Dancing, live music, jazz bar, concert",
+      interestTags: ["music"],
+    },
+    {
+      key: "sport_activity_r",
+      label: "Sport & activity",
+      icon: "fitness-outline",
+      sub: "Stroll, tennis, bowling, cycling, padel",
+      interestTags: ["fitness_wellness", "outdoors"],
+    },
+    {
+      key: "experience_r",
+      label: "Experience",
+      icon: "rocket-outline",
+      sub: "Cooking class, pottery, escape room, boat",
+      interestTags: ["play", "arts_culture"],
+    },
+    {
+      key: "wellness_r",
+      label: "Wellness",
+      icon: "heart-outline",
+      sub: "Spa, yoga, picnic, morning hike, sauna",
+      interestTags: ["fitness_wellness"],
+    },
+    {
+      key: "trip_r",
+      label: "Trip",
+      icon: "car-outline",
+      sub: "Day trip or romantic weekend (1–n days)",
+      interestTags: ["outdoors", "food_drink"],
+    },
+  ],
+  friends: [
+    {
+      key: "food_drinks_f",
+      label: "Food & drinks",
+      icon: "beer-outline",
+      sub: "Brunch, group dinner, craft beer, rooftop",
+      interestTags: ["food_drink"],
+    },
+    {
+      key: "outdoors_f",
+      label: "Outdoors",
+      icon: "trail-sign-outline",
+      sub: "Hike, kayak, park day, cycling, camping",
+      interestTags: ["outdoors", "fitness_wellness"],
+    },
+    {
+      key: "games_fun_f",
+      label: "Games & fun",
+      icon: "game-controller-outline",
+      sub: "Board games, bowling, escape room, arcade",
+      interestTags: ["play"],
+    },
+    {
+      key: "sport_f",
+      label: "Sport",
+      icon: "football-outline",
+      sub: "Football, padel, tennis, basketball",
+      interestTags: ["fitness_wellness"],
+    },
+    {
+      key: "music_nightlife_f",
+      label: "Music & nightlife",
+      icon: "musical-notes-outline",
+      sub: "Live gig, concert, club, festival, karaoke",
+      interestTags: ["music"],
+    },
+    {
+      key: "trip_f",
+      label: "Group trip",
+      icon: "car-outline",
+      sub: "Day trip or overnight with the group",
+      interestTags: ["outdoors", "food_drink"],
+    },
+  ],
+  business: [
+    {
+      key: "coffee_b",
+      label: "Coffee meeting",
+      icon: "cafe-outline",
+      sub: "Intro, pitch, check-in, collaboration",
+      interestTags: [],
+    },
+    {
+      key: "lunch_b",
+      label: "Lunch meeting",
+      icon: "briefcase-outline",
+      sub: "Client lunch, working lunch, team lunch",
+      interestTags: ["food_drink"],
+    },
+    {
+      key: "golf_b",
+      label: "Golf",
+      icon: "golf-outline",
+      sub: "9 or 18 holes, driving range",
+      interestTags: ["fitness_wellness"],
+    },
+    {
+      key: "industry_event_b",
+      label: "Industry event",
+      icon: "people-outline",
+      sub: "Meetup, panel, drinks reception, conference",
+      interestTags: [],
+    },
+    {
+      key: "walk_talk_b",
+      label: "Walk & talk",
+      icon: "walk-outline",
+      sub: "Informal outdoor meeting, park loop",
+      interestTags: ["outdoors"],
+    },
+    {
+      key: "business_dinner_b",
+      label: "Business dinner",
+      icon: "restaurant-outline",
+      sub: "Client dinner, team celebration",
+      interestTags: ["food_drink"],
+    },
+    {
+      key: "workshop_b",
+      label: "Workshop / offsite",
+      icon: "easel-outline",
+      sub: "Team workshop, brainstorm, training",
+      interestTags: [],
+    },
+  ],
+  events: [], // Events tab uses the All/generic layout
+};
+
+// ─── 3. Generic tail cards (always appended after mode-specific in mode contexts) ──
+export const GENERIC_TAIL: ActivityCardDef[] = [
+  { key: "surprise_me", label: "Surprise me", icon: "sparkles-outline", sub: "AI picks the perfect plan", interestTags: [] },
+  { key: "custom", label: "Custom plan", icon: "create-outline", sub: "Your own idea", interestTags: [] },
+];
+
+export type RankedCard = ActivityCardDef & {
+  boosted: boolean;
+  boostReason?: string;
+};
+
+export type IntentSection = {
+  key: string;
+  label: string;
+  labelStyle?: "boosted" | "romance" | "friends" | "business" | "muted";
+  cards: RankedCard[];
+};
+
+export type RankInput = {
+  selfInterests: string[];
+  partnerInterests?: string[];
+};
+
+function gatewayTagsForInterest(tag: string): string[] {
+  return categoriesForInterest(tag);
+}
+
+export function getIntentCards(
+  plannerScope: "all" | Mode,
+  rankInput?: RankInput
+): IntentSection[] {
+  // ── Generic / All ────────────────────────────────────────────────────────
+  if (plannerScope === "all" || plannerScope === "events") {
+    return PLANNER_GROUPS.map((group) => ({
+      key: group.key,
+      label: group.label,
+      labelStyle: "muted" as const,
+      cards: group.cards.map((c) => ({ ...c, boosted: false })),
+    }));
+  }
+
+  // ── Mode context (romance / friends / business) ───────────────────────────
+  const modeCards = MODE_CARDS[plannerScope] ?? [];
+
+  const ranked: RankedCard[] = modeCards.map((card) => {
+    if (!rankInput) return { ...card, boosted: false };
+
+    const selfCats = new Set(rankInput.selfInterests.flatMap(gatewayTagsForInterest));
+    const partnerCats = rankInput.partnerInterests?.length
+      ? new Set(rankInput.partnerInterests.flatMap(gatewayTagsForInterest))
+      : null;
+
+    const selfMatch = card.interestTags.some((t) => selfCats.has(t));
+    const partnerMatch = partnerCats ? card.interestTags.some((t) => partnerCats.has(t)) : false;
+
+    if (selfMatch && partnerMatch) {
+      const shared = card.interestTags.find((t) => selfCats.has(t) && partnerCats?.has(t));
+      return {
+        ...card,
+        boosted: true,
+        boostReason: `Both love ${(shared ?? "this").replace(/_/g, " ")}`,
+      };
+    }
+    if (selfMatch) return { ...card, boosted: true };
+    return { ...card, boosted: false };
+  });
+
+  const hasBoosted = ranked.some((c) => c.boosted);
+  const section1Cards = hasBoosted
+    ? [...ranked.filter((c) => c.boosted), ...ranked.filter((c) => !c.boosted)]
+    : ranked;
+
+  const modeLabel =
+    plannerScope === "romance" ? "Dates & romance"
+    : plannerScope === "friends" ? "Meet-ups & friends"
+    : "Professional";
+
+  const modeLabelStyle =
+    plannerScope === "romance" ? "romance"
+    : plannerScope === "friends" ? "friends"
+    : "business";
+
+  const sections: IntentSection[] = [
+    {
+      key: "mode_cards",
+      label: hasBoosted ? `✦ ${modeLabel}` : modeLabel,
+      labelStyle: hasBoosted ? "boosted" : modeLabelStyle,
+      cards: section1Cards,
+    },
+  ];
+
+  const modeKeys = new Set(modeCards.map((c) => c.key));
+  const crossModeCards: RankedCard[] = [
+    { key: "arts_culture", label: "Arts & culture", icon: "color-palette-outline", sub: "Museum, cinema, gallery, exhibition", interestTags: ["arts_culture"], boosted: false },
+    { key: "wellness", label: "Wellness", icon: "heart-outline", sub: "Spa, yoga, gym class, sauna", interestTags: ["fitness_wellness"], boosted: false },
+    { key: "experience", label: "Experience", icon: "rocket-outline", sub: "Cooking class, escape room, pottery", interestTags: ["play"], boosted: false },
+  ].filter((c) => !modeKeys.has(c.key));
+
+  sections.push({
+    key: "more",
+    label: "More options",
+    labelStyle: "muted",
+    cards: [
+      ...crossModeCards,
+      ...GENERIC_TAIL.map((c) => ({ ...c, boosted: false })),
+    ],
+  });
+
+  return sections;
+}
 
 const CATEGORY_BY_KEY: Record<string, ActivityCategory> = Object.fromEntries(
   ALL_ACTIVITY_CATEGORIES.map((c) => [c.key, c])
