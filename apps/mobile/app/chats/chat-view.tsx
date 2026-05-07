@@ -472,7 +472,7 @@ export default function ChatView({ conversationId }: Props) {
       const payload = JSON.stringify({
         type: "pending_plan",
         pending_plan_id: res.pending_plan_id,
-        ...res.winkly_plan,
+        plan_options: res.options,
       });
       const inserted = await sendMessage(convId, meId, payload, [], { messageType: "cta" });
       mergeIncomingMessage(inserted);
@@ -1994,7 +1994,7 @@ export default function ChatView({ conversationId }: Props) {
                 }}
                 accessibilityLabel="Strategic Host: topic suggestions"
               >
-                <Ionicons name="sparkles-outline" size={22} color={Colors.primaryViolet} />
+                <Ionicons name={"sparkles-outline" as never} size={22} color={Colors.primaryViolet} />
               </Pressable>
             )}
 

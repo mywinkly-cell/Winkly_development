@@ -347,8 +347,11 @@ export async function loadPlanningProfileContext(userId: string, mode: Mode): Pr
     | undefined;
   const prefer = (concierge?.prefer ?? []).map((x) => x.trim()).filter(Boolean).slice(0, 4);
   const avoid = (concierge?.avoid ?? []).map((x) => x.trim()).filter(Boolean).slice(0, 3);
-  const profTopics = (concierge?.professional_topics ?? [])
-    .map((x) => String(x).trim())
+  const profTopicsRaw = concierge?.professional_topics;
+  const profTopicsArr =
+    Array.isArray(profTopicsRaw) ? profTopicsRaw : typeof profTopicsRaw === "string" ? [profTopicsRaw] : [];
+  const profTopics = profTopicsArr
+    .map((x: unknown) => String(x).trim())
     .filter(Boolean)
     .slice(0, 5);
   const noiseLevel =

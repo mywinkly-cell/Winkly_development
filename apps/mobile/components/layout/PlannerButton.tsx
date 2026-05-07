@@ -14,7 +14,7 @@ export type PlannerButtonProps = {
   style?: ViewStyle;
 };
 
-export function PlannerButton({ title, icon = "sparkles", onPress, style }: PlannerButtonProps) {
+export function PlannerButton({ title, icon = "star", onPress, style }: PlannerButtonProps) {
   return (
     <Pressable
       onPress={() => {
