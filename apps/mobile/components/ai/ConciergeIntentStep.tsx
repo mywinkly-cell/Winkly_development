@@ -1,5 +1,5 @@
 /**
- * Step 1 — Intent: category-first cards (ranked in mode context; full catalogue grouped by mode from Planner Events tab).
+ * Step 1 — Intent: sectioned cards (All = neutral groups; mode = boosted + tail).
  */
 
 import React, { useMemo } from "react";
@@ -8,8 +8,7 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import type { Mode } from "@/types";
-import { getCategoriesForMode } from "@/lib/ai/conciergePlanningFlow";
-import type { RankedCategory } from "@/lib/ai/rankActivityCategories";
+import type { IntentSection, RankedCard } from "@/lib/ai/conciergePlanningFlow";
 
 export type IntentContinuePayload = {
   key: string;
@@ -20,50 +19,16 @@ export type IntentContinuePayload = {
 
 export type ConciergeIntentStepProps = {
   mode: Mode;
-  categories: RankedCategory[];
-  /** Events planner tab: show every mode’s categories in grouped sections (no ranking). */
-  genericCatalog: boolean;
+  sections: IntentSection[];
   onContinue: (payload: IntentContinuePayload) => void;
 };
 
-const MODE_LABEL: Record<Mode, string> = {
-  romance: "Romance",
-  friends: "Friends",
-  business: "Business",
-  events: "Events",
-};
-
-const MODE_BORDER: Record<Mode, string> = {
-  romance: Colors.romance.primary,
-  friends: Colors.friends.primary,
-  business: Colors.business.primary,
-  events: Colors.events.primary,
-};
-
-const MODE_SECTION_ORDER: Mode[] = ["romance", "friends", "business", "events"];
-
 export function ConciergeIntentStep({
   mode,
-  categories,
-  genericCatalog,
+  sections,
   onContinue,
 }: ConciergeIntentStepProps) {
-  const sections = useMemo(() => {
-    if (!genericCatalog) return null;
-    return MODE_SECTION_ORDER.map((m) => ({
-      mode: m,
-      label: MODE_LABEL[m],
-      border: MODE_BORDER[m],
-      items: getCategoriesForMode(m).map((c) => ({ ...c, boosted: false as const })),
-    })).filter((s) => s.items.length > 0);
-  }, [genericCatalog]);
-
-  const singleList = useMemo(() => {
-    if (genericCatalog) return null;
-    const custom = categories.find((b) => b.key === "custom");
-    const rest = categories.filter((b) => b.key !== "custom");
-    return [...(custom ? [custom] : []), ...rest];
-  }, [categories, genericCatalog]);
+  const derived = useMemo(() => sections ?? [], [sections]);
 
   return (
     <ScrollView
@@ -74,59 +39,61 @@ export function ConciergeIntentStep({
     >
       <Text style={styles.title}>What would you like to plan?</Text>
 
-      {genericCatalog && sections ? (
-        <>
-          {sections.map((section) => (
-            <View key={section.mode} style={[styles.modeSection, { borderLeftColor: section.border }]}>
-              <Text style={styles.modeSectionTitle}>{section.label}</Text>
-              <View style={styles.grid}>
-                {section.items.map((item) => (
-                  <CategoryButton
-                    key={`${section.mode}-${item.key}`}
-                    item={item}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      onContinue({
-                        key: item.key,
-                        label: item.label,
-                        flowMode: section.mode,
-                      });
-                    }}
-                  />
-                ))}
-              </View>
-            </View>
-          ))}
-        </>
-      ) : (
-        singleList && (
+      {derived.map((section) => (
+        <View
+          key={section.key}
+          style={[
+            styles.section,
+            section.labelStyle === "romance"
+              ? { borderLeftColor: Colors.romance.primary }
+              : section.labelStyle === "friends"
+                ? { borderLeftColor: Colors.friends.primary }
+                : section.labelStyle === "business"
+                  ? { borderLeftColor: Colors.business.primary }
+                  : section.labelStyle === "boosted"
+                    ? { borderLeftColor: Colors.primaryViolet }
+                    : { borderLeftColor: Colors.gray300 },
+          ]}
+        >
+          <Text
+            style={[
+              styles.sectionTitle,
+              section.labelStyle === "muted" ? { color: Colors.gray600 } : undefined,
+              section.labelStyle === "boosted" ? { color: Colors.primaryViolet } : undefined,
+              section.labelStyle === "romance" ? { color: Colors.romance.primary } : undefined,
+              section.labelStyle === "friends" ? { color: Colors.friends.primary } : undefined,
+              section.labelStyle === "business" ? { color: Colors.business.primary } : undefined,
+            ]}
+          >
+            {section.label}
+          </Text>
           <View style={styles.grid}>
-            {singleList.map((item) => (
-              <CategoryButton
-                key={item.key}
-                item={item}
+            {section.cards.map((card) => (
+              <CardButton
+                key={`${section.key}-${card.key}`}
+                card={card}
                 onPress={() => {
                   Haptics.selectionAsync();
                   onContinue({
-                    key: item.key,
-                    label: item.label,
+                    key: card.key,
+                    label: card.label,
                     flowMode: mode,
                   });
                 }}
               />
             ))}
           </View>
-        )
-      )}
+        </View>
+      ))}
     </ScrollView>
   );
 }
 
-function CategoryButton({
-  item,
+function CardButton({
+  card,
   onPress,
 }: {
-  item: RankedCategory;
+  card: RankedCard;
   onPress: () => void;
 }) {
   return (
@@ -134,17 +101,17 @@ function CategoryButton({
       style={[styles.button]}
       onPress={onPress}
       activeOpacity={0.85}
-      accessibilityLabel={item.label}
+      accessibilityLabel={card.label}
     >
       <View style={styles.iconWrap}>
-        <Ionicons name={item.icon as never} size={28} color={Colors.primaryViolet} />
+        <Ionicons name={card.icon as never} size={28} color={Colors.primaryViolet} />
       </View>
       <Text style={styles.buttonLabel} numberOfLines={2}>
-        {item.label}
+        {card.label}
       </Text>
-      {item.boosted && item.boostReason ? (
+      {card.boosted && card.boostReason ? (
         <Text style={styles.boostHint} numberOfLines={2}>
-          {item.boostReason}
+          {card.boostReason}
         </Text>
       ) : null}
     </TouchableOpacity>
@@ -163,13 +130,13 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginBottom: 8,
   },
-  modeSection: {
+  section: {
     marginBottom: 20,
     paddingLeft: 12,
     borderLeftWidth: 4,
     borderLeftColor: Colors.gray300,
   },
-  modeSectionTitle: {
+  sectionTitle: {
     ...Typography.caption,
     fontWeight: "700",
     color: Colors.gray600,

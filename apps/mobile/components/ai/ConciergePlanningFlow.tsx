@@ -17,6 +17,7 @@ import {
   Modal,
   Pressable,
 } from "react-native";
+import { GestureDetector, Gesture } from "react-native-gesture-handler";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -44,10 +45,11 @@ import {
   type ActivityDetails,
   type DatePreset,
   type TimeOfDay,
-  type ActivityCategory,
   getSmartDefaultsForActivity,
-  getCategoriesForMode,
   getActivityCategoryByKey,
+  getIntentCards,
+  type IntentSection,
+  type RankInput,
 } from "@/lib/ai/conciergePlanningFlow";
 import { rankActivityCategories, type RankedCategory } from "@/lib/ai/rankActivityCategories";
 import { buildPlanRequestText, inclusivePlanDayCount } from "@/lib/ai/buildPlanRequestText";
@@ -83,6 +85,11 @@ function cityCountryFromLocation(loc: string | undefined, language: string): { c
 
 export type ConciergePlanningFlowProps = {
   mode: Mode;
+  /**
+   * Planner can open the concierge in an "all" scope (show the full cross-mode catalog).
+   * When omitted, defaults to the passed `mode`.
+   */
+  plannerScope?: "all" | Mode;
   source_screen: "planner" | "chats";
   source_planner_tab?: "all" | "dates" | "meetups" | "business" | "events";
   defaultCity?: string;
@@ -101,6 +108,7 @@ export type ConciergePlanningFlowProps = {
 
 export function ConciergePlanningFlow({
   mode,
+  plannerScope,
   source_screen,
   source_planner_tab,
   defaultCity,
@@ -116,11 +124,11 @@ export function ConciergePlanningFlow({
 }: ConciergePlanningFlowProps) {
   const { i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
-  /** Planner Events tab (and similar): grouped catalogue; chosen category sets planning mode for the rest of the flow. */
-  const genericCategoryCatalog = source_screen === "planner" && mode === "events";
+  /** Planner "All" scope: grouped catalogue; chosen category sets planning mode for the rest of the flow. */
+  const genericCategoryCatalog = source_screen === "planner" && plannerScope === "all";
   const [effectiveMode, setEffectiveMode] = useState<Mode>(mode);
-  const [rankedIntentCategories, setRankedIntentCategories] = useState<RankedCategory[]>(() =>
-    getCategoriesForMode(mode).map((c) => ({ ...c, boosted: false }))
+  const [intentSections, setIntentSections] = useState<IntentSection[]>(() =>
+    getIntentCards(genericCategoryCatalog ? "all" : mode)
   );
   const [selectedCategory, setSelectedCategory] = useState<ActivityCategory | null>(null);
   const [subActivityKey, setSubActivityKey] = useState<string | null>(null);
@@ -167,6 +175,7 @@ export function ConciergePlanningFlow({
   const autoGenerateRef = useRef(false);
   const genAttemptRef = useRef(0);
   const [lastRefinement, setLastRefinement] = useState<string | null>(null);
+  const swipeStartX = useRef(0);
 
   /** Single line for UI (cards, share, maps) — always expand ISO in "City, XX". */
   const locationLineDisplay = useMemo(
@@ -186,7 +195,7 @@ export function ConciergePlanningFlow({
 
   useEffect(() => {
     if (genericCategoryCatalog) {
-      setRankedIntentCategories(getCategoriesForMode(mode).map((c) => ({ ...c, boosted: false })));
+      setIntentSections(getIntentCards("all"));
       return;
     }
     let cancelled = false;
@@ -195,13 +204,7 @@ export function ConciergePlanningFlow({
       const uid = auth.user?.id;
       if (!uid) {
         if (!cancelled) {
-          setRankedIntentCategories(
-            rankActivityCategories(getCategoriesForMode(mode), {
-              selfInterests: [],
-              selfLifestyle: [],
-              mode,
-            })
-          );
+          setIntentSections(getIntentCards(mode));
         }
         return;
       }
@@ -244,14 +247,11 @@ export function ConciergePlanningFlow({
           ? [sl]
           : [];
 
-      const ranked = rankActivityCategories(getCategoriesForMode(mode), {
+      const rankInput: RankInput = {
         selfInterests,
-        selfLifestyle,
-        partnerInterests,
-        partnerLifestyle,
-        mode,
-      });
-      if (!cancelled) setRankedIntentCategories(ranked);
+        ...(partnerInterests?.length ? { partnerInterests } : {}),
+      };
+      if (!cancelled) setIntentSections(getIntentCards(mode, rankInput));
     })();
     return () => {
       cancelled = true;
@@ -597,6 +597,26 @@ export function ConciergePlanningFlow({
     }
   }, [flowStep, onBack, showInviteStepBeforePlanner]);
 
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .onStart((e) => {
+          swipeStartX.current = e.x;
+        })
+        .activeOffsetX(20)
+        .failOffsetY(-15)
+        .minDistance(40)
+        .onEnd((e) => {
+          // Swipe left anywhere to go back, or edge-swipe right (iOS-style).
+          if (e.translationX < -60) {
+            handleFlowBack();
+            return;
+          }
+          if (swipeStartX.current < 50 && e.translationX > 60) handleFlowBack();
+        }),
+    [handleFlowBack]
+  );
+
   const stepIndexMap: Record<ConciergeFlowStep, number> = {
     intent: 1,
     sub_activity: 2,
@@ -628,7 +648,8 @@ export function ConciergePlanningFlow({
                   : "Add to planner";
 
   return (
-    <View style={styles.container}>
+    <GestureDetector gesture={panGesture}>
+      <View style={styles.container}>
       <View style={styles.flowHeader}>
         <TouchableOpacity
           onPress={handleFlowBack}
@@ -671,18 +692,52 @@ export function ConciergePlanningFlow({
       {flowStep === "intent" && (
         <ConciergeIntentStep
           mode={mode}
-          categories={rankedIntentCategories}
-          genericCatalog={genericCategoryCatalog}
+          sections={intentSections}
           onContinue={({ key, label, flowMode }) => {
+            const normalizeKey = (k: string): string => {
+              const map: Record<string, string> = {
+                // Generic groups
+                arts_culture: "art_culture",
+                outdoors_nature: "outdoors",
+                work_meeting: "coffee_meeting",
+                social_hangout: "games_fun",
+                surprise_me: "custom",
+                // Romance
+                food_drinks_r: "dinner_drinks",
+                arts_culture_r: "art_culture",
+                dance_music_r: "dance_music",
+                sport_activity_r: "sport_activity",
+                experience_r: "experience",
+                wellness_r: "wellness",
+                trip_r: "trip",
+                // Friends
+                food_drinks_f: "food_drinks",
+                outdoors_f: "outdoors",
+                games_fun_f: "games_fun",
+                sport_f: "sport",
+                music_nightlife_f: "music_nightlife",
+                trip_f: "trip",
+                // Business
+                coffee_b: "coffee_meeting",
+                lunch_b: "lunch_meeting",
+                golf_b: "golf",
+                industry_event_b: "industry_event",
+                walk_talk_b: "walk_talk",
+                business_dinner_b: "business_dinner",
+                workshop_b: "workshop_offsite",
+              };
+              return map[k] ?? k;
+            };
+            const resolvedKey = normalizeKey(key);
             const clearWishlist =
-              activityKey != null && activityKey !== key;
+              activityKey != null && activityKey !== resolvedKey;
             setEffectiveMode(flowMode);
-            setActivityKey(key);
+            setActivityKey(resolvedKey);
             setActivityLabel(label);
-            setSelectedCategory(getActivityCategoryByKey(key) ?? null);
+            setSelectedCategory(getActivityCategoryByKey(resolvedKey) ?? null);
             setSubActivityKey(null);
             setSubActivityLabel(null);
-            const smart = getSmartDefaultsForActivity(key, label, details.budgetCurrency || "EUR");
+            const smart = getSmartDefaultsForActivity(resolvedKey, label, details.budgetCurrency || "EUR");
             setDetails((prev) => ({
               ...prev,
               ...(clearWishlist ? { customPromptExtra: undefined } : {}),
@@ -696,8 +751,8 @@ export function ConciergePlanningFlow({
               date: prev.date ?? new Date(),
               singleDay: true,
             }));
-            const cat = getActivityCategoryByKey(key);
-            const isTrip = key === "trip" || cat?.detailsVariant === "trip";
+            const cat = getActivityCategoryByKey(resolvedKey);
+            const isTrip = resolvedKey === "trip" || cat?.detailsVariant === "trip";
             const hasSub = (cat?.subActivities?.length ?? 0) > 0;
             if (isTrip) {
               setFlowStep("trip_planning");
@@ -1237,7 +1292,8 @@ export function ConciergePlanningFlow({
           </Pressable>
         </Pressable>
       </Modal>
-    </View>
+      </View>
+    </GestureDetector>
   );
 }
 

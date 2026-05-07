@@ -10,11 +10,13 @@ import { ChatsHeader } from "@/components/layout/ChatsHeader";
 import { ModeSelectionBottomBar } from "@/components/layout/ModeSelectionBottomBar";
 import { ChatsInboxContent } from "@/components/chats/ChatsInboxContent";
 import { Colors } from "@/constants/tokens";
+import { useModeContext } from "@/providers";
 
 export default function ModeSelectionChats() {
+  const { context: modeContext } = useModeContext();
   return (
     <SafeScreenView edges={["left", "right"]} style={styles.screen}>
-      <ChatsHeader />
+      <ChatsHeader mode={modeContext.active_mode ?? undefined} />
       <View style={styles.content}>
         <ChatsInboxContent sourceMode="all" />
       </View>

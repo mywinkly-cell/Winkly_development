@@ -27,6 +27,7 @@ import { ConciergePlanningFlow } from "@/components/ai/ConciergePlanningFlow";
 import { callConciergeStream, reportConciergeOutcome } from "@/lib/ai/conciergeClient";
 import { getMergedDeviceWhiteSpaceSlots, formatCalendarWhiteSpaceForGateway } from "@/lib/integrations/calendarWhiteSpace";
 import { buildBookingContextForAi } from "@/lib/integrations/bookingLinks";
+import { supabase } from "@/lib/supabase";
 import {
   getRecentRequests,
   addRecentRequest,
@@ -92,6 +93,11 @@ export default function ConciergeScreen() {
     return source_screen === "chats" ? "romance" : "events";
   }, [params.mode, source_screen, modeContext.active_mode]);
 
+  const plannerScope = useMemo<"all" | Mode>(() => {
+    if (params.mode === "all") return "all";
+    return mode;
+  }, [params.mode, mode]);
+
   const { city: defaultCity, country: defaultCountry } = useDefaultLocation();
   const fmtLoc = useFormatLocationDisplay();
 
@@ -101,8 +107,47 @@ export default function ConciergeScreen() {
     return p === "decisive" || p === "menu" ? p : undefined;
   }, [params.presentation]);
 
-  /** Use improved 7-step planning flow when opened from Planner. */
-  const usePlanningFlow = source_screen === "planner";
+  const [chatMode, setChatMode] = useState<"plan" | "assist" | null>(
+    source_screen === "chats" && params.partner_user_id ? null : "assist"
+  );
+
+  useEffect(() => {
+    if (source_screen !== "chats") return;
+    setChatMode(params.partner_user_id ? null : "assist");
+  }, [source_screen, params.partner_user_id]);
+
+  /** Use improved 7-step planning flow when opened from Planner or from a chat (plan mode). */
+  const usePlanningFlow =
+    source_screen === "planner" || (source_screen === "chats" && chatMode === "plan");
+
+  const [chatPrefillPrompt, setChatPrefillPrompt] = useState<string | undefined>(undefined);
+  const [partnerInterests, setPartnerInterests] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (source_screen !== "chats") return;
+    if (!params.partner_user_id) return;
+    if (mode !== "romance" && mode !== "friends" && mode !== "business") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: row } = await supabase
+          .from("profiles_mode")
+          .select("interests")
+          .eq("user_id", params.partner_user_id)
+          .eq("mode", mode)
+          .maybeSingle();
+        const ints = Array.isArray((row as any)?.interests)
+          ? ((row as any).interests as unknown[]).filter((x): x is string => typeof x === "string")
+          : [];
+        if (!cancelled) setPartnerInterests(ints.slice(0, 6));
+      } catch {
+        if (!cancelled) setPartnerInterests([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [source_screen, params.partner_user_id, mode]);
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -228,7 +273,13 @@ export default function ConciergeScreen() {
         .failOffsetY(-15)
         .minDistance(40)
         .onEnd((e) => {
-          if (swipeStartX.current < 50 && e.translationX > 60 && step !== "form") handleBack();
+          // Support both directions: swipe left (anywhere) or edge-swipe right.
+          if (step === "form") return;
+          if (e.translationX < -60) {
+            handleBack();
+            return;
+          }
+          if (swipeStartX.current < 50 && e.translationX > 60) handleBack();
         }),
     [step, handleBack]
   );
@@ -246,8 +297,13 @@ export default function ConciergeScreen() {
       >
         <ConciergePlanningFlow
           mode={mode}
-          source_screen="planner"
-          source_planner_tab={(params.source_planner_tab as "all" | "dates" | "meetups" | "business" | "events") ?? "all"}
+          plannerScope={plannerScope}
+          source_screen={source_screen}
+          source_planner_tab={
+            source_screen === "planner"
+              ? ((params.source_planner_tab as "all" | "dates" | "meetups" | "business" | "events") ?? "all")
+              : undefined
+          }
           partnerUserId={typeof params.partner_user_id === "string" ? params.partner_user_id : undefined}
           partnerDisplayNameHint={
             typeof params.partner_display_name === "string" ? params.partner_display_name : undefined
@@ -458,6 +514,98 @@ export default function ConciergeScreen() {
               ))}
             </View>
           )}
+
+          {source_screen === "chats" && chatMode === null && params.partner_user_id ? (
+            <Modal transparent animationType="slide" visible>
+              <Pressable
+                style={styles.chatModeBackdrop}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setChatMode("assist");
+                }}
+              >
+                <Pressable style={styles.chatModeSheet} onPress={(e) => e.stopPropagation()}>
+                  <View style={styles.chatModeHeader}>
+                    <Text style={styles.chatModeTitle}>What do you want help with?</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setChatMode("assist");
+                      }}
+                      hitSlop={12}
+                      accessibilityLabel="Close"
+                    >
+                      <Ionicons name="close" size={22} color={Colors.gray600} />
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.chatModeOption}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setChatMode("plan");
+                    }}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={styles.chatModeOptionTitle}>Plan something together</Text>
+                    <Text style={styles.chatModeOptionSub}>Card-based planning using their interests</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.chatModeOption}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setChatMode("assist");
+                    }}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={styles.chatModeOptionTitle}>Help with the conversation</Text>
+                    <Text style={styles.chatModeOptionSub}>Quick templates to draft your next message</Text>
+                  </TouchableOpacity>
+                </Pressable>
+              </Pressable>
+            </Modal>
+          ) : null}
+
+          {source_screen === "chats" && chatMode === "assist" ? (
+            <View style={styles.chatAssistChipsWrap}>
+              <Text style={styles.chatAssistLabel}>Quick picks</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chatAssistChipsRow}>
+                {[
+                  { id: "opening", label: "Opening move" },
+                  { id: "next", label: "Next move" },
+                  { id: "icebreaker", label: "Suggest an icebreaker" },
+                  { id: "reconnect", label: "Reconnect after silence" },
+                ].map((chip) => (
+                  <TouchableOpacity
+                    key={chip.id}
+                    style={styles.chatAssistChip}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      const name = selectedPartner?.displayName?.trim() || "them";
+                      const interestSnippet =
+                        partnerInterests.length > 0
+                          ? `Shared interests to consider: ${partnerInterests.slice(0, 3).join(", ")}.`
+                          : "";
+                      const baseRules =
+                        "Rules: Do NOT reference or assume any message history. Keep it natural, not cringe. 1–2 short messages max. End with one easy question.";
+                      const prompt =
+                        chip.id === "opening"
+                          ? `Write an opening message to ${name}.\n${interestSnippet}\n${baseRules}`
+                          : chip.id === "next"
+                            ? `Draft my next message to ${name} to move the conversation forward.\n${interestSnippet}\n${baseRules}`
+                            : chip.id === "icebreaker"
+                              ? `Suggest an icebreaker question for ${name}.\n${interestSnippet}\n${baseRules}`
+                              : `Write a friendly reconnection message to ${name} after a period of silence.\n${interestSnippet}\n${baseRules}`;
+                      setChatPrefillPrompt(prompt);
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.chatAssistChipText}>{chip.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
           <ConciergeRequestForm
             mode={mode}
             source_screen={source_screen}
@@ -465,7 +613,10 @@ export default function ConciergeScreen() {
             defaultCity={defaultCity ?? undefined}
             defaultCountry={defaultCountry ?? undefined}
             refinementPlaceholder={refinementFeedback ?? undefined}
-            initialPrompt={typeof params.prefill_prompt === "string" ? params.prefill_prompt : undefined}
+            initialPrompt={
+              chatPrefillPrompt ??
+              (typeof params.prefill_prompt === "string" ? params.prefill_prompt : undefined)
+            }
             showModeLabel
             recentRequests={recentRequests}
             onClearError={() => {
@@ -807,6 +958,77 @@ const styles = StyleSheet.create({
   },
   contentWrap: {
     flex: 1,
+  },
+  chatModeBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+  },
+  chatModeSheet: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+  },
+  chatModeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  chatModeTitle: {
+    ...Typography.h3,
+    color: Colors.textPrimary,
+    flex: 1,
+    paddingRight: 10,
+  },
+  chatModeOption: {
+    backgroundColor: Colors.gray100,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+  },
+  chatModeOptionTitle: {
+    ...Typography.body,
+    color: Colors.textPrimary,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  chatModeOptionSub: {
+    ...Typography.caption,
+    color: Colors.gray600,
+  },
+  chatAssistChipsWrap: {
+    marginHorizontal: 24,
+    marginBottom: 12,
+    marginTop: 6,
+  },
+  chatAssistLabel: {
+    ...Typography.caption,
+    color: Colors.gray600,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  chatAssistChipsRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingRight: 10,
+  },
+  chatAssistChip: {
+    backgroundColor: Colors.gray100,
+    borderRadius: 999,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+  },
+  chatAssistChipText: {
+    ...Typography.caption,
+    color: Colors.primaryViolet,
+    fontWeight: "600",
   },
   offlineBanner: {
     flexDirection: "row",
