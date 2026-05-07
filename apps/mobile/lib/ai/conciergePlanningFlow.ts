@@ -7,6 +7,7 @@ import type { Mode } from "@/types";
 
 export type ConciergeFlowStep =
   | "intent"
+  | "sub_activity"
   /** Trip-specific questions before activity details (location/dates). */
   | "trip_planning"
   | "activity"
@@ -70,6 +71,8 @@ export interface ActivityDetails {
   cuisine?: string;
   atmosphere?: string;
   indoorOutdoor?: "indoor" | "outdoor" | "any";
+  /** Category-specific structured extras (serialized into plan_request_text). */
+  categoryExtras?: CategoryExtras;
   /** Custom plan only: merged into the main planning prompt for the AI. */
   customPromptExtra?: string;
   /** Device / "where I am now" when distinct from destination (e.g. first GPS capture). */
@@ -78,6 +81,59 @@ export interface ActivityDetails {
   exactTimeHm?: string;
 }
 
+export type CategoryDetailsVariant = "standard" | "food_drink" | "trip";
+
+export type CategoryExtras = {
+  // Food & drink
+  cuisine?: string;
+  atmosphere?: string;
+  indoorOutdoor?: "indoor" | "outdoor" | "any";
+  groupSize?: number;
+  occasion?: string;
+  dietaryNotes?: string;
+  privateRoom?: boolean;
+
+  // Art & culture
+  artSubType?: string;
+  collectionType?: string;
+  afterCulturePlan?: string;
+
+  // Sport & activity
+  sportSubType?: string;
+  activityLevel?: string;
+  terrain?: "any" | "flat" | "hilly" | "mixed";
+  postActivityPlan?: string;
+
+  // Dance & music
+  musicSubType?: string;
+
+  // Experience & wellness
+  experienceSubType?: string;
+  wellnessSubType?: string;
+
+  // Business
+  meetingGoal?: string;
+  meetingCounterpart?: string;
+  workFriendly?: boolean;
+  golfSkill?: string;
+  golfHoles?: number;
+  industryFocus?: string;
+  networkingGoal?: string;
+  eventFormat?: string;
+  specificEventInMind?: boolean;
+  workshopType?: string;
+  workshopGroupSize?: number;
+
+  // Trip (kept for parity; trip step already uses intentNotes/mustHaves)
+  tripScope?: string;
+  tripVibe?: string;
+  tripActivityLevel?: string;
+  tripMustHaves?: string[];
+  tripDestinationDecided?: boolean;
+  tripTravelRadius?: string;
+  numDays?: number;
+};
+
 /** Full planning flow state (for persistence or deep link). */
 export interface PlanningFlowState {
   step: ConciergeFlowStep;
@@ -85,6 +141,8 @@ export interface PlanningFlowState {
   activityKey: string | null;
   /** Human-readable activity label. */
   activityLabel: string | null;
+  subActivityKey: string | null;
+  subActivityLabel: string | null;
   details: Partial<ActivityDetails>;
   whoJoining: WhoJoining | null;
   /** Selected partner for invite (match/connection). */
@@ -106,6 +164,8 @@ export type ActivityCategory = {
   subActivityPrompt?: string;
   /** When true, Step 2 shows cuisine / atmosphere (food-led categories). */
   foodRelated?: boolean;
+  /** Drives which extras block to show in Activity details. */
+  detailsVariant?: CategoryDetailsVariant;
 };
 
 export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
@@ -140,6 +200,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     modes: ["romance"],
     interestTags: ["food_drink"],
     foodRelated: true,
+    detailsVariant: "food_drink",
     subActivityPrompt: "What kind of dinner or drinks?",
   },
   {
@@ -220,6 +281,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     modes: ["friends"],
     interestTags: ["food_drink"],
     foodRelated: true,
+    detailsVariant: "food_drink",
     subActivityPrompt: "What kind of food or drinks?",
   },
   {
@@ -257,6 +319,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     modes: ["business"],
     interestTags: ["food_drink"],
     foodRelated: true,
+    detailsVariant: "food_drink",
     subActivityPrompt: "What kind of coffee meeting?",
   },
   {
@@ -267,6 +330,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     modes: ["business"],
     interestTags: ["food_drink"],
     foodRelated: true,
+    detailsVariant: "food_drink",
     subActivityPrompt: "What kind of lunch?",
   },
   {
@@ -304,6 +368,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     modes: ["business"],
     interestTags: ["food_drink"],
     foodRelated: true,
+    detailsVariant: "food_drink",
     subActivityPrompt: "What kind of business dinner?",
   },
   {
@@ -313,6 +378,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     subActivities: [],
     modes: ["romance", "friends", "business", "events"],
     interestTags: ["outdoors", "food_drink", "arts_culture"],
+    detailsVariant: "trip",
   },
   {
     key: "custom",

@@ -5,6 +5,71 @@
  */
 
 import type { ConciergeContext } from "@/lib/ai/conciergeClient";
+import type { CategoryExtras } from "@/lib/ai/conciergePlanningFlow";
+
+/**
+ * Serializes CategoryExtras into natural-language lines for the AI prompt.
+ * Appended to buildPlanRequestText output as additional context.
+ */
+export function serializeCategoryExtras(extras: CategoryExtras): string {
+  const lines: string[] = [];
+
+  // Food & drink
+  if (extras.cuisine) lines.push(`Cuisine preference: ${extras.cuisine}.`);
+  if (extras.atmosphere) lines.push(`Atmosphere: ${extras.atmosphere}.`);
+  if (extras.indoorOutdoor && extras.indoorOutdoor !== "any") lines.push(`Setting: ${extras.indoorOutdoor}.`);
+  if (extras.groupSize) lines.push(`Group size: ${extras.groupSize}.`);
+  if (extras.occasion) lines.push(`Occasion: ${extras.occasion}.`);
+  if (extras.dietaryNotes) lines.push(`Dietary requirements: ${extras.dietaryNotes}.`);
+  if (extras.privateRoom) lines.push("Private room or secluded table preferred.");
+
+  // Art & culture
+  if (extras.artSubType) lines.push(`Cultural type: ${extras.artSubType}.`);
+  if (extras.collectionType) lines.push(`Exhibition preference: ${extras.collectionType}.`);
+  if (extras.afterCulturePlan && extras.afterCulturePlan !== "nothing")
+    lines.push(`After the cultural visit: ${extras.afterCulturePlan}.`);
+
+  // Sport & activity
+  if (extras.sportSubType) lines.push(`Sport / activity: ${extras.sportSubType}.`);
+  if (extras.activityLevel) lines.push(`Activity level: ${extras.activityLevel}.`);
+  if (extras.terrain && extras.terrain !== "any") lines.push(`Terrain preference: ${extras.terrain}.`);
+  if (extras.postActivityPlan && extras.postActivityPlan !== "nothing")
+    lines.push(`After the activity: ${extras.postActivityPlan}.`);
+
+  // Dance & music
+  if (extras.musicSubType) lines.push(`Music / dance type: ${extras.musicSubType}.`);
+
+  // Experience & wellness
+  if (extras.experienceSubType) lines.push(`Experience type: ${extras.experienceSubType}.`);
+  if (extras.wellnessSubType) lines.push(`Wellness type: ${extras.wellnessSubType}.`);
+
+  // Business
+  if (extras.meetingGoal) lines.push(`Meeting goal: ${extras.meetingGoal}.`);
+  if (extras.meetingCounterpart) lines.push(`Meeting with: ${extras.meetingCounterpart}.`);
+  if (extras.workFriendly) lines.push("Venue must have wifi and be quiet.");
+  if (extras.golfSkill) lines.push(`Golf skill level: ${extras.golfSkill}.`);
+  if (extras.golfHoles) lines.push(`Golf: ${extras.golfHoles} holes.`);
+  if (extras.industryFocus) lines.push(`Industry focus: ${extras.industryFocus}.`);
+  if (extras.networkingGoal) lines.push(`Networking goal: ${extras.networkingGoal}.`);
+  if (extras.eventFormat) lines.push(`Event format preference: ${extras.eventFormat}.`);
+  if (extras.specificEventInMind) lines.push("User has a specific event in mind — search external events first.");
+  if (extras.workshopType) lines.push(`Workshop type: ${extras.workshopType}.`);
+  if (extras.workshopGroupSize) lines.push(`Workshop group size: ${extras.workshopGroupSize}.`);
+
+  // Trip
+  if (extras.tripScope) lines.push(`Trip scope: ${extras.tripScope}.`);
+  if (extras.tripVibe) lines.push(`Trip vibe: ${extras.tripVibe}.`);
+  if (extras.tripActivityLevel) lines.push(`Trip activity level: ${extras.tripActivityLevel}.`);
+  if (extras.tripMustHaves?.length) lines.push(`Trip must-haves: ${extras.tripMustHaves.join(", ")}.`);
+  if (extras.tripDestinationDecided === false) lines.push("Destination not yet decided — AI should suggest.");
+  if (extras.tripTravelRadius) lines.push(`Willing to travel: ${extras.tripTravelRadius}.`);
+  if (extras.numDays && extras.numDays > 1)
+    lines.push(
+      `Multi-day plan: ${extras.numDays} days. Structure the plan day-by-day with morning, afternoon, and evening slots.`,
+    );
+
+  return lines.join("\n");
+}
 
 function formatDateLine(dateFrom?: string, dateTo?: string, singleDay?: boolean): string {
   if (!dateFrom) return "Date: not specified.";
@@ -122,6 +187,7 @@ export type BuildPlanRequestTextInput = {
   /** Optional known venue hint from Places / user (name + hours text). */
   venueName?: string;
   venueOpenHoursHint?: string;
+  categoryExtras?: CategoryExtras;
   extraNotes?: string;
 };
 
@@ -210,6 +276,11 @@ export function buildPlanRequestText(i: BuildPlanRequestTextInput): string {
 
   if (i.extraNotes?.trim()) {
     lines.push(`Additional notes: ${i.extraNotes.trim()}.`);
+  }
+
+  if (i.categoryExtras) {
+    const s = serializeCategoryExtras(i.categoryExtras).trim();
+    if (s) lines.push(s);
   }
 
   lines.push(

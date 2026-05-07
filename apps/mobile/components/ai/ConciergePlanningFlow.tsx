@@ -30,6 +30,7 @@ import {
 import { getWeatherForCityAndDate, getWeatherForCityAndDateRange } from "@/lib/weatherClient";
 import { formatDefaultLocationDisplay, normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { ConciergeIntentStep } from "@/components/ai/ConciergeIntentStep";
+import { ConciergeSubActivityStep } from "@/components/ai/ConciergeSubActivityStep";
 import { ConciergeActivityDetailsStep } from "@/components/ai/ConciergeActivityDetailsStep";
 import { ConciergeSocialStep } from "@/components/ai/ConciergeSocialStep";
 import { ConciergeSummaryStep } from "@/components/ai/ConciergeSummaryStep";
@@ -43,6 +44,7 @@ import {
   type ActivityDetails,
   type DatePreset,
   type TimeOfDay,
+  type ActivityCategory,
   getSmartDefaultsForActivity,
   getCategoriesForMode,
   getActivityCategoryByKey,
@@ -120,6 +122,9 @@ export function ConciergePlanningFlow({
   const [rankedIntentCategories, setRankedIntentCategories] = useState<RankedCategory[]>(() =>
     getCategoriesForMode(mode).map((c) => ({ ...c, boosted: false }))
   );
+  const [selectedCategory, setSelectedCategory] = useState<ActivityCategory | null>(null);
+  const [subActivityKey, setSubActivityKey] = useState<string | null>(null);
+  const [subActivityLabel, setSubActivityLabel] = useState<string | null>(null);
   const [flowStep, setFlowStep] = useState<ConciergeFlowStep>("intent");
   /** Mirrors last generate request; used to label Primary / Backup in decisive mode. */
   const [lastPresentation, setLastPresentation] = useState<"menu" | "decisive" | undefined>(undefined);
@@ -397,6 +402,7 @@ export function ConciergePlanningFlow({
       weatherSnapshot: weather_snapshot,
       partnerDisplayName: partnerDisplayName ?? undefined,
       sanitizedRequesterPersona: sanitizedPersona,
+        categoryExtras: details.categoryExtras,
       extraNotes: extraNotes || undefined,
     });
     const [slots] = await Promise.all([getMergedDeviceWhiteSpaceSlots()]);
@@ -593,6 +599,7 @@ export function ConciergePlanningFlow({
 
   const stepIndexMap: Record<ConciergeFlowStep, number> = {
     intent: 1,
+    sub_activity: 2,
     trip_planning: 2,
     activity: 2,
     social: 3,
@@ -672,11 +679,15 @@ export function ConciergePlanningFlow({
             setEffectiveMode(flowMode);
             setActivityKey(key);
             setActivityLabel(label);
+            setSelectedCategory(getActivityCategoryByKey(key) ?? null);
+            setSubActivityKey(null);
+            setSubActivityLabel(null);
             const smart = getSmartDefaultsForActivity(key, label, details.budgetCurrency || "EUR");
             setDetails((prev) => ({
               ...prev,
               ...(clearWishlist ? { customPromptExtra: undefined } : {}),
               intentNotes: undefined,
+              categoryExtras: undefined,
               timeOfDay: smart.timeOfDay,
               budgetAmount: smart.budgetAmount || prev.budgetAmount,
               budgetCurrency: smart.budgetCurrency,
@@ -685,12 +696,33 @@ export function ConciergePlanningFlow({
               date: prev.date ?? new Date(),
               singleDay: true,
             }));
-            if (key === "trip") {
+            const cat = getActivityCategoryByKey(key);
+            const isTrip = key === "trip" || cat?.detailsVariant === "trip";
+            const hasSub = (cat?.subActivities?.length ?? 0) > 0;
+            if (isTrip) {
               setFlowStep("trip_planning");
+            } else if (key !== "custom" && hasSub) {
+              setFlowStep("sub_activity");
             } else {
               setFlowStep("activity");
             }
           }}
+        />
+      )}
+
+      {flowStep === "sub_activity" && selectedCategory && (
+        <ConciergeSubActivityStep
+          category={selectedCategory}
+          onContinue={({ subKey, subLabel }) => {
+            setSubActivityKey(subKey);
+            setSubActivityLabel(subLabel);
+            setDetails((prev) => ({
+              ...prev,
+              intentNotes: subKey !== "any" ? `${activityLabel ?? selectedCategory.label}: ${subLabel}` : activityLabel ?? undefined,
+            }));
+            setFlowStep("activity");
+          }}
+          onBack={() => setFlowStep("intent")}
         />
       )}
 
@@ -709,15 +741,17 @@ export function ConciergePlanningFlow({
         <ConciergeActivityDetailsStep
           activityKey={activityKey}
           activityLabel={activityLabel}
-          activityCategory={activityKey ? getActivityCategoryByKey(activityKey) : undefined}
+          activityCategory={selectedCategory ?? (activityKey ? getActivityCategoryByKey(activityKey) : undefined)}
           initialDetails={details}
           mode={effectiveMode}
+          detailsVariant={selectedCategory?.detailsVariant ?? "standard"}
+          subActivityKey={subActivityKey}
           profilePromptVariant={activityKey === "custom" ? "custom" : undefined}
           onNext={(d) => {
             setDetails((prev) => ({ ...prev, ...d }));
             setFlowStep("social");
           }}
-          onBack={() => setFlowStep("intent")}
+          onBack={() => setFlowStep((selectedCategory?.subActivities?.length ?? 0) > 0 ? "sub_activity" : "intent")}
           showInlineBack={false}
         />
       )}

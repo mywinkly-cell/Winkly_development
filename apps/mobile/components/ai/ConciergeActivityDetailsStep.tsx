@@ -33,6 +33,8 @@ import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import {
   type ActivityDetails,
   type ActivityCategory,
+  type CategoryDetailsVariant,
+  type CategoryExtras,
   type DatePreset,
   type TimeOfDay,
   BUDGET_QUICK_AMOUNTS,
@@ -110,6 +112,10 @@ export type ConciergeActivityDetailsStepProps = {
   activityKey?: string | null;
   /** Category metadata from intent step (sub-activity chips, food flags). */
   activityCategory?: ActivityCategory | null;
+  /** Which details extras to show (category-driven). */
+  detailsVariant?: CategoryDetailsVariant;
+  /** Selected sub-activity key (from sub_activity step). */
+  subActivityKey?: string | null;
 };
 
 export function ConciergeActivityDetailsStep({
@@ -123,6 +129,8 @@ export function ConciergeActivityDetailsStep({
   mode = "romance",
   activityKey = null,
   activityCategory = null,
+  detailsVariant = "standard",
+  subActivityKey = null,
 }: ConciergeActivityDetailsStepProps) {
   const { i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
@@ -187,23 +195,11 @@ export function ConciergeActivityDetailsStep({
   });
   const [showExactTimePicker, setShowExactTimePicker] = useState(false);
 
-  const subActivities = activityCategory?.subActivities ?? [];
-  const subActivityPrompt =
-    activityCategory?.subActivityPrompt?.trim() ||
-    (subActivities.length ? `What kind of ${activityCategory?.label.toLowerCase() ?? "plan"}?` : "");
-
-  const [subActivityChoice, setSubActivityChoice] = useState<string>(() => {
-    if (!subActivities.length) return "";
-    return subActivities.includes("Surprise me") ? "Surprise me" : subActivities[0];
+  const [categoryExtras, setCategoryExtras] = useState<CategoryExtras | null>(() => {
+    const fromInitial = initialDetails.categoryExtras as CategoryExtras | undefined;
+    if (fromInitial && typeof fromInitial === "object") return fromInitial;
+    return null;
   });
-
-  useEffect(() => {
-    if (!subActivities.length) {
-      setSubActivityChoice("");
-      return;
-    }
-    setSubActivityChoice(subActivities.includes("Surprise me") ? "Surprise me" : subActivities[0]);
-  }, [activityKey, activityCategory?.key]);
 
   const showProfilePrompt = profilePromptVariant === "custom";
 
@@ -384,17 +380,11 @@ export function ConciergeActivityDetailsStep({
     const pad = (n: number) => String(n).padStart(2, "0");
     const exactTimeHm =
       singleDay && exactTimeEnabled ? `${pad(exactTime.getHours())}:${pad(exactTime.getMinutes())}` : undefined;
-    const specificsLine =
-      subActivities.length && subActivityChoice
-        ? `${activityCategory?.label ?? activityLabel ?? "Plan"}: ${subActivityChoice}.`
-        : "";
-    const mergedIntentNotes = [specificsLine, intentNotesText.trim()].filter(Boolean).join("\n\n");
-
     onNext({
       location: locLine,
       city: parsed.city || undefined,
       country: parsed.country,
-      intentNotes: mergedIntentNotes || undefined,
+      intentNotes: intentNotesText.trim() || undefined,
       additionalInfo: additionalInfo.trim() || undefined,
       mustHaves: mustHaves.trim() || undefined,
       datePreset,
@@ -407,17 +397,14 @@ export function ConciergeActivityDetailsStep({
       cuisine: cuisine.trim() || undefined,
       atmosphere: atmosphere.trim() || undefined,
       indoorOutdoor: indoorOutdoor !== "any" ? indoorOutdoor : undefined,
+      categoryExtras: categoryExtras || undefined,
       customPromptExtra: showProfilePrompt ? customPromptExtra.trim() || undefined : undefined,
       originLocationLabel: originLocationLabel.trim() || undefined,
       exactTimeHm,
     });
   };
 
-  const showFoodFields =
-    !!activityCategory?.foodRelated ||
-    (!activityCategory &&
-      !!activityLabel &&
-      /dinner|brunch|coffee|lunch|wine|restaurant|cafe/i.test(activityLabel));
+  const showFoodFields = detailsVariant === "food_drink" || !!activityCategory?.foodRelated;
 
   const locationHint = getInlineHint("location", {
     hasLocation: !!location.trim(),
@@ -498,32 +485,6 @@ export function ConciergeActivityDetailsStep({
       <Text style={styles.stepTitle}>Activity details</Text>
       {activityLabel ? (
         <Text style={styles.activityLabel} numberOfLines={1}>{activityLabel}</Text>
-      ) : null}
-
-      {subActivities.length > 0 ? (
-        <View style={styles.subActivityBlock}>
-          <Text style={styles.subActivityPrompt}>{subActivityPrompt}</Text>
-          <View style={styles.chipsRow}>
-            {subActivities.map((opt) => {
-              const active = subActivityChoice === opt;
-              return (
-                <TouchableOpacity
-                  key={opt}
-                  style={[styles.chip, active && styles.chipActive]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setSubActivityChoice(opt);
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={2}>
-                    {opt}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
       ) : null}
 
       {/* Location */}
@@ -889,6 +850,11 @@ export function ConciergeActivityDetailsStep({
           </View>
         </>
       )}
+
+      {/* Category extras — keep minimal for now (food fields already collected above). */}
+      {detailsVariant === "food_drink" ? (
+        <View style={{ marginTop: 4 }} />
+      ) : null}
 
       <TouchableOpacity style={styles.nextBtn} onPress={handleNext} activeOpacity={0.9}>
         <Text style={styles.nextBtnText}>Continue</Text>
