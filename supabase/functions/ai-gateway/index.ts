@@ -2692,7 +2692,7 @@ Required JSON schema:
     systemInstruction: { parts: [{ text: SYSTEM }] },
     contents: [{ role: "user", parts: [{ text: JSON.stringify(payload) }] }],
     generationConfig: {
-      maxOutputTokens: 900,
+      maxOutputTokens: 1400,
       temperature: 0.5,
       responseMimeType: "application/json",
     },

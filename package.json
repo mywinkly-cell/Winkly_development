@@ -14,7 +14,7 @@
     "mobile:web": "npm run -w apps/mobile web",
     "mobile:lint": "npm run -w apps/mobile lint",
     "mobile:test": "npm run -w apps/mobile test",
-    "supabase:deploy-auth-redirect": "supabase functions deploy auth-redirect --no-verify-jwt"
+    "supabase:deploy-auth-redirect": "supabase functions deploy auth-redirect"
   },
   "overrides": {
     "@expo/vector-icons": "15.1.1",

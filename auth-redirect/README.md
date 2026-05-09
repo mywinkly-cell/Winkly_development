@@ -49,3 +49,10 @@ If Storage serves with correct `Content-Type: text/html`, this works. Otherwise 
 ## Option 3: Vercel
 
 If using Vercel, disable **Deployment Protection** so the page is public.
+
+---
+
+## Security notes
+
+- **JWT verification:** Email and magic links open in a **browser** without a Supabase session JWT. The Supabase Edge Function must keep **`verify_jwt = false`** in **`supabase/config.toml`** (`[functions.auth-redirect]`). Deploy with `npm run supabase:deploy-auth-redirect`; the CLI applies that setting from **`config.toml`** (do not enable JWT verification on this function or links will break).
+- **What it does:** This endpoint returns **static HTML** only. OAuth/session tokens in the **URL fragment** are not visible to the server; the page forwards them to the app deep link. See **SECURITY.md** in the repo root for the full threat model and operational checklist (RLS, rate limits, repo visibility).
