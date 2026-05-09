@@ -315,7 +315,8 @@ authorization_url_path = "/oauth/consent"
 # Allow dynamic client registration
 allow_dynamic_registration = false
 
-# Edge Functions: auth-redirect must allow unauthenticated GET (email link has no Bearer token)
+# Edge Functions: auth-redirect must allow unauthenticated GET (email verification links have no Bearer JWT).
+# Deploy: npm run supabase:deploy-auth-redirect — CLI applies this block (do not enable JWT verify on this function).
 [functions.auth-redirect]
 verify_jwt = false
 

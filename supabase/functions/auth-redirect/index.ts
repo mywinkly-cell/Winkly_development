@@ -50,23 +50,45 @@ const HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+const SECURITY_HEADERS: Record<string, string> = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  // Inline script only; no remote loads.
+  "Content-Security-Policy":
+    "default-src 'none'; base-uri 'none'; form-action 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'",
+  "Cache-Control": "no-store, no-cache",
+};
+
 Deno.serve(async (req) => {
+  const { corsHeaders } = await import("../_shared/cors.ts");
+
   if (req.method === "OPTIONS") {
-    const { corsHeaders } = await import("../_shared/cors.ts");
     return new Response(null, {
       headers: {
+        ...SECURITY_HEADERS,
         ...Object.fromEntries(corsHeaders(req, { methods: "GET, OPTIONS", headers: "Content-Type" })),
       },
     });
   }
 
-  const { corsHeaders } = await import("../_shared/cors.ts");
+  if (req.method !== "GET") {
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: {
+        Allow: "GET, OPTIONS",
+        ...SECURITY_HEADERS,
+        ...Object.fromEntries(corsHeaders(req, { methods: "GET, OPTIONS", headers: "Content-Type" })),
+      },
+    });
+  }
+
   return new Response(HTML, {
     status: 200,
     headers: {
       "Content-Type": "text/html; charset=UTF-8",
-      "X-Content-Type-Options": "nosniff",
-      "Cache-Control": "no-store, no-cache",
+      ...SECURITY_HEADERS,
       ...Object.fromEntries(corsHeaders(req, { methods: "GET, OPTIONS", headers: "Content-Type" })),
     },
   });

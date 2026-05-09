@@ -776,7 +776,10 @@ export function ConciergePlanningFlow({
             setSubActivityKey(subKey);
             setSubActivityLabel(subLabel);
             setDetails((prev) => {
-              if (selectedCategory.key === "food_drinks") {
+              if (
+                selectedCategory.key === "food_drinks" ||
+                selectedCategory.key === "dinner_drinks"
+              ) {
                 const prompt = FOOD_AND_DRINKS_FORMAT_PROMPTS[subLabel];
                 const intentNotes = prompt
                   ? `Food & drinks format: ${subLabel}. ${prompt}`
