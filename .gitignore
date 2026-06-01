@@ -1,3 +1,55 @@
-node_modules
+# Dependencies
+node_modules/
+
+# Environment & secrets — never commit real values (only *.example templates are tracked)
 .env
+.env.*
+!.env.example
+!**/.env.example
+!.env.*.example
+!**/.env.*.example
+# Real per-environment files (dev/staging/prod) must never be committed
 apps/mobile/.env
+apps/mobile/.env.development
+apps/mobile/.env.staging
+apps/mobile/.env.production
+
+# Certificates & code signing
+*.pem
+*.p12
+*.jks
+*.keystore
+*.mobileprovision
+
+# OS junk
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs & debug
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Expo / Metro / RN — local cache & outputs
+.expo/
+apps/mobile/.expo/
+dist/
+web-build/
+
+# Native projects produced by `expo prebuild` (regenerate from app config / EAS)
+apps/mobile/android/
+apps/mobile/ios/
+
+# Tests & coverage
+coverage/
+.nyc_output/
+
+# TypeScript / caches
+*.tsbuildinfo
+.turbo/
+
+# Supabase CLI local caches (sometimes generated; remove from git index if already tracked)
+supabase/.temp/
+supabase/.branches/

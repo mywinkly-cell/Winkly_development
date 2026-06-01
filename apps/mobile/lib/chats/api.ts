@@ -254,51 +254,33 @@ export async function removeReaction(messageId: string, emoji: string) {
   if (error) throw error;
 }
 
-/** Delete message for self only (soft delete) */
-export async function deleteMessageForSelf(messageId: string) {
+// NOTE: Messages are intentionally NOT deletable after send. The DB enforces
+// immutability via RLS (no UPDATE/DELETE policy) plus a trigger, to preserve a
+// safety / evidence trail. Misuse is handled through reporting + blocking, not
+// deletion. See migration 20260611120000_messaging_match_rls_and_immutability.sql.
+
+/** Mark received messages as DELIVERED (delivered half of read receipts). */
+export async function markMessagesDelivered(messageIds: string[]) {
+  const uniq = Array.from(new Set(messageIds)).filter(Boolean);
+  if (uniq.length === 0) return;
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
-  if (!uid) throw new Error("Not signed in");
+  if (!uid) return;
 
-  const { error } = await supabase
-    .from("messages")
-    .update({ deleted_at: new Date().toISOString(), delete_type: "for_me" })
-    .eq("id", messageId)
-    .eq("sender_id", uid);
-  if (error) throw error;
+  // RPC fills conversation_id and skips the user's own messages.
+  await supabase.rpc("mark_messages_delivered", { p_message_ids: uniq });
 }
 
-/** Delete message for everyone (sender only, within 15 min). Returns true if deleted. */
-const DELETE_FOR_EVERYONE_WINDOW_MS = 15 * 60 * 1000;
-
-export async function deleteMessageForEveryone(messageId: string): Promise<boolean> {
-  const { data: auth } = await supabase.auth.getUser();
-  const uid = auth.user?.id;
-  if (!uid) throw new Error("Not signed in");
-
-  const { data: msg } = await supabase
-    .from("messages")
-    .select("sender_id,created_at")
-    .eq("id", messageId)
-    .single();
-
-  if (!msg || msg.sender_id !== uid) return false;
-
-  const createdAt = new Date((msg as { created_at: string }).created_at).getTime();
-  if (Date.now() - createdAt > DELETE_FOR_EVERYONE_WINDOW_MS) return false;
-
-  const { error } = await supabase
-    .from("messages")
-    .update({
-      deleted_at: new Date().toISOString(),
-      delete_type: "for_everyone",
-      content: "",
-      attachments: [],
-    })
-    .eq("id", messageId);
-
+/** Delivery receipts for a set of messages (who has received them). */
+export async function getDeliveryReceipts(messageIds: string[]) {
+  const uniq = Array.from(new Set(messageIds)).filter(Boolean);
+  if (uniq.length === 0) return [];
+  const { data, error } = await supabase
+    .from("message_delivery_receipts")
+    .select("message_id,user_id,delivered_at")
+    .in("message_id", uniq);
   if (error) throw error;
-  return true;
+  return data ?? [];
 }
 
 /** Mark messages as read (read receipts) */

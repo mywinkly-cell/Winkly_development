@@ -24,7 +24,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
-import { AUTH_REDIRECT_URL } from "@/constants/config";
+import { getEmailRedirectTo } from "@/lib/authRedirectUrl";
 import { getTermsAndCookiesAccepted } from "@/lib/legalFlags";
 
 function isInvalidRefreshToken(err: unknown): boolean {
@@ -88,10 +88,11 @@ export default function Signup() {
     }
     try {
       setLoading(true);
+      const emailRedirectTo = await getEmailRedirectTo();
       const { error } = await supabase.auth.signUp({
         email: cleanEmail,
         password,
-        options: { data: { account_type: accountType }, emailRedirectTo: AUTH_REDIRECT_URL },
+        options: { data: { account_type: accountType }, emailRedirectTo },
       });
       if (error) throw error;
       await AsyncStorage.setItem("winkly_last_signup_email", cleanEmail);

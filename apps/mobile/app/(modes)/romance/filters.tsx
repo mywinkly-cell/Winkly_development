@@ -46,11 +46,32 @@ import {
   setRomanceAiMatchingEnabled,
   getRomanceFilters,
   setRomanceFilters,
+  hasSavedRomanceFilters,
+  lookingForToGenders,
 } from "@/lib/filters/romanceFiltersStorage";
 import { canUseAIFeature } from "@/lib/ai/aiFeatureGate";
 import { WinklyAISpark, SparklesIcon } from "@/components/ui/WinklyAISpark";
 
 const MAX_LANGUAGES = 5;
+
+/**
+ * "Show me" gender-preference options. `values` are matched against the
+ * profile `gender` field ("Female" / "Male" / "Other"). An empty array means
+ * "Everyone" (no gender filter).
+ */
+const GENDER_PREFERENCE_OPTIONS: { key: string; label: string; values: string[] }[] = [
+  { key: "women", label: "Women", values: ["Female"] },
+  { key: "men", label: "Men", values: ["Male"] },
+  { key: "everyone", label: "Everyone", values: [] },
+];
+
+function genderKeyFromValues(values: string[]): string {
+  if (!values || values.length === 0) return "everyone";
+  const match = GENDER_PREFERENCE_OPTIONS.find(
+    (o) => o.values.length === values.length && o.values.every((v) => values.includes(v)),
+  );
+  return match?.key ?? "everyone";
+}
 
 const DISTANCE_KM_ANY = 999;
 const AGE_MIN_LIMIT = 18;
@@ -84,6 +105,7 @@ export default function RomanceFiltersScreen() {
   const [distanceKm, setDistanceKm] = useState<number>(50);
   const [ageMin, setAgeMin] = useState<number>(AGE_MIN_LIMIT);
   const [ageMax, setAgeMax] = useState<number>(AGE_MAX_LIMIT);
+  const [seekingGenders, setSeekingGenders] = useState<string[]>([]);
   const [languages, setLanguages] = useState<string[]>([]);
   const [profileLanguages, setProfileLanguages] = useState<string[]>([]);
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
@@ -126,6 +148,13 @@ export default function RomanceFiltersScreen() {
       if (cancelled) return;
       const langs = (profile as { languages?: string[] | null } | null)?.languages;
       setProfileLanguages(Array.isArray(langs) ? langs : []);
+      // Seed "Show me" from the onboarding "looking for" preference the first
+      // time (before the user has saved any filters).
+      const lookingFor = (profile as { looking_for?: string[] | null } | null)?.looking_for;
+      if (!(await hasSavedRomanceFilters())) {
+        const mapped = lookingForToGenders(lookingFor);
+        if (!cancelled) setSeekingGenders(mapped);
+      }
     })();
     return () => {
       cancelled = true;
@@ -150,6 +179,7 @@ export default function RomanceFiltersScreen() {
       setDistanceKm(saved.distanceKm);
       setAgeMin(saved.ageMin);
       setAgeMax(saved.ageMax);
+      setSeekingGenders(saved.seekingGenders ?? []);
       setLanguages(saved.languages.length ? saved.languages : [getDefaultFilterLanguage(i18n.language ?? "en")]);
       setInterests(saved.interests);
       setRelationshipGoals(saved.relationshipGoals);
@@ -205,6 +235,7 @@ export default function RomanceFiltersScreen() {
       distanceKm,
       ageMin,
       ageMax,
+      seekingGenders,
       languages,
       interests,
       relationshipGoals,
@@ -312,6 +343,28 @@ export default function RomanceFiltersScreen() {
               />
             </>
           )}
+
+          <Text style={[styles.label, { marginTop: 20 }]}>Show me</Text>
+          <View style={styles.segmentRow}>
+            {GENDER_PREFERENCE_OPTIONS.map((opt) => {
+              const selected = genderKeyFromValues(seekingGenders) === opt.key;
+              return (
+                <Pressable
+                  key={opt.key}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setSeekingGenders(opt.values);
+                  }}
+                  style={[styles.segment, selected && styles.segmentSelected]}
+                  accessibilityLabel={`Show ${opt.label}`}
+                >
+                  <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
           <Text style={[styles.label, { marginTop: 20 }]}>Age range</Text>
           <View style={styles.sliderValueRow}>
@@ -826,6 +879,32 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   chipTextSelected: {
+    color: Colors.white,
+  },
+  segmentRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 22,
+    backgroundColor: Colors.gray100,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+  },
+  segmentSelected: {
+    backgroundColor: Colors.romance.primary,
+    borderColor: Colors.romance.primary,
+  },
+  segmentText: {
+    ...Typography.caption,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+  },
+  segmentTextSelected: {
     color: Colors.white,
   },
   sliderValueRow: {

@@ -61,6 +61,8 @@ type Props = {
   /** When set, "Get suggestion" is shown (if user has Concierge access) and Concierge gets partner context. */
   partnerUserId?: string;
   partnerDisplayName?: string;
+  /** Pre-select an activity (e.g. tapped from in-chat date-idea suggestions). Added to chips if not already present. */
+  initialActivity?: string;
 };
 
 const defaultDate = () => {
@@ -130,7 +132,7 @@ function parseSuggestion(option: ExperienceOption, defaultStarts: Date): { place
   return { place, location, startsAt };
 }
 
-export function InviteToPlanModal({ visible, mode, onClose, onSubmit, partnerUserId, partnerDisplayName }: Props) {
+export function InviteToPlanModal({ visible, mode, onClose, onSubmit, partnerUserId, partnerDisplayName, initialActivity }: Props) {
   const { context: modeContext } = useModeContext();
   const { i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
@@ -138,7 +140,12 @@ export function InviteToPlanModal({ visible, mode, onClose, onSubmit, partnerUse
   const tier = modeContext.subscription_tier ?? "free";
   const hasConcierge = canUseAIFeature(tier, "concierge");
 
-  const [activity, setActivity] = useState(ACTIVITIES[mode][0]);
+  const activityOptions =
+    initialActivity && !ACTIVITIES[mode].includes(initialActivity)
+      ? [initialActivity, ...ACTIVITIES[mode]]
+      : ACTIVITIES[mode];
+
+  const [activity, setActivity] = useState(initialActivity ?? ACTIVITIES[mode][0]);
   const [location, setLocation] = useState("");
   const [place, setPlace] = useState("");
   const [startsAt, setStartsAt] = useState(defaultDate());
@@ -153,6 +160,12 @@ export function InviteToPlanModal({ visible, mode, onClose, onSubmit, partnerUse
     if (!line.trim()) return;
     setLocation((prev) => (prev.trim() ? prev : line));
   }, [visible, defaultCity, defaultCountry, appLanguage]);
+
+  // Pre-select the activity each time the sheet opens (e.g. from a date-idea tap).
+  useEffect(() => {
+    if (!visible) return;
+    setActivity(initialActivity ?? ACTIVITIES[mode][0]);
+  }, [visible, initialActivity, mode]);
 
   const _title =
     place.trim() ? `${activity} at ${place.trim()}` : activity;
@@ -233,7 +246,7 @@ export function InviteToPlanModal({ visible, mode, onClose, onSubmit, partnerUse
           <ScrollView style={styles.formScroll} contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
             <Text style={styles.label}>Activity</Text>
             <View style={styles.activityRow}>
-              {ACTIVITIES[mode].map((a) => (
+              {activityOptions.map((a) => (
                 <Pressable
                   key={a}
                   onPress={() => setActivity(a)}

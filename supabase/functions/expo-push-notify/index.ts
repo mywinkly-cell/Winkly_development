@@ -10,7 +10,7 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import { corsHeaders, withCorsJson } from "../_shared/cors.ts";
 import { sendExpoPushMessages } from "../_shared/expoPush.ts";
 
-type PushKind = "new_match" | "chat_message" | "planner_invitation" | "plan_confirmed";
+type PushKind = "new_match" | "chat_message" | "planner_invitation" | "planner_response" | "plan_confirmed";
 
 function isUuid(v: unknown): v is string {
   return typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
@@ -66,6 +66,30 @@ async function verifyPlannerInvite(
   );
 }
 
+/**
+ * The invitee responded (accept/decline/reschedule) and is notifying the
+ * original inviter. Caller must be the invitee, recipient the inviter, and the
+ * invitation must no longer be pending.
+ */
+async function verifyPlannerResponse(
+  supabase: SupabaseClient,
+  caller: string,
+  recipient: string,
+  invitationId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("planner_invitations")
+    .select("inviter_id, invitee_id, status")
+    .eq("id", invitationId)
+    .maybeSingle();
+  if (error || !data) return false;
+  return (
+    data.invitee_id === caller &&
+    data.inviter_id === recipient &&
+    ["accepted", "declined", "reschedule"].includes(data.status)
+  );
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders(req) });
@@ -108,7 +132,7 @@ serve(async (req) => {
     if (!isUuid(recipientId) || recipientId === callerId) {
       return withCorsJson(req, { error: "Invalid recipient" }, { status: 400 });
     }
-    if (!["new_match", "chat_message", "planner_invitation"].includes(kind)) {
+    if (!["new_match", "chat_message", "planner_invitation", "planner_response"].includes(kind)) {
       return withCorsJson(req, { error: "Invalid kind" }, { status: 400 });
     }
     if (!title.trim() || !notifyBody.trim()) {
@@ -131,6 +155,12 @@ serve(async (req) => {
         return withCorsJson(req, { error: "planner_invitation_id required" }, { status: 400 });
       }
       allowed = await verifyPlannerInvite(supabase, callerId, recipientId, invId);
+    } else if (kind === "planner_response") {
+      const invId = body.planner_invitation_id;
+      if (!isUuid(invId)) {
+        return withCorsJson(req, { error: "planner_invitation_id required" }, { status: 400 });
+      }
+      allowed = await verifyPlannerResponse(supabase, callerId, recipientId, invId);
     }
 
     if (!allowed) {

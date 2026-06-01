@@ -1,5 +1,48 @@
 // Winkly profile option lists — sub-profile fields
 
+// ─── Core onboarding ────────────────────────────────────────────────────────
+/** "Looking for" — who the user wants to be matched with (core profile). */
+export const LOOKING_FOR_OPTIONS = ["Women", "Men", "Everyone"];
+
+/**
+ * Activity preferences — Winkly's differentiator. Collected during onboarding
+ * as fun visual cards and stored as tags that drive the activity
+ * recommendation engine. Max 10 selections (see ACTIVITY_PREFERENCES_MAX).
+ */
+export const ACTIVITY_PREFERENCES_MAX = 10;
+
+export type ActivityPreferenceOption = {
+  /** Stable tag stored in the profile. */
+  key: string;
+  /** Display label shown on the card. */
+  label: string;
+  /** Emoji shown on the card (kept playful, not a dry form). */
+  emoji: string;
+};
+
+export const ACTIVITY_PREFERENCE_OPTIONS: ActivityPreferenceOption[] = [
+  { key: "hiking", label: "Hiking", emoji: "🥾" },
+  { key: "restaurants", label: "Restaurants", emoji: "🍽️" },
+  { key: "coffee", label: "Coffee", emoji: "☕" },
+  { key: "museums", label: "Museums & Art", emoji: "🎨" },
+  { key: "concerts", label: "Concerts", emoji: "🎵" },
+  { key: "sports", label: "Sports", emoji: "⚽" },
+  { key: "movies", label: "Movies", emoji: "🎬" },
+  { key: "travel", label: "Travel", emoji: "✈️" },
+  { key: "nightlife", label: "Nightlife", emoji: "🍸" },
+  { key: "fitness", label: "Fitness", emoji: "💪" },
+  { key: "beach", label: "Beach", emoji: "🏖️" },
+  { key: "gaming", label: "Gaming", emoji: "🎮" },
+  { key: "photography", label: "Photography", emoji: "📷" },
+  { key: "cooking", label: "Cooking", emoji: "🍳" },
+  { key: "dancing", label: "Dancing", emoji: "💃" },
+  { key: "festivals", label: "Festivals", emoji: "🎉" },
+  { key: "theater", label: "Theater", emoji: "🎭" },
+  { key: "reading", label: "Reading", emoji: "📚" },
+  { key: "nature", label: "Nature & Outdoors", emoji: "🌿" },
+  { key: "wine_tasting", label: "Wine Tasting", emoji: "🍷" },
+];
+
 // ─── Common (e.g. filters: preferred language) ─────────────────────────────
 export const LANGUAGE_OPTIONS = [
   "Any",

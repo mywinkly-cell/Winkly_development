@@ -7,6 +7,8 @@ import {
   getRomanceAiMatchingEnabled,
   getRomanceFilters,
   applyRomanceFiltersToFeed,
+  hasSavedRomanceFilters,
+  lookingForToGenders,
 } from "@/lib/filters/romanceFiltersStorage";
 import { combinedMatchScore, fetchBehaviorAffinityMap } from "@/lib/matching/behaviorAffinities";
 import { getBlockedUserIdSet } from "@/lib/access/blocks";
@@ -19,6 +21,8 @@ export type RomanceSwipeCardProfile = {
   occupation?: string | null;
   chipItems: string[];
   photoUrl: string;
+  /** Rounded, privacy-safe distance label from the server (e.g. "~3 km away"). */
+  distanceLabel?: string | null;
 };
 
 type FeedRow = {
@@ -33,7 +37,12 @@ type FeedRow = {
   compatibility?: number | null;
   romance_photos?: (string | null)[];
   core_photos?: (string | null)[];
+  romance_interests?: (string | null)[];
+  distance_km?: number | null;
+  distance_label?: string | null;
 };
+
+const DISTANCE_KM_ANY = 999;
 
 /**
  * Romance home swipe deck — same feed rules as Discover recommendations (RPC + filters + AI sort).
@@ -43,28 +52,59 @@ export async function fetchRomanceSwipeDeckProfiles(
   self: RomanceProfile | null,
 ): Promise<RomanceSwipeCardProfile[]> {
   const blocked = await getBlockedUserIdSet(authedUserId);
+  const filters = await getRomanceFilters();
 
-  const { data: feedData, error } = await supabase.rpc("romance_discover_feed", {
+  // Distance / age / gender are filtered server-side (PostGIS); the server
+  // returns only a rounded distance label, never raw coordinates.
+  const maxDistanceKm =
+    filters.distanceKm && filters.distanceKm !== DISTANCE_KM_ANY ? filters.distanceKm : null;
+
+  // Gender preference: explicit filter wins. If the user hasn't customised
+  // filters yet, fall back to their onboarding "looking for" preference.
+  let genders: string[] | null = filters.seekingGenders?.length ? filters.seekingGenders : null;
+  if (!genders && !(await hasSavedRomanceFilters())) {
+    const { data: lf } = await supabase
+      .from("user_profiles")
+      .select("looking_for")
+      .eq("id", authedUserId)
+      .maybeSingle();
+    const mapped = lookingForToGenders((lf as { looking_for?: string[] | null } | null)?.looking_for);
+    genders = mapped.length ? mapped : null;
+  }
+
+  const { data: feedData, error } = await supabase.rpc("romance_discover_feed_geo", {
     current_user_id: authedUserId,
+    p_max_distance_km: maxDistanceKm,
+    p_age_min: filters.ageMin ?? null,
+    p_age_max: filters.ageMax ?? null,
+    p_genders: genders,
+    p_limit: 100,
   });
 
   let rows: FeedRow[] = (feedData ?? []) as FeedRow[];
 
   if (error) {
-    const { data: fallback } = await supabase
-      .from("public_profile_view")
-      .select(
-        "id, first_name, age, city, interests, languages, occupation, bio_romance, core_photos, romance_photos",
-      )
-      .neq("id", authedUserId)
-      .limit(50);
-    rows = (fallback || []) as FeedRow[];
-    rows = rows.filter(
-      (r) =>
-        (Array.isArray(r.romance_photos) && r.romance_photos.some((p) => !!p)) ||
-        (r.bio_romance != null && String(r.bio_romance).trim() !== ""),
-    );
-    rows = rows.filter((r) => !blocked.has(r.id));
+    // Fallback: legacy feed (no geo), then plain view. Distance unavailable here.
+    const { data: legacy, error: legacyErr } = await supabase.rpc("romance_discover_feed", {
+      current_user_id: authedUserId,
+    });
+    if (!legacyErr && Array.isArray(legacy)) {
+      rows = legacy as FeedRow[];
+    } else {
+      const { data: fallback } = await supabase
+        .from("public_profile_view")
+        .select(
+          "id, first_name, age, city, interests, languages, occupation, bio_romance, core_photos, romance_photos",
+        )
+        .neq("id", authedUserId)
+        .limit(50);
+      rows = (fallback || []) as FeedRow[];
+      rows = rows.filter(
+        (r) =>
+          (Array.isArray(r.romance_photos) && r.romance_photos.some((p) => !!p)) ||
+          (r.bio_romance != null && String(r.bio_romance).trim() !== ""),
+      );
+    }
   }
 
   rows = rows.filter((r) => !blocked.has(r.id));
@@ -84,7 +124,6 @@ export async function fetchRomanceSwipeDeckProfiles(
     return { ...r, compatibility };
   });
 
-  const filters = await getRomanceFilters();
   let filtered = applyRomanceFiltersToFeed(scored, filters);
   const aiOn = await getRomanceAiMatchingEnabled();
   if (aiOn) {
@@ -100,7 +139,9 @@ export async function fetchRomanceSwipeDeckProfiles(
   }
 
   return filtered.map((r) => {
-    const interests = r.interests ?? [];
+    const interests = (r.romance_interests?.filter(Boolean) as string[] | undefined)?.length
+      ? (r.romance_interests as string[])
+      : r.interests ?? [];
     const chipItems = interests.slice(0, 3);
     const photo = r.romance_photos?.[0] ?? r.core_photos?.[0];
     return {
@@ -111,6 +152,7 @@ export async function fetchRomanceSwipeDeckProfiles(
       occupation: r.occupation ?? null,
       chipItems: chipItems.length ? chipItems : ["Romance"],
       photoUrl: photo ?? "https://i.pravatar.cc/400?u=winkly",
+      distanceLabel: r.distance_label ?? null,
     };
   });
 }

@@ -43,7 +43,12 @@ import {
 } from "@/lib/location/countryDisplay";
 import { reverseGeocodeToDisplay } from "@/lib/location";
 import { upsertOwnProfileCore } from "@/lib/access/profiles";
-import { LANGUAGE_OPTIONS as PROFILE_LANGUAGE_OPTIONS } from "@/constants/profileOptions";
+import {
+  LANGUAGE_OPTIONS as PROFILE_LANGUAGE_OPTIONS,
+  LOOKING_FOR_OPTIONS,
+  ACTIVITY_PREFERENCE_OPTIONS,
+  ACTIVITY_PREFERENCES_MAX,
+} from "@/constants/profileOptions";
 import { RomanceSubProfile } from "@/components/onboarding/RomanceSubProfile";
 import { FriendsSubProfile } from "@/components/onboarding/FriendsSubProfile";
 import { BusinessSubProfile } from "@/components/onboarding/BusinessSubProfile";
@@ -58,6 +63,16 @@ const EDUCATION_OPTIONS = [
 ];
 
 const PROFILE_LANGS = PROFILE_LANGUAGE_OPTIONS.filter((l) => l !== "Any");
+
+// ─── Core photo rules ───────────────────────────────────────────────────────
+/** Minimum core photos required before a user can start matching. */
+const MIN_CORE_PHOTOS = 2;
+/** Maximum core photos a user can add. */
+const MAX_CORE_PHOTOS = 5;
+/** Minimum source resolution (shortest side, px) for a usable, sharp photo. */
+const MIN_PHOTO_DIMENSION = 500;
+/** Max length for the optional core bio. */
+const MAX_CORE_BIO = 300;
 
 function sortedProfileLanguages(selected: string[]): string[] {
   const set = new Set(selected);
@@ -141,8 +156,14 @@ export default function ProfileCore() {
   const [occupation, setOccupation] = useState("");
   const [instagram, setInstagram] = useState("");
 
+  // ─────────────── CORE PROFILE EXTRAS ───────────────
+  const [bio, setBio] = useState("");
+  const [lookingFor, setLookingFor] = useState<string[]>([]);
+  const [activityPreferences, setActivityPreferences] = useState<string[]>([]);
+
   // ─────────────── MEDIA (UI only for now) ───────────────
-  const [corePhotos, setCorePhotos] = useState<(string | null)[]>([null]); // 1 required
+  // Core photos: 2–5 required, ordered (first = main). Stored as actual URIs (no null padding).
+  const [corePhotos, setCorePhotos] = useState<string[]>([]);
   const [romancePhotos, setRomancePhotos] = useState<(string | null)[]>([null, null, null]);
   const [friendsPhotos, setFriendsPhotos] = useState<(string | null)[]>([null, null, null]);
   const [businessPhotos, setBusinessPhotos] = useState<(string | null)[]>([null, null, null]);
@@ -219,7 +240,7 @@ export default function ProfileCore() {
 
           const { data: up } = await supabase
             .from("user_profiles")
-            .select("first_name, last_name, gender, birthday, city, education, occupation, languages, instagram, core_photos, main_photo_url, night_owl")
+            .select("first_name, last_name, gender, birthday, city, education, occupation, languages, instagram, core_photos, main_photo_url, night_owl, bio, looking_for, activity_preferences")
             .eq("id", userId)
             .maybeSingle();
 
@@ -227,7 +248,8 @@ export default function ProfileCore() {
             first_name?: string; last_name?: string; gender?: string; birthday?: string;
             city?: string; education?: string; occupation?: string; languages?: string[] | null;
             instagram?: string; core_photos?: string[]; main_photo_url?: string;
-            night_owl?: boolean | null;
+            night_owl?: boolean | null; bio?: string | null;
+            looking_for?: string[] | null; activity_preferences?: string[] | null;
           } | null;
 
           if (upRow?.first_name || upRow?.last_name) {
@@ -243,12 +265,15 @@ export default function ProfileCore() {
             setLanguages(Array.isArray(upRow.languages) ? upRow.languages : []);
             setOccupation(upRow.occupation ?? "");
             setInstagram(upRow.instagram ?? "");
+            setBio(upRow.bio ?? "");
+            setLookingFor(Array.isArray(upRow.looking_for) ? upRow.looking_for : []);
+            setActivityPreferences(Array.isArray(upRow.activity_preferences) ? upRow.activity_preferences : []);
             const photos = Array.isArray(upRow.core_photos) && upRow.core_photos.length > 0
-              ? upRow.core_photos
+              ? upRow.core_photos.filter(Boolean)
               : upRow.main_photo_url
                 ? [upRow.main_photo_url]
-                : [null];
-            setCorePhotos(photos.length ? photos : [null]);
+                : [];
+            setCorePhotos(photos);
           }
 
           const { data: subs } = await supabase
@@ -337,6 +362,9 @@ export default function ProfileCore() {
             setLanguages(data.languages ?? []);
             setOccupation(data.occupation ?? "");
             setInstagram(data.instagram ?? "");
+            setBio(data.bio ?? "");
+            setLookingFor(Array.isArray(data.lookingFor) ? data.lookingFor : []);
+            setActivityPreferences(Array.isArray(data.activityPreferences) ? data.activityPreferences : []);
             setBioRomance(data.bioRomance ?? "");
             setBioFriends(data.bioFriends ?? "");
             setBioBusiness(data.bioBusiness ?? "");
@@ -376,7 +404,7 @@ export default function ProfileCore() {
             setSkillsBusiness(Array.isArray(data.skillsBusiness) ? data.skillsBusiness : []);
             setInterestsBusiness(data.interestsBusiness ?? []);
 
-            setCorePhotos(data.corePhotos ?? [null]);
+            setCorePhotos(Array.isArray(data.corePhotos) ? data.corePhotos.filter(Boolean) : []);
             setRomancePhotos(data.romancePhotos ?? [null, null, null]);
             setFriendsPhotos(data.friendsPhotos ?? [null, null, null]);
             setBusinessPhotos(ensureLength(data.businessPhotos ?? [null, null, null], 3));
@@ -405,6 +433,9 @@ export default function ProfileCore() {
       languages,
       occupation,
       instagram,
+      bio,
+      lookingFor,
+      activityPreferences,
       bioRomance,
       bioFriends,
       bioBusiness,
@@ -467,6 +498,9 @@ export default function ProfileCore() {
     languages,
     occupation,
     instagram,
+    bio,
+    lookingFor,
+    activityPreferences,
     bioRomance,
     bioFriends,
     bioBusiness,
@@ -535,6 +569,9 @@ export default function ProfileCore() {
         occupation: occupation || null,
         languages: languages.length ? languages : null,
         instagram: instagram.trim() || null,
+        bio: bio.trim() || null,
+        looking_for: lookingFor.length ? lookingFor : null,
+        activity_preferences: activityPreferences.length ? activityPreferences : null,
         core_photos: corePhotos.filter(Boolean) as string[],
         main_photo_url: corePhotos[0] || null,
       }, { onConflict: "id" });
@@ -542,11 +579,14 @@ export default function ProfileCore() {
         first_name: firstName.trim() || null,
         last_name: lastName.trim() || null,
         city: cityNorm,
+        bio: bio.trim() || null,
+        looking_for: lookingFor.length ? lookingFor : null,
+        activity_preferences: activityPreferences.length ? activityPreferences : null,
       });
     } catch (e) {
       console.warn("Auto-save to Supabase:", e);
     }
-  }, [firstName, lastName, gender, birthday, city, education, occupation, languages, instagram, corePhotos, appLanguage]);
+  }, [firstName, lastName, gender, birthday, city, education, occupation, languages, instagram, bio, lookingFor, activityPreferences, corePhotos, appLanguage]);
 
   useEffect(() => {
     if (!firstName && !lastName) return;
@@ -752,7 +792,22 @@ export default function ProfileCore() {
 
     if (result.canceled || !result.assets?.length) return;
 
-    let uri = result.assets[0].uri;
+    const asset = result.assets[0];
+
+    // Photo quality validation: reject images that are too low-res to look sharp.
+    // (Face detection would require a native module + rebuild; deferred — see edit-media TODO.)
+    const w = asset.width ?? 0;
+    const h = asset.height ?? 0;
+    if (w && h && Math.min(w, h) < MIN_PHOTO_DIMENSION) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(
+        "Photo quality too low",
+        `For a sharp, clear profile, please pick a photo at least ${MIN_PHOTO_DIMENSION}×${MIN_PHOTO_DIMENSION}px. This one is ${w}×${h}px.`
+      );
+      return;
+    }
+
+    let uri = asset.uri;
     if (!uri.startsWith("http")) {
       try {
         const ext = uri.toLowerCase().includes(".png") ? "png" : "jpg";
@@ -772,9 +827,12 @@ export default function ProfileCore() {
     if (!pendingCrop) return;
     const { type, index } = pendingCrop;
     if (type === "core") {
-      const updated = [...corePhotos];
-      updated[index] = uri;
-      setCorePhotos(updated);
+      setCorePhotos((prev) => {
+        const updated = [...prev];
+        if (index >= updated.length) updated.push(uri);
+        else updated[index] = uri;
+        return updated.slice(0, MAX_CORE_PHOTOS);
+      });
     } else if (type === "romance") {
       const updated = [...romancePhotos];
       updated[index] = uri;
@@ -790,6 +848,69 @@ export default function ProfileCore() {
     }
     setCropModalVisible(false);
     setPendingCrop(null);
+  };
+
+  // ─────────────── CORE PHOTO MANAGEMENT (reorder / remove / main) ───────────────
+  const removeCorePhoto = (index: number) => {
+    Haptics.selectionAsync();
+    setCorePhotos((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const moveCorePhoto = (index: number, dir: -1 | 1) => {
+    setCorePhotos((prev) => {
+      const target = index + dir;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+    Haptics.selectionAsync();
+  };
+
+  const setMainCorePhoto = (index: number) => {
+    setCorePhotos((prev) => {
+      if (index <= 0 || index >= prev.length) return prev;
+      const next = [...prev];
+      const [picked] = next.splice(index, 1);
+      next.unshift(picked);
+      return next;
+    });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  /** Tap a filled core photo → reorder / main / remove options. */
+  const openCorePhotoOptions = (index: number) => {
+    Haptics.selectionAsync();
+    const options: { text: string; onPress?: () => void; style?: "cancel" | "destructive" }[] = [];
+    if (index !== 0) options.push({ text: "Make main photo", onPress: () => setMainCorePhoto(index) });
+    if (index > 0) options.push({ text: "Move left", onPress: () => moveCorePhoto(index, -1) });
+    if (index < corePhotos.length - 1) options.push({ text: "Move right", onPress: () => moveCorePhoto(index, 1) });
+    options.push({ text: "Replace photo", onPress: () => pickImage("core", index) });
+    options.push({ text: "Remove photo", style: "destructive", onPress: () => removeCorePhoto(index) });
+    options.push({ text: "Cancel", style: "cancel" });
+    Alert.alert("Edit photo", index === 0 ? "This is your main photo." : undefined, options);
+  };
+
+  const toggleLookingFor = (val: string) => {
+    Haptics.selectionAsync();
+    setLookingFor((prev) => {
+      // "Everyone" is exclusive of the specific options
+      if (val === "Everyone") return prev.includes("Everyone") ? [] : ["Everyone"];
+      const without = prev.filter((x) => x !== "Everyone");
+      return without.includes(val) ? without.filter((x) => x !== val) : [...without, val];
+    });
+  };
+
+  const toggleActivityPreference = (key: string) => {
+    Haptics.selectionAsync();
+    setActivityPreferences((prev) => {
+      if (prev.includes(key)) return prev.filter((x) => x !== key);
+      if (prev.length >= ACTIVITY_PREFERENCES_MAX) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        return prev;
+      }
+      return [...prev, key];
+    });
   };
 
   const MAX_VIDEO_SEC = 10;
@@ -831,8 +952,16 @@ export default function ProfileCore() {
       return;
     }
 
-    if (!corePhotos[0]) {
-      Alert.alert("Photo required", "Please add at least 1 profile photo.");
+    if (lookingFor.length === 0) {
+      Alert.alert("Almost there", "Please choose who you're looking to meet.");
+      return;
+    }
+
+    if (corePhotos.length < MIN_CORE_PHOTOS) {
+      Alert.alert(
+        "Add more photos",
+        `Please add at least ${MIN_CORE_PHOTOS} photos so you can start matching. You can add up to ${MAX_CORE_PHOTOS}.`
+      );
       return;
     }
 
@@ -875,6 +1004,9 @@ export default function ProfileCore() {
         occupation: occupation || null,
         languages: languages.length ? languages : null,
         instagram: instagram.trim() || null,
+        bio: bio.trim() || null,
+        looking_for: lookingFor,
+        activity_preferences: activityPreferences,
         core_photos: corePhotos.filter(Boolean) as string[],
         main_photo_url: corePhotos[0] || null,
       };
@@ -889,6 +1021,9 @@ export default function ProfileCore() {
         first_name: firstName.trim() || null,
         last_name: lastName.trim() || null,
         city: cityNorm,
+        bio: bio.trim() || null,
+        looking_for: lookingFor,
+        activity_preferences: activityPreferences,
       });
       if (coreErr) throw coreErr;
 
@@ -999,15 +1134,28 @@ export default function ProfileCore() {
     }
   };
 
+  const coreChecklist = useMemo(
+    () => [
+      corePhotos.length >= MIN_CORE_PHOTOS,
+      !!firstName.trim(),
+      !!lastName.trim(),
+      !!birthday,
+      !!gender.trim(),
+      !!city.trim(),
+      lookingFor.length > 0,
+    ],
+    [corePhotos.length, firstName, lastName, birthday, gender, city, lookingFor.length]
+  );
+
   const coreProgress = useMemo(() => {
-    const has = [!!corePhotos[0], !!firstName.trim(), !!lastName.trim(), !!birthday, !!gender.trim(), !!city.trim()].filter(Boolean).length;
-    return Math.round((has / 6) * 100);
-  }, [corePhotos[0], firstName, lastName, birthday, gender, city]);
+    const has = coreChecklist.filter(Boolean).length;
+    return Math.round((has / coreChecklist.length) * 100);
+  }, [coreChecklist]);
 
   const overallProgress = useMemo(() => {
     let total = 0;
-    let max = 6;
-    const coreHas = [!!corePhotos[0], !!firstName.trim(), !!lastName.trim(), !!birthday, !!gender.trim(), !!city.trim()].filter(Boolean).length;
+    let max = coreChecklist.length;
+    const coreHas = coreChecklist.filter(Boolean).length;
     total += coreHas;
     if (romanceEnabled) {
       max += 3;
@@ -1023,7 +1171,7 @@ export default function ProfileCore() {
     }
     return Math.round((total / max) * 100);
   }, [
-    corePhotos[0], firstName, lastName, birthday, gender, city,
+    coreChecklist,
     romanceEnabled, bioRomance, romancePhotos, interestsRomance,
     friendsEnabled, bioFriends, friendsPhotos, interestsFriends,
     businessEnabled, bioBusiness, businessPhotos, networkingGoalsBusiness,
@@ -1097,31 +1245,57 @@ export default function ProfileCore() {
             <View style={[sectionCard, { marginBottom: 20 }]}>
               <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 16, fontFamily: FontFamily.heading }}>About you 💫</Text>
 
-              <Text style={label}>Profile photo <Text style={requiredMark}>*</Text></Text>
-              <View style={{ flexDirection: "row", marginBottom: 18 }}>
-                <TouchableOpacity
-                  onPress={() => pickImage("core", 0)}
-                  style={corePhotos[0] ? photoSlotFilled : photoSlotEmpty}
-                >
-                  {corePhotos[0] ? (
-                    <Image source={{ uri: corePhotos[0] }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-                  ) : (
-                    <>
-                      <Ionicons name="camera-outline" size={32} color={Colors.gray400} />
-                      <Text style={{ ...Typography.caption, color: Colors.gray500, marginTop: 6 }}>Add photo</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                <View style={{ flex: 1, paddingLeft: 16, justifyContent: "center" }}>
-                  <Text style={{ ...Typography.body, color: Colors.textPrimary }}>
-                    Add a clear photo of yourself.
-                  </Text>
-                  <Text style={{ ...Typography.caption, color: Colors.gray600, marginTop: 6 }}>
-                    This photo is used in Events mode and shown on your event cards.
-                  </Text>
-                </View>
+              <Text style={label}>Photos <Text style={requiredMark}>*</Text></Text>
+              <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 12 }}>
+                Add {MIN_CORE_PHOTOS}–{MAX_CORE_PHOTOS} photos. Your first photo is your main one — tap any photo to reorder or remove it. ({corePhotos.length}/{MAX_CORE_PHOTOS})
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -6 }}>
+                {corePhotos.map((uri, i) => (
+                  <View key={`core-${i}-${uri}`} style={{ width: "33.333%", padding: 6 }}>
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => openCorePhotoOptions(i)}
+                      style={corePhotoTile}
+                    >
+                      <Image source={{ uri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                      {i === 0 && (
+                        <View style={mainBadge}>
+                          <Text style={mainBadgeText}>Main</Text>
+                        </View>
+                      )}
+                      <TouchableOpacity
+                        onPress={() => removeCorePhoto(i)}
+                        style={removeBadge}
+                        hitSlop={8}
+                        accessibilityLabel="Remove photo"
+                      >
+                        <Ionicons name="close" size={14} color={Colors.white} />
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {corePhotos.length < MAX_CORE_PHOTOS && (
+                  <View style={{ width: "33.333%", padding: 6 }}>
+                    <TouchableOpacity
+                      onPress={() => pickImage("core", corePhotos.length)}
+                      style={corePhotoAddTile}
+                      accessibilityLabel="Add photo"
+                    >
+                      <Ionicons name="add" size={30} color={Colors.primaryViolet} />
+                      <Text style={{ ...Typography.caption, color: Colors.gray600, marginTop: 4 }}>Add</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
+              {corePhotos.length < MIN_CORE_PHOTOS ? (
+                <Text style={{ ...Typography.caption, color: Colors.errorRed, marginTop: 6, marginBottom: 18 }}>
+                  Add at least {MIN_CORE_PHOTOS} photos to start matching.
+                </Text>
+              ) : (
+                <Text style={{ ...Typography.caption, color: Colors.gray500, marginTop: 6, marginBottom: 18 }}>
+                  Tip: clear, well-lit photos of your face get more matches.
+                </Text>
+              )}
 
               <Text style={label}>First name <Text style={requiredMark}>*</Text></Text>
               <TextInput
@@ -1197,6 +1371,33 @@ export default function ProfileCore() {
           ))}
         </View>
 
+        <Text style={[label, { marginBottom: 8 }]}>Looking for <Text style={requiredMark}>*</Text></Text>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 16 }}>
+          {LOOKING_FOR_OPTIONS.map((opt) => {
+            const selected = lookingFor.includes(opt);
+            return (
+              <TouchableOpacity
+                key={opt}
+                onPress={() => toggleLookingFor(opt)}
+                style={{
+                  flex: 1,
+                  marginHorizontal: 4,
+                  backgroundColor: selected ? Colors.primaryViolet : Colors.white,
+                  borderWidth: 2,
+                  borderColor: selected ? Colors.primaryViolet : Colors.gray200,
+                  borderRadius: Layout.radii.control,
+                  paddingVertical: 12,
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ ...Typography.body, color: selected ? "#FFF" : Colors.textPrimary }}>
+                  {opt}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
           <Text style={[label, { marginBottom: 0 }]}>City <Text style={requiredMark}>*</Text></Text>
           <TouchableOpacity
@@ -1254,6 +1455,61 @@ export default function ProfileCore() {
             ))}
           </View>
         )}
+
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+          <Text style={[label, { marginBottom: 0 }]}>Short bio</Text>
+          <Text style={{ ...Typography.caption, color: Colors.gray500 }}>{bio.length}/{MAX_CORE_BIO}</Text>
+        </View>
+        <TextInput
+          placeholder="Say something about yourself…"
+          placeholderTextColor={Colors.gray500}
+          value={bio}
+          onChangeText={(t) => setBio(t.slice(0, MAX_CORE_BIO))}
+          multiline
+          maxLength={MAX_CORE_BIO}
+          onFocus={() => setFocusedField("bio")}
+          onBlur={() => setFocusedField(null)}
+          style={[inputBase, { minHeight: 90, textAlignVertical: "top", paddingTop: 12 }, focusedField === "bio" && inputFocused]}
+        />
+          </View>
+
+          {/* Section: What do you enjoy? (activity preferences — Winkly's differentiator) */}
+          <View style={[sectionCard, { marginBottom: 20 }]}>
+            <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 4, fontFamily: FontFamily.heading }}>What do you enjoy? 🎉</Text>
+            <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 16 }}>
+              Pick the things you love doing — we&apos;ll use these to suggest date ideas you&apos;ll both enjoy. Choose up to {ACTIVITY_PREFERENCES_MAX}. ({activityPreferences.length}/{ACTIVITY_PREFERENCES_MAX})
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4 }}>
+              {ACTIVITY_PREFERENCE_OPTIONS.map((opt) => {
+                const selected = activityPreferences.includes(opt.key);
+                const atMax = !selected && activityPreferences.length >= ACTIVITY_PREFERENCES_MAX;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    onPress={() => toggleActivityPreference(opt.key)}
+                    activeOpacity={0.85}
+                    disabled={atMax}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      margin: 4,
+                      paddingVertical: 10,
+                      paddingHorizontal: 14,
+                      borderRadius: 22,
+                      borderWidth: 2,
+                      borderColor: selected ? Colors.primaryViolet : Colors.gray200,
+                      backgroundColor: selected ? Colors.primaryViolet + "15" : Colors.white,
+                      opacity: atMax ? 0.4 : 1,
+                    }}
+                  >
+                    <Text style={{ fontSize: 18, marginRight: 8 }}>{opt.emoji}</Text>
+                    <Text style={{ ...Typography.body, color: selected ? Colors.primaryViolet : Colors.textPrimary, fontWeight: selected ? "600" : "400" }}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
 
           {/* Section: More about you */}
@@ -1532,39 +1788,55 @@ const sectionCard = {
   ...Shadow.card,
 };
 
-const photoSlotEmpty = {
-  width: 120,
-  height: 120,
-  borderRadius: 18,
+const corePhotoTile = {
+  width: "100%" as const,
+  aspectRatio: 1,
+  borderRadius: 14,
   backgroundColor: Colors.gray100,
-  justifyContent: "center" as const,
-  alignItems: "center" as const,
-  overflow: "hidden" as const,
-  borderWidth: 2,
-  borderStyle: "dashed" as const,
-  borderColor: Colors.gray300,
-  shadowColor: "#1C1C1E",
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.1,
-  shadowRadius: 4,
-  elevation: 3,
-};
-
-const photoSlotFilled = {
-  width: 120,
-  height: 120,
-  borderRadius: 18,
-  backgroundColor: Colors.gray100,
-  justifyContent: "center" as const,
-  alignItems: "center" as const,
   overflow: "hidden" as const,
   borderWidth: 1,
   borderColor: Colors.gray200,
-  shadowColor: "#1C1C1E",
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.12,
-  shadowRadius: 6,
-  elevation: 4,
+};
+
+const corePhotoAddTile = {
+  width: "100%" as const,
+  aspectRatio: 1,
+  borderRadius: 14,
+  backgroundColor: Colors.gray100,
+  justifyContent: "center" as const,
+  alignItems: "center" as const,
+  borderWidth: 2,
+  borderStyle: "dashed" as const,
+  borderColor: Colors.gray300,
+};
+
+const mainBadge = {
+  position: "absolute" as const,
+  top: 6,
+  left: 6,
+  backgroundColor: Colors.primaryViolet,
+  borderRadius: 8,
+  paddingVertical: 2,
+  paddingHorizontal: 8,
+};
+
+const mainBadgeText = {
+  ...Typography.caption,
+  color: Colors.white,
+  fontWeight: "700" as const,
+  fontSize: 11,
+};
+
+const removeBadge = {
+  position: "absolute" as const,
+  top: 6,
+  right: 6,
+  width: 24,
+  height: 24,
+  borderRadius: 12,
+  backgroundColor: "rgba(0,0,0,0.55)",
+  justifyContent: "center" as const,
+  alignItems: "center" as const,
 };
 
 const inputStyle = {

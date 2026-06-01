@@ -1,8 +1,15 @@
-// ImageCropModal — crop UI (avoids black screen by using normalized file URI)
+// ImageCropModal — interactive crop UI.
+// Uses the maintained `expo-dynamic-image-crop` (gesture-based crop on top of the
+// official `expo-image-manipulator`). Replaces the abandoned
+// `@neilromblon/expo-image-manipulator-view` (see SECURITY.md dependency audit).
+//
+// The image URI is normalized to a readable temp JPEG first to avoid issues with
+// content:// URIs and very large images on some Android devices.
 
 import React, { useEffect, useState } from "react";
 import { Modal, View, ActivityIndicator, Text, StyleSheet } from "react-native";
-import ImageManipulatorView from "@neilromblon/expo-image-manipulator-view";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { ImageEditor } from "expo-dynamic-image-crop";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as FileSystem from "expo-file-system";
 import { cacheDirectory } from "expo-file-system/legacy";
@@ -15,12 +22,12 @@ type ImageCropModalProps = {
   onClose: () => void;
 };
 
-/** Normalize URI via ImageManipulator — outputs a temp file ImageManipulatorView can read (fixes black screen) */
+/** Normalize URI via ImageManipulator — outputs a temp file the editor can read reliably. */
 async function normalizeUriForCrop(uri: string): Promise<string> {
   try {
     const result = await ImageManipulator.manipulateAsync(
       uri,
-      [{ resize: { width: 1920 } }], // normalize to temp file ImageManipulatorView can read
+      [{ resize: { width: 1920 } }],
       { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
     );
     return result.uri;
@@ -63,44 +70,35 @@ export function ImageCropModal({
 
   if (!photoUri) return null;
 
-  if (normalizing) {
-    return (
-      <Modal visible={visible} transparent animationType="fade">
-        <View style={styles.loadingOverlay}>
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={Colors.primaryViolet} />
-            <Text style={styles.loadingText}>Preparing crop…</Text>
-          </View>
-        </View>
-      </Modal>
-    );
-  }
-
-  if (!normalizedUri) return null;
-
   return (
-    <ImageManipulatorView
-      isVisible={visible}
-      photo={{ uri: normalizedUri }}
-      onToggleModal={onClose}
-      onPictureChoosed={(data) => onSave(data.uri)}
-      btnTexts={{
-        crop: "Save",
-        done: "Save",
-        processing: "Saving…",
-      }}
-      saveOptions={{
-        compress: 0.85,
-        format: ImageManipulator.SaveFormat.JPEG,
-        base64: false,
-      }}
-      allowRotate={false}
-      allowFlip={false}
-    />
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      {/* GestureHandlerRootView is required for gestures to work inside a RN Modal (esp. Android). */}
+      <GestureHandlerRootView style={styles.root}>
+        {normalizing || !normalizedUri ? (
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="large" color={Colors.primaryViolet} />
+              <Text style={styles.loadingText}>Preparing crop…</Text>
+            </View>
+          </View>
+        ) : (
+          <ImageEditor
+            useModal={false}
+            imageUri={normalizedUri}
+            onEditingComplete={(data) => onSave(data.uri)}
+            onEditingCancel={onClose}
+          />
+        )}
+      </GestureHandlerRootView>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
   loadingOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",

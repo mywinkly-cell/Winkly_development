@@ -177,7 +177,7 @@ export async function acceptPlannerInvite(invitationId: string): Promise<void> {
 
   const { data: itemRow } = await supabase
     .from("planner_items")
-    .select("source_mode")
+    .select("source_mode, title")
     .eq("id", inv.planner_item_id)
     .maybeSingle();
 
@@ -194,6 +194,30 @@ export async function acceptPlannerInvite(invitationId: string): Promise<void> {
     role: "attendee",
   });
   if (insertErr) throw new Error(insertErr.message);
+
+  const itemTitle = (itemRow as { title?: string } | null)?.title ?? "your plan";
+  let accepterName = "Someone";
+  const { data: accepterProfile } = await supabase
+    .from("user_profiles")
+    .select("first_name")
+    .eq("id", uid)
+    .maybeSingle();
+  if ((accepterProfile as { first_name?: string | null } | null)?.first_name) {
+    accepterName = (accepterProfile as { first_name: string }).first_name;
+  }
+
+  void requestPeerPushNotification({
+    kind: "planner_response",
+    recipientUserId: inv.inviter_id,
+    title: "Date confirmed 🎉",
+    body: `${accepterName} accepted: ${itemTitle}`,
+    plannerInvitationId: invitationId,
+    data: {
+      planner_invitation_id: invitationId,
+      planner_item_id: inv.planner_item_id,
+      response: "accepted",
+    },
+  });
 
   const sm = (itemRow as { source_mode?: string } | null)?.source_mode;
   if (sm === "romance" || sm === "friends" || sm === "business") {

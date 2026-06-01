@@ -23,7 +23,7 @@ import { SafeScreenView } from "@/components/SafeScreenView";
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { Colors, Typography, Layout } from "@/constants/tokens";
-import { AUTH_REDIRECT_URL } from "@/constants/config";
+import { getEmailRedirectTo } from "@/lib/authRedirectUrl";
 
 export default function ResetPassword() {
   const router = useRouter();
@@ -44,8 +44,9 @@ export default function ResetPassword() {
 
     try {
       setLoading(true);
+      const redirectTo = await getEmailRedirectTo();
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: AUTH_REDIRECT_URL,
+        redirectTo,
       });
       if (error) throw error;
 
