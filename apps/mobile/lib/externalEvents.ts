@@ -1,5 +1,5 @@
 /**
- * External events (Meetup, Eventbrite) — add to planner, fetch nearby (stub).
+ * External events (Meetup, Eventbrite) — add to planner, fetch nearby (with retry + graceful fallback).
  * See docs/EXTERNAL_EVENTS_AND_FILTERING.md
  */
 
@@ -35,26 +35,66 @@ export async function addExternalEventToPlanner(item: EventCardItem): Promise<vo
   if (error) throw new Error(error.message);
 }
 
-/**
- * Fetch nearby external events (Meetup, Eventbrite) from Edge Function.
- * Stub: returns empty until get-nearby-external-events is deployed and API keys are set.
- */
-export async function getNearbyExternalEvents(opts: {
+export type ExternalEventsOpts = {
   latitude: number;
   longitude: number;
   radiusKm?: number;
   category?: string | null;
   from?: string; // ISO date
   to?: string;   // ISO date
-}): Promise<EventCardItem[]> {
+};
+
+/**
+ * Outcome of an external-events fetch.
+ * - "ok": at least one external event returned.
+ * - "empty": request succeeded but no external events (e.g. no API keys configured, or none nearby).
+ * - "unavailable": both providers / the Edge Function could not be reached (network error, timeout, 5xx).
+ *
+ * Callers should ALWAYS keep showing Winkly-native events regardless of this status — never a blank screen.
+ */
+export type ExternalEventsStatus = "ok" | "empty" | "unavailable";
+
+export type ExternalEventsResult = {
+  events: EventCardItem[];
+  status: ExternalEventsStatus;
+};
+
+const REQUEST_TIMEOUT_MS = 8000;
+const MAX_ATTEMPTS = 2;
+
+/** fetch with an abort timeout; returns null on network error / timeout. */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Fetch nearby external events (Meetup, Eventbrite) from the Edge Function, with retry + timeout.
+ *
+ * Graceful degradation: transient failures (network error, timeout, 5xx) are retried once, then
+ * reported as "unavailable" with an empty list so the UI can fall back to Winkly-only without
+ * surfacing an error or rendering a blank screen.
+ */
+export async function fetchNearbyExternalEvents(opts: ExternalEventsOpts): Promise<ExternalEventsResult> {
   const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
-  if (!SUPABASE_URL) return [];
+  if (!SUPABASE_URL) return { events: [], status: "unavailable" };
 
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) return [];
+  if (!session?.access_token) return { events: [], status: "unavailable" };
 
   const url = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/get-nearby-external-events`;
-  const res = await fetch(url, {
+  const init: RequestInit = {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -68,9 +108,43 @@ export async function getNearbyExternalEvents(opts: {
       from: opts.from ?? null,
       to: opts.to ?? null,
     }),
-  });
+  };
 
-  if (!res.ok) return [];
-  const data = await res.json().catch(() => ({}));
-  return Array.isArray(data.events) ? data.events : [];
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const res = await fetchWithTimeout(url, init, REQUEST_TIMEOUT_MS);
+
+    // Network error / timeout — retry, then give up gracefully.
+    if (!res) {
+      if (attempt < MAX_ATTEMPTS - 1) continue;
+      return { events: [], status: "unavailable" };
+    }
+
+    // Transient server error — retry, then give up gracefully.
+    if (res.status >= 500) {
+      if (attempt < MAX_ATTEMPTS - 1) continue;
+      return { events: [], status: "unavailable" };
+    }
+
+    // Other non-OK (auth, bad request) — not retryable; degrade gracefully.
+    if (!res.ok) return { events: [], status: "unavailable" };
+
+    const data = await res.json().catch(() => null);
+    if (!data || typeof data !== "object") return { events: [], status: "unavailable" };
+
+    const events = Array.isArray((data as { events?: unknown }).events)
+      ? ((data as { events: EventCardItem[] }).events)
+      : [];
+    return { events, status: events.length > 0 ? "ok" : "empty" };
+  }
+
+  return { events: [], status: "unavailable" };
+}
+
+/**
+ * Fetch nearby external events, returning just the list (empty on any failure).
+ * Prefer {@link fetchNearbyExternalEvents} when you need to distinguish "empty" from "unavailable".
+ */
+export async function getNearbyExternalEvents(opts: ExternalEventsOpts): Promise<EventCardItem[]> {
+  const { events } = await fetchNearbyExternalEvents(opts);
+  return events;
 }

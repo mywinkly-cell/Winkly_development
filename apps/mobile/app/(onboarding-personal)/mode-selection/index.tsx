@@ -56,7 +56,7 @@ type AccountType = "personal" | "business";
 
 export default function ModeSelectionIndex() {
   const router = useRouter();
-  const { context, setActiveMode } = useModeContext();
+  const { context, setActiveMode, refresh } = useModeContext();
   const [activeMode, setActiveModeLocal] = useState<ModeKey | null>(null);
   const [loading, setLoading] = useState(true);
   const [, setProfilePhotoUri] = useState<string | null>(null);
@@ -136,7 +136,10 @@ export default function ModeSelectionIndex() {
 
   useFocusEffect(useCallback(() => {
     load();
-  }, [load]));
+    // Force authz permissions to re-sync at the mode gateway so a newly
+    // completed sub-profile is reflected before the user enters a mode.
+    refresh();
+  }, [load, refresh]));
 
   const handleModePress = (mode: ModeKey) => {
     if (loading) return;

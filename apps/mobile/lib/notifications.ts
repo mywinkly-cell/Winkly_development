@@ -75,6 +75,34 @@ export function resetNotificationsRuntime(): void {
   runtimeInitialized = false;
 }
 
+/**
+ * Data payload of the notification that launched the app from a cold start
+ * (user tapped it while the app was killed). Null if none / module unavailable.
+ */
+export async function getInitialNotificationData(): Promise<Record<string, unknown> | null> {
+  const mod = await tryImportExpoNotifications();
+  if (!mod) return null;
+  const resp = await mod.getLastNotificationResponseAsync();
+  const data = resp?.notification?.request?.content?.data;
+  return data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+}
+
+/**
+ * Subscribe to notification taps (foreground/background). Returns an unsubscribe fn.
+ * No-ops (returns a noop unsubscribe) when the native module is unavailable.
+ */
+export async function addNotificationResponseListener(
+  handler: (data: Record<string, unknown>) => void,
+): Promise<() => void> {
+  const mod = await tryImportExpoNotifications();
+  if (!mod) return () => {};
+  const sub = mod.addNotificationResponseReceivedListener((response) => {
+    const data = response?.notification?.request?.content?.data;
+    if (data && typeof data === "object") handler(data as Record<string, unknown>);
+  });
+  return () => sub.remove();
+}
+
 export async function ensureAndroidNotificationChannelAsync(): Promise<void> {
   const mod = await tryImportExpoNotifications();
   if (!mod || Platform.OS !== "android") return;

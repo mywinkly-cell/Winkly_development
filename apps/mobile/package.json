@@ -5,6 +5,8 @@
   "main": "expo-router/entry",
   "scripts": {
     "postinstall": "patch-package",
+    "validate-env": "node scripts/validate-env.js",
+    "eas-build-pre-install": "node scripts/validate-env.js",
     "start": "expo start",
     "start:clear": "expo start -c",
     "android": "expo run:android",
@@ -21,6 +23,7 @@
     "@react-native-community/datetimepicker": "8.4.4",
     "@react-native-community/netinfo": "11.4.1",
     "@react-native-community/slider": "5.0.1",
+    "@sentry/react-native": "~7.2.0",
     "@supabase/supabase-js": "^2.57.0",
     "axios": "^1.13.5",
     "base64-arraybuffer": "^1.0.2",

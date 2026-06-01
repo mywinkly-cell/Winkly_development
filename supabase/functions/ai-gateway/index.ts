@@ -27,6 +27,92 @@ const UPSTASH_REDIS_REST_TOKEN = Deno.env.get("UPSTASH_REDIS_REST_TOKEN") ?? "";
 
 type SubscriptionTier = "free" | "super" | "premium" | "enterprise";
 
+// ───────────────────────────────────────────────────────────────────────────
+// Feature flags, tier access, and cost guards — enforced SERVER-SIDE.
+//
+// AI access is the source of truth here, in the Edge Function — not in the
+// client. The client gate (apps/mobile/lib/ai/aiFeatureGate.ts) is UX only and
+// is trivially bypassable (anyone can call this function with a valid session
+// token). Every billable AI task is therefore re-checked against the user's
+// subscription tier, a global kill switch, and per-request cost guards below.
+// ───────────────────────────────────────────────────────────────────────────
+
+function envFlagOn(name: string): boolean {
+  return /^(1|true|yes|on)$/i.test((Deno.env.get(name) ?? "").trim());
+}
+
+/** Global kill switch: when set, every billable AI task is rejected (503). */
+const AI_GATEWAY_DISABLED = envFlagOn("AI_GATEWAY_DISABLED");
+
+/** Per-tier disable list, e.g. AI_DISABLED_TIERS="free,super". Blocks those tiers entirely. */
+const AI_DISABLED_TIERS: Set<SubscriptionTier> = new Set(
+  (Deno.env.get("AI_DISABLED_TIERS") ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s): s is SubscriptionTier => ["free", "super", "premium", "enterprise"].includes(s)),
+);
+
+/** Cost guards. Output-token ceiling is applied to every provider call; input guards reject abuse. */
+const AI_LIMITS = {
+  // Hard ceiling on output tokens per provider request (clamps every call's maxOutputTokens/max_tokens).
+  maxOutputTokens: Math.max(64, Math.floor(Number(Deno.env.get("AI_MAX_OUTPUT_TOKENS") ?? "2048")) || 2048),
+  // Max characters of serialized request context (rejects oversized prompts → token-cost abuse).
+  maxContextChars: Math.max(2000, Math.floor(Number(Deno.env.get("AI_MAX_CONTEXT_CHARS") ?? "24000")) || 24000),
+  // Max characters of the free-text user prompt.
+  maxUserPromptChars: 2000,
+  // Max candidates accepted for rank/suggest.
+  maxCandidates: 50,
+} as const;
+
+/** Clamp a requested output-token count to the configured per-request ceiling. */
+function capOutputTokens(requested: number): number {
+  return Math.max(1, Math.min(requested, AI_LIMITS.maxOutputTokens));
+}
+
+/** Tasks that invoke a paid model (and so must be tier-gated, rate-limited, and cost-guarded). */
+const AI_TASKS = new Set<string>([
+  "chat_topics",
+  "planner_theme_plans",
+  "event_suggest",
+  "plan",
+  "concierge",
+  "winkly_plan",
+  "match_agent",
+  "match_bridge",
+]);
+
+const TIER_RANK: Record<SubscriptionTier, number> = { free: 0, super: 1, premium: 2, enterprise: 3 };
+
+/**
+ * Minimum subscription tier required per AI task. Mirrors the client gate
+ * (lib/ai/aiFeatureGate.ts) but enforced here so it cannot be bypassed.
+ *  - "super": limited AI (smart matching, event suggestions, planning ideas, chat opener).
+ *  - "premium": full concierge (weather-aware planning, coordination, first-date bridge).
+ * Free tier is denied every AI task (Free = no AI, per SUBSCRIPTION_TIERS_AND_AI.md).
+ */
+const TASK_MIN_TIER: Record<string, SubscriptionTier> = {
+  chat_topics: "super",
+  planner_theme_plans: "super",
+  event_suggest: "super",
+  plan: "super",
+  winkly_plan: "super",
+  match_agent: "super",
+  concierge: "premium",
+  match_bridge: "premium",
+};
+
+/** True when `tier` meets the minimum required for `task`. Non-AI tasks are always allowed. */
+function tierAllowsTask(tier: SubscriptionTier, task: string): boolean {
+  const required = TASK_MIN_TIER[task];
+  if (!required) return true;
+  return TIER_RANK[tier] >= TIER_RANK[required];
+}
+
+/** Suggested upgrade target for client upsell when a task is denied. */
+function suggestedUpgradeTier(task: string): "super" | "premium" {
+  return TASK_MIN_TIER[task] === "premium" ? "premium" : "super";
+}
+
 async function upstashPipeline(
   commands: Array<{ command: string; args: (string | number)[] }>
 ): Promise<Array<{ result?: unknown; error?: string }>> {
@@ -1363,7 +1449,7 @@ Respond with valid JSON only:
     systemInstruction: { parts: [{ text: MATCH_AGENT_SYSTEM }] },
     contents: [{ role: "user", parts: [{ text: `Structured pipeline output:\n${JSON.stringify(payload)}` }] }],
     generationConfig: {
-      maxOutputTokens: 1024,
+      maxOutputTokens: capOutputTokens(1024),
       temperature: 0.45,
       responseMimeType: "application/json",
     },
@@ -1391,7 +1477,7 @@ Output a single JSON object with keys chain, draft, agent_message as in the Gemi
     },
     body: JSON.stringify({
       model: "gpt-4o-mini",
-      max_tokens: 1200,
+      max_tokens: capOutputTokens(1200),
       temperature: 0.45,
       response_format: { type: "json_object" },
       messages: [
@@ -1627,7 +1713,7 @@ async function runMatchBridgeGeminiJson(
     systemInstruction: { parts: [{ text: MATCH_BRIDGE_SYSTEM }] },
     contents: [{ role: "user", parts: [{ text: `Context JSON:\n${JSON.stringify(payload)}` }] }],
     generationConfig: {
-      maxOutputTokens: 768,
+      maxOutputTokens: capOutputTokens(768),
       temperature: 0.55,
       responseMimeType: "application/json",
     },
@@ -1656,7 +1742,7 @@ async function runMatchBridgeOpenAIJson(
     },
     body: JSON.stringify({
       model: "gpt-4o-mini",
-      max_tokens: 900,
+      max_tokens: capOutputTokens(900),
       temperature: 0.55,
       response_format: { type: "json_object" },
       messages: [
@@ -1795,7 +1881,7 @@ async function runGeminiWithTools(
     const body: Record<string, unknown> = {
       systemInstruction: { parts: [{ text: sysFull }] },
       contents,
-      generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
+      generationConfig: { maxOutputTokens: capOutputTokens(1024), temperature: 0.7 },
     };
     // Grounding control: only enable Gemini tools (Maps/Search/etc.) for final plan phase.
     // We treat winkly_plan + concierge/plan/event_suggest as "final"; topic/theme previews should not invoke tools.
@@ -1814,13 +1900,17 @@ async function runGeminiWithTools(
     if (!res.ok) {
       const err = await res.text();
       console.error("[ai-gateway] Gemini !ok status=" + res.status + " body=" + err.slice(0, 400));
-      const friendly = res.status === 429
-        ? "The AI provider is rate-limiting. Wait a minute and try again, or use a paid API key for higher limits."
-        : res.status === 401 || res.status === 403
-          ? "Invalid or restricted API key. Check your Gemini/OpenAI key in Supabase secrets."
-          : `AI temporarily unavailable (${res.status}). Try again in a moment.`;
+      // A hard quota/billing exhaustion will not recover on retry — surface a distinct message.
+      const quotaExhausted = res.status === 429 && /RESOURCE_EXHAUSTED|quota|billing|exceeded/i.test(err);
+      const friendly = quotaExhausted
+        ? "Winkly AI has reached its usage quota for now. Please try again later."
+        : res.status === 429
+          ? "The AI provider is rate-limiting. Wait a minute and try again, or use a paid API key for higher limits."
+          : res.status === 401 || res.status === 403
+            ? "Invalid or restricted API key. Check your Gemini/OpenAI key in Supabase secrets."
+            : `AI temporarily unavailable (${res.status}). Try again in a moment.`;
       if (res.status === 429) {
-        return { message: friendly, suggestions: [], statusCode: 429 as const, retry_after: 60, provider_status: res.status };
+        return { message: friendly, suggestions: [], statusCode: 429 as const, retry_after: quotaExhausted ? 3600 : 60, provider_status: res.status, quota_exhausted: quotaExhausted };
       }
       return { message: friendly, suggestions: [], provider_status: res.status };
     }
@@ -1902,7 +1992,7 @@ async function runOpenAIWithTools(
     const body: Record<string, unknown> = {
       model: "gpt-4o-mini",
       messages,
-      max_tokens: 1024,
+      max_tokens: capOutputTokens(1024),
     };
     if (["plan", "concierge", "event_suggest"].includes(task)) {
       body.tools = conciergeOpenAiTools(context);
@@ -1921,6 +2011,18 @@ async function runOpenAIWithTools(
     // Retry on 429 (burst / RPM): concierge tool loop can trigger several calls per tap.
     if (!res.ok && res.status === 429) {
       const errBody = await res.text();
+      // Hard quota/billing exhaustion ("insufficient_quota") will not recover — don't waste retries.
+      if (/insufficient_quota|exceeded your current quota|billing/i.test(errBody)) {
+        console.error("[ai-gateway] OpenAI quota exhausted (no retry). Body: " + errBody.slice(0, 300));
+        return {
+          message: "Winkly AI has reached its usage quota for now. Please try again later.",
+          suggestions: [],
+          statusCode: 429 as const,
+          retry_after: 3600,
+          provider_status: 429,
+          quota_exhausted: true,
+        };
+      }
       console.error("[ai-gateway] OpenAI 429 (turn " + turn + "), retrying in 4s. Body: " + errBody.slice(0, 300));
       await new Promise((r) => setTimeout(r, 4000));
       res = await fetch(url, {
@@ -2389,7 +2491,7 @@ Return JSON only:
     systemInstruction: { parts: [{ text: SYSTEM }] },
     contents: [{ role: "user", parts: [{ text: JSON.stringify(payload) }] }],
     generationConfig: {
-      maxOutputTokens: 2048,
+      maxOutputTokens: capOutputTokens(2048),
       temperature: 0.45,
       responseMimeType: "application/json",
     },
@@ -2692,7 +2794,7 @@ Required JSON schema:
     systemInstruction: { parts: [{ text: SYSTEM }] },
     contents: [{ role: "user", parts: [{ text: JSON.stringify(payload) }] }],
     generationConfig: {
-      maxOutputTokens: 1400,
+      maxOutputTokens: capOutputTokens(1400),
       temperature: 0.5,
       responseMimeType: "application/json",
     },
@@ -2806,12 +2908,67 @@ serve(async (req) => {
     const safeContext = allowlistContext(context as Record<string, unknown>);
     const scrubbedSafeContext = scrubPiiInContext(safeContext);
     if (typeof scrubbedSafeContext.user_prompt === "string") {
-      scrubbedSafeContext.user_prompt = scrubbedSafeContext.user_prompt.slice(0, 2000);
+      scrubbedSafeContext.user_prompt = scrubbedSafeContext.user_prompt.slice(0, AI_LIMITS.maxUserPromptChars);
     }
+
+    const isAiTask = AI_TASKS.has(task);
+
+    // Server-side AI access enforcement (source of truth — client gate is UX only).
+    if (isAiTask) {
+      // 1) Global kill switch — disable all AI without redeploying client.
+      if (AI_GATEWAY_DISABLED) {
+        return new Response(
+          JSON.stringify({ error: "AI is temporarily disabled", code: "ai_disabled" }),
+          { status: 503, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } }
+        );
+      }
+      // 2) Per-tier feature flag — disable AI for specific tiers via env.
+      if (AI_DISABLED_TIERS.has(tier)) {
+        return new Response(
+          JSON.stringify({ error: "AI is not available on your plan", code: "ai_disabled_for_tier", tier }),
+          { status: 403, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } }
+        );
+      }
+      // 3) Tier access matrix — enforce minimum subscription tier per task.
+      if (!tierAllowsTask(tier, task)) {
+        const upgradeTo = suggestedUpgradeTier(task);
+        return new Response(
+          JSON.stringify({
+            error: upgradeTo === "premium"
+              ? "Upgrade to Premium for full concierge AI"
+              : "Upgrade to Super or Premium for AI",
+            code: "ai_tier_required",
+            tier,
+            required_tier: TASK_MIN_TIER[task],
+            upgrade_to: upgradeTo,
+          }),
+          { status: 403, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } }
+        );
+      }
+    }
+
+    // Cost guard: reject oversized context up front (prevents token-cost abuse).
+    if (isAiTask) {
+      let contextChars = 0;
+      try {
+        contextChars = JSON.stringify(scrubbedSafeContext).length;
+      } catch {
+        contextChars = 0;
+      }
+      if (contextChars > AI_LIMITS.maxContextChars) {
+        return new Response(
+          JSON.stringify({ error: "Request context too large", code: "context_too_large", max_chars: AI_LIMITS.maxContextChars }),
+          { status: 413, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } }
+        );
+      }
+    }
+
+    // Cost guard: clamp candidate count for rank/suggest tasks.
+    const candidatesGuarded = Array.isArray(candidates) ? candidates.slice(0, AI_LIMITS.maxCandidates) : [];
 
     // Redis-based rate limiter (prevents abuse + smooths bursts).
     // Free tier is blocked for AI tasks server-side even if client gating fails.
-    if (["chat_topics", "planner_theme_plans", "winkly_plan", "concierge", "plan", "event_suggest", "match_agent", "match_bridge"].includes(task)) {
+    if (isAiTask) {
       const rl = await rateLimitOrThrow({ userId: user.id, tier, task });
       if (!rl.ok) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded", retry_after: rl.retry_after }), {
@@ -3377,13 +3534,15 @@ serve(async (req) => {
     }
 
     function concierge429Response(
-      result: { message?: string; retry_after?: number; provider_status?: number }
+      result: { message?: string; retry_after?: number; provider_status?: number; quota_exhausted?: boolean }
     ) {
       return new Response(
         JSON.stringify({
           error: result.message,
           retry_after: result.retry_after ?? 60,
           provider_status: result.provider_status,
+          code: result.quota_exhausted ? "quota_exhausted" : "rate_limited",
+          quota_exhausted: result.quota_exhausted ?? false,
         }),
         { status: 429, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } }
       );
@@ -3418,14 +3577,14 @@ serve(async (req) => {
 
     // Stub for rank/suggest/summarize or when no AI key set (concierge/plan/event_suggest with no key fall through here)
     const result = {
-      ranked: candidates.slice(0, 5).map((c: Record<string, unknown>, i: number) => ({ ...c, rank: i + 1 })),
+      ranked: candidatesGuarded.slice(0, 5).map((c: Record<string, unknown>, i: number) => ({ ...c, rank: i + 1 })),
       suggestions: [] as unknown[],
       message: "" as string | undefined,
       no_options_reason: ["plan", "concierge", "event_suggest"].includes(task)
         ? "AI is not configured for this environment. Add OPENAI_API_KEY or GEMINI_API_KEY to enable plans."
         : undefined,
     };
-    if (openaiKey && ["rank", "suggest"].includes(task) && candidates.length > 0) {
+    if (openaiKey && ["rank", "suggest"].includes(task) && candidatesGuarded.length > 0) {
       // Optional: call OpenAI for ranking without tools (same allowlisted context)
       result.ranked = result.ranked;
     }

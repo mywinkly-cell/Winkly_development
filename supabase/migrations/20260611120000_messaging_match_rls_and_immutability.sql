@@ -17,6 +17,21 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- 0. Align conversation_type with the app + this migration's DM logic.
+--    Older deployments created the DM value as 'direct'; the app and the rest of
+--    this file use 'dm'. Rename if needed (no-op on fresh installs).
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+             WHERE t.typname = 'conversation_type' AND e.enumlabel = 'direct')
+     AND NOT EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+             WHERE t.typname = 'conversation_type' AND e.enumlabel = 'dm') THEN
+    ALTER TYPE public.conversation_type RENAME VALUE 'direct' TO 'dm';
+  END IF;
+END $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- 1. CONVERSATIONS — deterministic match/pair key ("keyed by match")
 -- ─────────────────────────────────────────────────────────────────────────────
 ALTER TABLE public.conversations

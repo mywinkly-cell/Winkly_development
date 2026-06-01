@@ -131,7 +131,7 @@ export function useMessages(conversationId: string | null, pageSize = 50) {
         let q = supabase
           .from("messages")
           .select(
-            "id,conversation_id,sender_id,content,message_type,attachments,reply_to_id,edited_at,deleted_at,delete_type,status,created_at"
+            "id,conversation_id,sender_id,content,message_type,attachments,reply_to_id,edited_at,deleted_at,delete_type,status,created_at,client_id"
           )
           .eq("conversation_id", conversationId)
           .order("created_at", { ascending: false })
@@ -147,7 +147,19 @@ export function useMessages(conversationId: string | null, pageSize = 50) {
 
         setMessages((prev) => {
           const next = [...list].reverse();
-          return append ? [...prev, ...next] : next;
+          if (append) return [...prev, ...next];
+          // Full refresh: keep optimistic bubbles that are still pending/failed and
+          // not yet represented by a persisted row, so an in-flight send isn't lost.
+          const persistedClientIds = new Set(
+            next.map((m) => m.client_id).filter((c): c is string => !!c)
+          );
+          const stillOptimistic = prev.filter(
+            (m) => (m.pending || m.failed) && (!m.client_id || !persistedClientIds.has(m.client_id))
+          );
+          if (stillOptimistic.length === 0) return next;
+          const merged = [...next, ...stillOptimistic];
+          merged.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+          return merged;
         });
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : "Failed to load messages");
@@ -169,15 +181,83 @@ export function useMessages(conversationId: string | null, pageSize = 50) {
     if (oldest) load(true, oldest);
   }, [load]);
 
-  /** Merge one row from realtime or sendMessage — dedupes by id, keeps chronological order. */
+  /**
+   * Merge one row from realtime or sendMessage — dedupes by id, reconciles any
+   * matching optimistic bubble (by client_id), and keeps chronological order.
+   */
   const mergeIncomingMessage = useCallback((raw: Record<string, unknown> | Message) => {
     const normalized = normalizeMessageRow(raw);
     setMessages((prev) => {
-      if (prev.some((m) => m.id === normalized.id)) return prev;
-      const next = [...prev, normalized];
+      const incomingClientId = normalized.client_id ?? null;
+      // Already have the authoritative row.
+      if (prev.some((m) => m.id === normalized.id)) {
+        // Still drop a now-superseded optimistic bubble for the same client_id.
+        if (incomingClientId && prev.some((m) => (m.pending || m.failed) && m.client_id === incomingClientId)) {
+          return prev.filter((m) => !((m.pending || m.failed) && m.client_id === incomingClientId));
+        }
+        return prev;
+      }
+      // Replace the optimistic placeholder (if any) with the persisted row.
+      const withoutOptimistic = incomingClientId
+        ? prev.filter((m) => !((m.pending || m.failed) && m.client_id === incomingClientId))
+        : prev;
+      const next = [...withoutOptimistic, normalized];
       next.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       return next;
     });
+  }, []);
+
+  /** Insert a pending optimistic message immediately; returns its client_id. */
+  const addOptimisticMessage = useCallback(
+    (input: {
+      clientId: string;
+      senderId: string;
+      content: string;
+      attachments?: Message["attachments"];
+      messageType?: Message["message_type"];
+      replyToId?: string | null;
+    }) => {
+      if (!conversationId) return;
+      const optimistic: Message = {
+        id: input.clientId,
+        client_id: input.clientId,
+        conversation_id: conversationId,
+        sender_id: input.senderId,
+        content: input.content,
+        message_type: input.messageType ?? "text",
+        attachments: input.attachments ?? [],
+        reply_to_id: input.replyToId ?? null,
+        edited_at: null,
+        deleted_at: null,
+        delete_type: "none",
+        status: "sending",
+        created_at: new Date().toISOString(),
+        pending: true,
+        failed: false,
+      };
+      setMessages((prev) => {
+        const next = [...prev, optimistic];
+        next.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        return next;
+      });
+    },
+    [conversationId]
+  );
+
+  /** Mark an optimistic message as failed (keeps it visible for retry). */
+  const markOptimisticFailed = useCallback((clientId: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.client_id === clientId && (m.pending || m.failed)
+          ? { ...m, pending: false, failed: true, status: "failed" }
+          : m
+      )
+    );
+  }, []);
+
+  /** Remove an optimistic message (e.g. discarding a failed send). */
+  const removeOptimisticMessage = useCallback((clientId: string) => {
+    setMessages((prev) => prev.filter((m) => !(m.client_id === clientId && (m.pending || m.failed))));
   }, []);
 
   useEffect(() => {
@@ -191,7 +271,18 @@ export function useMessages(conversationId: string | null, pageSize = 50) {
     load(false);
   }, [conversationId]);
 
-  return { messages, loading, error, hasMore, refetch, loadMore, mergeIncomingMessage };
+  return {
+    messages,
+    loading,
+    error,
+    hasMore,
+    refetch,
+    loadMore,
+    mergeIncomingMessage,
+    addOptimisticMessage,
+    markOptimisticFailed,
+    removeOptimisticMessage,
+  };
 }
 
 /** Subscribe to new messages in a conversation */

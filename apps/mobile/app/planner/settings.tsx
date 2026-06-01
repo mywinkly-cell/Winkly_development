@@ -22,12 +22,14 @@ import * as Calendar from "expo-calendar";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { CALENDAR_SYNC_STORAGE_KEY, setCalendarSyncPreference } from "@/lib/integrations/calendarSync";
 
 const STORAGE_KEYS = {
   reminders: "winkly_planner_reminders",
   weeklyDigest: "winkly_planner_weekly_digest",
   defaultReminderWhen: "winkly_planner_default_reminder_when",
   defaultReminderChannel: "winkly_planner_default_reminder_channel",
+  calendarSync: CALENDAR_SYNC_STORAGE_KEY,
 };
 
 export type DefaultReminderWhen = "at_time" | "5m" | "10m" | "15m" | "30m" | "1h" | "1d";
@@ -57,6 +59,7 @@ export default function PlannerSettings() {
   const [defaultReminderWhen, setDefaultReminderWhen] = useState<DefaultReminderWhen>("15m");
   const [defaultReminderChannel, setDefaultReminderChannel] = useState<DefaultReminderChannel>("push");
   const [calendarStatus, setCalendarStatus] = useState<PermissionStatus>("undetermined");
+  const [calendarSync, setCalendarSync] = useState(false);
   const [locationStatus, setLocationStatus] = useState<PermissionStatus>("undetermined");
   const [loading, setLoading] = useState<"calendar" | "location" | null>(null);
 
@@ -80,14 +83,16 @@ export default function PlannerSettings() {
 
   const loadPreferences = useCallback(async () => {
     try {
-      const [r, w, when, ch] = await Promise.all([
+      const [r, w, when, ch, sync] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.reminders),
         AsyncStorage.getItem(STORAGE_KEYS.weeklyDigest),
         AsyncStorage.getItem(STORAGE_KEYS.defaultReminderWhen),
         AsyncStorage.getItem(STORAGE_KEYS.defaultReminderChannel),
+        AsyncStorage.getItem(STORAGE_KEYS.calendarSync),
       ]);
       setReminders(r === "true");
       setWeeklyDigest(w === "true");
+      setCalendarSync(sync === "true");
       if (when && ["at_time", "5m", "10m", "15m", "30m", "1h", "1d"].includes(when)) {
         setDefaultReminderWhen(when as DefaultReminderWhen);
       }
@@ -166,6 +171,66 @@ export default function PlannerSettings() {
         );
       }
     } catch (_e) {
+      Alert.alert("Error", "Could not request calendar access. Please try again.");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const persistCalendarSync = useCallback(async (value: boolean) => {
+    setCalendarSync(value);
+    await setCalendarSyncPreference(value);
+  }, []);
+
+  const handleCalendarSyncToggle = async (value: boolean) => {
+    Haptics.selectionAsync();
+
+    // Turning off is always allowed and immediate.
+    if (!value) {
+      await persistCalendarSync(false);
+      return;
+    }
+
+    // Turning on requires granted calendar permission — request it if needed.
+    if (calendarStatus === "granted") {
+      await persistCalendarSync(true);
+      return;
+    }
+
+    if (calendarStatus === "denied") {
+      Alert.alert(
+        "Calendar access needed",
+        "To sync planner items to your calendar, enable calendar access for Winkly in your device settings.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Open settings", onPress: () => Linking.openSettings() },
+        ]
+      );
+      return;
+    }
+
+    setLoading("calendar");
+    try {
+      const { status } = await Calendar.requestCalendarPermissionsAsync();
+      const next = status === "granted" ? "granted" : status === "denied" ? "denied" : "undetermined";
+      setCalendarStatus(next);
+      if (next === "granted") {
+        await persistCalendarSync(true);
+      } else {
+        await persistCalendarSync(false);
+        if (next === "denied") {
+          Alert.alert(
+            "Calendar access",
+            "Calendar sync stays off until you allow calendar access in your device settings.",
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Open settings", onPress: () => Linking.openSettings() },
+            ]
+          );
+        }
+      }
+    } catch (_e) {
+      await persistCalendarSync(false);
       Alert.alert("Error", "Could not request calendar access. Please try again.");
     } finally {
       setLoading(null);
@@ -356,6 +421,24 @@ export default function PlannerSettings() {
               <Ionicons name="chevron-forward" size={18} color={Colors.primaryViolet} />
             )}
           </TouchableOpacity>
+
+          <View style={styles.row}>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>Sync planner items to calendar</Text>
+              <Text style={styles.rowSub}>
+                {calendarStatus === "granted"
+                  ? "Add dates and events you plan to your device calendar automatically."
+                  : "Turn on to add planned dates and events to your device calendar. We'll ask for calendar access."}
+              </Text>
+            </View>
+            <Switch
+              value={calendarSync}
+              onValueChange={handleCalendarSyncToggle}
+              disabled={loading === "calendar"}
+              trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }}
+              ios_backgroundColor={Colors.gray300}
+            />
+          </View>
 
           <View style={styles.hr} />
 

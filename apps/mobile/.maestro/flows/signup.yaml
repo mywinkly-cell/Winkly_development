@@ -1,0 +1,40 @@
+# Flow: account creation (Personal account via email).
+appId: com.winkly.app
+env:
+  EMAIL: "qa@winkly.test"
+  PASSWORD: "Test1234!"
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    text: "Winkly"
+    optional: true
+
+# Navigate from splash/welcome to the signup screen. These taps are optional
+# so the flow still works if the user lands directly on an auth screen.
+- tapOn:
+    text: "Get started"
+    optional: true
+- tapOn:
+    text: "Sign up"
+    optional: true
+- tapOn:
+    text: "Create account"
+    optional: true
+
+# Signup screen
+- assertVisible: "Create your account"
+- tapOn: "Personal"
+- tapOn:
+    text: "name@example.com"
+- inputText: "${EMAIL}"
+- tapOn:
+    below: "Password"
+- inputText: "${PASSWORD}"
+- hideKeyboard
+- tapOn: "Create account"
+
+# Either a verification screen or the onboarding entry should appear.
+- assertVisible:
+    text: ".*([Vv]erify|[Cc]heck your email|What would you like|Set up).*"
+    optional: true

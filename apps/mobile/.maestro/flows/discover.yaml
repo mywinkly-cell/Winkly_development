@@ -1,0 +1,16 @@
+# Flow: first discover/main screen of a mode renders without hanging.
+# Run after mode-selection (which enters Events mode).
+appId: com.winkly.app
+---
+# We should be inside a mode now. Assert the app is interactive and not stuck on
+# a spinner or a crash screen. Adjust the expected text to your Events landing.
+- assertVisible:
+    text: ".*(Events|Discover|Explore|Nearby|For you).*"
+- assertNotVisible:
+    text: ".*(Something went wrong|render error|Unhandled).*"
+
+# Sanity: the bottom navigation is present and tappable.
+- assertVisible:
+    id: "bottom-bar"
+    optional: true
+- takeScreenshot: discover-first-screen

@@ -26,7 +26,8 @@ import { EventCard, type EventCardItem } from "@/components/ui/EventCard";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { EVENT_CATEGORIES, type EventCategoryId, type EventTimeRange } from "@/constants/eventCategories";
 import { addWinklyEventToPlanner } from "@/lib/access/events";
-import { addExternalEventToPlanner } from "@/lib/externalEvents";
+import { addExternalEventToPlanner, fetchNearbyExternalEvents, type ExternalEventsStatus } from "@/lib/externalEvents";
+import { getDeviceCoordsIfPermitted } from "@/lib/location/deviceLocation";
 import { supabase } from "@/lib/supabase";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 
@@ -48,38 +49,6 @@ function winklyRowToCard(row: Record<string, unknown>): EventCardItem {
     category: (row.category as string) ?? null,
     winklyEventId: row.id as string,
   };
-}
-
-// Mock external events (until Edge Function is wired) — one per category for demo
-function getMockExternalEvents(categoryId: EventCategoryId): EventCardItem[] {
-  const labels: Record<EventCategoryId, string> = {
-    music_dancing: "Live Jazz Night",
-    nightlife: "Rooftop Bar Night",
-    performing_arts: "Gallery Opening",
-    dating_networking: "Speed Networking",
-    hobbies: "Photography Walk",
-    business: "Startup Mixer",
-    food_drink: "Wine Tasting",
-  };
-  const d = new Date();
-  d.setDate(d.getDate() + 7);
-  d.setHours(19, 0, 0, 0);
-  return [
-    {
-      id: `ext-${categoryId}-1`,
-      title: labels[categoryId],
-      description: "From external platform",
-      imageUrl: null,
-      startAt: d.toISOString(),
-      endAt: null,
-      location: "Downtown",
-      venueName: "Venue TBA",
-      hostName: "Meetup",
-      externalUrl: "https://www.meetup.com/",
-      externalPlatform: "meetup",
-      category: categoryId,
-    },
-  ];
 }
 
 function getRangeBounds(range: EventTimeRange, date: Date): { from: string; to: string } {
@@ -119,11 +88,15 @@ export default function EventsHome() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const [winklyEvents, setWinklyEvents] = useState<EventCardItem[]>([]);
+  const [externalEvents, setExternalEvents] = useState<EventCardItem[]>([]);
+  const [externalStatus, setExternalStatus] = useState<ExternalEventsStatus | "loading">("loading");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const { from, to } = useMemo(() => getRangeBounds(timeRange, selectedDate), [timeRange, selectedDate]);
 
+  // Winkly-native events. Always best-effort; failures leave the list empty but never throw,
+  // so the screen still renders (no blank screen on a Supabase error).
   const fetchEvents = useCallback(async (reset?: boolean) => {
     if (reset) setLoading(true);
     try {
@@ -145,14 +118,39 @@ export default function EventsHome() {
     }
   }, [from, to, category]);
 
+  // External events (Meetup / Eventbrite) via Edge Function. Best-effort only:
+  // needs device location (no prompt) and degrades to Winkly-only if APIs are unavailable.
+  const fetchExternalEvents = useCallback(async () => {
+    setExternalStatus("loading");
+    const coords = await getDeviceCoordsIfPermitted();
+    if (!coords) {
+      // No location available — we can't query nearby external events. Fall back silently.
+      setExternalEvents([]);
+      setExternalStatus("unavailable");
+      return;
+    }
+    const { events, status } = await fetchNearbyExternalEvents({
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      radiusKm: 30,
+      category,
+      from,
+      to,
+    });
+    setExternalEvents(events);
+    setExternalStatus(status);
+  }, [from, to, category]);
+
   useEffect(() => {
     fetchEvents(true);
-  }, [fetchEvents]);
+    fetchExternalEvents();
+  }, [fetchEvents, fetchExternalEvents]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchEvents(true);
-  }, [fetchEvents]);
+    fetchExternalEvents();
+  }, [fetchEvents, fetchExternalEvents]);
 
   const eventsByCategory = useMemo(() => {
     const byCat: Record<string, EventCardItem[]> = {};
@@ -167,6 +165,12 @@ export default function EventsHome() {
     const q = searchQuery.trim().toLowerCase();
     return winklyEvents.filter((e) => e.title.toLowerCase().includes(q) || (e.location ?? "").toLowerCase().includes(q) || (e.venueName ?? "").toLowerCase().includes(q));
   }, [winklyEvents, searchQuery]);
+
+  const filteredExternal = useMemo(() => {
+    if (!searchQuery.trim()) return externalEvents;
+    const q = searchQuery.trim().toLowerCase();
+    return externalEvents.filter((e) => e.title.toLowerCase().includes(q) || (e.location ?? "").toLowerCase().includes(q) || (e.venueName ?? "").toLowerCase().includes(q));
+  }, [externalEvents, searchQuery]);
 
   const handleAddToPlanner = useCallback(async (item: EventCardItem) => {
     try {
@@ -317,17 +321,37 @@ export default function EventsHome() {
               </ScrollView>
             </View>
 
-            {/* Category strips (Winkly + mock external) */}
+            {/* Nearby on Meetup & Eventbrite — degrades gracefully if external APIs are unavailable */}
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 12 }}>Nearby on Meetup &amp; Eventbrite</Text>
+              {externalStatus === "loading" ? (
+                <ActivityIndicator style={{ marginVertical: 12, alignSelf: "flex-start" }} />
+              ) : filteredExternal.length > 0 ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }}>
+                  {filteredExternal.map((item) => (
+                    <EventCard key={item.id} item={item} onAddToPlanner={handleAddToPlanner} onPress={(e) => e.winklyEventId && router.push(`/(modes)/events/event-details?event_id=${e.winklyEventId}`)} />
+                  ))}
+                </ScrollView>
+              ) : (
+                <View style={{ padding: 16, backgroundColor: Colors.gray100, borderRadius: Layout.radii.card }}>
+                  <Text style={{ ...Typography.caption, color: Colors.gray600 }}>
+                    {externalStatus === "unavailable"
+                      ? "We couldn't reach Meetup or Eventbrite right now. Showing Winkly events — pull to refresh to try again."
+                      : "No nearby events from Meetup or Eventbrite for this period. Browse Winkly events above."}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Winkly category strips */}
             {EVENT_CATEGORIES.map((cat) => {
               const winklyInCat = eventsByCategory[cat.id] ?? [];
-              const externalMock = getMockExternalEvents(cat.id);
-              const combined = [...winklyInCat, ...externalMock];
-              if (combined.length === 0) return null;
+              if (winklyInCat.length === 0) return null;
               return (
                 <View key={cat.id} style={{ marginBottom: 24 }}>
                   <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 12 }}>{cat.label}</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }}>
-                    {combined.map((item) => (
+                    {winklyInCat.map((item) => (
                       <EventCard key={item.id} item={item} onAddToPlanner={handleAddToPlanner} onPress={(e) => e.winklyEventId && router.push(`/(modes)/events/event-details?event_id=${e.winklyEventId}`)} />
                     ))}
                   </ScrollView>

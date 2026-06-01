@@ -7,4 +7,6 @@ export { Header } from "./layout/Header";
 export { ModeSwitch } from "./layout/ModeSwitch";
 export { ProgressRing } from "./ui/ProgressRing";
 export { WinklyAISpark, SparklesIcon } from "./ui/WinklyAISpark";
+export { ErrorState } from "./ui/ErrorState";
+export { OfflineBanner } from "./OfflineBanner";
 export { RouteGuard } from "./RouteGuard";

@@ -51,9 +51,9 @@ You choose what to add; we store what you provide to show your profile to other 
 
 ### 2.5 Device and permissions
 
-- **Location** — If you grant permission, we use it for features such as city/discovery and event locations. You can revoke permission in your device settings.
+- **Location** — If you grant permission, we use it for features such as city/discovery and event locations. Your location is **approximated before it is stored** (your precise GPS position is never saved), and you can choose **Approximate** or **Precise** precision in Privacy & Safety → Location precision. Other users only ever see a rounded distance, never your coordinates. You can revoke permission in your device settings.
 - **Photos / camera** — Used only when you choose to add or change profile or event photos.
-- **Contacts** — We do not currently store your contact list. If we add “connect contacts” in the future, we will use only hashed identifiers for matching and will ask for your consent first.
+- **Contacts** — Only if you choose to use “find contacts on Winkly” and grant permission. Your contacts are **hashed on your device** (SHA-256 of email/phone) before anything is sent; we use only those hashed identifiers to find existing Winkly users and we do **not** store your contact list.
 
 We do **not** sell your personal data.
 

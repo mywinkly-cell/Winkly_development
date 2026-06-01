@@ -15,14 +15,20 @@ import {
   Poppins_700Bold,
 } from "@expo-google-fonts/poppins";
 import * as SplashScreen from "expo-splash-screen";
+import * as Sentry from "@sentry/react-native";
 import { PostHogProvider } from "posthog-react-native";
-import { AuthProvider, ModeContextProvider, ThemeProvider } from "@/providers";
+import { initMonitoring } from "@/lib/monitoring/sentry";
+import { AuthProvider, ModeContextProvider, NetworkProvider, ThemeProvider } from "@/providers";
 import { RouteGuard } from "@/components/RouteGuard";
+import { NotificationDeepLinkHandler } from "@/components/NotificationDeepLinkHandler";
 import { ScreenTopSpacer } from "@/components/ScreenTopSpacer";
 import { PostHogIdentitySync, PostHogScreenTracker } from "@/components/PostHogAnalytics";
 import { Colors } from "@/constants/tokens";
 import { POSTHOG_API_KEY, POSTHOG_HOST } from "@/constants/config";
 import { initI18n } from "@/lib/i18n";
+
+// Initialize crash reporting as early as possible (no-op without a DSN).
+initMonitoring();
 
 SplashScreen.preventAutoHideAsync();
 
@@ -52,7 +58,7 @@ function stackAnimation(): "default" | "slide_from_right" | "fade" {
   return "fade";
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const segments = useSegments();
   const isSplash = (segments as string[]).includes("splash") || segments.some((s) => String(s).endsWith("splash"));
 
@@ -101,38 +107,41 @@ export default function RootLayout() {
   };
 
   const content = (
-    <AuthProvider>
-      <ModeContextProvider>
-        <ThemeProvider>
-          {POSTHOG_API_KEY ? <PostHogIdentitySync /> : null}
-          <RouteGuard>
-            {POSTHOG_API_KEY ? <PostHogScreenTracker /> : null}
-            <StatusBar style="dark" backgroundColor={Colors.backgroundMuted} />
-            {isSplash ? null : <ScreenTopSpacer />}
-            <Stack
-              screenOptions={() => ({
-                headerShown: false,
-                headerShadowVisible: false,
-                headerTitle: "",
-                contentStyle: {
-                  backgroundColor: isSplash ? Colors.primaryViolet : Colors.backgroundMuted,
-                },
-                animation: stackAnimation(),
-                gestureEnabled: true,
-              })}
-            >
-              <Stack.Screen
-                name="concierge"
-                options={{
-                  // In-flow back is handled inside `ConciergePlanningFlow`; native swipe would exit the whole screen.
-                  gestureEnabled: false,
-                }}
-              />
-            </Stack>
-          </RouteGuard>
-        </ThemeProvider>
-      </ModeContextProvider>
-    </AuthProvider>
+    <NetworkProvider>
+      <AuthProvider>
+        <ModeContextProvider>
+          <ThemeProvider>
+            {POSTHOG_API_KEY ? <PostHogIdentitySync /> : null}
+            <RouteGuard>
+              {POSTHOG_API_KEY ? <PostHogScreenTracker /> : null}
+              <NotificationDeepLinkHandler />
+              <StatusBar style="dark" backgroundColor={Colors.backgroundMuted} />
+              {isSplash ? null : <ScreenTopSpacer />}
+              <Stack
+                screenOptions={() => ({
+                  headerShown: false,
+                  headerShadowVisible: false,
+                  headerTitle: "",
+                  contentStyle: {
+                    backgroundColor: isSplash ? Colors.primaryViolet : Colors.backgroundMuted,
+                  },
+                  animation: stackAnimation(),
+                  gestureEnabled: true,
+                })}
+              >
+                <Stack.Screen
+                  name="concierge"
+                  options={{
+                    // In-flow back is handled inside `ConciergePlanningFlow`; native swipe would exit the whole screen.
+                    gestureEnabled: false,
+                  }}
+                />
+              </Stack>
+            </RouteGuard>
+          </ThemeProvider>
+        </ModeContextProvider>
+      </AuthProvider>
+    </NetworkProvider>
   );
 
   return (
@@ -151,3 +160,7 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+// Sentry.wrap enables touch/navigation breadcrumbs + error boundary when a DSN
+// is configured; it is a transparent passthrough otherwise.
+export default Sentry.wrap(RootLayout);

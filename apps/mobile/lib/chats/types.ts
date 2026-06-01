@@ -82,6 +82,12 @@ export interface Message {
   delete_type: "none" | "for_me" | "for_everyone";
   status: string;
   created_at: string;
+  /** Client-generated id used to reconcile optimistic bubbles with the persisted row. */
+  client_id?: string | null;
+  /** Optimistic-UI only: true while the message is awaiting the server INSERT. */
+  pending?: boolean;
+  /** Optimistic-UI only: true when the send failed and the user can retry. */
+  failed?: boolean;
 }
 
 export interface MessageAttachment {

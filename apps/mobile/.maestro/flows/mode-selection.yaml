@@ -1,0 +1,13 @@
+# Flow: mode selection gateway (2x2 grid). Events is always available, so we use
+# it as the deterministic entry to verify the gateway routes into a mode.
+appId: com.winkly.app
+---
+- assertVisible: "What would you like to experience today?"
+- assertVisible: "Romance"
+- assertVisible: "Friends"
+- assertVisible: "Business"
+- assertVisible: "Events"
+
+# Events requires no completed sub-profile, so it always routes through.
+- tapOn: "Events"
+- waitForAnimationToEnd

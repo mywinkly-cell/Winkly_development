@@ -1,0 +1,11 @@
+# Maestro global config for Winkly E2E flows.
+# Docs: https://maestro.mobile.dev
+#
+# Run a single flow:   maestro test .maestro/flows/signup.yaml
+# Run the whole suite: maestro test .maestro/
+#
+# Selectors below favor visible text because screens don't yet expose testIDs.
+# As you add `testID=` props, prefer `id:` selectors here for stability.
+flows:
+  - "flows/*.yaml"
+  - "critical-path.yaml"

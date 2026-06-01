@@ -78,7 +78,9 @@ RETURNS TABLE (
 )
 LANGUAGE sql
 SECURITY DEFINER
-SET search_path = public, auth
+-- `extensions` is required so digest()/pgcrypto resolves on hosted Supabase
+-- (pgcrypto lives in the `extensions` schema, not `public`).
+SET search_path = public, auth, extensions
 AS $$
   WITH candidates AS (
     SELECT

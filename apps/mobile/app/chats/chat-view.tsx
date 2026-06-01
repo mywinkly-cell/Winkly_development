@@ -52,7 +52,7 @@ import {
   useMessageReactions,
   useOwnMessageReceipts,
 } from "@/lib/chats/hooks";
-import type { Message, MessageAttachment, OwnMessageStatus, UserMini } from "@/lib/chats/types";
+import type { Message, MessageAttachment, MessageType, OwnMessageStatus, UserMini } from "@/lib/chats/types";
 import { pickAndUploadChatImages as pickImages, uploadChatVoiceFromUri } from "@/lib/uploadMedia";
 import { VoiceMessageBubble } from "@/components/chats/VoiceMessageBubble";
 import { GifUrlSheet } from "@/components/chats/GifUrlSheet";
@@ -116,6 +116,22 @@ function formatName(u?: UserMini | null) {
 
 const QUICK_REACTIONS = ["❤️", "👍", "😊", "😂", "😮", "🔥"];
 
+/** Locally generated id used to reconcile an optimistic bubble with the persisted row. */
+function newClientId(): string {
+  return `temp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** Best-effort message type for an optimistic bubble, mirroring the server's inference. */
+function inferOptimisticType(attachments: MessageAttachment[]): MessageType {
+  const first = attachments[0];
+  if (!first) return "text";
+  if (first.type === "gif") return "gif";
+  if (first.type === "image") return "image";
+  if (first.type === "video") return "video";
+  if (first.type === "audio") return "audio";
+  return "file";
+}
+
 const MAX_VOICE_SECONDS = 180;
 
 const REPORT_REASONS: { key: string; label: string }[] = [
@@ -173,11 +189,26 @@ export default function ChatView({ conversationId }: Props) {
   const chatVoiceRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const chatVoiceRecorderState = useAudioRecorderState(chatVoiceRecorder);
 
-  const { messages, loading, error: loadErr, refetch, loadMore, mergeIncomingMessage } = useMessages(convId);
+  const {
+    messages,
+    loading,
+    error: loadErr,
+    refetch,
+    loadMore,
+    mergeIncomingMessage,
+    addOptimisticMessage,
+    markOptimisticFailed,
+    removeOptimisticMessage,
+  } = useMessages(convId);
 
   const [showGifSheet, setShowGifSheet] = useState(false);
   const { typingUserIds, setTyping } = useTypingIndicator(convId, meId);
-  const messageIds = useMemo(() => messages.map((m) => m.id), [messages]);
+  // Only persisted messages have real UUID ids; optimistic bubbles (pending/failed)
+  // carry temp client ids and must be excluded from uuid-keyed lookups.
+  const messageIds = useMemo(
+    () => messages.filter((m) => !m.pending && !m.failed).map((m) => m.id),
+    [messages]
+  );
   const reactionsByMessage = useMessageReactions(messageIds);
 
   const otherUser = useMemo(() => {
@@ -193,7 +224,7 @@ export default function ChatView({ conversationId }: Props) {
 
   // Delivered/seen status of the current user's own messages (live).
   const myMessageIds = useMemo(
-    () => (meId ? messages.filter((m) => m.sender_id === meId).map((m) => m.id) : []),
+    () => (meId ? messages.filter((m) => m.sender_id === meId && !m.pending && !m.failed).map((m) => m.id) : []),
     [messages, meId]
   );
   const { deliveredIds: peerDeliveredIds, seenIds: peerSeenIds } = useOwnMessageReceipts(
@@ -720,23 +751,77 @@ export default function ChatView({ conversationId }: Props) {
       if (!meId) return;
 
       const hadMineBeforeSend = messages.some((m) => m.sender_id === meId);
-      setSending(true);
+      const effectiveReplyToId = replyToId ?? replyTo?.id ?? null;
+      const messageType: MessageType = attachments.length ? inferOptimisticType(attachments) : "text";
+      const clientId = newClientId();
+
+      // Optimistic: show the bubble immediately and clear the composer.
+      addOptimisticMessage({
+        clientId,
+        senderId: meId,
+        content,
+        attachments,
+        messageType,
+        replyToId: effectiveReplyToId,
+      });
+      setDraft("");
+      setReplyTo(null);
       setError(null);
+
       try {
         const inserted = await sendMessage(convId, meId, content, attachments, {
-          replyToId: replyToId ?? replyTo?.id ?? null,
+          replyToId: effectiveReplyToId,
+          clientId,
         });
         mergeIncomingMessage(inserted);
         void recordDmFirstOutreachIfNeeded(hadMineBeforeSend);
-        setDraft("");
-        setReplyTo(null);
       } catch (e: unknown) {
+        markOptimisticFailed(clientId);
         setError(e instanceof Error ? e.message : "Failed to send");
-      } finally {
-        setSending(false);
       }
     },
-    [convId, meId, draft, replyTo, sending, mergeIncomingMessage, messages, recordDmFirstOutreachIfNeeded]
+    [
+      convId,
+      meId,
+      draft,
+      replyTo,
+      sending,
+      mergeIncomingMessage,
+      addOptimisticMessage,
+      markOptimisticFailed,
+      messages,
+      recordDmFirstOutreachIfNeeded,
+    ]
+  );
+
+  /** Retry a previously failed optimistic message. */
+  const handleRetrySend = useCallback(
+    async (failed: Message) => {
+      if (!meId) return;
+      const clientId = failed.client_id ?? newClientId();
+      // Flip the existing bubble back to pending in place.
+      removeOptimisticMessage(clientId);
+      addOptimisticMessage({
+        clientId,
+        senderId: meId,
+        content: failed.content,
+        attachments: failed.attachments,
+        messageType: failed.message_type,
+        replyToId: failed.reply_to_id,
+      });
+      try {
+        const inserted = await sendMessage(convId, meId, failed.content, failed.attachments, {
+          messageType: failed.message_type,
+          replyToId: failed.reply_to_id,
+          clientId,
+        });
+        mergeIncomingMessage(inserted);
+      } catch (e: unknown) {
+        markOptimisticFailed(clientId);
+        setError(e instanceof Error ? e.message : "Failed to send");
+      }
+    },
+    [convId, meId, addOptimisticMessage, removeOptimisticMessage, markOptimisticFailed, mergeIncomingMessage]
   );
 
   const onSendText = useCallback(() => {
@@ -993,6 +1078,7 @@ export default function ChatView({ conversationId }: Props) {
             alignSelf: isCenteredCta ? "center" : mine ? "flex-end" : "flex-start",
             maxWidth: isCenteredCta ? "96%" : "84%",
             marginBottom: 8,
+            opacity: item.pending ? 0.6 : 1,
           }}
         >
           {deletedForMe ? (
@@ -1406,7 +1492,15 @@ export default function ChatView({ conversationId }: Props) {
                 <Text style={{ fontSize: 11, color: Colors.gray500 }}>
                   {new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </Text>
-                {mine && item.message_type !== "cta" && item.message_type !== "system" && (
+                {mine && item.pending ? (
+                  <Text style={{ fontSize: 11, fontWeight: "600", color: Colors.gray500 }}>Sending…</Text>
+                ) : mine && item.failed ? (
+                  <Pressable onPress={() => handleRetrySend(item)} hitSlop={6}>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: Colors.errorRed }}>
+                      Not delivered · Tap to retry
+                    </Text>
+                  </Pressable>
+                ) : mine && item.message_type !== "cta" && item.message_type !== "system" ? (
                   <Text
                     style={{
                       fontSize: 11,
@@ -1416,7 +1510,7 @@ export default function ChatView({ conversationId }: Props) {
                   >
                     {ownStatus === "seen" ? "Seen" : ownStatus === "delivered" ? "Delivered" : "Sent"}
                   </Text>
-                )}
+                ) : null}
                 {reactions.length > 0 && (
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
                     {Array.from(
@@ -1489,6 +1583,7 @@ export default function ChatView({ conversationId }: Props) {
       conversationMode,
       matchAgentApprovalStage,
       onMatchAgentApprove,
+      handleRetrySend,
     ]
   );
 
