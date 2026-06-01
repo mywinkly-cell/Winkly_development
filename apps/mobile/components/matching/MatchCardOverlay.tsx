@@ -6,6 +6,7 @@
 
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { Colors, Typography, FontFamily } from "@/constants/tokens";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
@@ -29,6 +30,8 @@ export type MatchCardOverlayProps = {
   mode: MatchCardMode;
   /** Shown only for paid subscribers: compatibility score + short tags */
   aiHint?: { score: number; tags: string[] } | null;
+  /** Rounded, privacy-safe distance label (e.g. "~3 km away"). */
+  distanceLabel?: string | null;
   /** Border radius of the card (default 24) */
   cardRadius?: number;
 };
@@ -44,6 +47,7 @@ export function MatchCardOverlay({
   chipItems,
   mode,
   aiHint,
+  distanceLabel,
   cardRadius = CARD_RADIUS,
 }: MatchCardOverlayProps) {
   const { i18n } = useTranslation();
@@ -65,6 +69,12 @@ export function MatchCardOverlay({
     >
       <Text style={styles.nameAge}>{nameAgeLine}</Text>
       <Text style={styles.cityOverlay}>{cityLine || "—"}</Text>
+      {distanceLabel ? (
+        <View style={styles.distanceRow}>
+          <Ionicons name="location-outline" size={13} color="rgba(255,255,255,0.92)" />
+          <Text style={styles.distanceText}>{distanceLabel}</Text>
+        </View>
+      ) : null}
       {occupation ? (
         <Text style={styles.occupationOverlay}>{occupation}</Text>
       ) : null}
@@ -117,6 +127,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "rgba(255,255,255,0.92)",
     marginBottom: 2,
+  },
+  distanceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 4,
+  },
+  distanceText: {
+    ...Typography.caption,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.92)",
   },
   occupationOverlay: {
     ...Typography.caption,

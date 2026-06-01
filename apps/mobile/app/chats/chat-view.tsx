@@ -36,9 +36,8 @@ import {
   sendMessage,
   addReaction,
   removeReaction,
-  deleteMessageForSelf,
-  deleteMessageForEveryone,
   markMessagesAsRead,
+  markMessagesDelivered,
   markConversationRead,
   setConversationMuted,
   blockUser,
@@ -51,13 +50,16 @@ import {
   useMessageSubscription,
   useTypingIndicator,
   useMessageReactions,
+  useOwnMessageReceipts,
 } from "@/lib/chats/hooks";
-import type { Message, MessageAttachment, UserMini } from "@/lib/chats/types";
+import type { Message, MessageAttachment, OwnMessageStatus, UserMini } from "@/lib/chats/types";
 import { pickAndUploadChatImages as pickImages, uploadChatVoiceFromUri } from "@/lib/uploadMedia";
 import { VoiceMessageBubble } from "@/components/chats/VoiceMessageBubble";
 import { GifUrlSheet } from "@/components/chats/GifUrlSheet";
 import { InviteToPlanModal } from "@/components/chats/InviteToPlanModal";
 import type { InviteFormValues } from "@/components/chats/InviteToPlanModal";
+import { DateIdeasSuggestions } from "@/components/chats/DateIdeasSuggestions";
+import { getDateIdeasForChat, type DateIdea } from "@/lib/dates/dateIdeas";
 import { buildIcebreakerPayload, pickRandomIcebreaker } from "@/lib/communications/icebreakers";
 import { openVideoCallRoom, startVideoCallForConversation } from "@/lib/communications/videoCall";
 import {
@@ -141,6 +143,9 @@ export default function ChatView({ conversationId }: Props) {
   const [muted, setMuted] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteInitialActivity, setInviteInitialActivity] = useState<string | undefined>(undefined);
+  const [dateIdeas, setDateIdeas] = useState<DateIdea[]>([]);
+  const [dateIdeasDismissed, setDateIdeasDismissed] = useState(false);
   const [invitationStatusMap, setInvitationStatusMap] = useState<Record<string, string>>({});
   const [pendingPlanStatusMap, setPendingPlanStatusMap] = useState<Record<string, string>>({});
   const [chatExperienceSuggestion, setChatExperienceSuggestion] = useState<ChatExperienceSuggestion | null>(null);
@@ -186,6 +191,17 @@ export default function ChatView({ conversationId }: Props) {
   const conversationMode = (conversation?.mode ?? "romance") as Mode;
   const isDm = conversation?.type === "dm";
 
+  // Delivered/seen status of the current user's own messages (live).
+  const myMessageIds = useMemo(
+    () => (meId ? messages.filter((m) => m.sender_id === meId).map((m) => m.id) : []),
+    [messages, meId]
+  );
+  const { deliveredIds: peerDeliveredIds, seenIds: peerSeenIds } = useOwnMessageReceipts(
+    isDm ? convId : null,
+    isDm ? otherUser?.id ?? null : null,
+    myMessageIds
+  );
+
   const backToModeChats = useCallback(() => {
     if (typeof router.canGoBack === "function" && router.canGoBack()) {
       router.back();
@@ -224,6 +240,49 @@ export default function ChatView({ conversationId }: Props) {
     !conversation.related_event_id &&
     (conversationMode === "romance" || conversationMode === "friends") &&
     hasAnyAIAccess(modeContext.subscription_tier ?? "free");
+
+  // Winkly differentiator: curated date ideas at the top of a new match chat.
+  const isRomanceDm =
+    isDm && !!otherUser && !!conversation && !conversation.related_event_id && conversationMode === "romance";
+
+  const hasProposedDate = useMemo(
+    () =>
+      messages.some((m) => {
+        if (m.message_type !== "cta") return false;
+        try {
+          return JSON.parse(m.content)?.type === "planner_invite";
+        } catch {
+          return false;
+        }
+      }),
+    [messages]
+  );
+
+  const showDateIdeas =
+    isRomanceDm && !dateIdeasDismissed && !hasProposedDate && messages.length <= 12 && dateIdeas.length > 0;
+
+  useEffect(() => {
+    if (!isRomanceDm || !meId || !otherUser) {
+      setDateIdeas([]);
+      return;
+    }
+    let cancelled = false;
+    getDateIdeasForChat(meId, otherUser.id)
+      .then((ideas) => {
+        if (!cancelled) setDateIdeas(ideas);
+      })
+      .catch(() => {
+        if (!cancelled) setDateIdeas([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isRomanceDm, meId, otherUser?.id]);
+
+  const onPickDateIdea = useCallback((idea: DateIdea) => {
+    setInviteInitialActivity(idea.activity);
+    setShowInviteModal(true);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -621,15 +680,28 @@ export default function ChatView({ conversationId }: Props) {
   const onRealtimeMessage = useCallback(
     (msg: Message) => {
       mergeIncomingMessage(msg);
-      if (readReceiptsOn && meId && msg.sender_id !== meId) {
-        markMessagesAsRead([msg.id]);
-        markConversationRead(convId, msg.created_at);
+      if (meId && msg.sender_id !== meId) {
+        // Delivered is a transport-level signal — recorded regardless of the
+        // read-receipts preference. "Seen" respects the preference below.
+        markMessagesDelivered([msg.id]);
+        if (readReceiptsOn) {
+          markMessagesAsRead([msg.id]);
+          markConversationRead(convId, msg.created_at);
+        }
       }
     },
     [mergeIncomingMessage, readReceiptsOn, meId, convId]
   );
 
   useMessageSubscription(convId, onRealtimeMessage);
+
+  // Mark peer messages delivered as soon as they reach this client (always).
+  useEffect(() => {
+    if (!meId) return;
+    const peerIds = messages.filter((m) => m.sender_id !== meId).map((m) => m.id);
+    if (peerIds.length === 0) return;
+    markMessagesDelivered(peerIds.slice(-50));
+  }, [convId, meId, messages]);
 
   useEffect(() => {
     if (!readReceiptsOn || !meId) return;
@@ -752,63 +824,6 @@ export default function ChatView({ conversationId }: Props) {
       } catch {
         // ignore
       }
-    },
-    [refetch]
-  );
-
-  const DELETE_FOR_EVERYONE_WINDOW_MIN = 15;
-
-  const onDeleteForSelf = useCallback(
-    async (messageId: string) => {
-      Alert.alert("Delete message", "Remove this message for you only?", [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete for me",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteMessageForSelf(messageId);
-              refetch();
-            } catch {
-              setError("Could not delete");
-            }
-          },
-        },
-      ]);
-    },
-    [refetch]
-  );
-
-  const onDeleteForEveryone = useCallback(
-    async (messageId: string, createdAt: string) => {
-      const ageMs = Date.now() - new Date(createdAt).getTime();
-      if (ageMs > DELETE_FOR_EVERYONE_WINDOW_MIN * 60 * 1000) {
-        Alert.alert(
-          "Delete for everyone",
-          `You can only delete for everyone within ${DELETE_FOR_EVERYONE_WINDOW_MIN} minutes. Use "Delete for me" instead.`
-        );
-        return;
-      }
-      Alert.alert(
-        "Delete for everyone?",
-        "This will remove the message for both of you. This cannot be undone.",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Delete",
-            style: "destructive",
-            onPress: async () => {
-              try {
-                const ok = await deleteMessageForEveryone(messageId);
-                if (ok) refetch();
-                else setError("Could not delete");
-              } catch {
-                setError("Could not delete");
-              }
-            },
-          },
-        ]
-      );
     },
     [refetch]
   );
@@ -966,6 +981,11 @@ export default function ChatView({ conversationId }: Props) {
       const deletedForMe = item.delete_type === "for_me" && mine;
       const deletedForEveryone = item.delete_type === "for_everyone";
       const reactions = reactionsByMessage[item.id] ?? [];
+      const ownStatus: OwnMessageStatus = peerSeenIds.has(item.id)
+        ? "seen"
+        : peerDeliveredIds.has(item.id)
+          ? "delivered"
+          : "sent";
 
       return (
         <View
@@ -1386,6 +1406,17 @@ export default function ChatView({ conversationId }: Props) {
                 <Text style={{ fontSize: 11, color: Colors.gray500 }}>
                   {new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </Text>
+                {mine && item.message_type !== "cta" && item.message_type !== "system" && (
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "600",
+                      color: ownStatus === "seen" ? accentColor : Colors.gray500,
+                    }}
+                  >
+                    {ownStatus === "seen" ? "Seen" : ownStatus === "delivered" ? "Delivered" : "Sent"}
+                  </Text>
+                )}
                 {reactions.length > 0 && (
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
                     {Array.from(
@@ -1423,27 +1454,6 @@ export default function ChatView({ conversationId }: Props) {
                 >
                   <Ionicons name="arrow-undo-outline" size={16} color={Colors.gray600} />
                 </Pressable>
-                {mine && (
-                  <Pressable
-                    onPress={() => {
-                      Alert.alert("Delete message", "Choose an option:", [
-                        { text: "Cancel", style: "cancel" },
-                        {
-                          text: "Delete for me",
-                          onPress: () => onDeleteForSelf(item.id),
-                        },
-                        {
-                          text: "Delete for everyone",
-                          onPress: () => onDeleteForEveryone(item.id, item.created_at),
-                        },
-                      ]);
-                    }}
-                    style={{ padding: 4 }}
-                    hitSlop={8}
-                  >
-                    <Ionicons name="trash-outline" size={16} color={Colors.gray600} />
-                  </Pressable>
-                )}
                 {!mine && (
                   <Pressable onPress={() => handleReportMessage(item.id)} style={{ padding: 4 }} hitSlop={8}>
                     <Ionicons name="flag-outline" size={16} color={Colors.gray600} />
@@ -1471,9 +1481,9 @@ export default function ChatView({ conversationId }: Props) {
       refetch,
       onAddReaction,
       onRemoveReaction,
-      onDeleteForSelf,
-      onDeleteForEveryone,
       handleReportMessage,
+      peerDeliveredIds,
+      peerSeenIds,
       onConfirmMatchBridge,
       fmtLocationLine,
       conversationMode,
@@ -1654,7 +1664,11 @@ export default function ChatView({ conversationId }: Props) {
       <InviteToPlanModal
         visible={showInviteModal}
         mode={conversationMode}
-        onClose={() => setShowInviteModal(false)}
+        initialActivity={inviteInitialActivity}
+        onClose={() => {
+          setShowInviteModal(false);
+          setInviteInitialActivity(undefined);
+        }}
         partnerUserId={otherUser?.id}
         partnerDisplayName={otherUser ? formatName(otherUser) : undefined}
         onSubmit={async (values: InviteFormValues) => {
@@ -1879,6 +1893,15 @@ export default function ChatView({ conversationId }: Props) {
             onEndReachedThreshold={0.5}
           />
 
+          {showDateIdeas && (
+            <DateIdeasSuggestions
+              ideas={dateIdeas}
+              accent={accentColor}
+              onPick={onPickDateIdea}
+              onDismiss={() => setDateIdeasDismissed(true)}
+            />
+          )}
+
           {showChatExperienceCard && (loadingExperienceSuggestion ? (
             <View style={{ paddingHorizontal: 14, paddingVertical: 12, alignItems: "center" }}>
               <ActivityIndicator size="small" color={accentColor} />
@@ -1950,7 +1973,10 @@ export default function ChatView({ conversationId }: Props) {
 
             {isDm && otherUser && (
               <Pressable
-                onPress={() => setShowInviteModal(true)}
+                onPress={() => {
+                  setInviteInitialActivity(undefined);
+                  setShowInviteModal(true);
+                }}
                 style={{
                   width: 44,
                   height: 44,

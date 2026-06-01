@@ -3,6 +3,10 @@
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
+// Which environment this build/run targets: development | staging | production.
+// Set via .env (local) or eas.json build profile env (EAS). Defaults to development.
+const APP_ENV = process.env.APP_ENV || "development";
+
 /** Expo Push / EAS expects a real UUID project id — never use a placeholder string. */
 function isLikelyUuid(value) {
   const s = String(value ?? "").trim();
@@ -128,6 +132,7 @@ module.exports = {
 
     extra: {
       ...(easProjectId ? { eas: { projectId: easProjectId } } : {}),
+      appEnv: APP_ENV,
       supabaseUrl: SUPABASE_URL,
       supabaseAnonKey: SUPABASE_ANON_KEY
     }

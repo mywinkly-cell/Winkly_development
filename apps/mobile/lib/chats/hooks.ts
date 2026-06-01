@@ -4,6 +4,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "@/lib/supabase";
 import type { AppMode, Conversation, ConversationMember, Message, UserMini } from "./types";
 import { normalizeMessageRow } from "./normalizeMessage";
@@ -285,6 +286,103 @@ export function useTypingIndicator(conversationId: string | null, meId: string |
   }, [conversationId, meId, setTyping]);
 
   return { typingUserIds, setTyping };
+}
+
+/**
+ * Track delivered / seen status of the current user's OWN messages in a 1:1 DM.
+ * Combines an initial fetch with a live subscription to the receipt streams so
+ * outgoing bubbles update sent → delivered → seen in real time.
+ */
+export function useOwnMessageReceipts(
+  conversationId: string | null,
+  otherUserId: string | null,
+  myMessageIds: string[]
+) {
+  const [deliveredIds, setDeliveredIds] = useState<Set<string>>(new Set());
+  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+
+  const myIdsRef = useRef<Set<string>>(new Set());
+  myIdsRef.current = new Set(myMessageIds);
+
+  const idsKey = myMessageIds.join(",");
+
+  useEffect(() => {
+    if (!conversationId || !otherUserId || myMessageIds.length === 0) {
+      setDeliveredIds(new Set());
+      setSeenIds(new Set());
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const [delivered, seen] = await Promise.all([
+        supabase
+          .from("message_delivery_receipts")
+          .select("message_id")
+          .eq("user_id", otherUserId)
+          .in("message_id", myMessageIds),
+        supabase
+          .from("message_read_receipts")
+          .select("message_id")
+          .eq("user_id", otherUserId)
+          .in("message_id", myMessageIds),
+      ]);
+      if (cancelled) return;
+      setDeliveredIds(new Set((delivered.data ?? []).map((r: { message_id: string }) => r.message_id)));
+      setSeenIds(new Set((seen.data ?? []).map((r: { message_id: string }) => r.message_id)));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, otherUserId, idsKey]);
+
+  useEffect(() => {
+    if (!conversationId || !otherUserId) return;
+
+    const addIfMine = (
+      setter: Dispatch<SetStateAction<Set<string>>>,
+      messageId: string | undefined
+    ) => {
+      if (!messageId || !myIdsRef.current.has(messageId)) return;
+      setter((prev) => {
+        if (prev.has(messageId)) return prev;
+        const next = new Set(prev);
+        next.add(messageId);
+        return next;
+      });
+    };
+
+    const channel = supabase
+      .channel(`receipts:${conversationId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "message_delivery_receipts",
+          filter: `user_id=eq.${otherUserId}`,
+        },
+        (payload) => addIfMine(setDeliveredIds, (payload.new as { message_id?: string }).message_id)
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "message_read_receipts",
+          filter: `user_id=eq.${otherUserId}`,
+        },
+        (payload) => addIfMine(setSeenIds, (payload.new as { message_id?: string }).message_id)
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId, otherUserId]);
+
+  return { deliveredIds, seenIds };
 }
 
 /** Fetch reactions for a set of messages */

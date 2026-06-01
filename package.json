@@ -13,19 +13,22 @@
     "mobile:ios": "npm run -w apps/mobile ios",
     "mobile:web": "npm run -w apps/mobile web",
     "mobile:lint": "npm run -w apps/mobile lint",
+    "mobile:typecheck": "npm run -w apps/mobile typecheck",
     "mobile:test": "npm run -w apps/mobile test",
+    "env:dev": "node scripts/use-env.mjs development",
+    "env:staging": "node scripts/use-env.mjs staging",
+    "env:prod": "node scripts/use-env.mjs production",
+    "start:dev": "npm run env:dev && npm run mobile:start",
+    "start:staging": "npm run env:staging && npm run mobile:start",
+    "start:prod": "npm run env:prod && npm run mobile:start",
+    "ci": "npm run mobile:lint && npm run mobile:typecheck && npm run mobile:test",
     "supabase:deploy-auth-redirect": "supabase functions deploy auth-redirect"
   },
   "overrides": {
     "@expo/vector-icons": "15.1.1",
     "expo-file-system": "19.0.22",
     "expo-image-loader": "6.0.0",
-    "expo-image-manipulator": "14.0.8",
-    "@neilromblon/expo-image-manipulator-view": {
-      "expo-file-system": "19.0.22",
-      "expo-image-manipulator": "14.0.8",
-      "expo-image-loader": "6.0.0"
-    }
+    "expo-image-manipulator": "14.0.8"
   },
   "devDependencies": {
     "supabase": "^2.0.0"

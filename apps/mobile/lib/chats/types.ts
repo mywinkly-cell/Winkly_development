@@ -99,6 +99,21 @@ export interface MessageReaction {
   created_at: string;
 }
 
+export interface MessageReadReceipt {
+  message_id: string;
+  user_id: string;
+  read_at: string;
+}
+
+export interface MessageDeliveryReceipt {
+  message_id: string;
+  user_id: string;
+  delivered_at: string;
+}
+
+/** Outgoing delivery status shown under the current user's own messages. */
+export type OwnMessageStatus = "sent" | "delivered" | "seen";
+
 export interface UserMini {
   id: string;
   first_name: string | null;

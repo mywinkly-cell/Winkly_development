@@ -1,0 +1,16 @@
+# Dependency update PRs — enables Dependabot for this repo once merged.
+# Review changelogs before merging; run mobile lint/tests after upgrades.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      expo-and-react-native:
+        patterns:
+          - "expo*"
+          - "@expo/*"
+          - "react-native*"
+          - "@react-native-*"

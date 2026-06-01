@@ -1,0 +1,44 @@
+name: CI
+
+# Lint + typecheck + test on every PR and on pushes to main.
+# Keep this green before merging. Build/typecheck is the RN equivalent of "build".
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Lint, typecheck & test
+    runs-on: ubuntu-latest
+    # Placeholder public env so import-time checks (lib/supabase.ts) don't fail in CI.
+    # These are not secrets; real values come from EAS env / runtime config.
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run mobile:lint
+
+      - name: Typecheck
+        run: npm run mobile:typecheck
+
+      - name: Test
+        # GitHub Actions sets CI=true, so Jest runs in CI mode automatically.
+        run: npm run mobile:test

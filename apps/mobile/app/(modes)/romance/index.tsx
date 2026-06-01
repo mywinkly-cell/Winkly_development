@@ -21,6 +21,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { RomanceBottomNav } from "@/components/layout/RomanceBottomNav";
 import { MatchCardOverlay } from "@/components/matching/MatchCardOverlay";
+import { MatchCelebration } from "@/components/matching/MatchCelebration";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { useModeContext } from "@/providers/ModeContextProvider";
@@ -32,6 +33,7 @@ import { SuperLikeInviteModal } from "@/components/romance/SuperLikeInviteModal"
 import { blockUser, recordSwipe, reportUser } from "@/lib/matching/actions";
 import { buildRomanceSuperLikeIcebreaker } from "@/lib/matching/romanceIcebreaker";
 import { fetchRomanceSwipeDeckProfiles } from "@/lib/discover/romanceSwipeDeck";
+import { updateMyLocationOnAppOpen } from "@/lib/location/updateLocation";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const CARD_WIDTH = SCREEN_WIDTH * 0.9;
@@ -54,6 +56,15 @@ type Profile = {
   /** First 3 shown: interests + relationship goals combined */
   chipItems: string[];
   photoUrl: string;
+  /** Rounded, privacy-safe distance label from the server (e.g. "~3 km away"). */
+  distanceLabel?: string | null;
+};
+
+type MatchState = {
+  visible: boolean;
+  otherName: string;
+  otherPhotoUrl: string | null;
+  chatId: string | null;
 };
 
 export default function RomanceHome() {
@@ -67,6 +78,13 @@ export default function RomanceHome() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
   const [selfProfile, setSelfProfile] = useState<RomanceProfile | null>(null);
+  const [selfPhotoUrl, setSelfPhotoUrl] = useState<string | null>(null);
+  const [matchState, setMatchState] = useState<MatchState>({
+    visible: false,
+    otherName: "",
+    otherPhotoUrl: null,
+    chatId: null,
+  });
   // Intent (Super Like): daily limit — 1 free/day; 10/day with subscription (Premium)
   const [intentRemainingToday, setIntentRemainingToday] = useState(
     hasIntentSubscription ? INTENT_SUBSCRIBER_PER_DAY : INTENT_FREE_PER_DAY
@@ -93,6 +111,22 @@ export default function RomanceHome() {
         setProfiles([]);
         setSelfProfile(null);
         return;
+      }
+
+      // Self photo for the "It's a match!" celebration.
+      const { data: selfRow } = await supabase
+        .from("public_profile_view")
+        .select("main_photo_url, romance_photos, core_photos")
+        .eq("id", uid)
+        .maybeSingle();
+      if (selfRow) {
+        const r = selfRow as Record<string, unknown>;
+        const photo =
+          (r.romance_photos as (string | null)[] | null)?.find((p) => !!p) ??
+          (r.core_photos as (string | null)[] | null)?.find((p) => !!p) ??
+          (r.main_photo_url as string | null) ??
+          null;
+        setSelfPhotoUrl(photo ?? null);
       }
 
       let selfForDeck: RomanceProfile | null = null;
@@ -134,7 +168,22 @@ export default function RomanceHome() {
 
   useFocusEffect(
     useCallback(() => {
-      void loadDeck();
+      let active = true;
+      // Refresh coarse location on open (throttled, permission-gated), then load
+      // the deck so distance filtering reflects the latest position.
+      (async () => {
+        const res = await updateMyLocationOnAppOpen();
+        if (!active) return;
+        await loadDeck();
+        // If we just got a fresh fix, reload once more so distances populate.
+        if (res.ok) {
+          if (!active) return;
+          await loadDeck();
+        }
+      })();
+      return () => {
+        active = false;
+      };
     }, [loadDeck]),
   );
 
@@ -187,18 +236,28 @@ export default function RomanceHome() {
     }
   };
 
-  const applyLike = async (profileId: string) => {
+  const celebrateMatch = (profile: Profile | undefined, chatId: string | null) => {
+    if (!profile) return;
+    setMatchState({
+      visible: true,
+      otherName: profile.name,
+      otherPhotoUrl: profile.photoUrl ?? null,
+      chatId: chatId ?? null,
+    });
+  };
+
+  const applyLike = async (profileId: string, profile?: Profile) => {
     try {
       const result = await romanceLikeProfile(profileId);
-      if (result?.is_match && result?.chat_id) {
-        router.push(`/chats/${result.chat_id}?matchBridge=1`);
+      if (result?.is_match) {
+        celebrateMatch(profile, result?.chat_id ?? null);
       }
     } catch (e) {
       console.warn("Like failed", e);
     }
   };
 
-  const applyIntent = async (profileId: string, message?: string) => {
+  const applyIntent = async (profileId: string, message?: string, profile?: Profile) => {
     setIntentRemainingToday((n) => Math.max(0, n - 1));
     pendingIntentMessage.current = undefined;
     try {
@@ -206,8 +265,8 @@ export default function RomanceHome() {
         superLike: true,
         superLikeMessage: message || null,
       });
-      if (result?.is_match && result?.chat_id) {
-        router.push(`/chats/${result.chat_id}?matchBridge=1`);
+      if (result?.is_match) {
+        celebrateMatch(profile, result?.chat_id ?? null);
       }
     } catch (e) {
       console.warn("Super like failed", e);
@@ -318,7 +377,8 @@ export default function RomanceHome() {
 
   const animateCardOut = (direction: "left" | "right" | "up" | "down", action?: SwipeAction) => {
     if (transitioning) return;
-    const profileId = currentProfile?.id;
+    const swipedProfile = currentProfile;
+    const profileId = swipedProfile?.id;
     setTransitioning(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -337,8 +397,9 @@ export default function RomanceHome() {
       useNativeDriver: true,
     }).start(async () => {
       if (profileId && action === "pass") applyPass(profileId);
-      if (profileId && action === "like") await applyLike(profileId);
-      if (profileId && action === "intent") await applyIntent(profileId, pendingIntentMessage.current);
+      if (profileId && action === "like") await applyLike(profileId, swipedProfile);
+      if (profileId && action === "intent")
+        await applyIntent(profileId, pendingIntentMessage.current, swipedProfile);
       advanceToNext();
     });
   };
@@ -438,7 +499,7 @@ export default function RomanceHome() {
             You&apos;ve seen everyone nearby 💫
           </Text>
           <Pressable
-            onPress={() => {}}
+            onPress={() => router.push("/(modes)/romance/filters")}
             style={styles.adjustFiltersBtn}
             accessibilityLabel="Adjust filters"
           >
@@ -521,6 +582,7 @@ export default function RomanceHome() {
                   chipItems={currentProfile.chipItems}
                   mode="romance"
                   aiHint={romanceAiHint}
+                  distanceLabel={currentProfile.distanceLabel}
                   cardRadius={CARD_RADIUS}
                 />
               </Animated.View>
@@ -669,6 +731,23 @@ export default function RomanceHome() {
           )}
         </>
       )}
+
+      <MatchCelebration
+        visible={matchState.visible}
+        selfPhotoUrl={selfPhotoUrl}
+        otherPhotoUrl={matchState.otherPhotoUrl}
+        otherName={matchState.otherName}
+        onSendMessage={() => {
+          const chatId = matchState.chatId;
+          setMatchState((s) => ({ ...s, visible: false }));
+          if (chatId) {
+            router.push(`/chats/${chatId}?matchBridge=1`);
+          } else {
+            router.push("/(modes)/romance/chats");
+          }
+        }}
+        onKeepSwiping={() => setMatchState((s) => ({ ...s, visible: false }))}
+      />
 
       <RomanceBottomNav />
     </View>

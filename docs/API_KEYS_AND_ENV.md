@@ -19,6 +19,8 @@ This doc lists every API key and env var used by Winkly, where they are used, an
 
 All mobile env vars are prefixed with `EXPO_PUBLIC_` so they are available at build time. Copy `apps/mobile/.env.example` to `apps/mobile/.env` and fill in values.
 
+> **Environments (dev / staging / production):** Winkly uses three isolated environments. Instead of a single `.env`, copy the per-environment templates `apps/mobile/.env.{development,staging,production}.example` to real files and switch between them with `npm run env:dev | env:staging | env:prod` (these copy the chosen `.env.<env>` → `.env`, which Expo loads). Full guide: **docs/ENVIRONMENTS.md**. Never point dev/staging at production data.
+
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `EXPO_PUBLIC_SUPABASE_URL` | **Yes** | Supabase project URL (e.g. `https://xxxx.supabase.co`) |
@@ -59,6 +61,7 @@ These are **server-side only**. Never put them in the mobile app.
 | `DAILY_API_KEY` | **video-call-session** | Optional | [Daily.co](https://www.daily.co/) REST API — creates private rooms and meeting tokens for 1:1 video. When unset, returns a placeholder URL. |
 | `SAGEMAKER_RUNTIME_ENDPOINT`, `SAGEMAKER_API_KEY` | **recompute-behavior-ml** | Optional | Custom HTTP endpoint (e.g. SageMaker) that returns JSON `{ score: number }` per pair; optional bearer key. |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | **recompute-behavior-ml** | Optional | Bust cache key `winkly:feed:{user_id}` after updates when `user_id` is in the request body. |
+| `AUTH_REDIRECT_STATE_SECRET` | **auth-redirect** | **Recommended (prod)** | Random string **≥ 16 characters**. Signs `winkly_state` CSRF tokens (`GET …/auth-redirect?action=mint`). Required for production when using HTTPS `EXPO_PUBLIC_AUTH_REDIRECT_URL`. |
 
 **How to set (Supabase secrets):**
 

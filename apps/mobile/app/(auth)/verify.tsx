@@ -22,7 +22,7 @@ import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { createSessionFromUrl } from "@/lib/authDeepLink";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
-import { AUTH_REDIRECT_URL } from "@/constants/config";
+import { getEmailRedirectTo } from "@/lib/authRedirectUrl";
 
 export default function Verify() {
   const router = useRouter();
@@ -51,10 +51,11 @@ export default function Verify() {
     }
     setLoading(true);
     try {
+      const emailRedirectTo = await getEmailRedirectTo();
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: cleanEmail,
-        options: { emailRedirectTo: AUTH_REDIRECT_URL },
+        options: { emailRedirectTo },
       });
       if (error) throw error;
       await AsyncStorage.setItem("winkly_last_signup_email", cleanEmail);

@@ -12,6 +12,11 @@ export interface RomanceFiltersState {
   distanceKm: number;
   ageMin: number;
   ageMax: number;
+  /**
+   * Genders to show. Values match profile `gender` values ("Female", "Male",
+   * "Other"). Empty array = "Everyone" (no gender filter).
+   */
+  seekingGenders: string[];
   languages: string[];
   interests: string[];
   relationshipGoals: string[];
@@ -32,6 +37,7 @@ const DEFAULT_ROMANCE_FILTERS: RomanceFiltersState = {
   distanceKm: 50,
   ageMin: 18,
   ageMax: 100,
+  seekingGenders: [],
   languages: [],
   interests: [],
   relationshipGoals: [],
@@ -63,6 +69,24 @@ export async function setRomanceAiMatchingEnabled(enabled: boolean): Promise<voi
   } catch {
     // ignore
   }
+}
+
+/** True if the user has explicitly saved Romance filters at least once. */
+export async function hasSavedRomanceFilters(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(KEY_FILTERS)) != null;
+  } catch {
+    return false;
+  }
+}
+
+/** Map onboarding "looking for" labels (Women/Men/Everyone) to profile gender values. */
+export function lookingForToGenders(lookingFor: string[] | null | undefined): string[] {
+  if (!lookingFor || lookingFor.length === 0 || lookingFor.includes("Everyone")) return [];
+  const out: string[] = [];
+  if (lookingFor.includes("Women")) out.push("Female");
+  if (lookingFor.includes("Men")) out.push("Male");
+  return out;
 }
 
 export async function getRomanceFilters(): Promise<RomanceFiltersState> {

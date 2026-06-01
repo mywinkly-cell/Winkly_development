@@ -77,6 +77,8 @@ export type ProfileCoreUpdate = {
   languages?: string[] | null;
   occupation?: string | null;
   bio?: string | null;
+  looking_for?: string[] | null;
+  activity_preferences?: string[] | null;
   core_photos?: string[] | null;
   instagram?: string | null;
   night_owl?: boolean | null;

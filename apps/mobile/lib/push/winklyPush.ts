@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 
-export type WinklyRemotePushKind = "new_match" | "chat_message" | "planner_invitation";
+export type WinklyRemotePushKind = "new_match" | "chat_message" | "planner_invitation" | "planner_response";
 
 /** Ask Edge Function to deliver an Expo push to a peer (server verifies relationship). */
 export async function requestPeerPushNotification(params: {

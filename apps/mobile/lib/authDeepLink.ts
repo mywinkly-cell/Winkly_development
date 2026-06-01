@@ -9,6 +9,7 @@
 // at an HTTPS URL (e.g. https://winkly.app/auth/) and use that as emailRedirectTo.
 
 import * as QueryParams from "expo-auth-session/build/QueryParams";
+import { validateAuthRedirectStateFromUrl } from "@/lib/authRedirectUrl";
 import { supabase } from "@/lib/supabase";
 
 const AUTH_CALLBACK_PATH = "winkly://callback";
@@ -42,6 +43,11 @@ function getParamsFromUrl(url: string): Record<string, string> {
  */
 export async function createSessionFromUrl(url: string): Promise<boolean> {
   try {
+    if (!(await validateAuthRedirectStateFromUrl(url))) {
+      console.warn("authDeepLink: winkly_state mismatch or missing");
+      return false;
+    }
+
     // Normalize: if URL has fragment but wrong scheme (e.g. https after redirect), use callback path for fragment so setSession works
     const urlToParse = url.includes("#") ? (url.startsWith("winkly://") ? url : "winkly://callback#" + url.slice(url.indexOf("#") + 1)) : url;
     const { params, errorCode } = QueryParams.getQueryParams(urlToParse);

@@ -9,5 +9,6 @@ export {
   sameLocality,
 } from "./countryDisplay";
 export { getDeviceLocationDisplay, reverseGeocodeToDisplay, type DeviceLocationResult } from "./deviceLocation";
+export { updateMyLocationOnAppOpen, type UpdateLocationResult } from "./updateLocation";
 export { searchCities, type CityCountry } from "./citySearch";
 export { useFormatLocationDisplay, useNormalizedLocation } from "./useLocationDisplay";

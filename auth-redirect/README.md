@@ -14,13 +14,13 @@ From the project root (WinklyApp_3):
 npm run supabase:deploy-auth-redirect
 ```
 
-If prompted, run `npx supabase login` once, then `npx supabase link --project-ref gwgjdpqskusuejlwrsnd` to link to your project.
+If prompted, run `npx supabase login` once, then `npx supabase link --project-ref YOUR_PROJECT_REF` to link to your project.
 
 ### 2. Add URL to Supabase Redirect URLs
 
 1. **Supabase Dashboard** → **Authentication** → **URL Configuration** → **Redirect URLs**
 2. Add: `https://YOUR_PROJECT_REF.supabase.co/functions/v1/auth-redirect`
-   (Replace YOUR_PROJECT_REF with your project ID, e.g. `gwgjdpqskusuejlwrsnd`)
+   (Replace `YOUR_PROJECT_REF` with your Supabase project ID)
 3. Save
 
 ### 3. App config
@@ -28,10 +28,14 @@ If prompted, run `npx supabase login` once, then `npx supabase link --project-re
 In `apps/mobile/.env`:
 
 ```
-EXPO_PUBLIC_AUTH_REDIRECT_URL=https://gwgjdpqskusuejlwrsnd.supabase.co/functions/v1/auth-redirect
+EXPO_PUBLIC_AUTH_REDIRECT_URL=https://YOUR_PROJECT_REF.supabase.co/functions/v1/auth-redirect
 ```
 
-Replace `gwgjdpqskusuejlwrsnd` with your Supabase project ref. Restart Expo.
+Restart Expo after changing `.env`.
+
+### 4. CSRF secret (production)
+
+In **Supabase Dashboard → Edge Functions → Secrets**, set **`AUTH_REDIRECT_STATE_SECRET`** (random, ≥ 16 characters). Redeploy `auth-redirect`. The mobile app mints `winkly_state` before sign-up / password reset emails when using this HTTPS URL.
 
 ---
 
@@ -54,5 +58,6 @@ If using Vercel, disable **Deployment Protection** so the page is public.
 
 ## Security notes
 
-- **JWT verification:** Email and magic links open in a **browser** without a Supabase session JWT. The Supabase Edge Function must keep **`verify_jwt = false`** in **`supabase/config.toml`** (`[functions.auth-redirect]`). Deploy with `npm run supabase:deploy-auth-redirect`; the CLI applies that setting from **`config.toml`** (do not enable JWT verification on this function or links will break).
+- **JWT verification:** Email and magic links open in a **browser** without a Supabase session JWT. Keep **`verify_jwt = false`** in **`supabase/config.toml`** (`[functions.auth-redirect]`). Deploy with `npm run supabase:deploy-auth-redirect` — **do not** pass `--no-verify-jwt` on the CLI; **`config.toml`** is the source of truth.
+- **CSRF (`winkly_state`):** When **`AUTH_REDIRECT_STATE_SECRET`** is set, the function rejects requests without a valid signed `winkly_state` query param. See **SECURITY.md**.
 - **What it does:** This endpoint returns **static HTML** only. OAuth/session tokens in the **URL fragment** are not visible to the server; the page forwards them to the app deep link. See **SECURITY.md** in the repo root for the full threat model and operational checklist (RLS, rate limits, repo visibility).
