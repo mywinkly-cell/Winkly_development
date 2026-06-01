@@ -5,24 +5,13 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import type { AccountType } from "@/types";
+import { deriveAuthState, hasAuthenticatedUser, isAuthRecoverableError } from "@/lib/auth/session";
+import { setMonitoringUser } from "@/lib/monitoring/sentry";
 import {
   initializeNotificationsRuntime,
   registerForPushNotificationsAndSync,
   resetNotificationsRuntime,
 } from "@/lib/notifications";
-
-function isAuthRecoverableError(err: unknown): boolean {
-  const e = err as { name?: string; message?: string };
-  const name = String(e?.name ?? "").toLowerCase();
-  const msg = String(e?.message ?? err ?? "").toLowerCase();
-  return (
-    name === "authapierror" ||
-    name === "authsessionmissingerror" ||
-    (msg.includes("refresh token") && (msg.includes("invalid") || msg.includes("not found"))) ||
-    msg.includes("session expired") ||
-    msg.includes("invalid refresh token")
-  );
-}
 
 type AuthState = {
   session: Session | null;
@@ -61,15 +50,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setState({ session: null, user: null, loading: false, accountType: null });
           return;
         }
+        const effectiveSession = error ? null : session;
         setState((prev) => ({
           ...prev,
-          session: error ? null : session,
-          user: session?.user ?? null,
-          accountType: (session?.user?.user_metadata?.account_type as AccountType) ?? null,
+          ...deriveAuthState(effectiveSession),
           loading: false,
         }));
-        const u = session?.user?.id;
-        if (u) {
+        if (hasAuthenticatedUser(effectiveSession)) {
           void initializeNotificationsRuntime().then(() => registerForPushNotificationsAndSync());
         } else {
           resetNotificationsRuntime();
@@ -92,14 +79,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setState({
-        session,
-        user: session?.user ?? null,
-        loading: false,
-        accountType: (session?.user?.user_metadata?.account_type as AccountType) ?? null,
-      });
-      const uid = session?.user?.id;
-      if (uid) {
+      setState({ ...deriveAuthState(session), loading: false });
+      if (hasAuthenticatedUser(session)) {
         void initializeNotificationsRuntime().then(() => registerForPushNotificationsAndSync());
       } else {
         resetNotificationsRuntime();
@@ -108,6 +89,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Attach/detach the user on crash reports as auth state changes (no-op without a Sentry DSN).
+  useEffect(() => {
+    setMonitoringUser(
+      state.user ? { id: state.user.id, account_type: state.accountType ?? undefined } : null
+    );
+  }, [state.user, state.accountType]);
 
   const signOut = async () => {
     try {

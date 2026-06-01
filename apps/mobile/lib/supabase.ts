@@ -3,6 +3,7 @@ import "react-native-url-polyfill/auto";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
+import { assertOnline } from "@/lib/network/connectivity";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -23,7 +24,11 @@ const resolveUrl = (input: RequestInfo | URL): string => {
   return url;
 };
 
-const customFetch: typeof fetch = (input, init) => {
+const customFetch: typeof fetch = async (input, init) => {
+  // Fail fast (rejected promise) when the device is known to be offline rather
+  // than hanging until the OS-level timeout. Token refresh paths swallow this
+  // and retry on reconnect; data hooks surface it via isOfflineError().
+  assertOnline();
   const url = resolveUrl(input);
   const resolvedInput =
     typeof input === "string" || input instanceof URL ? url : new Request(url, input as Request);

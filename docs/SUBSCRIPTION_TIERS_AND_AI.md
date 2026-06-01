@@ -1,6 +1,6 @@
 # Subscription Tiers & AI Access
 
-**Last updated:** 2026-02-16
+**Last updated:** 2026-06-01
 
 This document defines Winkly subscription tiers (Free, Super, Premium), how AI is gated per tier, the **Winkly AI Spark** icon behaviour, and what you need to do to activate the AI agent.
 
@@ -61,17 +61,23 @@ This document defines Winkly subscription tiers (Free, Super, Premium), how AI i
    - Use **subscription_tier** from context everywhere you gate AI (see `lib/ai/aiFeatureGate.ts`).  
    - Use the **WinklyAISpark** component for every AI entry point; it handles disabled state and upsell modal.
 
-4. **Edge Function (optional hardening)**  
-   - For strict server-side gating, `ai-gateway` can accept a `tier` (or derive from a server-side user lookup) and reject **concierge** tasks when tier is not `premium`; **rank/suggest** when tier is `free` can return a stub or 403 with a message like “Upgrade to Super or Premium for AI”.
+4. **Edge Function (server-side enforcement — IMPLEMENTED)**  
+   - `ai-gateway` **derives the tier from `users.subscription_tier`** (server-side lookup, short Redis cache) and enforces a **tier access matrix** (`TASK_MIN_TIER`) for every billable AI task. The client gate (`lib/ai/aiFeatureGate.ts`) is **UX only** and is treated as untrusted.
+   - **Free = no AI** (all billable tasks denied). **Super+**: `chat_topics`, `planner_theme_plans`, `event_suggest`, `plan`, `winkly_plan`, `match_agent`. **Premium+** (full concierge): `concierge`, `match_bridge`.
+   - Denied requests return **HTTP 403** with `{ code: "ai_tier_required", tier, required_tier, upgrade_to }` so the client can show contextual upsell (`upgrade_to` = `super` or `premium`).
+   - **Feature flags (env):** `AI_GATEWAY_DISABLED` (global kill switch → 503, `code: "ai_disabled"`) and `AI_DISABLED_TIERS="free,super"` (per-tier disable → 403, `code: "ai_disabled_for_tier"`).
+   - **Cost guards:** output-token ceiling `AI_MAX_OUTPUT_TOKENS` (default 2048) on every provider call; input guard `AI_MAX_CONTEXT_CHARS` (default 24000 → 413, `code: "context_too_large"`); `user_prompt` truncated to 2000 chars; `candidates` clamped to 50.
+   - **Quota handling:** provider quota exhaustion (Gemini `RESOURCE_EXHAUSTED`, OpenAI `insufficient_quota`) is non-retryable → **429** `code: "quota_exhausted"`.
+   - See **PRODUCT_DOCUMENTATION.md** §3.7 for the full env list and check order.
 
 ---
 
 ## 5. Pitfalls and things to consider
 
 - **Backward compatibility:** If you already have `is_premium` (boolean), keep it during transition. Migration can set `subscription_tier = 'premium'` where `is_premium = true`, and `'free'` otherwise; new billing writes `subscription_tier` (free/super/premium/enterprise).
-- **__DEV__:** ModeContext currently forces `subscription_tier = 'premium'` in development so you can test all features; remember to test Free/Super flows (e.g. override tier or use a test account).
+- **__DEV__:** ModeContext currently forces `subscription_tier = 'premium'` in development so you can test all features. **Note:** the gateway now enforces tier **server-side** from `users.subscription_tier`, so the dev override only affects client UX — to actually exercise AI you must have a matching DB tier (set `subscription_tier` on your test user). To test Free/Super denials, set the DB tier accordingly or use `AI_DISABLED_TIERS`.
 - **Spark everywhere:** If the Spark appears in many screens, ensure the **upsell copy is contextual** (e.g. “Use AI to get better matches” on Discover vs “Get full trip planning with Premium” in Planner).
-- **Rate limits / abuse:** Plan for per-user or per-tier rate limits on `ai-gateway` (e.g. Super: N requests/day, Premium: higher or unlimited) and log usage in `ai_requests` for monitoring.
+- **Rate limits / abuse:** Implemented — `ai-gateway` applies per-minute, per-tier, per-task Redis rate limits (HTTP 429 + `retry_after`) and logs usage in `ai_requests`. Cost guards cap output tokens and reject oversized input. Tune ceilings as traffic grows.
 - **Offline / errors:** When the AI gateway fails or the user is offline, show a friendly message and do not block core flows (discover, planner, chat work without AI).
 
 ---
@@ -81,7 +87,7 @@ This document defines Winkly subscription tiers (Free, Super, Premium), how AI i
 - **Free:** Full Winkly without AI; Spark visible but greyed, tap = upsell.  
 - **Super:** Limited AI (matching, event suggestions, planning ideas, chat opener); Spark on for those, greyed for full concierge.  
 - **Premium:** Full AI + concierge; Spark on everywhere.  
-- **Activation:** Set `OPENAI_API_KEY`, deploy `ai-gateway`, store `subscription_tier`, gate in app (and optionally in gateway).  
+- **Activation:** Set `OPENAI_API_KEY`/`GEMINI_API_KEY`, deploy `ai-gateway`, store `subscription_tier`. AI access is **enforced server-side** in the gateway (tier matrix + feature flags + cost guards); the app gate is UX only.  
 - **Spark:** One icon, coloured when allowed, grey when not; tap when grey = contextual upsell and “See plans”.
 
 See **PRODUCT_DOCUMENTATION.md** §8.9 (Subscription and premium) and §9.2 (WinklyAISpark).

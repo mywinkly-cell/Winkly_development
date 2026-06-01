@@ -69,61 +69,67 @@ async function resolveInitialLanguage(): Promise<string> {
   return match ?? "en";
 }
 
-const en = require("./i18n/locales/en.json");
-const de = require("./i18n/locales/de.json");
-const uk = require("./i18n/locales/uk.json");
-const ru = require("./i18n/locales/ru.json");
-const pl = require("./i18n/locales/pl.json");
-const es = require("./i18n/locales/es.json");
-const fr = require("./i18n/locales/fr.json");
-const it = require("./i18n/locales/it.json");
-const nl = require("./i18n/locales/nl.json");
-const pt = require("./i18n/locales/pt.json");
-const el = require("./i18n/locales/el.json");
-const ro = require("./i18n/locales/ro.json");
-const hu = require("./i18n/locales/hu.json");
-const cs = require("./i18n/locales/cs.json");
-const sv = require("./i18n/locales/sv.json");
-const da = require("./i18n/locales/da.json");
-const fi = require("./i18n/locales/fi.json");
-const sk = require("./i18n/locales/sk.json");
-const bg = require("./i18n/locales/bg.json");
-const hr = require("./i18n/locales/hr.json");
-const sl = require("./i18n/locales/sl.json");
-const et = require("./i18n/locales/et.json");
-const lv = require("./i18n/locales/lv.json");
-const lt = require("./i18n/locales/lt.json");
-const mt = require("./i18n/locales/mt.json");
-const ga = require("./i18n/locales/ga.json");
+type TranslationModule = Record<string, string> | { default: Record<string, string> };
 
-const resources: Record<string, { translation: Record<string, string> }> = {
-  en: { translation: en },
-  de: { translation: de },
-  uk: { translation: uk },
-  ru: { translation: ru },
-  pl: { translation: pl },
-  es: { translation: es },
-  fr: { translation: fr },
-  it: { translation: it },
-  nl: { translation: nl },
-  pt: { translation: pt },
-  el: { translation: el },
-  ro: { translation: ro },
-  hu: { translation: hu },
-  cs: { translation: cs },
-  sv: { translation: sv },
-  da: { translation: da },
-  fi: { translation: fi },
-  sk: { translation: sk },
-  bg: { translation: bg },
-  hr: { translation: hr },
-  sl: { translation: sl },
-  et: { translation: et },
-  lv: { translation: lv },
-  lt: { translation: lt },
-  mt: { translation: mt },
-  ga: { translation: ga },
+/**
+ * Lazy locale loaders. The require() calls live inside arrow functions so the
+ * JSON is only parsed/evaluated when the language is actually requested — not
+ * all 26 at startup. This keeps cold-start JS work proportional to the single
+ * detected language (+ the `en` fallback) instead of every supported locale.
+ *
+ * Note: Metro still includes the JSON in the bundle; the win is startup parse
+ * time and memory, which is the dominant cost on device cold launch.
+ */
+const localeLoaders: Record<SupportedLanguageCode, () => TranslationModule> = {
+  en: () => require("./i18n/locales/en.json"),
+  de: () => require("./i18n/locales/de.json"),
+  uk: () => require("./i18n/locales/uk.json"),
+  ru: () => require("./i18n/locales/ru.json"),
+  pl: () => require("./i18n/locales/pl.json"),
+  es: () => require("./i18n/locales/es.json"),
+  fr: () => require("./i18n/locales/fr.json"),
+  it: () => require("./i18n/locales/it.json"),
+  nl: () => require("./i18n/locales/nl.json"),
+  pt: () => require("./i18n/locales/pt.json"),
+  el: () => require("./i18n/locales/el.json"),
+  ro: () => require("./i18n/locales/ro.json"),
+  hu: () => require("./i18n/locales/hu.json"),
+  cs: () => require("./i18n/locales/cs.json"),
+  sv: () => require("./i18n/locales/sv.json"),
+  da: () => require("./i18n/locales/da.json"),
+  fi: () => require("./i18n/locales/fi.json"),
+  sk: () => require("./i18n/locales/sk.json"),
+  bg: () => require("./i18n/locales/bg.json"),
+  hr: () => require("./i18n/locales/hr.json"),
+  sl: () => require("./i18n/locales/sl.json"),
+  et: () => require("./i18n/locales/et.json"),
+  lv: () => require("./i18n/locales/lv.json"),
+  lt: () => require("./i18n/locales/lt.json"),
+  mt: () => require("./i18n/locales/mt.json"),
+  ga: () => require("./i18n/locales/ga.json"),
 };
+
+const loadedLanguages = new Set<string>();
+
+/** Resolve a require()'d JSON module to its translation object (Metro vs. ESM-interop safe). */
+function resolveTranslation(mod: TranslationModule): Record<string, string> {
+  const maybe = mod as { default?: Record<string, string> };
+  return maybe.default ?? (mod as Record<string, string>);
+}
+
+/** Parse + register a locale bundle exactly once. */
+function addLanguageBundle(code: string): void {
+  if (loadedLanguages.has(code)) return;
+  const loader = localeLoaders[code as SupportedLanguageCode];
+  if (!loader) return;
+  i18n.addResourceBundle(code, "translation", resolveTranslation(loader()), true, true);
+  loadedLanguages.add(code);
+}
+
+/** Public: ensure a supported language is loaded before use (idempotent). */
+export async function ensureLanguageLoaded(code: string): Promise<void> {
+  if (SUPPORTED_CODES.includes(code as SupportedLanguageCode)) addLanguageBundle(code);
+}
 
 let initPromise: Promise<void> | null = null;
 
@@ -132,19 +138,25 @@ export async function initI18n(): Promise<void> {
   initPromise = (async () => {
     const lng = await resolveInitialLanguage();
     await i18n.use(initReactI18next).init({
-      resources,
+      // Start with no eagerly-bundled resources; load only what we need below.
+      resources: {},
       lng,
       fallbackLng: "en",
       supportedLngs: SUPPORTED_CODES,
+      partialBundledLanguages: true,
       interpolation: { escapeValue: false },
       react: { useSuspense: false },
     } as InitOptions);
+    // Always load the fallback; load the detected language only if different.
+    addLanguageBundle("en");
+    if (lng !== "en") addLanguageBundle(lng);
   })();
   return initPromise;
 }
 
 export async function changeLanguage(code: string): Promise<void> {
   if (!SUPPORTED_CODES.includes(code as SupportedLanguageCode)) return;
+  addLanguageBundle(code);
   await setStoredLanguage(code);
   await i18n.changeLanguage(code);
 }

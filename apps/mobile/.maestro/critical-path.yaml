@@ -1,0 +1,17 @@
+# Winkly critical-path E2E: signup -> onboarding -> mode selection -> discover.
+# A broken onboarding at launch is catastrophic, so this is the must-pass flow.
+#
+# Usage:
+#   maestro test \
+#     -e EMAIL="qa+$(date +%s)@winkly.test" \
+#     -e PASSWORD="Test1234!" \
+#     .maestro/critical-path.yaml
+appId: com.winkly.app
+env:
+  EMAIL: "qa@winkly.test"
+  PASSWORD: "Test1234!"
+---
+- runFlow: flows/signup.yaml
+- runFlow: flows/onboarding.yaml
+- runFlow: flows/mode-selection.yaml
+- runFlow: flows/discover.yaml

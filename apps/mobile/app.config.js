@@ -31,6 +31,17 @@ module.exports = {
       "expo-localization",
       "expo-web-browser",
       "expo-apple-authentication",
+      // Crash reporting + source map upload. Sourcemap upload only runs when
+      // SENTRY_AUTH_TOKEN/org/project are set in the EAS build env; otherwise
+      // the plugin is a safe no-op. Runtime init is gated on EXPO_PUBLIC_SENTRY_DSN.
+      [
+        "@sentry/react-native/expo",
+        {
+          organization: process.env.SENTRY_ORG,
+          project: process.env.SENTRY_PROJECT,
+          url: process.env.SENTRY_URL || "https://sentry.io/",
+        },
+      ],
       [
         "expo-notifications",
         {

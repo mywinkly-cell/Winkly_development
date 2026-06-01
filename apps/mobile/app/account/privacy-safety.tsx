@@ -79,6 +79,13 @@ export default function PrivacySafety() {
           />
           <View style={styles.divider} />
           <Row
+            title="Location precision"
+            subtitle="Exact or approximate — your raw GPS is never stored"
+            onPress={() => router.push("/account/location-privacy" as never)}
+            icon="navigate-outline"
+          />
+          <View style={styles.divider} />
+          <Row
             title="Photo verification"
             subtitle="Selfie check against your profile photo"
             onPress={() => router.push("/account/photo-verification" as never)}

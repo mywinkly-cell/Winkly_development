@@ -5,11 +5,28 @@ import { useEffect } from "react";
 import { usePathname } from "expo-router";
 import { usePostHog } from "posthog-react-native";
 import { useAuth } from "@/providers";
+import { setAnalyticsClient } from "@/lib/analytics";
 
 /** Call identify when user is set, reset when user is null. Renders nothing. */
 export function PostHogIdentitySync() {
   const { user } = useAuth();
   const posthog = usePostHog();
+
+  // Register PostHog as the backing client for the decoupled analytics module
+  // (lib/analytics + lib/analytics/events), so track() works app-wide.
+  useEffect(() => {
+    if (!posthog) {
+      setAnalyticsClient(null);
+      return;
+    }
+    setAnalyticsClient({
+      identify: (id, props) => posthog.identify(id, props as Parameters<typeof posthog.identify>[1]),
+      reset: () => posthog.reset(),
+      capture: (event, props) => posthog.capture(event, props as Parameters<typeof posthog.capture>[1]),
+      screen: (name, props) => posthog.screen(name, props as Parameters<typeof posthog.screen>[1]),
+    });
+    return () => setAnalyticsClient(null);
+  }, [posthog]);
 
   useEffect(() => {
     if (!posthog) return;

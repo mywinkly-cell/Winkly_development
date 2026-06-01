@@ -4,7 +4,8 @@
 // - Saves ONLY to public.user_profiles (not public.users)
 // - Uses upsert(id) so it works even if the row does not exist yet
 // - Handles "Auth session missing" safely (redirects to Sign in)
-// - Photos are UI-only for now (no storage upload yet)
+// - On save, local photos/videos are uploaded to Supabase Storage and the
+//   resulting public URLs (not file:// URIs) are persisted to the DB.
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
@@ -53,6 +54,8 @@ import { RomanceSubProfile } from "@/components/onboarding/RomanceSubProfile";
 import { FriendsSubProfile } from "@/components/onboarding/FriendsSubProfile";
 import { BusinessSubProfile } from "@/components/onboarding/BusinessSubProfile";
 import { PhotoConfirmModal } from "@/components/media/PhotoConfirmModal";
+import { uploadLocalPhotos, uploadLocalVideos } from "@/lib/uploadMedia";
+import { validatePickerAsset } from "@/lib/mediaValidation";
 
 const EDUCATION_OPTIONS = [
   "High school graduate",
@@ -794,6 +797,14 @@ export default function ProfileCore() {
 
     const asset = result.assets[0];
 
+    // Size + MIME validation before any upload work (avoids wasted API calls).
+    const sizeCheck = await validatePickerAsset(asset, "image");
+    if (!sizeCheck.ok) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert("Photo not allowed", sizeCheck.reason ?? "Please pick a different photo.");
+      return;
+    }
+
     // Photo quality validation: reject images that are too low-res to look sharp.
     // (Face detection would require a native module + rebuild; deferred — see edit-media TODO.)
     const w = asset.width ?? 0;
@@ -993,6 +1004,10 @@ export default function ProfileCore() {
 
       const cityNorm = normalizeLocationDisplayString(city.trim(), appLanguage);
 
+      // Persist local photos to Supabase Storage; remote URLs pass through untouched.
+      const uploadedCorePhotos = await uploadLocalPhotos(authUser.id, "core", corePhotos);
+      setCorePhotos(uploadedCorePhotos);
+
       const payload: Record<string, any> = {
         id: authUser.id,
         first_name: firstName,
@@ -1007,8 +1022,8 @@ export default function ProfileCore() {
         bio: bio.trim() || null,
         looking_for: lookingFor,
         activity_preferences: activityPreferences,
-        core_photos: corePhotos.filter(Boolean) as string[],
-        main_photo_url: corePhotos[0] || null,
+        core_photos: uploadedCorePhotos,
+        main_photo_url: uploadedCorePhotos[0] || null,
       };
 
       const { error: upsertErr } = await supabase
@@ -1028,6 +1043,8 @@ export default function ProfileCore() {
       if (coreErr) throw coreErr;
 
       if (romanceEnabled) {
+        const uploadedRomancePhotos = await uploadLocalPhotos(authUser.id, "romance", romancePhotos);
+        const uploadedRomanceVideos = await uploadLocalVideos(authUser.id, "romance", romanceVideos);
         const romanceMeta: Record<string, unknown> = {
           height: heightRomance.trim() || null,
           weight: weightRomance.trim() || null,
@@ -1043,13 +1060,13 @@ export default function ProfileCore() {
           pets: petsRomance,
           allergies: allergiesRomance.length ? allergiesRomance : null,
           food: foodRomance || null,
-          videos: romanceVideos.filter(Boolean),
+          videos: uploadedRomanceVideos,
         };
         const romancePayload = {
           user_id: authUser.id,
           mode: "romance",
           bio: bioRomance || null,
-          photos: romancePhotos.filter(Boolean) as string[],
+          photos: uploadedRomancePhotos,
           interests: interestsRomance.length ? interestsRomance : null,
           meta: romanceMeta,
         };
@@ -1060,6 +1077,8 @@ export default function ProfileCore() {
         );
       }
       if (friendsEnabled) {
+        const uploadedFriendsPhotos = await uploadLocalPhotos(authUser.id, "friends", friendsPhotos);
+        const uploadedFriendsVideos = await uploadLocalVideos(authUser.id, "friends", friendsVideos);
         const friendsMeta: Record<string, unknown> = {
           lifestyle: lifestyleFriends || null,
           alcohol: alcoholFriends || null,
@@ -1070,13 +1089,13 @@ export default function ProfileCore() {
           pets: petsFriends,
           allergies: allergiesFriends.length ? allergiesFriends : null,
           food: foodFriends || null,
-          videos: friendsVideos.filter(Boolean),
+          videos: uploadedFriendsVideos,
         };
         const friendsPayload = {
           user_id: authUser.id,
           mode: "friends",
           bio: bioFriends || null,
-          photos: friendsPhotos.filter(Boolean) as string[],
+          photos: uploadedFriendsPhotos,
           interests: interestsFriends.length ? interestsFriends : null,
           meta: friendsMeta,
         };
@@ -1087,6 +1106,8 @@ export default function ProfileCore() {
         );
       }
       if (businessEnabled) {
+        const uploadedBusinessPhotos = await uploadLocalPhotos(authUser.id, "business", businessPhotos);
+        const uploadedBusinessVideos = await uploadLocalVideos(authUser.id, "business", businessVideos);
         const businessMeta: Record<string, unknown> = {
           role: roleBusiness.trim() || null,
           company: companyBusiness.trim() || null,
@@ -1095,13 +1116,13 @@ export default function ProfileCore() {
           skills: skillsBusiness.length ? skillsBusiness : null,
           interests: interestsBusiness,
           instagram: instagramBusiness.trim() || null,
-          videos: businessVideos.filter(Boolean),
+          videos: uploadedBusinessVideos,
         };
         const businessPayload = {
           user_id: authUser.id,
           mode: "business",
           bio: bioBusiness || null,
-          photos: businessPhotos.filter(Boolean) as string[],
+          photos: uploadedBusinessPhotos,
           interests: interestsBusiness.length ? interestsBusiness : null,
           meta: businessMeta,
         };

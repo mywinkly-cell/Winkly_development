@@ -12,7 +12,9 @@
 --     geography column directly.
 -- ─────────────────────────────────────────────────────────────────────────────
 
-CREATE EXTENSION IF NOT EXISTS postgis;
+-- Install into public so the unqualified GEOGRAPHY type + ST_* functions below
+-- resolve under the default search_path (matches pg_trgm/vector on this project).
+CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 1. user_locations — one coarse point per user (updated on app open, not live)

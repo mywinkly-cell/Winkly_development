@@ -79,6 +79,27 @@ export async function reverseGeocodeToDisplay(
 }
 
 /**
+ * Get device coordinates WITHOUT prompting for permission.
+ * Returns coords only if foreground location permission is already granted; otherwise null.
+ * Use for best-effort nearby discovery (e.g. external events) where we must not interrupt the
+ * user with a permission dialog and can silently fall back when location is unavailable.
+ */
+export async function getDeviceCoordsIfPermitted(): Promise<{ latitude: number; longitude: number } | null> {
+  try {
+    const { status } = await Location.getForegroundPermissionsAsync();
+    if (status !== "granted") return null;
+    const last = await Location.getLastKnownPositionAsync();
+    if (last?.coords) {
+      return { latitude: last.coords.latitude, longitude: last.coords.longitude };
+    }
+    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Request foreground location permission, get current position, and reverse-geocode to "City, Country".
  * Use for Concierge default location when user hasn't set a profile city or wants "current location".
  * @param language App language code (e.g. from i18n) for country name; defaults to "en".

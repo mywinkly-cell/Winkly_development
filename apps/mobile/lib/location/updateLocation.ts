@@ -2,8 +2,10 @@
  * Update the signed-in user's coarse location for geo-based discovery.
  *
  * Privacy: coordinates are refreshed *on app open* (throttled), never streamed
- * continuously. Raw coordinates are sent to the `set_my_location` RPC, which
- * stores them owner-only; other users only ever receive rounded distances.
+ * continuously. Coordinates are sent to the `set_my_location` RPC, which
+ * QUANTIZES them server-side (snaps to a coarse grid based on the user's chosen
+ * precision) before storing — raw GPS is never persisted. Stored points are
+ * owner-only; other users only ever receive rounded distances.
  */
 
 import * as Location from "expo-location";
@@ -12,6 +14,13 @@ import { supabase } from "@/lib/supabase";
 
 const KEY_LAST_UPDATE = "winkly_location_last_update";
 const KEY_PERMISSION_ASKED = "winkly_location_permission_asked";
+
+/**
+ * Discovery location precision.
+ *  - "approximate": ~1.1 km grid (default; GDPR-friendly neighbourhood level).
+ *  - "precise":     ~110 m grid (still never the raw GPS point).
+ */
+export type LocationPrecision = "precise" | "approximate";
 
 /** Minimum time between background refreshes (6h). */
 const MIN_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -77,5 +86,43 @@ export async function updateMyLocationOnAppOpen(opts?: {
     return { ok: true };
   } catch (e) {
     return { ok: false, reason: "error", message: (e as Error).message };
+  }
+}
+
+/**
+ * Read the user's stored discovery location precision. Defaults to
+ * "approximate" if not set or on error.
+ */
+export async function getLocationPrecision(): Promise<LocationPrecision> {
+  try {
+    const { data, error } = await supabase.rpc("get_my_location_precision");
+    if (error || (data !== "precise" && data !== "approximate")) {
+      return "approximate";
+    }
+    return data as LocationPrecision;
+  } catch {
+    return "approximate";
+  }
+}
+
+/**
+ * Update the user's discovery location precision. Coarsening (precise →
+ * approximate) re-snaps any stored point immediately; switching to "precise"
+ * takes effect on the next location refresh. Returns the applied precision.
+ */
+export async function setLocationPrecision(
+  precision: LocationPrecision
+): Promise<{ ok: true; precision: LocationPrecision } | { ok: false; message?: string }> {
+  try {
+    const { data, error } = await supabase.rpc("set_my_location_precision", {
+      p_precision: precision,
+    });
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+    const applied = data === "precise" || data === "approximate" ? (data as LocationPrecision) : precision;
+    return { ok: true, precision: applied };
+  } catch (e) {
+    return { ok: false, message: (e as Error).message };
   }
 }

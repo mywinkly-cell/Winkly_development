@@ -105,16 +105,28 @@ enabled = true
 # The maximum file size allowed (e.g. "5MB", "500KB").
 file_size_limit = "50MiB"
 
-# Image transformation API is available to Supabase Pro plan.
-# [storage.image_transformation]
-# enabled = true
+# Image transformation API is available to Supabase Pro plan and is used by the
+# app's CDN render URLs (apps/mobile/lib/images/cdnImage.ts) to serve resized,
+# format-optimized profile/match media. Enabled here so local dev mirrors prod.
+[storage.image_transformation]
+enabled = true
 
-# Uncomment to configure local storage buckets
-# [storage.buckets.images]
-# public = false
-# file_size_limit = "50MiB"
-# allowed_mime_types = ["image/png", "image/jpeg"]
-# objects_path = "./images"
+# Winkly media buckets. Mirrors supabase/migrations/20260613120000_storage_buckets_policies.sql.
+# These are recreated on `supabase db reset` so local dev matches production.
+[storage.buckets.user-photos]
+public = true
+file_size_limit = "50MiB"
+allowed_mime_types = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]
+
+[storage.buckets.user-videos]
+public = true
+file_size_limit = "50MiB"
+allowed_mime_types = ["video/mp4", "video/quicktime", "audio/mp4", "audio/mpeg", "audio/aac", "audio/x-m4a"]
+
+[storage.buckets.business-logos]
+public = true
+file_size_limit = "50MiB"
+allowed_mime_types = ["image/jpeg", "image/png", "image/webp"]
 
 [auth]
 enabled = true
@@ -319,6 +331,11 @@ allow_dynamic_registration = false
 # Edge Functions: auth-redirect must allow unauthenticated GET (email verification links have no Bearer JWT).
 # Deploy: npm run supabase:deploy-auth-redirect — CLI applies this block (do not enable JWT verify on this function).
 [functions.auth-redirect]
+verify_jwt = false
+
+# notify-fanout is invoked by Postgres triggers (pg_net), not by users. It has no
+# Bearer JWT; it is protected by the shared `x-webhook-secret` header instead.
+[functions.notify-fanout]
 verify_jwt = false
 
 [edge_runtime]

@@ -20,5 +20,6 @@ export function normalizeMessageRow(row: Record<string, unknown> | Message): Mes
       dt === "for_me" || dt === "for_everyone" ? dt : ("none" as Message["delete_type"]),
     status: typeof r.status === "string" ? r.status : "sent",
     created_at: String(r.created_at),
+    client_id: r.client_id != null ? String(r.client_id) : null,
   };
 }

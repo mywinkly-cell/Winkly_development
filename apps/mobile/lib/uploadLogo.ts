@@ -10,6 +10,8 @@
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "@/lib/supabase";
 import { Alert } from "react-native";
+import { validatePickerAsset } from "@/lib/mediaValidation";
+import { CACHE_CONTROL_IMMUTABLE } from "@/lib/images/cdnImage";
 
 /**
  * Pick and upload a business logo.
@@ -33,7 +35,16 @@ export async function pickAndUploadLogo(userId: string): Promise<string | null> 
     });
 
     if (result.canceled || !result.assets?.length) return null;
-    const fileUri = result.assets[0].uri;
+    const asset = result.assets[0];
+
+    // 2️⃣.5 Validate before any network call (size + MIME)
+    const check = await validatePickerAsset(asset, "image");
+    if (!check.ok) {
+      Alert.alert("Logo not allowed", check.reason ?? "Please pick a different image.");
+      return null;
+    }
+
+    const fileUri = asset.uri;
 
     // 3️⃣ Convert to Blob
     const response = await fetch(fileUri);
@@ -43,7 +54,7 @@ export async function pickAndUploadLogo(userId: string): Promise<string | null> 
     const filePath = `${userId}/${Date.now()}.jpg`;
     const { error: uploadError } = await supabase.storage
       .from("business-logos")
-      .upload(filePath, blob, { upsert: true });
+      .upload(filePath, blob, { contentType: blob.type || "image/jpeg", cacheControl: CACHE_CONTROL_IMMUTABLE, upsert: true });
 
     if (uploadError) throw uploadError;
 

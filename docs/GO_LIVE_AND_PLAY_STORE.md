@@ -91,8 +91,23 @@ Checklist to **activate** the app (production-ready backend + build) and **publi
 
 ### 2.5 Optional: Automated submissions with EAS Submit
 
-- [ ] Create a **Google Play service account** with access to your app in Play Console, download JSON key.
-- [ ] Save the key as `google-service-account.json` (e.g. in `apps/mobile/`) and reference it in `eas.json` under `submit.production.android.serviceAccountKeyPath` (or use EAS secrets).
+`eas.json` references `./google-service-account.json` under
+`submit.production.android.serviceAccountKeyPath`. This file is a **secret** and
+is **git-ignored** (see root `.gitignore`) — it must never be committed.
+
+**Generate the key (one-time):**
+
+1. In [Google Play Console](https://play.google.com/console) → **Users and permissions**, or in [Google Cloud Console](https://console.cloud.google.com) → **IAM & Admin → Service Accounts**, create a service account for the project linked to your Play app.
+2. Grant it access to your app in Play Console (**Users and permissions → Invite new users**, give at least *Release* permissions for the app).
+3. In Cloud Console, open the service account → **Keys → Add key → Create new key → JSON**. Download the JSON file.
+
+**Store the key (pick one):**
+
+- **Local (matches `eas.json` default):** place the downloaded file at `apps/mobile/google-service-account.json`. Because the path in `eas.json` is relative to that file, EAS resolves it automatically. The `.gitignore` rule `**/google-service-account.json` keeps it out of git — verify with `git status` that it is **not** listed.
+- **CI / shared (recommended for teams):** do **not** keep the file on disk. Instead store the JSON as an [EAS secret](https://docs.expo.dev/eas/environment-variables/) (e.g. `GOOGLE_SERVICE_ACCOUNT_JSON`) or a CI secret, and write it to `apps/mobile/google-service-account.json` at submit time. EAS will also read a service account configured in the Expo dashboard.
+
+> Treat this JSON like a password. If it is ever committed or leaked, delete the key in Cloud Console and generate a new one.
+
 - [ ] After a successful build:  
   `eas submit --platform android --latest --profile production`  
   to upload the last build to the track set in the submit profile (e.g. `internal` for testing first).

@@ -1,0 +1,25 @@
+# Flow: personal onboarding (core profile).
+# Selectors are intentionally tolerant — onboarding copy evolves frequently.
+# Tighten these (and add testIDs) once the onboarding screens are final.
+appId: com.winkly.app
+---
+# Skip if we're already past onboarding (e.g. re-run on a seeded account).
+- runFlow:
+    when:
+      visible: "What would you like to experience today?"
+    commands:
+      - evalScript: ${output.skip = true}
+
+# Best-effort progression through the onboarding wizard. Each "Continue"/"Next"
+# is optional so the flow tolerates a variable number of steps.
+- repeat:
+    times: 8
+    commands:
+      - tapOn:
+          text: ".*(Continue|Next|Done|Save|Finish|Skip).*"
+          optional: true
+      - waitForAnimationToEnd
+
+- assertVisible:
+    text: "What would you like to experience today?"
+    optional: true

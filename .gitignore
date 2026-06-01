@@ -21,6 +21,10 @@ apps/mobile/.env.production
 *.keystore
 *.mobileprovision
 
+# Google Play service account key for EAS Submit — NEVER commit (see docs/GO_LIVE_AND_PLAY_STORE.md)
+google-service-account.json
+**/google-service-account.json
+
 # OS junk
 .DS_Store
 Thumbs.db
