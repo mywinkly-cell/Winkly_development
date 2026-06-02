@@ -4,7 +4,7 @@ import React, { useRef } from "react";
 import { View, StyleSheet } from "react-native";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { PlannerHeader } from "@/components/layout/PlannerHeader";
-import { ModeBottomBar } from "@/components/layout/ModeBottomBar";
+import { BusinessBottomNav } from "@/components/layout/BusinessBottomNav";
 import PlannerIndex, { type PlannerIndexHandle } from "@/app/planner";
 import { Colors } from "@/constants/tokens";
 
@@ -16,7 +16,7 @@ export default function BusinessPlanner() {
       <View style={styles.content}>
         <PlannerIndex ref={plannerRef} embedded initialTab="business" />
       </View>
-      <ModeBottomBar mode="business" />
+      <BusinessBottomNav />
     </SafeScreenView>
   );
 }

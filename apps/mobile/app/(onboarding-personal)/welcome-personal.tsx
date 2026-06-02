@@ -82,7 +82,7 @@ export default function WelcomePersonal() {
 
       {/* CTA */}
       <TouchableOpacity
-        onPress={() => router.replace("/(modes)/romance/home" as Href)}
+        onPress={() => router.replace("/(modes)/romance" as Href)}
         style={{
           backgroundColor: Colors.primaryViolet,
           borderRadius: Layout.radii.card,

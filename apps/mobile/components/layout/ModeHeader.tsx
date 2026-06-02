@@ -1,15 +1,25 @@
 // ModeHeader — Shared header for mode screens (Discover, Chats, etc.)
-// Placeholder (left) | Winkly (center) | Right slot (filters or filter only).
-// No profile or settings — profile and settings only at Mode Selection.
+// Business: Filter (left) | Winkly (center) | Winkly AI (right) + search + filter chips
 
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  TextInput,
+  ScrollView,
+  Pressable,
+} from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Layout, Shadow, Typography, FontFamily, HEADER } from "@/constants/tokens";
+import { WinklyAISpark } from "@/components/ui/WinklyAISpark";
+import { BUSINESS_FILTER_CHIPS } from "@/constants/profileOptions";
+import type { BusinessChipFilter } from "@/hooks/useBusinessSearch";
 
-type RightSlot = "settings" | "filterSettings" | "filters";
+type RightSlot = "settings" | "filterSettings" | "filters" | "ai";
 type LeftSlot = "filters";
 type ModeKey = "romance" | "friends" | "business" | "events";
 export type HeaderVariant = "default" | "planner";
@@ -21,6 +31,13 @@ type ModeHeaderProps = {
   variant?: HeaderVariant;
   onFilterPress?: () => void;
   onSettingsPress?: () => void;
+  showSearchBar?: boolean;
+  searchValue?: string;
+  onSearchChange?: (q: string) => void;
+  activeChip?: BusinessChipFilter | null;
+  onChipSelect?: (chip: BusinessChipFilter) => void;
+  filterBadgeCount?: number;
+  onClearFilters?: () => void;
 };
 
 export function ModeHeader({
@@ -29,9 +46,17 @@ export function ModeHeader({
   rightSlot = "settings",
   variant = "default",
   onFilterPress,
+  showSearchBar = false,
+  searchValue = "",
+  onSearchChange,
+  activeChip,
+  onChipSelect,
+  filterBadgeCount = 0,
+  onClearFilters,
 }: ModeHeaderProps) {
   const router = useRouter();
   const isPlannerHeader = variant === "planner";
+  const isBusiness = currentMode === "business";
 
   const onFilterPressDefault = () => {
     Haptics.selectionAsync();
@@ -49,12 +74,17 @@ export function ModeHeader({
 
   const handleFiltersOnlyPress = () => {
     Haptics.selectionAsync();
-    if (onFilterPress) {
-      onFilterPress();
-    }
+    if (onFilterPress) onFilterPress();
   };
 
-  // Planner variant: Filter (left) | Winkly (center) | placeholder (no settings)
+  const handleAiPress = () => {
+    Haptics.selectionAsync();
+    router.push({
+      pathname: "/concierge",
+      params: { source_screen: "business_home", mode: "business" },
+    });
+  };
+
   if (isPlannerHeader) {
     return (
       <View style={styles.container}>
@@ -89,38 +119,117 @@ export function ModeHeader({
       style={styles.rightBtn}
       accessibilityLabel="Filtering"
     >
-      <Ionicons name="options-outline" size={HEADER.iconSize} color={filterIconColor} />
+      <Ionicons name="options-outline" size={24} color={filterIconColor} />
+      {filterBadgeCount > 0 ? (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{filterBadgeCount > 9 ? "9+" : filterBadgeCount}</Text>
+        </View>
+      ) : null}
     </TouchableOpacity>
   );
 
-  return (
-    <View style={styles.container}>
-      {leftSlot === "filters" && onFilterPress ? filterButton : <View style={styles.placeholder} />}
+  const rightContent =
+    isBusiness && (rightSlot === "ai" || rightSlot === "filters") ? (
+      <View style={styles.aiButton3D}>
+        <WinklyAISpark
+          feature="smart_matching"
+          onPress={handleAiPress}
+          size={HEADER.iconSize}
+          style={styles.sparkBtn}
+          accessibilityLabel="Winkly AI"
+        />
+      </View>
+    ) : leftSlot === "filters" ? (
+      <View style={styles.placeholder} />
+    ) : rightSlot === "filterSettings" ? (
+      <TouchableOpacity onPress={handleFilterPress} style={styles.rightBtn} accessibilityLabel="Planner filters">
+        <Ionicons name="filter" size={HEADER.iconSize} color={Colors.textPrimary} />
+      </TouchableOpacity>
+    ) : rightSlot === "filters" ? (
+      filterButton
+    ) : (
+      <View style={styles.placeholder} />
+    );
 
-      <View style={styles.centerTitleWrap}>
-        <Text style={styles.centerTitle}>Winkly</Text>
+  const showBusinessChrome = isBusiness && showSearchBar;
+
+  return (
+    <View style={styles.wrapper}>
+      <View style={[styles.container, showBusinessChrome && styles.containerNoBorder]}>
+        {isBusiness && onFilterPress ? filterButton : leftSlot === "filters" && onFilterPress ? filterButton : <View style={styles.placeholder} />}
+
+        <View style={styles.centerTitleWrap}>
+          <Text style={styles.centerTitle}>Winkly</Text>
+        </View>
+
+        {rightContent}
       </View>
 
-      {leftSlot === "filters" ? (
-        <View style={styles.placeholder} />
-      ) : rightSlot === "filterSettings" ? (
-        <TouchableOpacity
-          onPress={handleFilterPress}
-          style={styles.rightBtn}
-          accessibilityLabel="Planner filters"
-        >
-          <Ionicons name="filter" size={HEADER.iconSize} color={Colors.textPrimary} />
-        </TouchableOpacity>
-      ) : rightSlot === "filters" ? (
-        filterButton
-      ) : (
-        <View style={styles.placeholder} />
-      )}
+      {showBusinessChrome && currentMode === "business" ? (
+        <View style={styles.searchSection}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={16} color={Colors.gray500} />
+            <TextInput
+              style={styles.searchInput}
+              value={searchValue}
+              onChangeText={onSearchChange}
+              placeholder="Search name, role, company, skill…"
+              placeholderTextColor={Colors.gray500}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {searchValue.length > 0 ? (
+              <TouchableOpacity
+                onPress={() => onSearchChange?.("")}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close-circle" size={18} color={Colors.gray500} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsRow}
+          >
+            {BUSINESS_FILTER_CHIPS.map((chip) => {
+              const active =
+                chip.label === "All"
+                  ? !activeChip
+                  : activeChip?.label === chip.label;
+              return (
+                <Pressable
+                  key={chip.label}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    onChipSelect?.(chip);
+                  }}
+                  style={[styles.chip, active && styles.chipActive]}
+                >
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{chip.label}</Text>
+                </Pressable>
+              );
+            })}
+            {onClearFilters ? (
+              <Pressable onPress={onClearFilters} style={styles.clearChip}>
+                <Text style={styles.clearChipText}>Clear</Text>
+              </Pressable>
+            ) : null}
+          </ScrollView>
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrapper: {
+    backgroundColor: Colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray200,
+    ...Shadow.card,
+  },
   container: {
     paddingHorizontal: 16,
     ...Layout.topHeaderBar,
@@ -128,9 +237,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-    ...Shadow.card,
+  },
+  containerNoBorder: {
+    borderBottomWidth: 0,
   },
   placeholder: {
     width: HEADER.buttonSize,
@@ -142,7 +251,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   centerTitle: {
-    ...Typography.headerWinklyTitle,
+    ...Typography.headerTitle,
     color: Colors.primaryViolet,
     fontFamily: FontFamily.headingBold,
     textAlign: "center",
@@ -160,4 +269,75 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
+  badge: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.business.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  badgeText: { fontSize: 10, fontWeight: "700", color: Colors.white },
+  aiButton3D: {
+    width: HEADER.buttonSize,
+    height: HEADER.buttonSize,
+    borderRadius: HEADER.buttonSize / 2,
+    backgroundColor: Colors.gray100,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#1C1C1E",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  sparkBtn: {
+    width: HEADER.buttonSize,
+    height: HEADER.buttonSize,
+    marginRight: 0,
+  },
+  searchSection: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    backgroundColor: Colors.white,
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    height: 36,
+    borderRadius: Layout.radii.control,
+    backgroundColor: Colors.gray100,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: Colors.textPrimary,
+    paddingVertical: 0,
+  },
+  chipsRow: { gap: 8, paddingRight: 8 },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    backgroundColor: Colors.white,
+  },
+  chipActive: {
+    backgroundColor: Colors.business.secondary,
+    borderColor: Colors.business.primary,
+  },
+  chipText: { fontSize: 12, color: Colors.gray700, fontWeight: "600" },
+  chipTextActive: { color: Colors.business.primary },
+  clearChip: { paddingHorizontal: 12, paddingVertical: 6, justifyContent: "center" },
+  clearChipText: { fontSize: 12, color: Colors.gray500, fontWeight: "600" },
 });

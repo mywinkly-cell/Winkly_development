@@ -1,6 +1,7 @@
 // ────────────────────────────────────────────────
 // Winkly Mode Selection Screen – Premium v8.1
-// Home tab: 2x2 mode grid
+// Route: /(onboarding-personal)/mode-selection (this index file; not mode-selection.tsx)
+// Home tab: 2x2 mode grid — Romance / Friends / Business / Events → setActiveMode()
 // ────────────────────────────────────────────────
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -26,6 +27,7 @@ import { ModeSelectionBottomBar } from "@/components/layout/ModeSelectionBottomB
 import {
   computeModeProgressFromSubProfiles,
   getModeEntryBlockReason,
+  getModeSubProfileEditRoute,
   type ModeProgressMap,
 } from "@/lib/mode/subProfileProgress";
 import type { Mode } from "@/types";
@@ -33,10 +35,10 @@ import type { Mode } from "@/types";
 type ModeKey = Mode;
 
 const MODE_CARD_COLORS: Record<ModeKey, string> = {
-  romance: "#E83838",
-  friends: "#FF9100",
-  business: "#007AFF",
-  events: "#9D33FF",
+  romance: Colors.romance.primary,
+  friends: Colors.friends.primary,
+  business: Colors.business.primary,
+  events: Colors.events.primary,
 };
 
 const EVENTS_ICON = require("@/assets/icons/events-icon_1.png");
@@ -55,7 +57,7 @@ type AccountType = "personal" | "business";
 
 export default function ModeSelectionIndex() {
   const router = useRouter();
-  const { context, setActiveMode, refresh } = useModeContext();
+  const { context, setActiveMode, resetMode, refresh } = useModeContext();
   const [activeMode, setActiveModeLocal] = useState<ModeKey | null>(null);
   const [loading, setLoading] = useState(true);
   const [, setProfilePhotoUri] = useState<string | null>(null);
@@ -110,12 +112,16 @@ export default function ModeSelectionIndex() {
     load();
   }, [load]);
 
-  useFocusEffect(useCallback(() => {
-    load();
-    // Force authz permissions to re-sync at the mode gateway so a newly
-    // completed sub-profile is reflected before the user enters a mode.
-    refresh();
-  }, [load, refresh]));
+  useFocusEffect(
+    useCallback(() => {
+      // Clear stale active_mode so RouteGuard does not fight the gateway after a bounce-back.
+      resetMode();
+      load();
+      // Force authz permissions to re-sync at the mode gateway so a newly
+      // completed sub-profile is reflected before the user enters a mode.
+      void refresh();
+    }, [load, refresh, resetMode])
+  );
 
   const handleModePress = async (mode: ModeKey) => {
     if (loading || enteringMode) return;
@@ -137,21 +143,51 @@ export default function ModeSelectionIndex() {
 
       if (blockReason === "not_enabled") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        Alert.alert(
-          `${cfg.label} not set up`,
-          `Turn on ${cfg.label} in your profile and save to unlock this mode.`,
-          [{ text: "OK" }, { text: "Set up profile", onPress: () => router.push("/(onboarding-personal)/profile-core?edit=1") }]
-        );
+        const editRoute = getModeSubProfileEditRoute(mode);
+        if (mode === "business") {
+          Alert.alert(
+            "Business mode not set up",
+            "Turn on Business in your profile to unlock professional networking.",
+            [
+              { text: "Not now", style: "cancel" },
+              { text: "Set up profile", onPress: () => router.push(editRoute as never) },
+            ]
+          );
+        } else {
+          Alert.alert(
+            `${cfg.label} not set up`,
+            `Turn on ${cfg.label} in your profile and save to unlock this mode.`,
+            [
+              { text: "Not now", style: "cancel" },
+              { text: "Set up profile", onPress: () => router.push(editRoute as never) },
+            ]
+          );
+        }
         return;
       }
 
       if (blockReason === "incomplete") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        Alert.alert(
-          "Complete required fields",
-          `Add main photo, bio, and goals to your ${cfg.subProfileName} sub-profile to use ${cfg.label} mode.`,
-          [{ text: "OK" }, { text: "Complete now", onPress: () => router.push("/(onboarding-personal)/profile-core?edit=1") }]
-        );
+        const editRoute = getModeSubProfileEditRoute(mode);
+        if (mode === "business") {
+          Alert.alert(
+            "Complete your Business profile",
+            "Add a photo, bio, and networking goals to your Business sub-profile before using Business mode.",
+            [
+              { text: "Not now", style: "cancel" },
+              { text: "Complete profile", onPress: () => router.push(editRoute as never) },
+            ]
+          );
+        } else {
+          Alert.alert(
+            "Complete required fields",
+            `Add main photo, bio, and goals to your ${cfg.subProfileName} sub-profile to use ${cfg.label} mode.`,
+            [
+              { text: "Not now", style: "cancel" },
+              { text: "Complete now", onPress: () => router.push(editRoute as never) },
+            ]
+          );
+        }
         return;
       }
 

@@ -1,5 +1,5 @@
 // apps/mobile/app/(modes)/business/_layout.tsx
-// Business mode stack. Screens render their own bottom nav.
+// Business mode stack. Screens render BusinessBottomNav (Home, Discover, Chats, Planner).
 
 import React from "react";
 import { Platform } from "react-native";

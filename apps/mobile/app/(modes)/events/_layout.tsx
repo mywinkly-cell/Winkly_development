@@ -1,5 +1,5 @@
 // apps/mobile/app/(modes)/events/_layout.tsx
-// Events mode stack. Screens render their own bottom nav (ModeBottomBar).
+// Events mode stack. Screens render EventsBottomNav (Home, Discover, Chats, Planner).
 
 import React from "react";
 import { Platform } from "react-native";

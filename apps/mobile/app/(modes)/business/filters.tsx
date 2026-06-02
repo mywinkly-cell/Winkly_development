@@ -13,7 +13,7 @@ import {
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { ModeBottomBar } from "@/components/layout/ModeBottomBar";
+import { BusinessBottomNav } from "@/components/layout/BusinessBottomNav";
 import { Colors, Typography, Layout, FontFamily, HEADER } from "@/constants/tokens";
 import {
   LANGUAGE_OPTIONS,
@@ -208,7 +208,7 @@ export default function BusinessFiltersScreen() {
         </Pressable>
         <View style={{ height: 40 }} />
       </ScrollView>
-      <ModeBottomBar mode="business" />
+      <BusinessBottomNav />
     </View>
   );
 }

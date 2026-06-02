@@ -272,6 +272,67 @@ export const NETWORKING_GOALS_OPTIONS = [
 
 export const SKILLS_POPULAR_BUSINESS = ["Project management", "Marketing", "Sales", "Leadership", "Data analytics"];
 
+export const BUSINESS_NETWORKING_GOALS = [
+  "Open to advising",
+  "Looking for co-founder",
+  "Hiring",
+  "Seeking investment",
+  "Open to collaboration",
+  "Freelance & consulting",
+  "Building partnerships",
+  "Looking for mentorship",
+  "Offering mentorship",
+] as const;
+
+export const BUSINESS_ROLE_TYPES = [
+  "Founder / CEO",
+  "Co-founder",
+  "C-suite",
+  "Investor",
+  "Angel investor",
+  "VC",
+  "Engineer",
+  "Product manager",
+  "Designer",
+  "Sales & BD",
+  "Marketing",
+  "Consultant",
+  "Freelancer",
+  "Researcher",
+  "Other",
+] as const;
+
+export const BUSINESS_INDUSTRIES = [
+  "Tech & SaaS",
+  "Fintech",
+  "HealthTech",
+  "E-commerce",
+  "Creative & Media",
+  "Real Estate",
+  "Legal & Compliance",
+  "Education",
+  "Climate tech",
+  "Mobility & Logistics",
+  "Consumer",
+  "B2B Services",
+  "Other",
+] as const;
+
+export const BUSINESS_FILTER_CHIPS: {
+  label: string;
+  roleType?: string;
+  goal?: string;
+}[] = [
+  { label: "All" },
+  { label: "Founders", roleType: "Founder / CEO" },
+  { label: "Investors", roleType: "Investor" },
+  { label: "Engineers", roleType: "Engineer" },
+  { label: "Designers", roleType: "Designer" },
+  { label: "Consultants", roleType: "Consultant" },
+  { label: "Open to advise", goal: "Open to advising" },
+  { label: "Hiring", goal: "Hiring" },
+];
+
 // ─── Interests: 5 most popular per mode + users can add custom ─────────────
 export const INTEREST_POPULAR_ROMANCE = ["Travel", "Music", "Food", "Fitness", "Movies"];
 export const INTEREST_POPULAR_FRIENDS = ["Hiking", "Coffee", "Travel", "Movies", "Fitness"];

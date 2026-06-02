@@ -21,7 +21,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { ModeHeader } from "@/components/layout/ModeHeader";
-import { ModeBottomBar } from "@/components/layout/ModeBottomBar";
+import { EventsBottomNav } from "@/components/layout/EventsBottomNav";
 import { EventCard, type EventCardItem } from "@/components/ui/EventCard";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { EVENT_CATEGORIES, type EventCategoryId, type EventTimeRange } from "@/constants/eventCategories";
@@ -388,7 +388,7 @@ export default function EventsHome() {
         </View>
       </ScrollView>
 
-      <ModeBottomBar mode="events" />
+      <EventsBottomNav />
     </View>
   );
 }

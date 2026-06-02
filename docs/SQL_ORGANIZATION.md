@@ -2,7 +2,7 @@
 
 How to keep Supabase SQL clean, well structured, and organized when you have many queries (e.g. 100+ in the Dashboard or across migrations).
 
-**Last updated:** 2026-02-13
+**Last updated:** 2026-06-02
 
 ---
 
@@ -66,21 +66,14 @@ For each exported file, label it:
 ```
 supabase/
 ├── config.toml
-├── migrations/                    # Applied in order by timestamp
+├── migrations/                    # 48 SQL files — see README.md in this folder
+│   ├── README.md                  # Audit name mapping + core object index
 │   ├── 20250130000001_winkly_schema.sql
-│   ├── 20250130000002_winkly_rls.sql
-│   ├── 20250130000003_profiles_core_instagram.sql
-│   ├── 20250130100000_user_profiles_with_instagram.sql
-│   ├── 20250130100001_align_sub_profiles.sql
-│   ├── 20250130200000_chat_system_full.sql
-│   ├── 20250130200001_chat_rls.sql
-│   ├── 20250130200002_chat_extras.sql
-│   ├── 20250130200003_direct_chat_triggers.sql
-│   └── 20250130200004_conversation_unread_counts.sql
+│   └── … (through 20260614120000_location_privacy_precision.sql)
+├── seed.sql                       # Loaded on db reset
 ├── scripts/                       # Run manually when needed
-│   ├── verify-setup.sql
-│   ├── verify-setup-report.sql
-│   └── create-fake-romance-match.sql
+│   ├── verify-setup.sql           # Tables, views, RPCs after migrate
+│   └── …
 └── functions/
 ```
 
@@ -88,20 +81,36 @@ supabase/
 
 ## 4. Migration inventory (what each file does)
 
-Use this to see at a glance what you have and avoid duplicate or missing pieces.
+**48 files** on `main`. Full list and audit-name mapping: **`supabase/migrations/README.md`**.
+
+Grouped summary (apply in timestamp order):
+
+| Group | Migrations (prefix range) | Purpose |
+|-------|---------------------------|---------|
+| **Core schema + RLS** | `20250130000001` … `20250130000003` | Enums, `users`, `profiles_core`, `profiles_mode`, `profiles_business`, events, planner, conversations, messages, `ai_requests`, `handle_new_user`; core RLS |
+| **Profiles** | `20250130100000`, `20250130100001` | `user_profiles`; `sub_profiles` create + align |
+| **Chat** | `20250130200000` … `20250130200004` | Full chat stack, RLS, triggers, unread counts, `romance_likes`, `romance_new_matches` |
+| **Subscriptions & audit** | `20250216000001` … `20250216110000` | Tiers, event chat rules, `sub_profiles` / views (`business_profiles`, `friend_profiles`, `public_profile_view`), companies |
+| **Planner & romance** | `20250217000000` … `20250223000000` | Planner invitations, super-like, `romance_discover_feed` |
+| **Friends & auth** | `20250305000000` … `20250306100000` | Direct chat alias, friend_profiles views, auth trigger |
+| **Groups & compatibility** | `20250315100000`, `20250315110000` | Group invitations, embeddings |
+| **Concierge & behavior** | `20260405140000` … `20260408120000` | `profile_photo_verifications`, behavior signals, concierge RPCs, AI match proposals |
+| **Plans & events** | `20260422120000` … `20260426121000` | Pending plans, confirmed events, night_owl views |
+| **Security & feeds** | `20260505220000` … `20260605121000` | Feed hardening, push tokens, friends feed fixes, swipes/requests, `match_contacts`, mode discover RPCs |
+| **Onboarding & geo** | `20260606140000` … `20260610120000` | Friends accept/decline, onboarding fields, dates view, PostGIS |
+| **Messaging & push** | `20260611120000` … `20260612130000` | Match-gated messaging, `messages.client_id`, push triggers |
+| **Storage & privacy** | `20260613120000`, `20260614120000` | Storage buckets/policies; location privacy |
+
+Key single files (detail):
 
 | Migration | Purpose |
 |-----------|---------|
-| `20250130000001_winkly_schema.sql` | Core schema: enums, `users`, `profiles_core`, `profiles_mode`, `profiles_business`, `follows`, `events`, `event_participants`, `event_invitations`, `planner_items`, `planner_participants`, `conversations`, `conversation_members`, `messages`, `event_chat_settings`, `groups`, `group_members`, `wishlist_items`, `user_preferences`, `calendar_connections`, `ai_requests`, `user_blocks`; triggers (e.g. `handle_new_user`). |
-| `20250130000002_winkly_rls.sql` | RLS for all core tables (users, profiles, follows, events, planner, conversations, messages, groups, wishlist, preferences, calendar, ai_requests). |
-| `20250130000003_profiles_core_instagram.sql` | Adds `instagram` to `profiles_core` (if not already present). |
-| `20250130100000_user_profiles_with_instagram.sql` | User/profile views or compatibility (user_profiles, instagram). |
-| `20250130100001_align_sub_profiles.sql` | Aligns `sub_profiles` with app (columns, unique on `user_id`, `mode`). |
-| `20250130200000_chat_system_full.sql` | Chat enums (`dm_source`, `message_type`, `member_role`, etc.), `conversations`/`conversation_members` extensions, `conversation_member_settings`, `messages` extensions, `message_reactions`, `message_read_receipts`, reporting. |
-| `20250130200001_chat_rls.sql` | RLS for chat tables (conversations, members, settings, messages, reactions, read receipts). |
-| `20250130200002_chat_extras.sql` | Chat-related triggers, functions, indexes. |
-| `20250130200003_direct_chat_triggers.sql` | Direct chat creation (e.g. on mutual follow). |
-| `20250130200004_conversation_unread_counts.sql` | Unread count logic (function/view/trigger). |
+| `20250130000001_winkly_schema.sql` | Core tables: `users`, `profiles_core`, `profiles_mode`, `profiles_business`, `events`, `planner_items`, `conversations`, `messages`, `ai_requests`, … |
+| `20250130100001_align_sub_profiles.sql` | Creates + aligns `sub_profiles` (must run before later profile migrations) |
+| `20250216110000_remaining_tables_and_views.sql` | `sub_profiles`, `business_profiles` / `friend_profiles` views, notifications scaffolding |
+| `20260605121000_mode_discover_feeds_rpc.sql` | `friends_discover_feed`, `business_discover_feed` |
+| `20260605120000_swipes_friends_requests_contacts_match.sql` | `match_contacts` |
+| `20260613120000_storage_buckets_policies.sql` | `user-photos`, `user-videos`, `business-logos` buckets |
 
 ---
 

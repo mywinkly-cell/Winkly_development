@@ -11,6 +11,7 @@ import {
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { ModeHeader } from "@/components/layout/ModeHeader";
+import { EventsBottomNav } from "@/components/layout/EventsBottomNav";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 
@@ -129,7 +130,8 @@ export default function EventsDiscover() {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: Colors.background }]}>
+    <View style={{ flex: 1, backgroundColor: Colors.background }}>
+      <View style={[styles.screen, { flex: 1, backgroundColor: Colors.background }]}>
       <ModeHeader currentMode="events" rightSlot="filterSettings" />
       <View style={styles.header}>
         <Text style={[styles.title, Typography.h2]}>Events</Text>
@@ -293,6 +295,8 @@ export default function EventsDiscover() {
           </View>
         )}
       </ScrollView>
+      </View>
+      <EventsBottomNav />
     </View>
   );
 }

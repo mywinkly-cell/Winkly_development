@@ -162,7 +162,7 @@ export function MatchesConnectionsSubheader({
             const chatId = await createDirectChat(
               item.id,
               isRomance ? "romance" : isFriends ? "friends" : "business",
-              "match",
+              isRomance ? "match" : "connection",
               userData.user.id
             );
             router.push(`/chats/${chatId}`);

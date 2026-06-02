@@ -16,5 +16,12 @@ export {
   type UpdateLocationResult,
   type LocationPrecision,
 } from "./updateLocation";
+export {
+  getModeLocationCopy,
+  hasShownModeLocationRationale,
+  markModeLocationRationaleShown,
+  modeLocationRationaleKey,
+  type ModeLocationCopy,
+} from "./modeLocationPrompt";
 export { searchCities, type CityCountry } from "./citySearch";
 export { useFormatLocationDisplay, useNormalizedLocation } from "./useLocationDisplay";

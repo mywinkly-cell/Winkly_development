@@ -13,7 +13,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
 
 const KEY_LAST_UPDATE = "winkly_location_last_update";
-const KEY_PERMISSION_ASKED = "winkly_location_permission_asked";
 
 /**
  * Discovery location precision.
@@ -33,15 +32,15 @@ export type UpdateLocationResult =
  * Refresh the user's stored location.
  *
  * @param opts.force        Skip the throttle (e.g. user tapped "Use my location").
- * @param opts.promptIfNeeded If false, only updates when permission is already
- *                            granted (won't show the OS prompt). Defaults true.
+ * @param opts.promptIfNeeded If true, may show the OS prompt when undetermined.
+ *                            Defaults false — use ModeLocationGate for first-time rationale.
  */
 export async function updateMyLocationOnAppOpen(opts?: {
   force?: boolean;
   promptIfNeeded?: boolean;
 }): Promise<UpdateLocationResult> {
   const force = opts?.force ?? false;
-  const promptIfNeeded = opts?.promptIfNeeded ?? true;
+  const promptIfNeeded = opts?.promptIfNeeded ?? false;
 
   try {
     if (!force) {
@@ -55,13 +54,10 @@ export async function updateMyLocationOnAppOpen(opts?: {
     let granted = current.status === "granted";
 
     if (!granted) {
-      // Only prompt once unless explicitly forced, and only when allowed to.
-      const alreadyAsked = await AsyncStorage.getItem(KEY_PERMISSION_ASKED);
       const canRequest = current.canAskAgain !== false;
-      if (!promptIfNeeded || (alreadyAsked && !force) || !canRequest) {
+      if (!promptIfNeeded || !canRequest) {
         return { ok: false, reason: "denied" };
       }
-      await AsyncStorage.setItem(KEY_PERMISSION_ASKED, "1");
       const req = await Location.requestForegroundPermissionsAsync();
       granted = req.status === "granted";
     }

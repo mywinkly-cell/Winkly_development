@@ -4,7 +4,7 @@ import React, { useRef } from "react";
 import { View, StyleSheet } from "react-native";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { PlannerHeader } from "@/components/layout/PlannerHeader";
-import { ModeBottomBar } from "@/components/layout/ModeBottomBar";
+import { EventsBottomNav } from "@/components/layout/EventsBottomNav";
 import PlannerIndex, { type PlannerIndexHandle } from "@/app/planner";
 import { Colors } from "@/constants/tokens";
 
@@ -16,7 +16,7 @@ export default function EventsPlanner() {
       <View style={styles.content}>
         <PlannerIndex ref={plannerRef} embedded initialTab="events" />
       </View>
-      <ModeBottomBar mode="events" />
+      <EventsBottomNav />
     </SafeScreenView>
   );
 }
