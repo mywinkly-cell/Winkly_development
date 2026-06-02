@@ -1,7 +1,9 @@
 # patch-package patches
 
-These patches are applied automatically after `npm install` via the `postinstall`
-hook (`patch-package`). Each entry below documents **why** the patch exists and
+These patches are applied automatically after `npm install` / `npm ci` via the
+repo-root `postinstall` hook (`patch-package --patch-dir apps/mobile/patches`).
+Hoisted workspace deps live in the root `node_modules`, so patches must run from
+the monorepo root — not from `apps/mobile` alone. Each entry below documents **why** the patch exists and
 **when it can be removed** — re-check on every dependency bump so we don't carry
 patches longer than needed.
 

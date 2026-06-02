@@ -112,7 +112,7 @@ rather than committing real `.env.*` files.
 
 `.github/workflows/ci.yml` runs on every PR and on pushes to `main`:
 
-- `npm ci` (workspace install)
+- `npm ci` (workspace install; root **`postinstall`** runs `patch-package --patch-dir apps/mobile/patches` so hoisted deps like `react-native-range-slider-expo` typecheck in CI)
 - `npm run mobile:lint`
 - `npm run mobile:typecheck` (the RN "build" check)
 - `npm run mobile:test`
