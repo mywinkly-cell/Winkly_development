@@ -22,14 +22,14 @@ const ModeContext = createContext<{
   context: ActiveModeContext;
   setActiveMode: (mode: Mode, personaId?: string | null) => void;
   resetMode: () => void;
-  /** Force a fresh load from Supabase, bypassing the cache (e.g. after a sub-profile/mode is added). */
-  refresh: () => Promise<void>;
+  /** Force a fresh load from Supabase, bypassing the cache. Returns latest permissions when load succeeds. */
+  refresh: () => Promise<Mode[] | null>;
   loading: boolean;
 }>({
   context: defaultContext,
   setActiveMode: () => {},
   resetMode: () => {},
-  refresh: async () => {},
+  refresh: async () => null,
   loading: true,
 });
 
@@ -173,7 +173,25 @@ export function ModeContextProvider({ children }: { children: React.ReactNode })
     [user, accountType, signOut, fetchUserContextData, applyLoadedData]
   );
 
-  const refresh = useCallback(() => loadUserContext({ force: true }), [loadUserContext]);
+  const refresh = useCallback(async (): Promise<Mode[] | null> => {
+    if (!user) return null;
+    const cached = contextCache && contextCache.userId === user.id ? contextCache : null;
+    const result = await fetchUserContextData(user.id);
+    if (result.status === "authError") {
+      contextCache = null;
+      signOut();
+      setContext(defaultContext);
+      setLoading(false);
+      return null;
+    }
+    if (result.status === "ok") {
+      contextCache = { userId: user.id, data: result.data, fetchedAt: Date.now() };
+      applyLoadedData(user.id, result.data);
+      setLoading(false);
+      return result.data.permissions;
+    }
+    return cached?.data.permissions ?? null;
+  }, [user, signOut, fetchUserContextData, applyLoadedData]);
 
   useEffect(() => {
     if (!authLoading) loadUserContext();

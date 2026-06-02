@@ -23,15 +23,14 @@ import { useModeContext } from "@/providers";
 import { Colors, Typography, FontFamily } from "@/constants/tokens";
 import { ModeSelectionHeader } from "@/components/layout/ModeSelectionHeader";
 import { ModeSelectionBottomBar } from "@/components/layout/ModeSelectionBottomBar";
+import {
+  computeModeProgressFromSubProfiles,
+  getModeEntryBlockReason,
+  type ModeProgressMap,
+} from "@/lib/mode/subProfileProgress";
+import type { Mode } from "@/types";
 
-type ModeKey = "romance" | "friends" | "business" | "events";
-
-type ModeProgress = {
-  romance: number;
-  friends: number;
-  business: number;
-  events: number;
-};
+type ModeKey = Mode;
 
 const MODE_CARD_COLORS: Record<ModeKey, string> = {
   romance: "#E83838",
@@ -61,12 +60,12 @@ export default function ModeSelectionIndex() {
   const [loading, setLoading] = useState(true);
   const [, setProfilePhotoUri] = useState<string | null>(null);
   const [, setAccountType] = useState<AccountType>("personal");
-  const [progress, setProgress] = useState<ModeProgress>({
+  const [progress, setProgress] = useState<ModeProgressMap>({
     romance: 0,
     friends: 0,
     business: 0,
-    events: 100,
   });
+  const [enteringMode, setEnteringMode] = useState<ModeKey | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -79,30 +78,7 @@ export default function ModeSelectionIndex() {
         .select("mode, bio, photos, meta")
         .eq("user_id", userId);
 
-      const p: ModeProgress = { romance: 0, friends: 0, business: 0, events: 100 };
-
-      (profiles ?? []).forEach((row: { mode: string; bio: string | null; photos: string[] | null; meta?: Record<string, unknown> | null }) => {
-        const hasBio = !!(row.bio?.trim?.());
-        const hasPhotos = Array.isArray(row.photos) && row.photos.filter(Boolean).length > 0;
-        const meta = row.meta as Record<string, unknown> | null | undefined;
-        const hasGoals =
-          row.mode === "romance"
-            ? Array.isArray(meta?.relationship_goals) && (meta.relationship_goals as unknown[]).length > 0
-            : row.mode === "friends"
-              ? Array.isArray(meta?.meetup_goals) && (meta.meetup_goals as unknown[]).length > 0
-              : row.mode === "business"
-                ? (Array.isArray(meta?.networking_goals) && (meta.networking_goals as unknown[]).length > 0) ||
-                  (typeof meta?.networking_goals === "string" && (meta.networking_goals as string).trim().length > 0)
-                : false;
-        const canUse = hasPhotos && hasBio && hasGoals;
-        const percent = canUse ? 100 : Math.round(([hasPhotos, hasBio, hasGoals].filter(Boolean).length / 3) * 100);
-
-        if (row.mode === "romance") p.romance = percent;
-        if (row.mode === "friends") p.friends = percent;
-        if (row.mode === "business") p.business = percent;
-      });
-
-      setProgress(p);
+      setProgress(computeModeProgressFromSubProfiles(profiles ?? []));
       setAccountType((context.account_type as AccountType) ?? "personal");
 
       if ((context.account_type as AccountType) === "personal") {
@@ -141,34 +117,50 @@ export default function ModeSelectionIndex() {
     refresh();
   }, [load, refresh]));
 
-  const handleModePress = (mode: ModeKey) => {
-    if (loading) return;
+  const handleModePress = async (mode: ModeKey) => {
+    if (loading || enteringMode) return;
 
     if (mode === "events") {
       Haptics.selectionAsync();
+      setEnteringMode("events");
       setActiveModeLocal("events");
       setActiveMode("events");
-      router.replace("/(modes)/events");
+      setEnteringMode(null);
       return;
     }
 
-    const percent = progress[mode];
-    const canUse = percent >= 100;
-    if (!canUse) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    setEnteringMode(mode);
+    try {
+      const permissions = (await refresh()) ?? context.permissions;
+      const blockReason = getModeEntryBlockReason(mode, progress, permissions);
       const cfg = MODE_CONFIG[mode];
-      Alert.alert(
-        "Complete required fields",
-        `Add main photo, bio, and goals to your ${cfg.subProfileName} sub-profile to use ${cfg.label} mode.`,
-        [{ text: "OK" }, { text: "Complete now", onPress: () => router.push("/(onboarding-personal)/profile-core?edit=1") }]
-      );
-      return;
-    }
 
-    Haptics.selectionAsync();
-    setActiveModeLocal(mode);
-    setActiveMode(mode);
-    router.replace(`/(modes)/${mode}` as any);
+      if (blockReason === "not_enabled") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert(
+          `${cfg.label} not set up`,
+          `Turn on ${cfg.label} in your profile and save to unlock this mode.`,
+          [{ text: "OK" }, { text: "Set up profile", onPress: () => router.push("/(onboarding-personal)/profile-core?edit=1") }]
+        );
+        return;
+      }
+
+      if (blockReason === "incomplete") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert(
+          "Complete required fields",
+          `Add main photo, bio, and goals to your ${cfg.subProfileName} sub-profile to use ${cfg.label} mode.`,
+          [{ text: "OK" }, { text: "Complete now", onPress: () => router.push("/(onboarding-personal)/profile-core?edit=1") }]
+        );
+        return;
+      }
+
+      Haptics.selectionAsync();
+      setActiveModeLocal(mode);
+      setActiveMode(mode);
+    } finally {
+      setEnteringMode(null);
+    }
   };
 
   return (
@@ -204,6 +196,9 @@ export default function ModeSelectionIndex() {
         <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", marginHorizontal: -CARD_GAP / 2 }}>
           {(["romance", "friends", "business", "events"] as ModeKey[]).map((mode) => {
             const cfg = MODE_CONFIG[mode];
+            const ready =
+              mode === "events" ||
+              getModeEntryBlockReason(mode, progress, context.permissions) === null;
             return (
               <ModeCard
                 key={mode}
@@ -213,7 +208,9 @@ export default function ModeSelectionIndex() {
                 icon={cfg.icon}
                 iconImage={cfg.iconImage}
                 active={activeMode === mode}
-                onPress={() => handleModePress(mode)}
+                ready={ready}
+                busy={enteringMode === mode}
+                onPress={() => void handleModePress(mode)}
               />
             );
           })}
@@ -232,6 +229,8 @@ type ModeCardProps = {
   icon: keyof typeof Ionicons.glyphMap;
   iconImage?: number;
   active: boolean;
+  ready: boolean;
+  busy: boolean;
   onPress: () => void;
 };
 
@@ -243,7 +242,7 @@ const CARD_RADIUS = 28;
 const CARD_PADDING = 24;
 const ACTIVE_SCALE = 1.08;
 
-function ModeCard({ label, description, color, icon, iconImage, active, onPress }: ModeCardProps) {
+function ModeCard({ label, description, color, icon, iconImage, active, ready, busy, onPress }: ModeCardProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -263,8 +262,20 @@ function ModeCard({ label, description, color, icon, iconImage, active, onPress 
   };
 
   return (
-    <View style={{ opacity: 1, transform: [{ scale: active ? ACTIVE_SCALE : 1 }], margin: CARD_GAP / 2 }}>
-      <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={onPress} android_ripple={{ color: "transparent" }}>
+    <View
+      style={{
+        opacity: ready && !busy ? 1 : 0.72,
+        transform: [{ scale: active ? ACTIVE_SCALE : 1 }],
+        margin: CARD_GAP / 2,
+      }}
+    >
+      <Pressable
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        onPress={onPress}
+        disabled={busy}
+        android_ripple={{ color: "transparent" }}
+      >
         <Animated.View
           style={[
             {
@@ -292,6 +303,9 @@ function ModeCard({ label, description, color, icon, iconImage, active, onPress 
             }}
           >
             <View style={{ alignItems: "center", flex: 1, justifyContent: "center" }}>
+              {!ready ? (
+                <Ionicons name="lock-closed" size={18} color="rgba(255,255,255,0.9)" style={{ position: "absolute", top: 0, right: 0 }} />
+              ) : null}
               {iconImage ? (
                 <Image source={iconImage} style={{ width: CARD_ICON_SIZE, height: CARD_ICON_SIZE, marginBottom: 12, tintColor: Colors.white }} resizeMode="contain" />
               ) : (

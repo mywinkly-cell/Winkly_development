@@ -53,7 +53,10 @@ BEGIN
     SELECT c.relname
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname = 'public' AND c.relkind = 'r'
+    WHERE n.nspname = 'public'
+      AND c.relkind = 'r'
+      -- PostGIS catalog tables are owned by the extension; do not ALTER them here.
+      AND c.relname NOT IN ('spatial_ref_sys', 'geometry_columns', 'geography_columns')
   LOOP
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', r.relname);
   END LOOP;

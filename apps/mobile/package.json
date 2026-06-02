@@ -4,7 +4,6 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "postinstall": "patch-package",
     "validate-env": "node scripts/validate-env.js",
     "eas-build-pre-install": "node scripts/validate-env.js",
     "start": "expo start",
