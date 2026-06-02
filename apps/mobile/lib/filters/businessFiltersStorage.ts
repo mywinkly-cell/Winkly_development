@@ -14,6 +14,10 @@ export interface BusinessFiltersState {
   roles: string[];
   networkingGoals: string[];
   interests: string[];
+  /** Free-text search on Business Home (name, role, interests, etc.). */
+  searchQuery: string;
+  /** City or region filter (client-side on profile location fields). */
+  location: string;
 }
 
 const DEFAULT_BUSINESS_FILTERS: BusinessFiltersState = {
@@ -23,6 +27,8 @@ const DEFAULT_BUSINESS_FILTERS: BusinessFiltersState = {
   roles: [],
   networkingGoals: [],
   interests: [],
+  searchQuery: "",
+  location: "",
 };
 
 export async function getBusinessFilters(): Promise<BusinessFiltersState> {
@@ -55,6 +61,25 @@ export function applyBusinessFiltersToFeed<T extends {
   items: T[],
   filters: BusinessFiltersState
 ): T[] {
+  const q = filters.searchQuery.trim().toLowerCase();
+  const loc = filters.location.trim().toLowerCase();
+
+  let out = items;
+
+  if (q) {
+    out = out.filter((item) => {
+      const text = [item.title, item.subtitle, item.meta].filter(Boolean).join(" ").toLowerCase();
+      return text.includes(q);
+    });
+  }
+
+  if (loc) {
+    out = out.filter((item) => {
+      const text = [item.meta, item.subtitle].filter(Boolean).join(" ").toLowerCase();
+      return text.includes(loc);
+    });
+  }
+
   if (
     filters.industries.length === 0 &&
     filters.roles.length === 0 &&
@@ -62,11 +87,11 @@ export function applyBusinessFiltersToFeed<T extends {
     filters.interests.length === 0 &&
     (filters.languages.length === 0 || filters.languages.includes("Any"))
   ) {
-    return items;
+    return out;
   }
   const searchText = (item: T) =>
     [item.title, item.subtitle, item.meta].filter(Boolean).join(" ").toLowerCase();
-  return items.filter((item) => {
+  return out.filter((item) => {
     const text = searchText(item);
     if (filters.industries.length > 0) {
       const match = filters.industries.some((i) => text.includes(i.toLowerCase()));

@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import type { AppMode, Conversation, ConversationMember, Message, UserMini } from "@/lib/chats";
+import { formatChatInboxTimestamp, loadChatInbox, sortChatInboxItems } from "@/lib/chats/inbox";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { ChatPreviewCard } from "./ChatPreviewCard";
 import { MatchesConnectionsSubheader, type MatchConnectionItem } from "./MatchesConnectionsSubheader";
@@ -24,7 +25,9 @@ const CHAT_TAB_CONFIG: { key: ChatTabKey; label: string; secondary: string; acce
   { key: "events", label: "Events", secondary: Colors.events.secondary, accent: Colors.events.primary },
 ];
 
-function getTabsWithModeFirst(sourceMode: "romance" | "friends" | "business" | "all"): typeof CHAT_TAB_CONFIG {
+function getTabsWithModeFirst(
+  sourceMode: "romance" | "friends" | "business" | "events" | "all"
+): typeof CHAT_TAB_CONFIG {
   if (sourceMode === "all") return CHAT_TAB_CONFIG;
   const modeTab = CHAT_TAB_CONFIG.find((t) => t.key === sourceMode)!;
   const rest = CHAT_TAB_CONFIG.filter((t) => t.key !== sourceMode && t.key !== "all");
@@ -40,7 +43,7 @@ function formatName(u?: UserMini | null) {
 }
 
 type ChatsInboxContentProps = {
-  sourceMode: "romance" | "friends" | "business" | "all";
+  sourceMode: "romance" | "friends" | "business" | "events" | "all";
 };
 
 export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
@@ -93,134 +96,13 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
     setError(null);
 
     try {
-      let q = supabase
-        .from("conversations")
-        .select("id,type,mode,name,last_message_at,archived,related_event_id")
-        .eq("archived", false)
-        .order("last_message_at", { ascending: false, nullsFirst: false })
-        .limit(200);
-
-      if (activeTab !== "all") q = q.eq("mode", activeTab);
-
-      const { data: convs, error: convErr } = await q;
-      if (convErr) throw convErr;
-
-      const conversations = (convs ?? []) as Conversation[];
-      setItems(conversations);
-
-      const convIds = conversations.map((c) => c.id);
-      if (convIds.length === 0) {
-        setParticipantsByConv({});
-        setLastMessageByConv({});
-        setUsersById({});
-        setMemberSettingsByConv({});
-        setUnreadByConv({});
-        setLoading(false);
-        return;
-      }
-
-      const { data: auth } = await supabase.auth.getUser();
-      const uid = auth.user?.id ?? null;
-
-      const membersPromise = supabase
-        .from("conversation_members")
-        .select("conversation_id,user_id,role")
-        .in("conversation_id", convIds)
-        .is("left_at", null);
-
-      const msgsPromise = supabase
-        .from("messages")
-        .select("id,conversation_id,sender_id,content,message_type,attachments,reply_to_id,edited_at,deleted_at,delete_type,status,created_at")
-        .in("conversation_id", convIds)
-        .order("created_at", { ascending: false })
-        .limit(300);
-
-      const settingsPromise = uid
-        ? supabase
-            .from("conversation_member_settings")
-            .select("conversation_id,pinned,last_read_at")
-            .in("conversation_id", convIds)
-            .eq("user_id", uid)
-        : Promise.resolve({ data: [] as { conversation_id: string; pinned: boolean; last_read_at: string | null }[], error: null });
-
-      const unreadPromise = uid
-        ? supabase.rpc("get_conversation_unread_counts", {
-            p_conv_ids: convIds,
-            p_user_id: uid,
-          })
-        : Promise.resolve({ data: [] as { conversation_id: string; unread_count: number }[], error: null });
-
-      const [partsRes, msgsRes, settingsRes, unreadRes] = await Promise.all([
-        membersPromise,
-        msgsPromise,
-        settingsPromise,
-        unreadPromise,
-      ]);
-
-      if (partsRes.error) throw partsRes.error;
-      if (msgsRes.error) throw msgsRes.error;
-      if (settingsRes.error) throw settingsRes.error;
-      if (unreadRes.error) throw unreadRes.error;
-
-      const partsList = (partsRes.data ?? []) as ConversationMember[];
-      const byConvParts: Record<string, ConversationMember[]> = {};
-      for (const p of partsList) {
-        byConvParts[p.conversation_id] = byConvParts[p.conversation_id] ?? [];
-        byConvParts[p.conversation_id].push(p);
-      }
-      setParticipantsByConv(byConvParts);
-
-      if (uid && settingsRes.data) {
-        const byConv: Record<string, { pinned: boolean; last_read_at: string | null }> = {};
-        for (const s of settingsRes.data as { conversation_id: string; pinned: boolean; last_read_at: string | null }[]) {
-          byConv[s.conversation_id] = { pinned: s.pinned, last_read_at: s.last_read_at };
-        }
-        setMemberSettingsByConv(byConv);
-
-        const unreadMap: Record<string, number> = {};
-        for (const r of (unreadRes.data ?? []) as { conversation_id: string; unread_count: number }[]) {
-          unreadMap[r.conversation_id] = Number(r.unread_count) || 0;
-        }
-        setUnreadByConv(unreadMap);
-      } else {
-        setMemberSettingsByConv({});
-        setUnreadByConv({});
-      }
-
-      const userIds = Array.from(new Set(partsList.map((p) => p.user_id)));
-      if (userIds.length > 0) {
-        const [minisRes, modeProfilesRes] = await Promise.all([
-          supabase.from("user_profiles").select("id,first_name,last_name,city,main_photo_url").in("id", userIds),
-          supabase
-            .from("profiles_mode")
-            .select("user_id,mode,photos")
-            .in("user_id", userIds)
-            .in("mode", ["romance", "friends", "business"]),
-        ]);
-
-        if (minisRes.error) throw minisRes.error;
-        if (modeProfilesRes.error) throw modeProfilesRes.error;
-
-        const map: Record<string, UserMini> = {};
-        for (const u of (minisRes.data ?? []) as UserMini[]) map[u.id] = { ...u };
-
-        for (const row of (modeProfilesRes.data ?? []) as { user_id: string; mode: string; photos: (string | null)[] }[]) {
-          const u = map[row.user_id];
-          if (!u) continue;
-          if (row.mode === "romance") u.romance_photos = row.photos ?? [];
-          else if (row.mode === "friends") u.friends_photos = row.photos ?? [];
-          else if (row.mode === "business") u.business_photos = row.photos ?? [];
-        }
-        setUsersById(map);
-      } else {
-        setUsersById({});
-      }
-
-      const lastMap: Record<string, Message> = {};
-      for (const m of (msgsRes.data ?? []) as Message[]) {
-        if (!lastMap[m.conversation_id]) lastMap[m.conversation_id] = m;
-      }
-      setLastMessageByConv(lastMap);
+      const data = await loadChatInbox(activeTab);
+      setItems(data.conversations);
+      setParticipantsByConv(data.participantsByConv);
+      setLastMessageByConv(data.lastMessageByConv);
+      setUsersById(data.usersById);
+      setMemberSettingsByConv(data.memberSettingsByConv);
+      setUnreadByConv(data.unreadByConv);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load chats.");
       setItems([]);
@@ -434,14 +316,10 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
     });
   }
 
-  /** Chats ordered by last message sent (most recent first), same for All and every sub-tab. */
-  const sortedItems = useMemo(() => {
-    return [...items].sort((a, b) => {
-      const tsA = lastMessageByConv[a.id]?.created_at ?? a.last_message_at ?? a.created_at ?? "";
-      const tsB = lastMessageByConv[b.id]?.created_at ?? b.last_message_at ?? b.created_at ?? "";
-      return tsB.localeCompare(tsA);
-    });
-  }, [items, lastMessageByConv]);
+  const sortedItems = useMemo(
+    () => sortChatInboxItems(items, lastMessageByConv, memberSettingsByConv),
+    [items, lastMessageByConv, memberSettingsByConv]
+  );
 
   if (loading) {
     return (
@@ -515,20 +393,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
               chatName={getConversationTitle(item)}
               lastMessage={last ?? null}
               participantAvatars={getParticipantAvatars(item)}
-              timestamp={ts ? (() => {
-                const d = new Date(ts);
-                const now = new Date();
-                const diffMs = now.getTime() - d.getTime();
-                const diffMins = Math.floor(diffMs / 60000);
-                const diffHours = Math.floor(diffMs / 3600000);
-                const diffDays = Math.floor(diffMs / 86400000);
-                if (diffMins < 1) return "Now";
-                if (diffMins < 60) return `${diffMins}m`;
-                if (diffHours < 24) return `${diffHours}h`;
-                if (diffDays === 1) return "Yesterday";
-                if (diffDays < 7) return `${diffDays}d`;
-                return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-              })() : "—"}
+              timestamp={formatChatInboxTimestamp(ts)}
               unreadCount={unreadByConv[item.id] ?? 0}
               isPinned={settings?.pinned ?? false}
               onPress={() => router.push(`/chats/${item.id}`)}

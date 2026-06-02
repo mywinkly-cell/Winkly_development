@@ -24,6 +24,7 @@ describe("isAuthRoute / isModeRoute", () => {
   it("recognizes mode routes", () => {
     expect(isModeRoute("(modes)/romance/discover")).toBe(true);
     expect(isModeRoute("account/privacy-safety")).toBe(false);
+    expect(isModeRoute("(onboarding-personal)/mode-selection")).toBe(false);
   });
 });
 

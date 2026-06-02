@@ -11,6 +11,7 @@ import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
+import { getProfileForMode } from "@/lib/access/profiles";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 
@@ -66,42 +67,55 @@ export default function BusinessProfileView() {
         return;
       }
 
-      // Prefer business_profiles; fallback to user_profiles.
-      const { data, error } = await supabase
-        .from("business_profiles")
-        .select(
-          "id,user_id,display_name,first_name,last_name,role_title,company_name,city,bio,skills,main_photo_url,avatar_url,website,linkedin_url,instagram,created_at"
-        )
-        .or(`id.eq.${userId},user_id.eq.${userId}`)
-        .limit(1)
-        .maybeSingle();
-
-      if (!error && data) {
-        setProfile(data as BusinessProfile);
+      const { data: auth } = await supabase.auth.getUser();
+      const viewerId = auth?.user?.id;
+      if (!viewerId) {
+        setProfile(null);
         return;
       }
 
-      const fallback = await supabase
-        .from("user_profiles")
-        .select("id,first_name,last_name,city,about,main_photo_url,avatar_url,created_at")
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (fallback.error || !fallback.data) {
+      const row = await getProfileForMode("business", viewerId, userId);
+      if (!row) {
         setProfile(null);
         return;
       }
 
       setProfile({
-        id: fallback.data.id,
-        user_id: fallback.data.id,
-        first_name: fallback.data.first_name ?? null,
-        last_name: fallback.data.last_name ?? null,
-        city: fallback.data.city ?? null,
-        bio: (fallback.data as any).about ?? null,
-        main_photo_url: (fallback.data as any).main_photo_url ?? null,
-        avatar_url: (fallback.data as any).avatar_url ?? null,
-        created_at: fallback.data.created_at ?? null,
+        id: String(row.id ?? row.user_id ?? userId),
+        user_id: String(row.user_id ?? row.id ?? userId),
+        display_name: (row.display_name as string | null) ?? null,
+        first_name: (row.first_name as string | null) ?? null,
+        last_name: (row.last_name as string | null) ?? null,
+        role_title:
+          (row.role_title as string | null) ??
+          ((row.meta as Record<string, unknown> | undefined)?.role as string | undefined) ??
+          null,
+        company_name:
+          (row.company_name as string | null) ??
+          (row.business_name as string | null) ??
+          ((row.meta as Record<string, unknown> | undefined)?.company as string | null) ??
+          null,
+        city: (row.city as string | null) ?? (row.location as string | null) ?? null,
+        bio: (row.bio as string | null) ?? null,
+        skills: Array.isArray(row.skills)
+          ? (row.skills as string[])
+          : Array.isArray(row.tags)
+            ? (row.tags as string[])
+            : Array.isArray(row.interests)
+              ? (row.interests as string[])
+              : null,
+        main_photo_url:
+          (row.main_photo_url as string | null) ??
+          (row.logo_uri as string | null) ??
+          null,
+        avatar_url:
+          (row.avatar_url as string | null) ??
+          (row.logo_uri as string | null) ??
+          null,
+        website: (row.website as string | null) ?? null,
+        linkedin_url: (row.linkedin as string | null) ?? (row.linkedin_url as string | null) ?? null,
+        instagram: (row.instagram as string | null) ?? null,
+        created_at: (row.created_at as string | null) ?? null,
       });
     } finally {
       setLoading(false);

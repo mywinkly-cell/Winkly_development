@@ -66,3 +66,9 @@ export function getModeEntryBlockReason(
   if (progress[mode] < 100) return "incomplete";
   return null;
 }
+
+/** Route to complete the sub-profile for a gated mode. */
+export function getModeSubProfileEditRoute(mode: Exclude<Mode, "events">): string {
+  if (mode === "business") return "/profile/edit-business";
+  return "/(onboarding-personal)/profile-core?edit=1";
+}

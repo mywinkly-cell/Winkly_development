@@ -27,7 +27,8 @@ export function isAuthRoute(path: string): boolean {
 }
 
 export function isModeRoute(path: string): boolean {
-  return MODE_SEGMENTS.some((m) => path.includes(m));
+  const segments = path.split("/").filter(Boolean);
+  return MODE_SEGMENTS.some((m) => segments.includes(m));
 }
 
 export type RouteAction =

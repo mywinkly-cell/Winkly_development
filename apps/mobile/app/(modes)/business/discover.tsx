@@ -19,6 +19,8 @@ import {
   type BusinessFiltersState,
 } from "@/lib/filters/businessFiltersStorage";
 import { getBlockedUserIdSet } from "@/lib/access/blocks";
+import { getProfilesForMode } from "@/lib/access/profiles";
+import { BusinessBottomNav } from "@/components/layout/BusinessBottomNav";
 
 type ResultType = "person" | "company" | "service";
 
@@ -105,31 +107,47 @@ export default function BusinessDiscover() {
       const { data: auth } = await supabase.auth.getUser();
       const blocked = auth?.user?.id ? await getBlockedUserIdSet(auth.user.id) : new Set<string>();
 
-      // 1) People from business_profiles (or user_profiles fallback)
+      // 1) People — mode-safe RPC feed (falls back to table read if RPC empty)
       if (activeType === "all" || activeType === "person") {
-        const { data, error } = await supabase
-          .from("business_profiles")
-          .select("id, display_name, role_title, city, company_name, main_photo_url, avatar_url, created_at")
-          .order("created_at", { ascending: false })
-          .range(from, to);
+        const uid = auth?.user?.id;
+        let personRows: Record<string, unknown>[] = [];
+        if (uid) {
+          const feed = await getProfilesForMode("business", uid, PAGE_SIZE);
+          personRows = (feed ?? []) as Record<string, unknown>[];
+        }
+        if (personRows.length === 0) {
+          const { data, error } = await supabase
+            .from("business_profiles")
+            .select("id, display_name, role_title, city, company_name, main_photo_url, avatar_url, created_at")
+            .order("created_at", { ascending: false })
+            .range(from, to);
+          if (!error && data) personRows = data as Record<string, unknown>[];
+        }
+        for (const row of personRows) {
+          const id = String(row.id ?? "");
+          if (!id || blocked.has(id)) continue;
+          const title =
+            (row.business_name as string) ??
+            (row.display_name as string) ??
+            "Professional";
+          const subtitle = [row.role_title, row.company_name, row.area]
+            .filter(Boolean)
+            .join(" · ");
+          const meta = (row.location as string) ?? (row.city as string) ?? undefined;
+          const avatar_url =
+            (row.logo_uri as string) ??
+            (row.main_photo_url as string) ??
+            (row.avatar_url as string) ??
+            null;
 
-        if (!error && data) {
-          for (const row of data as any[]) {
-            if (blocked.has(row.id)) continue;
-            const title = row?.display_name ?? "Professional";
-            const subtitle = [row?.role_title, row?.company_name].filter(Boolean).join(" · ");
-            const meta = row?.city ?? undefined;
-            const avatar_url = row?.main_photo_url ?? row?.avatar_url ?? null;
-
-            batches.push({
-              id: row.id,
-              type: "person",
-              title,
-              subtitle,
-              meta,
-              avatar_url,
-            });
-          }
+          batches.push({
+            id,
+            type: "person",
+            title,
+            subtitle: subtitle || undefined,
+            meta,
+            avatar_url,
+          });
         }
       }
 
@@ -237,7 +255,8 @@ export default function BusinessDiscover() {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: Colors.background }]}>
+    <View style={{ flex: 1, backgroundColor: Colors.background }}>
+      <View style={[styles.screen, { flex: 1, backgroundColor: Colors.background }]}>
       <ModeHeader
         currentMode="business"
         rightSlot="filters"
@@ -388,6 +407,8 @@ export default function BusinessDiscover() {
           </View>
         )}
       </ScrollView>
+      </View>
+      <BusinessBottomNav />
     </View>
   );
 }

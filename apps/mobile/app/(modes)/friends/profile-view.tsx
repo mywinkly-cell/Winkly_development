@@ -13,6 +13,7 @@ import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
+import { getProfileForMode } from "@/lib/access/profiles";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 
@@ -75,45 +76,15 @@ export default function FriendsProfileView() {
         return;
       }
 
-      // Prefer friend_profiles (includes Friends sub-profile photos + meta); fallback to user_profiles.
-      const { data, error } = await supabase
-        .from("friend_profiles")
-        .select(
-          "id,user_id,display_name,first_name,last_name,city,about,night_owl,vibe_tags,interests,main_photo_url,avatar_url,photos,meta,instagram,created_at"
-        )
-        .or(`user_id.eq.${userId},id.eq.${userId}`)
-        .limit(1)
-        .maybeSingle();
-
-      if (!error && data) {
-        setProfile(data as FriendProfile);
-        return;
-      }
-
-      const fb = await supabase
-        .from("user_profiles")
-        .select("id,first_name,last_name,city,about,night_owl,main_photo_url,avatar_url,instagram,created_at")
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (fb.error || !fb.data) {
+      const { data: auth } = await supabase.auth.getUser();
+      const viewerId = auth?.user?.id;
+      if (!viewerId) {
         setProfile(null);
         return;
       }
 
-      setProfile({
-        id: fb.data.id,
-        user_id: fb.data.id,
-        first_name: fb.data.first_name ?? null,
-        last_name: fb.data.last_name ?? null,
-        city: fb.data.city ?? null,
-        about: (fb.data as any).about ?? null,
-        night_owl: (fb.data as any).night_owl ?? null,
-        main_photo_url: (fb.data as any).main_photo_url ?? null,
-        avatar_url: (fb.data as any).avatar_url ?? null,
-        instagram: (fb.data as any).instagram ?? null,
-        created_at: fb.data.created_at ?? null,
-      });
+      const row = await getProfileForMode("friends", viewerId, userId);
+      setProfile(row ? (row as FriendProfile) : null);
     } finally {
       setLoading(false);
     }

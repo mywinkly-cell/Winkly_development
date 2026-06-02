@@ -32,6 +32,7 @@ import { Colors, Typography, Layout } from "@/constants/tokens";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { supabase } from "@/lib/supabase";
+import { getProfileForMode } from "@/lib/access/profiles";
 import {
   computeCompatibilityScore,
   buildMatchTags,
@@ -96,37 +97,27 @@ export default function RomanceProfileView() {
         return;
       }
 
-      // Self profile
-      const { data: me } = await supabase
-        .from("public_profile_view")
-        .select("*")
-        .eq("id", userData.user.id)
-        .single();
+      // Self + target via mode-isolated access layer (public_profile_view)
+      const [me, other] = await Promise.all([
+        getProfileForMode("romance", userData.user.id, userData.user.id),
+        getProfileForMode("romance", userData.user.id, id),
+      ]);
 
       if (me) {
         setSelfProfile({
-          id: me.id,
-          first_name: me.first_name,
-          age: me.age,
-          city: me.city,
-          interests: me.interests,
-          languages: me.languages,
-          occupation: me.occupation,
-          bio_romance: me.bio_romance,
-          compatibility: me.compatibility,
+          id: String(me.id),
+          first_name: me.first_name as string,
+          age: (me.age as number | null) ?? undefined,
+          city: (me.city as string | null) ?? undefined,
+          interests: (me.interests as string[] | null) ?? (me.romance_interests as string[] | null) ?? [],
+          languages: (me.languages as string[] | null) ?? [],
+          occupation: (me.occupation as string | null) ?? undefined,
+          bio_romance: (me.bio_romance as string | null) ?? undefined,
+          compatibility: me.compatibility as number | undefined,
         });
       }
 
-      // Target profile
-      const { data: other, error } = await supabase
-        .from("public_profile_view")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-      if (error) {
-        console.warn("Profile view error:", error);
-      } else {
+      if (other) {
         setTargetProfile(other as ProfileRow);
       }
     } catch (err) {

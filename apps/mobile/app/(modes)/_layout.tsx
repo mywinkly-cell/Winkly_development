@@ -6,9 +6,12 @@
 import React from "react";
 import { Platform } from "react-native";
 import { Stack } from "expo-router";
+import { ModeLocationGate } from "@/components/location/ModeLocationGate";
 
 export default function ModesLayout() {
   return (
+    <>
+    <ModeLocationGate />
     <Stack
       screenOptions={{
         headerShown: false,
@@ -21,5 +24,6 @@ export default function ModesLayout() {
       <Stack.Screen name="business" />
       <Stack.Screen name="events" />
     </Stack>
+    </>
   );
 }

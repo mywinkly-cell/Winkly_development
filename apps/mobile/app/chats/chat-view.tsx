@@ -97,6 +97,9 @@ import {
   type StrategicHostTopic,
 } from "@/lib/ai/strategicHost";
 
+/** Not a navigable route — only imported by `app/chats/[conversationId].tsx`. */
+export const unstable_settings = { href: null };
+
 type ConversationRow = {
   id: string;
   type: string;
@@ -841,6 +844,7 @@ export default function ChatView({ conversationId }: Props) {
     if (chatVoiceRecorderState.isRecording) {
       const durMs = chatVoiceRecorderState.durationMillis ?? 0;
       const hadMineBeforeSend = messages.some((m) => m.sender_id === meId);
+      const clientId = newClientId();
       try {
         await chatVoiceRecorder.stop();
         const uri = chatVoiceRecorder.uri ?? chatRecordUriRef.current;
@@ -851,16 +855,29 @@ export default function ChatView({ conversationId }: Props) {
         }
         if (!uri) return;
         setSending(true);
+        setError(null);
+        addOptimisticMessage({
+          clientId,
+          senderId: meId,
+          content: "Voice message",
+          messageType: "audio",
+          replyToId: replyTo?.id ?? null,
+        });
         const att = await uploadChatVoiceFromUri(meId, uri);
         if (!att) {
+          removeOptimisticMessage(clientId);
           setSending(false);
           return;
         }
-        const inserted = await sendMessage(convId, meId, " ", [att], { replyToId: replyTo?.id ?? null });
+        const inserted = await sendMessage(convId, meId, " ", [att], {
+          replyToId: replyTo?.id ?? null,
+          clientId,
+        });
         mergeIncomingMessage(inserted);
         void recordDmFirstOutreachIfNeeded(hadMineBeforeSend);
         setReplyTo(null);
       } catch (e: unknown) {
+        markOptimisticFailed(clientId);
         setError(e instanceof Error ? e.message : "Voice send failed");
       } finally {
         setSending(false);
@@ -887,6 +904,9 @@ export default function ChatView({ conversationId }: Props) {
     chatVoiceRecorder,
     replyTo?.id,
     mergeIncomingMessage,
+    addOptimisticMessage,
+    removeOptimisticMessage,
+    markOptimisticFailed,
   ]);
 
   const onAddReaction = useCallback(

@@ -96,3 +96,32 @@ SELECT 'profiles_mode CONSTRAINT' AS check_type,
 FROM pg_constraint
 WHERE conrelid = 'public.profiles_mode'::regclass
   AND contype = 'u';
+
+-- 9) App-facing views (business_profiles, friend_profiles)
+SELECT 'VIEWS' AS check_type, table_name AS name, 'required' AS status
+FROM information_schema.views
+WHERE table_schema = 'public'
+  AND table_name IN ('business_profiles', 'friend_profiles', 'public_profile_view')
+ORDER BY table_name;
+
+-- 10) Discover + contacts RPCs (authenticated)
+SELECT 'RPCS' AS check_type, p.proname AS name, 'required' AS status
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.proname IN (
+    'romance_discover_feed',
+    'friends_discover_feed',
+    'business_discover_feed',
+    'match_contacts',
+    'romance_new_matches'
+  )
+ORDER BY p.proname;
+
+-- 11) Safety / verification tables
+SELECT 'TABLES' AS check_type, table_name AS name, 'required' AS status
+FROM information_schema.tables
+WHERE table_schema = 'public'
+  AND table_type = 'BASE TABLE'
+  AND table_name IN ('profile_photo_verifications', 'romance_likes')
+ORDER BY table_name;

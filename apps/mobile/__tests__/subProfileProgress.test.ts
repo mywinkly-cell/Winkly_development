@@ -1,6 +1,7 @@
 import {
   computeModeProgressFromSubProfiles,
   getModeEntryBlockReason,
+  getModeSubProfileEditRoute,
 } from "@/lib/mode/subProfileProgress";
 
 describe("computeModeProgressFromSubProfiles", () => {
@@ -60,5 +61,11 @@ describe("getModeEntryBlockReason", () => {
 
   it("returns incomplete when permitted but under 100%", () => {
     expect(getModeEntryBlockReason("friends", progress, ["events", "friends"])).toBe("incomplete");
+  });
+});
+
+describe("getModeSubProfileEditRoute", () => {
+  it("routes business to edit-business", () => {
+    expect(getModeSubProfileEditRoute("business")).toBe("/profile/edit-business");
   });
 });
