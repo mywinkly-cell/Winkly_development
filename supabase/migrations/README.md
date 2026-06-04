@@ -1,6 +1,6 @@
 # Winkly — Supabase migrations (source of truth)
 
-**Last updated:** 2026-06-03
+**Last updated:** 2026-06-04
 
 All database schema, RLS, triggers, and RPCs live in this folder. There are **52** timestamped SQL files (run `(git ls-files supabase/migrations/*.sql).Count` — expect 52 on `main`).
 
