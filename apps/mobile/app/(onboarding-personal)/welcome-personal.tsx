@@ -98,7 +98,7 @@ export default function WelcomePersonal() {
 
       {/* Option: Go back to Mode Selection */}
       <TouchableOpacity
-        onPress={() => router.push("/(onboarding-personal)/mode-selection")}
+        onPress={() => router.push("/mode-selection")}
         style={{ marginTop: 18 }}
       >
         <Text

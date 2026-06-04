@@ -1,8 +1,7 @@
 import { Platform } from "react-native";
 import { Stack } from "expo-router";
 
-/** Legacy path group — screens redirect to /(tabs) hubs. */
-export default function LegacyModeSelectionLayout() {
+export default function PlannerLayout() {
   return (
     <Stack
       screenOptions={{

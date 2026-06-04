@@ -4,6 +4,7 @@
  */
 
 import { supabase } from "@/lib/supabase";
+import { ensureGroupConversation } from "@/lib/groups/groupChat";
 import type { Mode } from "@/types";
 
 export type GroupInvitationRow = {
@@ -64,6 +65,8 @@ export async function createGroupWithInvites(params: {
     );
     if (invErr) throw new Error(invErr.message);
   }
+
+  await ensureGroupConversation(groupId);
 
   return { groupId };
 }
@@ -164,6 +167,8 @@ export async function acceptGroupInvite(invitationId: string): Promise<void> {
   });
 
   if (memberErr) throw new Error(memberErr.message);
+
+  await ensureGroupConversation(inv.group_id as string);
 }
 
 /**

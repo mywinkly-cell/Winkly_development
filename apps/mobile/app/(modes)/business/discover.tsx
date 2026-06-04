@@ -317,6 +317,21 @@ export default function BusinessDiscover() {
             </TouchableOpacity>
           );
         })}
+        <TouchableOpacity
+          onPress={() =>
+            Alert.alert(
+              "Communities",
+              "Professional communities are coming soon — curated groups by industry and goal."
+            )
+          }
+          style={[
+            styles.filterChip,
+            { backgroundColor: Colors.card, borderColor: Colors.border, opacity: 0.85 },
+          ]}
+          activeOpacity={0.9}
+        >
+          <Text style={{ color: Colors.mutedText, fontWeight: "700" }}>Communities · Soon</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       {/* Results */}

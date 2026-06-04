@@ -68,7 +68,7 @@ export function PendingInvitesSheet({ visible, onClose, onChanged }: Props) {
       onChanged();
       onClose();
       if (res.chat_id) {
-        router.push({ pathname: "/chats/chat-view", params: { id: res.chat_id } });
+        router.push({ pathname: "/chats/[conversationId]", params: { conversationId: res.chat_id } });
       }
     } catch (e) {
       Alert.alert("Accept", e instanceof Error ? e.message : "Something went wrong.");

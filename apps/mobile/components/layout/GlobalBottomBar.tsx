@@ -28,7 +28,7 @@ export function GlobalBottomBar() {
 
   const nav = (tab: Tab) => {
     Haptics.selectionAsync();
-    if (tab === "modes") router.replace("/(onboarding-personal)/mode-selection");
+    if (tab === "modes") router.replace("/mode-selection");
     else if (tab === "chats") router.replace("/chats");
     else router.replace("/planner");
   };

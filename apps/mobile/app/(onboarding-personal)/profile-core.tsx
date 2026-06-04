@@ -1141,7 +1141,7 @@ export default function ProfileCore() {
       }
       const skipWinklyWorld = await import("@/lib/introFlags").then((m) => m.shouldSkipWinklyWorld());
       if (skipWinklyWorld) {
-        router.push("/(onboarding-personal)/mode-selection");
+        router.push("/mode-selection");
       } else {
         router.push("/(onboarding-personal)/winkly-world?variant=personal");
       }

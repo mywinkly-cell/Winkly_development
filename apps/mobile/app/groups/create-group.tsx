@@ -88,12 +88,17 @@ export default function CreateGroup() {
           : "You can invite people from the group details.",
         [
           {
-            text: "OK",
+            text: "Details",
             onPress: () =>
               router.replace({
                 pathname: "/groups/group-details",
                 params: { id: groupId, name: name.trim() },
               }),
+          },
+          {
+            text: "Open chat",
+            onPress: () =>
+              router.replace({ pathname: "/groups/group-chat", params: { groupId } }),
           },
         ]
       );

@@ -39,7 +39,7 @@ export function ModeSwitchCenterButton({ mode }: ModeSwitchCenterButtonProps) {
 
   const onPress = () => {
     Haptics.selectionAsync();
-    router.push("/(onboarding-personal)/mode-selection");
+    router.push("/mode-selection");
   };
 
   // Same premium 3D as mode cards: neutral depth shadow (visible on all modes)

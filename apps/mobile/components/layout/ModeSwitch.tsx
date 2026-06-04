@@ -24,7 +24,7 @@ export function ModeSwitch({ currentMode }: ModeSwitchProps) {
 
   const handlePress = () => {
     Haptics.selectionAsync();
-    router.push("/(onboarding-personal)/mode-selection");
+    router.push("/mode-selection");
   };
 
   return (

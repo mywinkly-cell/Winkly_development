@@ -90,6 +90,7 @@ import {
   dismissStaleConciergeNudge,
 } from "@/lib/chats/conciergeNudge";
 import { getSharedInterestHintForPair } from "@/lib/ai/preferenceEngine";
+import { openPlanTogetherCreateEvent } from "@/lib/social/planTogether";
 import {
   getChatStrategicHostTopics,
   getPlannerThemePlans,
@@ -104,7 +105,9 @@ type ConversationRow = {
   id: string;
   type: string;
   mode: string;
+  name: string | null;
   related_event_id: string | null;
+  related_group_id: string | null;
   dm_source: string | null;
 };
 
@@ -219,7 +222,10 @@ export default function ChatView({ conversationId }: Props) {
     return participants.find((p) => p.id !== meId) ?? null;
   }, [participants, meId]);
 
-  const otherPartyLabel = formatName(otherUser) || "Chat";
+  const isGroup = conversation?.type === "group";
+  const otherPartyLabel = isGroup
+    ? (conversation?.name?.trim() || "Group chat")
+    : formatName(otherUser) || "Chat";
   const isRomance = conversation?.mode === "romance";
   const accentColor = isRomance ? Colors.romance.primary : Colors.primaryViolet;
   const conversationMode = (conversation?.mode ?? "romance") as Mode;
@@ -498,6 +504,23 @@ export default function ChatView({ conversationId }: Props) {
     });
   }, [otherUser, conversationMode, router]);
 
+  const openPlanTogether = useCallback(() => {
+    if (!otherUser || !isDm) return;
+    const mode =
+      conversationMode === "romance" ||
+      conversationMode === "friends" ||
+      conversationMode === "business" ||
+      conversationMode === "events"
+        ? conversationMode
+        : "friends";
+    openPlanTogetherCreateEvent(router, {
+      partnerUserId: otherUser.id,
+      partnerDisplayName: formatName(otherUser),
+      sourceMode: mode,
+      conversationId: convId,
+    });
+  }, [otherUser, isDm, conversationMode, convId, router]);
+
   const openStrategicHost = useCallback(async () => {
     if (!meId || !conversation || !participants.length) return;
     if (!["romance", "friends", "business"].includes(conversationMode)) return;
@@ -674,7 +697,7 @@ export default function ChatView({ conversationId }: Props) {
   const loadMeta = useCallback(async () => {
     const { data: conv } = await supabase
       .from("conversations")
-      .select("id,type,mode,related_event_id,dm_source")
+      .select("id,type,mode,name,related_event_id,related_group_id,dm_source")
       .eq("id", convId)
       .single();
     setConversation(conv as ConversationRow);
@@ -1092,6 +1115,11 @@ export default function ChatView({ conversationId }: Props) {
           ? "delivered"
           : "sent";
 
+      const senderLabel =
+        !isDm && !mine && !isCenteredCta
+          ? formatName(participants.find((p) => p.id === item.sender_id))
+          : null;
+
       return (
         <View
           style={{
@@ -1101,6 +1129,11 @@ export default function ChatView({ conversationId }: Props) {
             opacity: item.pending ? 0.6 : 1,
           }}
         >
+          {senderLabel ? (
+            <Text style={{ fontSize: 11, fontWeight: "700", color: Colors.gray600, marginBottom: 2, marginLeft: 4 }}>
+              {senderLabel}
+            </Text>
+          ) : null}
           {deletedForMe ? (
             <View
               style={{
@@ -1588,6 +1621,8 @@ export default function ChatView({ conversationId }: Props) {
     },
     [
       meId,
+      isDm,
+      participants,
       accentColor,
       reactionsByMessage,
       invitationStatusMap,
@@ -1656,9 +1691,37 @@ export default function ChatView({ conversationId }: Props) {
         >
           <Text style={{ fontWeight: "900", fontSize: 16 }} numberOfLines={1}>{otherPartyLabel}</Text>
           <Text style={{ opacity: 0.65, fontSize: 12 }}>
-            {typingUserIds.size > 0 ? "typing…" : conversation ? `${conversation.mode} • direct` : ""}
+            {typingUserIds.size > 0
+              ? "typing…"
+              : conversation
+                ? isGroup
+                  ? `${conversation.mode} • group • ${participants.length} members`
+                  : `${conversation.mode} • direct`
+                : ""}
           </Text>
         </Pressable>
+
+        {isDm && otherUser ? (
+          <Pressable
+            onPress={openPlanTogether}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              paddingHorizontal: 10,
+              paddingVertical: 8,
+              borderRadius: 20,
+              backgroundColor: Colors.primaryViolet + "18",
+              maxWidth: 130,
+            }}
+            accessibilityLabel="Plan together"
+          >
+            <Ionicons name="calendar-outline" size={18} color={Colors.primaryViolet} />
+            <Text style={{ fontWeight: "700", fontSize: 12, color: Colors.primaryViolet }} numberOfLines={1}>
+              Plan together
+            </Text>
+          </Pressable>
+        ) : null}
 
         <Pressable
           onPress={() => setShowMenu(!showMenu)}

@@ -198,6 +198,20 @@ export default function BusinessHome() {
         </Pressable>
       ) : null}
 
+      <View style={styles.newsletterCard}>
+        <Text style={styles.newsletterTitle}>Network brief</Text>
+        <Text style={styles.newsletterBody}>
+          Send thoughtful invites (20+ chars), respond on Home, then plan a meet-up or co-host an event from chat.
+        </Text>
+        <TouchableOpacity
+          onPress={() => router.push("/(modes)/business/discover")}
+          style={styles.newsletterCta}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.newsletterCtaText}>Explore Discover</Text>
+        </TouchableOpacity>
+      </View>
+
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={primary} />
@@ -325,6 +339,26 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.business.secondary,
   },
   pendingText: { ...Typography.body, fontWeight: "600", color: Colors.business.primary },
+  newsletterCard: {
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 4,
+    padding: 14,
+    borderRadius: Layout.radii.card,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+  },
+  newsletterTitle: { ...Typography.body, fontWeight: "700", color: Colors.textPrimary, marginBottom: 6 },
+  newsletterBody: { ...Typography.caption, color: Colors.gray600, lineHeight: 18, marginBottom: 10 },
+  newsletterCta: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: Colors.business.primary,
+  },
+  newsletterCtaText: { ...Typography.caption, fontWeight: "700", color: Colors.white },
   section: { marginBottom: 24 },
   sectionTitle: {
     ...Typography.h3,

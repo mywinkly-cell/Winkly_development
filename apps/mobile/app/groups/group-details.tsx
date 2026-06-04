@@ -31,7 +31,7 @@ export default function GroupDetails() {
         <View style={styles.card}>
           <Text style={styles.title}>{groupName}</Text>
           <Text style={styles.subtitle}>
-            MVP group details screen. Next: real group data, rules, cover image, and tags.
+            Group chat uses the same inbox thread as 1:1 chats (Supabase Realtime). Invitees join after they accept an invitation.
           </Text>
 
           <View style={styles.hr} />

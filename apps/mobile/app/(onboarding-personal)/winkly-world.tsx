@@ -31,7 +31,7 @@ export default function WinklyWorld() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await setWinklyWorldSeen();
     if (dontShowAgain) await setWinklyWorldDontShow();
-    router.replace("/(onboarding-personal)/mode-selection");
+    router.replace("/mode-selection");
   };
 
   const isPersonal = variant === "personal";
