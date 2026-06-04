@@ -61,7 +61,7 @@ export default function GroupInvitationsScreen() {
       await acceptGroupInvite(inv.id);
       setList((prev) => prev.filter((i) => i.id !== inv.id));
       Alert.alert("Joined", `You joined "${inv.group_name ?? "the group"}".`);
-      router.push({ pathname: "/groups/group-details", params: { id: inv.group_id, name: inv.group_name ?? "Group" } });
+      router.replace({ pathname: "/groups/group-chat", params: { groupId: inv.group_id } });
     } catch (e) {
       Alert.alert("Error", (e as Error).message ?? "Could not accept.");
     } finally {

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -7,13 +7,20 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { getProfileForMode } from "@/lib/access/profiles";
+import { getBusinessConnectionStatus } from "@/lib/access/businessConnections";
+import { createDirectChat } from "@/lib/chats/api";
+import { InviteModal } from "@/components/business/InviteModal";
+import { mapProfilesBusinessRow, type BusinessPersonItem } from "@/lib/business/homeFeed";
+import { openPlanTogetherCreateEvent } from "@/lib/social/planTogether";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import type { BusinessConnectionStatus } from "@/types/business";
 
 type BusinessProfile = {
   id: string; // user_id or profile id
@@ -57,6 +64,9 @@ export default function BusinessProfileView() {
 
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState<BusinessConnectionStatus>("none");
+  const [inviteVisible, setInviteVisible] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
 
   async function loadProfile() {
     try {
@@ -122,25 +132,100 @@ export default function BusinessProfileView() {
     }
   }
 
+  const refreshConnectionStatus = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const status = await getBusinessConnectionStatus(userId);
+      setConnectionStatus(status);
+    } catch {
+      setConnectionStatus("none");
+    }
+  }, [userId]);
+
   useEffect(() => {
     loadProfile();
+    void refreshConnectionStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
-  const onConnect = async () => {
-    // Safe placeholder: you can later create conversations + participants rows here.
-    Alert.alert("Connect", "Connection request flow can be wired to your chat + requests tables next.");
+  const inviteTarget: BusinessPersonItem | null = useMemo(() => {
+    if (!profile?.user_id && !profile?.id) return null;
+    const uid = profile.user_id ?? profile.id;
+    return mapProfilesBusinessRow({
+      id: uid,
+      user_id: uid,
+      first_name: profile.first_name,
+      last_name: profile.last_name,
+      business_name: profile.company_name,
+      role: profile.role_title,
+      city: profile.city,
+      bio: profile.bio,
+      logo_uri: profile.main_photo_url ?? profile.avatar_url,
+      tags: profile.skills,
+    });
+  }, [profile]);
+
+  const onConnect = () => {
+    if (connectionStatus === "accepted") {
+      void onMessage();
+      return;
+    }
+    if (connectionStatus === "pending_sent") {
+      Alert.alert("Connect", "Your invite is pending — they will be notified.");
+      return;
+    }
+    if (connectionStatus === "pending_received") {
+      Alert.alert("Connect", "Check your pending invites on Business Home.");
+      return;
+    }
+    if (connectionStatus === "blocked" || connectionStatus === "declined") {
+      Alert.alert("Connect", "You cannot connect with this person right now.");
+      return;
+    }
+    setInviteVisible(true);
   };
 
-  const onMessage = () => {
-    // Safe placeholder: route to a chat screen if exists.
-    Alert.alert("Message", "Chat routing can be connected once conversations are in place.");
+  const onMessage = async () => {
+    const targetId = profile?.user_id ?? profile?.id;
+    if (!targetId) return;
+    if (connectionStatus !== "accepted") {
+      Alert.alert("Message", "Connect first — accepted connections can chat.");
+      return;
+    }
+    try {
+      setActionBusy(true);
+      const { data: auth } = await supabase.auth.getUser();
+      const meId = auth?.user?.id;
+      if (!meId) throw new Error("Not signed in");
+      const chatId = await createDirectChat(targetId, "business", "connection", meId);
+      Haptics.selectionAsync();
+      router.push({ pathname: "/chats/[conversationId]", params: { conversationId: chatId } });
+    } catch (e) {
+      Alert.alert("Message", e instanceof Error ? e.message : "Could not open chat.");
+    } finally {
+      setActionBusy(false);
+    }
   };
 
   const onPlanMeeting = () => {
-    // Navigate to Planner (you can later pass params for prefilling)
-    router.push("/(modes)/business/planner");
+    if (!profile) return;
+    const targetId = profile.user_id ?? profile.id;
+    if (!targetId) return;
+    openPlanTogetherCreateEvent(router, {
+      partnerUserId: targetId,
+      partnerDisplayName: fullName(profile),
+      sourceMode: "business",
+    });
   };
+
+  const connectLabel =
+    connectionStatus === "accepted"
+      ? "Connected"
+      : connectionStatus === "pending_sent"
+        ? "Invite sent"
+        : connectionStatus === "pending_received"
+          ? "Respond on Home"
+          : "Connect";
 
   return (
     <View style={[styles.screen, { backgroundColor: Colors.background }]}>
@@ -200,27 +285,49 @@ export default function BusinessProfileView() {
               <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
                 <TouchableOpacity
                   onPress={onConnect}
-                  style={[styles.actionPrimary, { backgroundColor: Colors.primary }]}
+                  disabled={actionBusy || connectionStatus === "pending_sent"}
+                  style={[
+                    styles.actionPrimary,
+                    {
+                      backgroundColor: Colors.business?.primary ?? Colors.primaryViolet,
+                      opacity: connectionStatus === "pending_sent" ? 0.65 : 1,
+                    },
+                  ]}
                   activeOpacity={0.9}
                 >
-                  <Text style={{ color: Colors.onPrimary, fontWeight: "900" }}>Connect</Text>
+                  <Text style={{ color: Colors.white, fontWeight: "900" }}>{connectLabel}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  onPress={onMessage}
-                  style={[styles.actionSecondary, { backgroundColor: Colors.background, borderColor: Colors.border }]}
+                  onPress={() => void onMessage()}
+                  disabled={actionBusy || connectionStatus !== "accepted"}
+                  style={[
+                    styles.actionSecondary,
+                    {
+                      backgroundColor: Colors.backgroundMuted,
+                      borderColor: Colors.gray200,
+                      opacity: connectionStatus !== "accepted" ? 0.55 : 1,
+                    },
+                  ]}
                   activeOpacity={0.9}
                 >
-                  <Text style={{ color: Colors.text, fontWeight: "900" }}>Message</Text>
+                  <Text style={{ color: Colors.textPrimary, fontWeight: "900" }}>Message</Text>
                 </TouchableOpacity>
               </View>
 
               <TouchableOpacity
                 onPress={onPlanMeeting}
-                style={[styles.actionSecondary, { marginTop: 10, backgroundColor: Colors.background, borderColor: Colors.border }]}
+                style={[
+                  styles.actionSecondary,
+                  {
+                    marginTop: 10,
+                    backgroundColor: Colors.backgroundMuted,
+                    borderColor: Colors.gray200,
+                  },
+                ]}
                 activeOpacity={0.9}
               >
-                <Text style={{ color: Colors.text, fontWeight: "900" }}>Plan a meeting</Text>
+                <Text style={{ color: Colors.textPrimary, fontWeight: "900" }}>Plan together</Text>
               </TouchableOpacity>
             </View>
 
@@ -290,6 +397,18 @@ export default function BusinessProfileView() {
           </>
         )}
       </ScrollView>
+
+      {inviteTarget ? (
+        <InviteModal
+          visible={inviteVisible}
+          target={inviteTarget}
+          onClose={() => setInviteVisible(false)}
+          onSent={() => {
+            setInviteVisible(false);
+            void refreshConnectionStatus();
+          }}
+        />
+      ) : null}
     </View>
   );
 }

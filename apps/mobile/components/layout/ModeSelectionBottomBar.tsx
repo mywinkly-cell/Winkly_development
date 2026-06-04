@@ -29,9 +29,9 @@ export function ModeSelectionBottomBar() {
 
   const nav = (tab: Tab) => {
     Haptics.selectionAsync();
-    if (tab === "home") router.replace("/(onboarding-personal)/mode-selection");
-    else if (tab === "chats") router.replace("/(onboarding-personal)/mode-selection/chats");
-    else router.replace("/(onboarding-personal)/mode-selection/planner");
+    if (tab === "home") router.replace("/mode-selection");
+    else if (tab === "chats") router.replace("/chats");
+    else router.replace("/planner");
   };
 
   const isActive = (tab: Tab) => activeTab === tab;

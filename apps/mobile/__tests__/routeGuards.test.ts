@@ -24,7 +24,7 @@ describe("isAuthRoute / isModeRoute", () => {
   it("recognizes mode routes", () => {
     expect(isModeRoute("(modes)/romance/discover")).toBe(true);
     expect(isModeRoute("account/privacy-safety")).toBe(false);
-    expect(isModeRoute("(onboarding-personal)/mode-selection")).toBe(false);
+    expect(isModeRoute("mode-selection")).toBe(false);
   });
 });
 
@@ -56,7 +56,7 @@ describe("resolveRouteAction", () => {
         activeMode: "romance",
         permissions: ["events"],
       })
-    ).toEqual({ type: "redirect", to: "/(onboarding-personal)/mode-selection" });
+    ).toEqual({ type: "redirect", to: "/mode-selection" });
   });
 
   it("allows a permitted active mode", () => {

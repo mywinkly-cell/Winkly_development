@@ -6,6 +6,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { Routes } from "@/constants/routes";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -121,7 +122,8 @@ export default function SettingsIndex() {
         <TouchableOpacity
           onPress={() => {
             Haptics.selectionAsync();
-            router.back();
+            if (router.canGoBack()) router.back();
+            else router.replace(Routes.onboardingModeSelection);
           }}
           style={styles.backBtn}
           activeOpacity={0.8}

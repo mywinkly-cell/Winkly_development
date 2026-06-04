@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 
@@ -52,9 +52,30 @@ function toFloatOrNull(v: string) {
 
 export default function CreateEvent() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    partner_user_id?: string;
+    partner_display_name?: string;
+    source_mode?: string;
+    conversation_id?: string;
+  }>();
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const planPartnerId = typeof params.partner_user_id === "string" ? params.partner_user_id : "";
+  const planPartnerName =
+    typeof params.partner_display_name === "string" && params.partner_display_name.trim()
+      ? params.partner_display_name.trim()
+      : "your connection";
+  const planSourceMode = typeof params.source_mode === "string" ? params.source_mode : "";
+  const planConversationId =
+    typeof params.conversation_id === "string" ? params.conversation_id : "";
+
+  const [title, setTitle] = useState(() =>
+    planPartnerId ? `Plan with ${planPartnerName}` : ""
+  );
+  const [description, setDescription] = useState(() =>
+    planPartnerId
+      ? `Co-created from chat (${planSourceMode || "connect"}). Invite ${planPartnerName} once the event is live.`
+      : ""
+  );
 
   const [city, setCity] = useState("Munich");
   const [venueName, setVenueName] = useState("");
@@ -176,6 +197,27 @@ export default function CreateEvent() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+        {planPartnerId ? (
+          <View
+            style={{
+              marginHorizontal: Layout.screenPadding,
+              marginBottom: 12,
+              padding: 12,
+              borderRadius: 12,
+              backgroundColor: Colors.events.primary + "14",
+              borderWidth: 1,
+              borderColor: Colors.events.primary + "44",
+            }}
+          >
+            <Text style={{ fontWeight: "800", color: Colors.events.primary, marginBottom: 4 }}>
+              Planning with {planPartnerName}
+            </Text>
+            <Text style={{ color: Colors.gray600, fontSize: 13, lineHeight: 18 }}>
+              This event is started from your chat
+              {planConversationId ? " — share the event link after you publish." : "."}
+            </Text>
+          </View>
+        ) : null}
         <View style={[styles.card, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
           <Text style={[styles.label, { color: Colors.mutedText }]}>Title *</Text>
           <View style={[styles.inputBox, { borderColor: Colors.border, backgroundColor: Colors.background }]}>

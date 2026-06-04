@@ -30,7 +30,7 @@ export default function ModeSwitchButton({ currentMode, aboveBottomBar }: ModeSw
 
   const handlePress = () => {
     Haptics.selectionAsync();
-    router.push("/(onboarding-personal)/mode-selection");
+    router.push("/mode-selection");
   };
 
   return (

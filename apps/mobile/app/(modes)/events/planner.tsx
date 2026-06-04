@@ -5,7 +5,7 @@ import { View, StyleSheet } from "react-native";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { PlannerHeader } from "@/components/layout/PlannerHeader";
 import { EventsBottomNav } from "@/components/layout/EventsBottomNav";
-import PlannerIndex, { type PlannerIndexHandle } from "@/app/planner";
+import PlannerIndex, { type PlannerIndexHandle } from "@/app/(tabs)/planner";
 import { Colors } from "@/constants/tokens";
 
 export default function EventsPlanner() {

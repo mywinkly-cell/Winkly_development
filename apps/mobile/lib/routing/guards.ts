@@ -59,7 +59,7 @@ export function resolveRouteAction(input: RouteGuardInput): RouteAction {
 
   if (input.hasSession && isModeRoute(input.path) && input.activeMode) {
     if (!input.permissions.includes(input.activeMode)) {
-      return { type: "redirect", to: "/(onboarding-personal)/mode-selection" };
+      return { type: "redirect", to: "/mode-selection" };
     }
   }
 

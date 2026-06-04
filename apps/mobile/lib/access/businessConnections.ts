@@ -125,7 +125,7 @@ export async function listIncomingBusinessInvites(): Promise<BusinessInvite[]> {
         area: "",
         bio: "",
         location: person.meta ?? "",
-        logo_uri: person.photoUrl,
+        logo_uri: person.photoUrl ?? null,
         networking_goals: person.tags ?? [],
         skills: [],
         tags: person.tags ?? [],

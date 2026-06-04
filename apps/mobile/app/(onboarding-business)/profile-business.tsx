@@ -132,7 +132,7 @@ export default function ProfileBusiness() {
       const { shouldSkipWinklyWorld } = await import("@/lib/introFlags");
       const skip = await shouldSkipWinklyWorld();
       if (skip) {
-        router.replace("/(onboarding-personal)/mode-selection");
+        router.replace("/mode-selection");
       } else {
         router.replace("/(onboarding-personal)/winkly-world?variant=business");
       }

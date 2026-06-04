@@ -79,14 +79,14 @@ export default function Signin() {
         if (accountType === "business") {
           const { data: bp } = await supabase.from("business_profiles").select("business_name").or(`id.eq.${userId},user_id.eq.${userId}`).limit(1).maybeSingle();
           const hasBusinessProfile = !!(bp as any)?.business_name?.trim?.();
-          router.replace(hasBusinessProfile ? "/(onboarding-personal)/mode-selection" : "/(auth)/welcome-back-setup");
+          router.replace(hasBusinessProfile ? "/mode-selection" : "/(auth)/welcome-back-setup");
         } else {
           const { data: up } = await supabase.from("user_profiles").select("first_name, last_name, gender, birthday, city, core_photos").eq("id", userId).maybeSingle();
           const u = up as any;
           const hasCoreProfile = !!(u?.first_name?.trim?.() && u?.last_name?.trim?.() && u?.gender?.trim?.() && u?.birthday && u?.city?.trim?.());
           const hasPhoto = Array.isArray(u?.core_photos) ? u.core_photos.filter(Boolean).length > 0 : false;
           const profileComplete = hasCoreProfile && hasPhoto;
-          router.replace(profileComplete ? "/(onboarding-personal)/mode-selection" : "/(auth)/welcome-back-setup");
+          router.replace(profileComplete ? "/mode-selection" : "/(auth)/welcome-back-setup");
         }
       } else {
         router.replace("/(auth)/verify");
