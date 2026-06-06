@@ -19,7 +19,7 @@
       "distribution": "internal",
       "channel": "preview",
       "env": {
-        "APP_ENV": "staging"
+        "APP_ENV": "production"
       },
       "android": {
         "buildType": "apk"

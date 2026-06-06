@@ -19,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { Routes } from "@/constants/routes";
 import { setWinklyWorldSeen, setWinklyWorldDontShow } from "@/lib/introFlags";
+import { trackOnboardingCompleted } from "@/lib/analytics/events";
 
 type Variant = "personal" | "business";
 
@@ -32,6 +33,7 @@ export default function WinklyWorld() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await setWinklyWorldSeen();
     if (dontShowAgain) await setWinklyWorldDontShow();
+    trackOnboardingCompleted({ account_type: variant });
     router.replace(Routes.modeSelection);
   };
 

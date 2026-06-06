@@ -25,6 +25,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Routes } from "@/constants/routes";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { pickAndUploadLogo } from "@/lib/uploadLogo";
+import { trackOnboardingCompleted } from "@/lib/analytics/events";
 
 export default function ProfileBusiness() {
   const router = useRouter();
@@ -133,6 +134,7 @@ export default function ProfileBusiness() {
       const { shouldSkipWinklyWorld } = await import("@/lib/introFlags");
       const skip = await shouldSkipWinklyWorld();
       if (skip) {
+        trackOnboardingCompleted({ account_type: "business" });
         router.replace(Routes.modeSelection);
       } else {
         router.replace("/(onboarding-personal)/winkly-world?variant=business");

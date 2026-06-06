@@ -3,7 +3,7 @@
 // Same logic/functionality/view as Romance Home; Friends mode colors & sub-profile data
 // ────────────────────────────────────────────────
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { FriendsBottomNav } from "@/components/layout/FriendsBottomNav";
 import { MatchCardOverlay } from "@/components/matching/MatchCardOverlay";
+import { SwipeDeckEmptyState } from "@/components/matching/SwipeDeckEmptyState";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { supabase } from "@/lib/supabase";
 import { buildFriendsMatchTags, computeFriendsCompatibility, type FriendsProfile } from "@/lib/ai/friendsInsights";
@@ -36,6 +37,7 @@ import {
   sendFriendsRequest,
 } from "@/lib/matching/actions";
 import { fetchFriendsSwipeDeckProfiles } from "@/lib/discover/friendsSwipeDeck";
+import { fetchFriendsWantToConnectCount } from "@/lib/discover/likesReceivedCount";
 import { friendsFollowProfile } from "@/lib/access/connections";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -75,6 +77,7 @@ export default function FriendsHome() {
   const [selfDisplayName, setSelfDisplayName] = useState<string | null>(null);
   const [superLikeRemainingToday, setSuperLikeRemainingToday] = useState(SUPER_LIKE_PER_DAY);
   const [incomingRequestCount, setIncomingRequestCount] = useState(0);
+  const [wantToConnectCount, setWantToConnectCount] = useState<number | null>(null);
 
   const cardAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
 
@@ -165,6 +168,26 @@ export default function FriendsHome() {
   );
 
   const currentProfile = profiles[currentIndex];
+
+  useEffect(() => {
+    if (deckLoading || currentProfile) return;
+    let active = true;
+    setWantToConnectCount(null);
+    (async () => {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        const uid = userData?.user?.id;
+        if (!uid || !active) return;
+        const count = await fetchFriendsWantToConnectCount(uid);
+        if (active) setWantToConnectCount(count);
+      } catch {
+        if (active) setWantToConnectCount(0);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [deckLoading, currentProfile]);
 
   const advanceToNext = () => {
     setCurrentIndex((i) => i + 1);
@@ -426,16 +449,12 @@ export default function FriendsHome() {
           <ActivityIndicator size="large" color={Colors.friends.primary} />
         </View>
       ) : !currentProfile ? (
-        <View style={styles.center}>
-          <Text style={styles.emptyTitle}>You&apos;ve seen everyone nearby 👋</Text>
-          <Pressable
-            onPress={() => router.push("/(modes)/friends/filters")}
-            style={styles.adjustFiltersBtn}
-            accessibilityLabel="Adjust filters"
-          >
-            <Text style={styles.adjustFiltersText}>Adjust filters</Text>
-          </Pressable>
-        </View>
+        <SwipeDeckEmptyState
+          mode="friends"
+          likesCount={wantToConnectCount}
+          onExpandRadius={() => router.push("/(modes)/friends/filters")}
+          onOpenDiscover={() => router.push("/(modes)/friends/discover")}
+        />
       ) : (
         <>
           <View style={styles.cardContainer}>
@@ -602,27 +621,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
-  },
-  emptyTitle: {
-    ...Typography.h3,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  adjustFiltersBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: Colors.friends.primary,
-    minHeight: 48,
-    justifyContent: "center",
-  },
-  adjustFiltersText: {
-    ...Typography.button,
-    fontFamily: FontFamily.heading,
-    color: Colors.friends.primary,
   },
   cardContainer: {
     flex: 1,

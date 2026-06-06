@@ -2,47 +2,33 @@
 
 **Last updated:** 2026-06-06
 
-Winkly uses **three logical environments**. Only **two** need paid Supabase cloud projects at once if you use **local** for development (see §0).
+Winkly uses **two active environments** today. A separate staging project is **deferred until app publishing**.
 
 | Environment | Backend | Project ref | GitHub (team) |
 | ----------- | ------- | ----------- | ------------- |
 | **development** | Local (`supabase start`) | n/a | Main app repo (`develop` / feature branches) |
-| **staging** | Supabase cloud | **`orjccytcmklzcfjgqwwj`** ([dashboard](https://supabase.com/dashboard/project/orjccytcmklzcfjgqwwj)) | Private [`mywinkly-cell/winkly-staging`](https://github.com/mywinkly-cell/winkly-staging) |
-| **production** | Supabase cloud — **WinklyApp (main)** | **`gwgjdpqskusuejlwrsnd`** ([dashboard](https://supabase.com/dashboard/project/gwgjdpqskusuejlwrsnd)) | [`mywinkly-cell/winkly-prod`](https://github.com/mywinkly-cell/winkly-prod) (release mirror / ops) |
+| **production** | Supabase cloud — **winkly-production** | **`orjccytcmklzcfjgqwwj`** ([dashboard](https://supabase.com/dashboard/project/orjccytcmklzcfjgqwwj)) | [`mywinkly-cell/winkly-production`](https://github.com/mywinkly-cell/winkly-production) |
 
-Both cloud projects are on the **Free** plan (2-project org limit). **Development** stays local — no third cloud slot needed.
-
-**Status (2026-06-06):** All repo migrations applied to **staging** and **production**. Edge Functions deployed to staging (parity with production). Local env files: `apps/mobile/.env.staging`, `apps/mobile/.env.production` (git-ignored).
+The former `winkly-staging` project was **renamed to winkly-production** and is now the single cloud backend. **Development** stays local — no second cloud slot needed until go-live staging is introduced.
 
 ---
 
-## 0. Two-cloud layout (current)
+## 0. Current layout
 
 1. **Development** → `supabase start` locally.
-2. **Staging** → `orjccytcmklzcfjgqwwj` — migration QA, EAS **preview** builds, disposable data.
-3. **Production** → `gwgjdpqskusuejlwrsnd` — live **WinklyApp** project; promote migrations only after staging verification.
+2. **Production** → `orjccytcmklzcfjgqwwj` — migrations, Edge Functions, EAS **preview** and **production** builds.
 
-**Never** point preview/staging mobile builds at production keys. **Never** run experiments on production data.
+**Never** run `supabase db reset` against the linked remote project. **Never** apply untested migrations to production.
 
 ---
 
-## 1. One-time: create separate projects
+## 1. One-time: production project setup
 
-### Staging
-
-1. [Supabase Dashboard](https://supabase.com/dashboard) → **New project** → name `winkly-staging`.
-2. Copy **Project URL** + **anon key** into `apps/mobile/.env.staging` (local) and EAS **preview** env vars.
-3. Link CLI: `supabase link --project-ref YOUR_STAGING_REF`
-4. Apply migrations: `supabase db push`
-5. Deploy Edge Functions to staging first; set secrets per project.
-
-### Production
-
-1. Create a **separate** project (e.g. `winkly-prod`) — never reuse staging.
-2. Copy URL + anon key into EAS **production** env vars only (avoid local `.env.production` on developer laptops when possible).
-3. Link: `supabase link --project-ref YOUR_PROD_REF`
-4. Apply migrations **only after** staging verification: `supabase db push`
-5. Deploy Edge Functions + production secrets.
+1. Open [winkly-production](https://supabase.com/dashboard/project/orjccytcmklzcfjgqwwj) in the Supabase dashboard.
+2. Copy **Project URL** + **anon key** into `apps/mobile/.env.production` (local) and EAS **preview** / **production** env vars.
+3. Link CLI: `npm run supabase:link:production` (or `supabase link --project-ref orjccytcmklzcfjgqwwj`).
+4. Apply migrations: `npm run supabase:push:production`.
+5. Deploy Edge Functions + set production secrets (see **docs/API_KEYS_AND_ENV.md** §3.1).
 
 ### Auth redirect URLs (production)
 
@@ -55,17 +41,16 @@ In production **Authentication → URL configuration**:
 
 ## 2. Migration promotion checklist
 
-Never run untested migrations on production.
-
 ```
-local (db reset) → staging (db push + app QA) → production (db push)
+local (db reset) → production (db push + app QA)
 ```
 
 1. `supabase db reset` locally — verify app + tests
-2. `supabase link --project-ref STAGING_REF && supabase db push`
-3. Run staging EAS preview build; smoke-test critical flows
-4. `supabase link --project-ref PROD_REF && supabase db push`
-5. Deploy Edge Functions to production
+2. `npm run supabase:push:production`
+3. Run EAS preview build; smoke-test critical flows
+4. Deploy Edge Functions to production if changed
+
+**Future (at app publish):** add a separate `winkly-staging` project and promote `local → staging → production`.
 
 ---
 
@@ -83,13 +68,12 @@ Supabase backup options depend on your plan:
 - [ ] Production project is on a **paid plan** with **PITR enabled** (Dashboard → **Database → Backups**).
 - [ ] Confirm **daily backup schedule** is active and retention meets your policy (minimum 7 days; 30+ recommended).
 - [ ] Document the **recovery procedure**: restore to a new project or use PITR to a timestamp (Supabase support/docs).
-- [ ] Test a **staging restore** at least once so the team knows the steps.
 - [ ] Store the **service role key** and **database password** in a team password manager — not in git.
 - [ ] Enable **database network restrictions** if your deployment model allows fixed egress IPs.
 
 ### Verify backups in dashboard
 
-1. Open the **production** project (not staging).
+1. Open **winkly-production** (`orjccytcmklzcfjgqwwj`).
 2. Go to **Database → Backups**.
 3. Confirm status is **Enabled** and recent backup timestamps are listed.
 4. For PITR: note the earliest recoverable time and test window.
@@ -107,9 +91,9 @@ Supabase backup options depend on your plan:
 
 ## 5. Golden rules
 
-- Never point `development` or `staging` mobile builds at the production Supabase URL.
+- Never point `development` mobile builds at the production Supabase URL.
 - Never run `supabase db reset` against a linked remote project.
-- Never apply migrations to production without staging verification.
+- Never apply migrations to production without local verification.
 - Rotate keys if a `.env` or service account is exposed.
 
 See also: `docs/ENVIRONMENTS.md`, `docs/GO_LIVE_AND_PLAY_STORE.md`.

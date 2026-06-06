@@ -23,6 +23,7 @@ import { ModeHeader } from "@/components/layout/ModeHeader";
 import { RomanceBottomNav } from "@/components/layout/RomanceBottomNav";
 import { MatchCardOverlay } from "@/components/matching/MatchCardOverlay";
 import { MatchCelebration } from "@/components/matching/MatchCelebration";
+import { SwipeDeckEmptyState } from "@/components/matching/SwipeDeckEmptyState";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { useModeContext } from "@/providers/ModeContextProvider";
@@ -34,6 +35,7 @@ import { SuperLikeInviteModal } from "@/components/romance/SuperLikeInviteModal"
 import { blockUser, recordSwipe, reportUser } from "@/lib/matching/actions";
 import { buildRomanceSuperLikeIcebreaker } from "@/lib/matching/romanceIcebreaker";
 import { fetchRomanceSwipeDeckProfiles } from "@/lib/discover/romanceSwipeDeck";
+import { fetchRomanceLikesReceivedCount } from "@/lib/discover/likesReceivedCount";
 import { updateMyLocationOnAppOpen } from "@/lib/location/updateLocation";
 import {
   acceptRomanceChatInvite,
@@ -103,6 +105,7 @@ export default function RomanceHome() {
   const [intentModalVisible, setIntentModalVisible] = useState(false);
   const [superLikeInviteModalVisible, setSuperLikeInviteModalVisible] = useState(false);
   const [intentMessage, setIntentMessage] = useState("");
+  const [likesReceivedCount, setLikesReceivedCount] = useState<number | null>(null);
 
   const cardAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const pendingIntentMessage = useRef<string | undefined>(undefined);
@@ -218,6 +221,26 @@ export default function RomanceHome() {
   );
 
   const currentProfile = profiles[currentIndex];
+
+  useEffect(() => {
+    if (deckLoading || currentProfile) return;
+    let active = true;
+    setLikesReceivedCount(null);
+    (async () => {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        const uid = userData?.user?.id;
+        if (!uid || !active) return;
+        const count = await fetchRomanceLikesReceivedCount(uid);
+        if (active) setLikesReceivedCount(count);
+      } catch {
+        if (active) setLikesReceivedCount(0);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [deckLoading, currentProfile]);
 
   const intentAiIcebreaker = React.useMemo(
     () =>
@@ -557,18 +580,12 @@ export default function RomanceHome() {
           <ActivityIndicator size="large" color={Colors.primaryViolet} />
         </View>
       ) : !currentProfile ? (
-        <View style={styles.center}>
-          <Text style={styles.emptyTitle}>
-            You&apos;ve seen everyone nearby 💫
-          </Text>
-          <Pressable
-            onPress={() => router.push("/(modes)/romance/filters")}
-            style={styles.adjustFiltersBtn}
-            accessibilityLabel="Adjust filters"
-          >
-            <Text style={styles.adjustFiltersText}>Adjust filters</Text>
-          </Pressable>
-        </View>
+        <SwipeDeckEmptyState
+          mode="romance"
+          likesCount={likesReceivedCount}
+          onExpandRadius={() => router.push("/(modes)/romance/filters")}
+          onOpenDiscover={() => router.push("/(modes)/romance/discover")}
+        />
       ) : (
         <>
           <View style={styles.cardContainer}>
@@ -832,27 +849,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
-  },
-  emptyTitle: {
-    ...Typography.h3,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  adjustFiltersBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: Colors.romance.primary,
-    minHeight: 48,
-    justifyContent: "center",
-  },
-  adjustFiltersText: {
-    ...Typography.button,
-    fontFamily: FontFamily.heading,
-    color: Colors.romance.primary,
   },
   cardContainer: {
     flex: 1,

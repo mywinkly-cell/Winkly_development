@@ -19,7 +19,7 @@ This doc lists every API key and env var used by Winkly, where they are used, an
 
 All mobile env vars are prefixed with `EXPO_PUBLIC_` so they are available at build time. Copy `apps/mobile/.env.example` to `apps/mobile/.env` and fill in values.
 
-> **Environments (dev / staging / production):** Winkly uses three isolated environments. Instead of a single `.env`, copy the per-environment templates `apps/mobile/.env.{development,staging,production}.example` to real files and switch between them with `npm run env:dev | env:staging | env:prod` (these copy the chosen `.env.<env>` → `.env`, which Expo loads). Full guide: **docs/ENVIRONMENTS.md**. Never point dev/staging at production data.
+> **Environments (dev / production):** Winkly uses local development plus **winkly-production** (`orjccytcmklzcfjgqwwj`). Copy `apps/mobile/.env.{development,production}.example` to real files and switch with `npm run env:dev | env:prod` (copies the chosen `.env.<env>` → `.env`, which Expo loads). Full guide: **docs/ENVIRONMENTS.md**. A separate staging project is deferred until app publishing.
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
@@ -61,7 +61,10 @@ These are **server-side only**. Never put them in the mobile app.
 | `MOCK_FACE_MATCH` | **verify-profile-photo** | Optional | Set to `true` only in dev to mark verification as passed without Rekognition. |
 | `DAILY_API_KEY` | **video-call-session** | Optional | [Daily.co](https://www.daily.co/) REST API — creates private rooms and meeting tokens for 1:1 video. When unset, returns a placeholder URL. |
 | `SAGEMAKER_RUNTIME_ENDPOINT`, `SAGEMAKER_API_KEY` | **recompute-behavior-ml** | Optional | Custom HTTP endpoint (e.g. SageMaker) that returns JSON `{ score: number }` per pair; optional bearer key. |
-| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | **recompute-behavior-ml** | Optional | Bust cache key `winkly:feed:{user_id}` after updates when `user_id` is in the request body. |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | **ai-gateway**, **recompute-behavior-ml** | **Recommended (prod)** | **ai-gateway:** per-tier/per-task rate limits + response caches (skips limits when unset). **recompute-behavior-ml:** busts cache key `winkly:feed:{user_id}` after updates. |
+| `CORS_ALLOWED_ORIGINS` | **ai-gateway**, **delete-account** | **Recommended (prod)** | Comma-separated browser origins allowed for CORS preflight. When unset, defaults to localhost (dev). Production example: `https://YOUR_PROJECT_REF.supabase.co`. Native mobile `supabase.functions.invoke` is unaffected. |
+| `EXPO_ACCESS_TOKEN` | **notify-fanout**, **pending-plan-confirm**, **expo-push-notify** | **Recommended (prod)** | Expo account access token ([expo.dev](https://expo.dev) → Account → Access tokens). Improves Expo Push API reliability and rate limits. Same token family as GitHub `EXPO_TOKEN` for EAS CI. |
+| `WEBHOOK_SECRET` | **notify-fanout** | **Required for server push** | Shared secret for `x-webhook-secret` header from Postgres `pg_net` triggers. **Must match** `private.webhook_config.secret` in the database. Generate a strong random string; set via CLI/Dashboard, then sync the DB row (see §3.1). |
 | `AUTH_REDIRECT_STATE_SECRET` | **auth-redirect** | **Recommended (prod)** | Random string **≥ 16 characters**. Signs `winkly_state` CSRF tokens (`GET …/auth-redirect?action=mint`). Required for production when using HTTPS `EXPO_PUBLIC_AUTH_REDIRECT_URL`. |
 
 **Local Edge Functions (`supabase start` / `supabase functions serve`):**
@@ -102,7 +105,40 @@ Run the commands **on your machine** in PowerShell or Command Prompt. When you t
    ```bash
    npx supabase functions deploy ai-gateway
    npx supabase functions deploy get-nearby-external-events
+   npx supabase functions deploy notify-fanout
    ```
+
+### 3.1 Production checklist (`orjccytcmklzcfjgqwwj` — winkly-production)
+
+Audit what's set (names only — no values):
+
+```bash
+npx supabase secrets list --project-ref orjccytcmklzcfjgqwwj
+```
+
+| Secret | Status (2026-06-06) | Action if missing |
+|--------|---------------------|-------------------|
+| `OPENAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` | Set | Required for AI; **Anthropic** is primary for Premium tier |
+| `UPSTASH_REDIS_REST_URL` + `TOKEN` | Set | Enables ai-gateway rate limits + caches |
+| `CORS_ALLOWED_ORIGINS` | Set | `https://orjccytcmklzcfjgqwwj.supabase.co` |
+| `WEBHOOK_SECRET` | Set | Must match `private.webhook_config.secret` (see below) |
+| `AUTH_REDIRECT_STATE_SECRET` | Set | HTTPS email redirect CSRF |
+| `EXPO_ACCESS_TOKEN` | **Not set** | Create at expo.dev → set secret → redeploy push functions |
+| `MEETUP_API_KEY` | Optional | External events |
+| `EVENTBRITE_PRIVATE_TOKEN` | Set | External events |
+| `GOOGLE_PLACES_API_KEY` | Optional | Richer venue hints in ai-gateway |
+
+**Sync `WEBHOOK_SECRET` with the database** (after setting the Edge Function secret):
+
+```sql
+INSERT INTO private.webhook_config (id, function_base_url, secret)
+VALUES (true, 'https://orjccytcmklzcfjgqwwj.supabase.co', '<same-as-WEBHOOK_SECRET>')
+ON CONFLICT (id) DO UPDATE
+  SET function_base_url = EXCLUDED.function_base_url,
+      secret = EXCLUDED.secret;
+```
+
+Remove any misnamed secrets (e.g. `WinklyApp`) from Dashboard → Edge Functions → Secrets.
 
 ---
 
@@ -131,6 +167,8 @@ Run the commands **on your machine** in PowerShell or Command Prompt. When you t
 - [ ] **Google / Facebook sign-in:** Optional. Set the OAuth client/app IDs in `.env` and configure Supabase Auth providers.
 - [ ] **AI concierge:** In Supabase, set `ANTHROPIC_API_KEY` for **Premium** Claude routing, and/or `GEMINI_API_KEY` / `OPENAI_API_KEY` (Super uses Gemini first; Premium falls back to them). Deploy `ai-gateway`. Apply migration `20260406120000_concierge_event_trgm_and_rpc.sql` for fuzzy event matching. Optional: `GOOGLE_PLACES_API_KEY` or `GOOGLE_MAPS_API_KEY` for richer **EXTERNAL_PLACE_HINTS**.
 - [ ] **External events (Meetup/Eventbrite):** Optional. Set `MEETUP_API_KEY` and/or `EVENTBRITE_PRIVATE_TOKEN` in Supabase secrets and deploy `get-nearby-external-events`. The Edge Function implements Meetup GraphQL and Eventbrite REST; when keys are set, Events home can show nearby external events.
+- [ ] **Server push:** Set `EXPO_ACCESS_TOKEN` + `WEBHOOK_SECRET` in Supabase secrets; sync `private.webhook_config`; deploy `notify-fanout`. See §3.1.
+- [ ] **Production CORS + Redis:** Set `CORS_ALLOWED_ORIGINS` and `UPSTASH_REDIS_REST_*` for ai-gateway scale/abuse protection.
 - [ ] **Expo Push / EAS:** Optional for dev in Expo Go. For **standalone / dev builds**, set `EXPO_PUBLIC_EAS_PROJECT_ID` to your Expo **project UUID** if you need remote push tokens; **Android Expo Go** cannot exercise remote push (SDK 53+) — build with **EAS** (`eas build`) when testing pushes end-to-end.
 
 ---

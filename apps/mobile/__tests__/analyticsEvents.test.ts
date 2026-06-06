@@ -1,10 +1,12 @@
 import { setAnalyticsClient, type AnalyticsClient } from "@/lib/analytics";
 import {
   AnalyticsEvents,
+  trackAccountCreated,
   trackChatStarted,
   trackEventRsvp,
   trackMatchCreated,
   trackModeSelected,
+  trackOnboardingCompleted,
   trackSubscriptionUpgraded,
 } from "@/lib/analytics/events";
 
@@ -30,6 +32,8 @@ describe("analytics event taxonomy", () => {
     expect(AnalyticsEvents.ChatStarted).toBe("chat_started");
     expect(AnalyticsEvents.EventRsvp).toBe("event_rsvp");
     expect(AnalyticsEvents.SubscriptionUpgraded).toBe("subscription_upgraded");
+    expect(AnalyticsEvents.AccountCreated).toBe("account_created");
+    expect(AnalyticsEvents.OnboardingCompleted).toBe("onboarding_completed");
   });
 
   it("emits typed payloads through the registered client", () => {
@@ -41,6 +45,8 @@ describe("analytics event taxonomy", () => {
     trackChatStarted({ mode: "friends", chat_id: "c1" });
     trackEventRsvp({ event_id: "e1", status: "going" });
     trackSubscriptionUpgraded({ from_tier: "free", to_tier: "premium" });
+    trackAccountCreated({ account_type: "personal", method: "email" });
+    trackOnboardingCompleted({ account_type: "business" });
 
     expect(captured).toEqual([
       { event: "mode_selected", props: { mode: "romance" } },
@@ -48,6 +54,8 @@ describe("analytics event taxonomy", () => {
       { event: "chat_started", props: { mode: "friends", chat_id: "c1" } },
       { event: "event_rsvp", props: { event_id: "e1", status: "going" } },
       { event: "subscription_upgraded", props: { from_tier: "free", to_tier: "premium" } },
+      { event: "account_created", props: { account_type: "personal", method: "email" } },
+      { event: "onboarding_completed", props: { account_type: "business" } },
     ]);
   });
 

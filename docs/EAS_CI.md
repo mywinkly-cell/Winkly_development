@@ -11,8 +11,8 @@ This doc covers Expo Application Services (EAS) profiles, credential storage, an
 | Profile | `APP_ENV` | Distribution | Use case |
 | ------- | --------- | ------------ | -------- |
 | **development** | `development` | Internal dev client | Local dev builds with `expo-dev-client` |
-| **preview** | `staging` | Internal (TestFlight + Play internal) | Pre-prod QA on real devices |
-| **staging** | `staging` | Same as `preview` (`extends`) | Backward-compatible alias |
+| **preview** | `production` | Internal (TestFlight + Play internal) | Pre-release QA on real devices (winkly-production backend) |
+| **staging** | `production` | Same as `preview` (`extends`) | Backward-compatible alias |
 | **production** | `production` | Store (AAB for Play) | Public release builds |
 
 Signing credentials (iOS distribution cert + provisioning profile, Android keystore) are stored **remotely in EAS** — not in git. Configure once per machine:

@@ -20,18 +20,15 @@
     "mobile:test:e2e:android": "npm run -w apps/mobile test:e2e:android",
     "mobile:audit-i18n": "npm run -w apps/mobile audit-i18n",
     "env:dev": "node scripts/use-env.mjs development",
-    "env:staging": "node scripts/use-env.mjs staging",
     "env:prod": "node scripts/use-env.mjs production",
     "start:dev": "npm run env:dev && npm run mobile:start",
-    "start:staging": "npm run env:staging && npm run mobile:start",
     "start:prod": "npm run env:prod && npm run mobile:start",
     "ci": "npm run mobile:lint && npm run mobile:typecheck && npm run mobile:test",
     "postinstall": "patch-package --patch-dir apps/mobile/patches",
     "supabase:deploy-auth-redirect": "supabase functions deploy auth-redirect",
-    "supabase:link:staging": "node scripts/supabase-link.mjs staging",
     "supabase:link:production": "node scripts/supabase-link.mjs production",
-    "supabase:push:staging": "node scripts/supabase-push.mjs staging",
-    "supabase:push:production": "node scripts/supabase-push.mjs production"
+    "supabase:push:production": "node scripts/supabase-push.mjs production",
+    "supabase:secrets:production": "npx supabase secrets list --project-ref orjccytcmklzcfjgqwwj"
   },
   "overrides": {
     "@expo/vector-icons": "15.1.1",

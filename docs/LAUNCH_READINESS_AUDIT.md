@@ -100,8 +100,8 @@
 | `chat_started` | Chat opened |
 | `event_rsvp` | Planner RSVP |
 | `subscription_upgraded` | Tier change |
-| `account_created` | Sign-up (wire at signup) |
-| `onboarding_completed` | Onboarding done (wire when complete) |
+| `account_created` | Email sign-up success (`signup.tsx`) |
+| `onboarding_completed` | Profile save → mode selection or Winkly World “Enter” (`profile-core`, `profile-business`, `winkly-world`) |
 
 **Discover-specific** (`lib/discover/analytics.ts`): `discover_open`, `recommendation_*`, etc. — consider moving into `events.ts` for one taxonomy.
 
@@ -177,5 +177,5 @@ SELECT * FROM public.rls_audit_report() WHERE status != 'OK';
 1. Device-test auth-redirect + `winkly://callback` on iOS and Android (blocking).
 2. Complete OAuth implementation or hide buttons until ready.
 3. Run `rls_audit_report()` on production Supabase.
-4. Wire `trackAccountCreated` / `trackOnboardingCompleted` at completion points.
+4. ~~Wire `trackAccountCreated` / `trackOnboardingCompleted` at completion points.~~ Done.
 5. Accessibility pass on auth + tab shell + discover.
