@@ -1,5 +1,6 @@
 // ai-gateway — Mode-locked AI gateway (spec v8.1 + concierge)
-// Validates session, mode; allowlisted context only; optional Gemini (preferred) or OpenAI + tools (weather, Winkly events, planner)
+// Validates session, mode; allowlisted context only; LLM routing by tier:
+// Premium/Enterprise → Anthropic (Claude) primary; Super → Gemini primary; OpenAI/Gemini fallbacks.
 //
 // AI safety / account deletion: We do not log full prompts or responses. Only telemetry (user_id, mode, task) is
 // stored in ai_requests; that table has ON DELETE CASCADE from auth.users, so when a user deletes their account
@@ -20,6 +21,11 @@ const GEMINI_MODEL_LITE = Deno.env.get("GEMINI_MODEL_LITE") ?? "gemini-2.0-flash
 // Model routing (cost optimization)
 const GEMINI_MODEL_TOPICS = Deno.env.get("GEMINI_MODEL_TOPICS") ?? "gemini-2.0-flash-lite";
 const GEMINI_MODEL_PLAN = Deno.env.get("GEMINI_MODEL_PLAN") ?? "gemini-2.0-flash";
+
+/** Anthropic (Claude) — primary for Premium/Enterprise. Override via Supabase secrets. */
+const ANTHROPIC_MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-sonnet-4-20250514";
+const ANTHROPIC_MODEL_LITE = Deno.env.get("ANTHROPIC_MODEL_LITE") ?? "claude-3-5-haiku-20241022";
+const ANTHROPIC_MODEL_PLAN = Deno.env.get("ANTHROPIC_MODEL_PLAN") ?? "claude-sonnet-4-20250514";
 
 // Redis (Upstash REST) — used for rate limiting + semantic caching + context caching
 const UPSTASH_REDIS_REST_URL = Deno.env.get("UPSTASH_REDIS_REST_URL") ?? "";
@@ -111,6 +117,64 @@ function tierAllowsTask(tier: SubscriptionTier, task: string): boolean {
 /** Suggested upgrade target for client upsell when a task is denied. */
 function suggestedUpgradeTier(task: string): "super" | "premium" {
   return TASK_MIN_TIER[task] === "premium" ? "premium" : "super";
+}
+
+/** Premium and Enterprise subscribers get Claude as the primary LLM when configured. */
+function isPremiumTier(tier: SubscriptionTier): boolean {
+  return tier === "premium" || tier === "enterprise";
+}
+
+function pickAnthropicModel(task: string): string {
+  if (task === "chat_topics") return ANTHROPIC_MODEL_LITE;
+  if (task === "winkly_plan" || task === "planner_theme_plans") return ANTHROPIC_MODEL_PLAN;
+  return ANTHROPIC_MODEL;
+}
+
+type ConciergeLlmResult = {
+  message?: string;
+  suggestions?: unknown[];
+  no_options_reason?: string;
+  statusCode?: number;
+  retry_after?: number;
+  provider_status?: number;
+  quota_exhausted?: boolean;
+};
+
+/** Run a single Anthropic Messages API call; returns assistant text or null on failure. */
+async function runAnthropicJson(
+  anthropicKey: string,
+  system: string,
+  userContent: string,
+  model: string,
+  maxTokens = 1200,
+  temperature = 0.5,
+): Promise<string | null> {
+  const res = await fetchWithBackoff(
+    "https://api.anthropic.com/v1/messages",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": anthropicKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: capOutputTokens(maxTokens),
+        temperature,
+        system,
+        messages: [{ role: "user", content: userContent }],
+      }),
+    },
+    { retries: 3, baseMs: 700 },
+  );
+  if (!res.ok) {
+    console.error("[ai-gateway] Anthropic JSON !ok status=" + res.status);
+    return null;
+  }
+  const data = await res.json();
+  const textBlock = (data.content as Array<{ type: string; text?: string }> | undefined)?.find((b) => b.type === "text");
+  return typeof textBlock?.text === "string" ? textBlock.text : null;
 }
 
 async function upstashPipeline(
@@ -1466,6 +1530,33 @@ Respond with valid JSON only:
   return parseMatchAgentModelJson(text);
 }
 
+async function runMatchAgentFinalAnthropic(anthropicKey: string, payload: Record<string, unknown>): Promise<MatchAgentModelJson | null> {
+  const sys = `${MATCH_AGENT_RULES}
+
+You are Winkly's Match Agent conductor. Respond with valid JSON only:
+{
+  "chain": { "extract": "", "search_query_used": "", "weather_note": "" },
+  "draft": {
+    "venue_name": "",
+    "place_id": "",
+    "proposed_time_caption": "",
+    "mutual_fit_reason": "",
+    "double_opt_in_prompt": "",
+    "neutral_third_fallback": ""
+  },
+  "agent_message": "Winkly: ..."
+}`;
+  const text = await runAnthropicJson(
+    anthropicKey,
+    sys,
+    `Structured pipeline output:\n${JSON.stringify(payload)}`,
+    ANTHROPIC_MODEL_PLAN,
+    1200,
+    0.45,
+  );
+  return text ? parseMatchAgentModelJson(text) : null;
+}
+
 async function runMatchAgentFinalOpenAI(openaiKey: string, payload: Record<string, unknown>): Promise<MatchAgentModelJson | null> {
   const sys = `${MATCH_AGENT_RULES}
 Output a single JSON object with keys chain, draft, agent_message as in the Gemini spec.`;
@@ -1499,6 +1590,7 @@ async function runMatchAgentPipeline(
   mode: string,
   partnerUserId: string,
   safeContext: Record<string, unknown>,
+  tier: SubscriptionTier,
 ): Promise<{
   chain: Record<string, unknown>;
   places: unknown[];
@@ -1594,10 +1686,14 @@ async function runMatchAgentPipeline(
     },
   };
 
+  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
   let model: MatchAgentModelJson | null = null;
-  if (geminiKey) model = await runMatchAgentFinalGemini(geminiKey, llmPayload);
+  if (isPremiumTier(tier) && anthropicKey) {
+    model = await runMatchAgentFinalAnthropic(anthropicKey, llmPayload);
+  }
+  if (!model && geminiKey) model = await runMatchAgentFinalGemini(geminiKey, llmPayload);
   if (!model && openaiKey) model = await runMatchAgentFinalOpenAI(openaiKey, llmPayload);
   if (!model) {
     model = {
@@ -1730,6 +1826,21 @@ async function runMatchBridgeGeminiJson(
   return parseMatchBridgePayload(text);
 }
 
+async function runMatchBridgeAnthropicJson(
+  anthropicKey: string,
+  payload: Record<string, unknown>,
+): Promise<MatchBridgePayload | null> {
+  const text = await runAnthropicJson(
+    anthropicKey,
+    MATCH_BRIDGE_SYSTEM,
+    `Context JSON:\n${JSON.stringify(payload)}`,
+    ANTHROPIC_MODEL,
+    900,
+    0.55,
+  );
+  return text ? parseMatchBridgePayload(text) : null;
+}
+
 async function runMatchBridgeOpenAIJson(
   openaiKey: string,
   payload: Record<string, unknown>,
@@ -1816,6 +1927,14 @@ function conciergeGeminiTools(ctx: Record<string, unknown>) {
     return GEMINI_FUNCTION_DECLARATIONS.filter((d) => d.name !== "get_weather");
   }
   return GEMINI_FUNCTION_DECLARATIONS;
+}
+
+function conciergeAnthropicTools(ctx: Record<string, unknown>) {
+  return conciergeOpenAiTools(ctx).map((t) => ({
+    name: t.function.name,
+    description: t.function.description,
+    input_schema: t.function.parameters,
+  }));
 }
 
 /** User message: optional verbatim form text + structured JSON (same facts as typing into Gemini). */
@@ -2127,6 +2246,195 @@ async function runOpenAIWithTools(
   }
 
   return { message: "Planning took too many steps. Please try again.", suggestions: [], no_options_reason: "Planning took too many steps." };
+}
+
+async function resolveConciergeToolResult(
+  name: string,
+  args: Record<string, unknown>,
+  userId: string,
+  context: Record<string, unknown>,
+  supabase: ReturnType<typeof createClient>,
+): Promise<string> {
+  if (name === "get_weather") {
+    let lat = args.latitude as number;
+    let lng = args.longitude as number;
+    if ((lat == null || lng == null) && context.city) {
+      const coords = await geocodeCity(String(context.city));
+      if (coords) {
+        lat = coords.lat;
+        lng = coords.lng;
+      }
+    }
+    if (lat != null && lng != null) {
+      return await getWeather(lat, lng, args.date as string);
+    }
+    return JSON.stringify({ error: "Need latitude/longitude or city in context" });
+  }
+  if (name === "get_winkly_events") {
+    return await getWinklyEvents(supabase, {
+      mode: args.mode as string,
+      dateFrom: args.date_from as string,
+      dateTo: args.date_to as string,
+      limit: (args.limit as number) ?? 10,
+    });
+  }
+  if (name === "get_planner_items") {
+    return await getPlannerItemsForUser(supabase, userId, args.source_mode as string);
+  }
+  return JSON.stringify({ error: "Unknown tool" });
+}
+
+async function runAnthropicWithTools(
+  anthropicKey: string,
+  userId: string,
+  task: string,
+  context: Record<string, unknown>,
+  supabase: ReturnType<typeof createClient>,
+  systemPrompt: string,
+): Promise<ConciergeLlmResult> {
+  const userContent = conciergeUserMessage(task, context);
+  const sysFull = conciergeSystemPromptAugment(systemPrompt, context);
+  const model = pickAnthropicModel(task);
+  const url = "https://api.anthropic.com/v1/messages";
+
+  type AnthropicContent =
+    | { type: "text"; text: string }
+    | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+    | { type: "tool_result"; tool_use_id: string; content: string };
+
+  const messages: Array<{ role: "user" | "assistant"; content: string | AnthropicContent[] }> = [
+    { role: "user", content: userContent },
+  ];
+
+  const maxTurns = 5;
+  let turn = 0;
+
+  while (turn < maxTurns) {
+    const body: Record<string, unknown> = {
+      model,
+      max_tokens: capOutputTokens(1024),
+      temperature: 0.7,
+      system: sysFull,
+      messages,
+    };
+    if (["plan", "concierge", "event_suggest", "winkly_plan"].includes(task)) {
+      body.tools = conciergeAnthropicTools(context);
+    }
+
+    const res = await fetchWithBackoff(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": anthropicKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify(body),
+    }, { retries: 4, baseMs: 900 });
+
+    if (!res.ok) {
+      const err = await res.text();
+      console.error("[ai-gateway] Anthropic !ok status=" + res.status + " body=" + err.slice(0, 400));
+      const quotaExhausted = res.status === 429 && /rate_limit|quota|billing|exceeded/i.test(err);
+      const friendly = quotaExhausted
+        ? "Winkly AI has reached its usage quota for now. Please try again later."
+        : res.status === 429
+          ? "The AI provider is rate-limiting. Wait a minute and try again, or use a paid API key for higher limits."
+          : res.status === 401 || res.status === 403
+            ? "Invalid or restricted API key. Check your Anthropic/Gemini/OpenAI key in Supabase secrets."
+            : `AI temporarily unavailable (${res.status}). Try again in a moment.`;
+      if (res.status === 429) {
+        return { message: friendly, suggestions: [], statusCode: 429, retry_after: quotaExhausted ? 3600 : 60, provider_status: res.status, quota_exhausted: quotaExhausted };
+      }
+      return { message: friendly, suggestions: [], provider_status: res.status };
+    }
+
+    const data = await res.json();
+    const content = data.content as AnthropicContent[] | undefined;
+    if (!Array.isArray(content) || content.length === 0) {
+      return { message: "No response from AI.", suggestions: [], no_options_reason: "No response from AI." };
+    }
+
+    const toolUses = content.filter((b): b is Extract<AnthropicContent, { type: "tool_use" }> => b.type === "tool_use");
+    if (toolUses.length > 0) {
+      messages.push({ role: "assistant", content });
+      const toolResults: AnthropicContent[] = [];
+      for (const tu of toolUses) {
+        const toolResult = await resolveConciergeToolResult(tu.name, tu.input ?? {}, userId, context, supabase);
+        toolResults.push({ type: "tool_result", tool_use_id: tu.id, content: toolResult });
+      }
+      messages.push({ role: "user", content: toolResults });
+      turn++;
+      continue;
+    }
+
+    const text = content.find((b): b is Extract<AnthropicContent, { type: "text" }> => b.type === "text")?.text?.trim() ?? "";
+    const options = parseConciergeOptions(text);
+    const list = options ?? [];
+    const noOptionsReason = list.length === 0 && text ? (text.slice(0, 120).replace(/\n/g, " ").trim() + (text.length > 120 ? "…" : "")) : undefined;
+    return { message: text, suggestions: list, no_options_reason: noOptionsReason };
+  }
+
+  return { message: "Planning took too many steps. Please try again.", suggestions: [], no_options_reason: "Planning took too many steps." };
+}
+
+/** Tier-aware LLM chain: Premium/Enterprise → Anthropic first; Super → Gemini first. */
+async function runConciergeLlmChain(
+  tier: SubscriptionTier,
+  userId: string,
+  task: string,
+  context: Record<string, unknown>,
+  supabase: ReturnType<typeof createClient>,
+  systemPrompt: string,
+): Promise<ConciergeLlmResult> {
+  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+  const geminiKey = Deno.env.get("GEMINI_API_KEY");
+  const openaiKey = Deno.env.get("OPENAI_API_KEY");
+
+  if (isPremiumTier(tier) && anthropicKey) {
+    let result = await runAnthropicWithTools(anthropicKey, userId, task, context, supabase, systemPrompt);
+    const shouldFallback = result.statusCode === 429 ||
+      (result.provider_status != null && result.provider_status >= 400);
+    if (shouldFallback) {
+      console.warn(`[ai-gateway] Anthropic failed (status=${result.provider_status ?? result.statusCode}); trying Gemini/OpenAI.`);
+      if (geminiKey) {
+        await new Promise((r) => setTimeout(r, 800));
+        result = await runGeminiWithTools(geminiKey, userId, task, context, supabase, systemPrompt);
+        if (result.statusCode === 429 && openaiKey) {
+          await new Promise((r) => setTimeout(r, 1500));
+          result = await runOpenAIWithTools(openaiKey, userId, task, context, supabase, systemPrompt);
+        }
+      } else if (openaiKey) {
+        result = await runOpenAIWithTools(openaiKey, userId, task, context, supabase, systemPrompt);
+      }
+    }
+    return result;
+  }
+
+  if (geminiKey) {
+    let result = await runGeminiWithTools(geminiKey, userId, task, context, supabase, systemPrompt);
+    if (result.statusCode === 429 && openaiKey) {
+      console.warn("[ai-gateway] Gemini returned 429; trying OpenAI.");
+      await new Promise((r) => setTimeout(r, 1500));
+      result = await runOpenAIWithTools(openaiKey, userId, task, context, supabase, systemPrompt);
+    }
+    if (openaiKey) {
+      const ps = (result as ConciergeLlmResult).provider_status;
+      if (ps != null && ps !== 429) {
+        const oai = await runOpenAIWithTools(openaiKey, userId, task, context, supabase, systemPrompt);
+        if (oai.statusCode === 429) return oai;
+        const oaps = (oai as ConciergeLlmResult).provider_status;
+        if (oaps == null) return oai;
+      }
+    }
+    return result;
+  }
+  if (openaiKey) {
+    return await runOpenAIWithTools(openaiKey, userId, task, context, supabase, systemPrompt);
+  }
+  return {
+    suggestions: [],
+    no_options_reason: "AI is not configured for this environment. Add ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY to enable plans.",
+  };
 }
 
 async function getPlanningProfileRows(
@@ -2526,11 +2834,13 @@ async function generateWinklyPlan(params: {
   maps_grounding?: "none" | "textsearch" | "verify";
   /** When set with num_days > 1, returns a day-by-day itinerary (skips single-day Maps verify path). */
   multiDay?: { num_days: number } | null;
+  /** Premium/Enterprise → Anthropic (Claude) for single-day plan JSON when ANTHROPIC_API_KEY is set. */
+  tier?: SubscriptionTier;
 }): Promise<{
   plan: WinklyPlanOutput;
   trip_days?: PlannerTripDayOut[];
   pending_plan_id: string | null;
-  provider: "gemini" | "fallback";
+  provider: "gemini" | "anthropic" | "fallback";
   location_id: string | null;
   booking_url: string | null;
   participants: string[];
@@ -2603,6 +2913,8 @@ async function generateWinklyPlan(params: {
   const planSeedTitle = userIdea ? userIdea.slice(0, 120) : "Plan";
 
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
+  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+  const useAnthropicPlan = params.tier && isPremiumTier(params.tier) && !!anthropicKey;
 
   const multiReq = params.multiDay;
   if (multiReq && multiReq.num_days > 1) {
@@ -2664,7 +2976,7 @@ async function generateWinklyPlan(params: {
     };
   }
 
-  if (!geminiKey) {
+  if (!geminiKey && !useAnthropicPlan) {
     const fallback = noVenueFoundPlan(planSeedTitle);
     return {
       plan: fallback,
@@ -2789,33 +3101,44 @@ Required JSON schema:
     ...(verifiedBookingUrl ? { BOOKING_URL: verifiedBookingUrl } : {}),
   };
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(geminiKey)}`;
-  const body = {
-    systemInstruction: { parts: [{ text: SYSTEM }] },
-    contents: [{ role: "user", parts: [{ text: JSON.stringify(payload) }] }],
-    generationConfig: {
-      maxOutputTokens: capOutputTokens(1400),
-      temperature: 0.5,
-      responseMimeType: "application/json",
-    },
-  };
-  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (!res.ok) {
-    const fallback = noVenueFoundPlan(planSeedTitle);
-    return {
-      plan: fallback,
-      pending_plan_id: null,
-      provider: "fallback",
-      location_id: verifiedPlaceId,
-      booking_url: verifiedBookingUrl,
-      participants: ensureRequester,
-    };
+  let parsed: WinklyPlanOutput | null = null;
+  let planProvider: "gemini" | "anthropic" | "fallback" = "fallback";
+
+  if (useAnthropicPlan && anthropicKey) {
+    const anthropicText = await runAnthropicJson(
+      anthropicKey,
+      SYSTEM,
+      JSON.stringify(payload),
+      ANTHROPIC_MODEL_PLAN,
+      1400,
+      0.5,
+    );
+    parsed = anthropicText ? parseWinklyPlanOutput(anthropicText) : null;
+    if (parsed) planProvider = "anthropic";
   }
-  const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  const parsed = typeof text === "string" ? parseWinklyPlanOutput(text) : null;
+
+  if (!parsed && geminiKey) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(geminiKey)}`;
+    const body = {
+      systemInstruction: { parts: [{ text: SYSTEM }] },
+      contents: [{ role: "user", parts: [{ text: JSON.stringify(payload) }] }],
+      generationConfig: {
+        maxOutputTokens: capOutputTokens(1400),
+        temperature: 0.5,
+        responseMimeType: "application/json",
+      },
+    };
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (res.ok) {
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      parsed = typeof text === "string" ? parseWinklyPlanOutput(text) : null;
+      if (parsed) planProvider = "gemini";
+    }
+  }
 
   let finalPlan: WinklyPlanOutput = parsed ?? noVenueFoundPlan(planSeedTitle);
+  if (!parsed) planProvider = "fallback";
 
   if (verifiedVenue) {
     finalPlan = applyVerifiedVenueToOptions(finalPlan, verifiedVenue, verifiedBookingUrl);
@@ -2850,7 +3173,7 @@ Required JSON schema:
   return {
     plan: finalPlan,
     pending_plan_id: pendingPlanId,
-    provider: "gemini",
+    provider: planProvider,
     location_id: verifiedPlaceId,
     booking_url: verifiedBookingUrl,
     participants: ensureRequester,
@@ -3049,6 +3372,7 @@ serve(async (req) => {
         conversationId: convId,
         persistDraft: true,
         maps_grounding: "verify",
+        tier,
       });
       const agentic_planning_output = {
         topic: out.plan.options?.[0]?.title ?? "Plan",
@@ -3158,6 +3482,7 @@ serve(async (req) => {
         persistDraft: false,
         maps_grounding: "textsearch",
         multiDay: multiDayOpt,
+        tier,
       });
 
       const options = Array.isArray(out.plan?.options) ? out.plan.options : [];
@@ -3199,7 +3524,7 @@ serve(async (req) => {
       let requestIdMa: string | null = null;
       if (!insMa.error) requestIdMa = (insMa.data as { id?: string } | null)?.id ?? null;
 
-      const pipeline = await runMatchAgentPipeline(supabase, user.id, mode, partnerUserId, scrubbedSafeContext);
+      const pipeline = await runMatchAgentPipeline(supabase, user.id, mode, partnerUserId, scrubbedSafeContext, tier);
       const m = pipeline.model;
       const planJson = {
         chain: pipeline.chain,
@@ -3336,11 +3661,15 @@ serve(async (req) => {
         requestIdMb = (insMb.data as { id?: string } | null)?.id ?? null;
       }
 
+      const anthropicKeyMb = Deno.env.get("ANTHROPIC_API_KEY");
       const geminiKeyMb = Deno.env.get("GEMINI_API_KEY");
       const openaiKeyMb = Deno.env.get("OPENAI_API_KEY");
 
       let bridge: MatchBridgePayload | null = null;
-      if (geminiKeyMb) {
+      if (isPremiumTier(tier) && anthropicKeyMb) {
+        bridge = await runMatchBridgeAnthropicJson(anthropicKeyMb, mbPayload);
+      }
+      if (!bridge && geminiKeyMb) {
         bridge = await runMatchBridgeGeminiJson(geminiKeyMb, mbPayload);
       }
       if (!bridge && openaiKeyMb) {
@@ -3472,23 +3801,6 @@ serve(async (req) => {
       requestId = (ins.data as { id?: string } | null)?.id ?? null;
     }
 
-    const openaiKey = Deno.env.get("OPENAI_API_KEY");
-    const geminiKey = Deno.env.get("GEMINI_API_KEY");
-
-    /** When Gemini fails (bad key, quota, etc.) but OpenAI is configured, try OpenAI. */
-    async function maybeFallbackToOpenAI(
-      result: { message?: string; suggestions?: unknown[]; no_options_reason?: string; statusCode?: number; provider_status?: number }
-    ) {
-      if (!openaiKey) return result;
-      const ps = result.provider_status;
-      if (ps == null || ps === 429) return result;
-      const oai = await runOpenAIWithTools(openaiKey, user.id, task, contextForLlm, supabase, systemPrompt);
-      if (oai.statusCode === 429) return oai;
-      const oaps = (oai as { provider_status?: number }).provider_status;
-      if (oaps == null) return oai;
-      return result;
-    }
-
     /** Shared success response for plan/concierge/event_suggest (stream or JSON). */
     function conciergeSuccessResponse(
       result: { message?: string; suggestions?: unknown[]; no_options_reason?: string; statusCode?: number }
@@ -3549,31 +3861,16 @@ serve(async (req) => {
     }
 
     if (["plan", "concierge", "event_suggest"].includes(task)) {
-      // Prefer Gemini when both keys exist (closer to free-tier Gemini usage in AI Studio); OpenAI is fallback.
-      if (geminiKey) {
-        let result = await runGeminiWithTools(geminiKey, user.id, task, contextForLlm, supabase, systemPrompt);
-        if (result.statusCode === 429 && openaiKey) {
-          console.warn("[ai-gateway] Gemini returned 429; trying OpenAI.");
-          await new Promise((r) => setTimeout(r, 1500));
-          result = await runOpenAIWithTools(openaiKey, user.id, task, contextForLlm, supabase, systemPrompt);
-        }
-        if (result.statusCode === 429) {
-          return concierge429Response(result as { message?: string; retry_after?: number; provider_status?: number });
-        }
-        result = await maybeFallbackToOpenAI(result as { message?: string; suggestions?: unknown[]; no_options_reason?: string; statusCode?: number; provider_status?: number });
-        if (result.statusCode === 429) {
-          return concierge429Response(result as { message?: string; retry_after?: number; provider_status?: number });
-        }
-        return conciergeSuccessResponse(result);
+      const result = await runConciergeLlmChain(tier, user.id, task, contextForLlm, supabase, systemPrompt);
+      if (result.statusCode === 429) {
+        return concierge429Response(result);
       }
-      if (openaiKey) {
-        let result = await runOpenAIWithTools(openaiKey, user.id, task, contextForLlm, supabase, systemPrompt);
-        if (result.statusCode === 429) {
-          return concierge429Response(result as { message?: string; retry_after?: number; provider_status?: number });
-        }
+      if (result.message != null || (result.suggestions && result.suggestions.length > 0) || result.no_options_reason) {
         return conciergeSuccessResponse(result);
       }
     }
+
+    const openaiKey = Deno.env.get("OPENAI_API_KEY");
 
     // Stub for rank/suggest/summarize or when no AI key set (concierge/plan/event_suggest with no key fall through here)
     const result = {
@@ -3581,7 +3878,7 @@ serve(async (req) => {
       suggestions: [] as unknown[],
       message: "" as string | undefined,
       no_options_reason: ["plan", "concierge", "event_suggest"].includes(task)
-        ? "AI is not configured for this environment. Add OPENAI_API_KEY or GEMINI_API_KEY to enable plans."
+        ? "AI is not configured for this environment. Add ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY to enable plans."
         : undefined,
     };
     if (openaiKey && ["rank", "suggest"].includes(task) && candidatesGuarded.length > 0) {

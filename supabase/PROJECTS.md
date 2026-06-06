@@ -20,7 +20,7 @@ npm run supabase:push:production   # migrations → production (after staging QA
 After deploying functions to staging, copy required secrets from production (Dashboard → Edge Functions → Secrets), or set via CLI:
 
 ```bash
-npx supabase secrets set --project-ref orjccytcmklzcfjgqwwj GEMINI_API_KEY=... OPENAI_API_KEY=...
+npx supabase secrets set --project-ref orjccytcmklzcfjgqwwj GEMINI_API_KEY=... OPENAI_API_KEY=... ANTHROPIC_API_KEY=...
 ```
 
 Minimum for auth email links: **auth-redirect** (no extra secrets). **ai-gateway** needs LLM keys; **notify-fanout** needs `private.webhook_config` + push setup when testing notifications.

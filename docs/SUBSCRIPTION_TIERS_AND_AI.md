@@ -1,6 +1,6 @@
 # Subscription Tiers & AI Access
 
-**Last updated:** 2026-06-01
+**Last updated:** 2026-06-06
 
 This document defines Winkly subscription tiers (Free, Super, Premium), how AI is gated per tier, the **Winkly AI Spark** icon behaviour, and what you need to do to activate the AI agent.
 
@@ -12,7 +12,7 @@ This document defines Winkly subscription tiers (Free, Super, Premium), how AI i
 |------|--------------|----------------|
 | **Free (Basic)** | Users who want core Winkly without paying | All core product: modes (Romance/Friends/Business/Events), connect with people, 1:1 and group chat, search, events (discover, participate, create, host), Planner with contacts/calendar/maps. Basic ranking and relevant content only — similar to what other apps offer for free. **No AI suggestions, no concierge.** |
 | **Super** | Users who want smarter discovery and light AI help | Everything in Free, plus **limited AI**: Smart AI matching (profile-based), better event suggestions, mid-level planning support (activity/place ideas from interests, location, preferences, wishlist), and support with the opening move in chats. **Not** the full concierge (no weather-aware rescheduling, full trip planning, or “do it for me” coordination). |
-| **Premium** | Users who want the full “5-star” experience | Everything in Super, plus **full AI and concierge**: full concierge service (weather checks, postpone/indoor suggestions, trip planning, routes, coordination), and full AI matching/suggestions everywhere the Spark appears. |
+| **Premium** | Users who want the full “5-star” experience | Everything in Super, plus **full AI and concierge**: full concierge service (weather checks, postpone/indoor suggestions, trip planning, routes, coordination), and full AI matching/suggestions everywhere the Spark appears. **Server-side:** Premium/Enterprise requests use **Anthropic Claude** as the primary LLM when `ANTHROPIC_API_KEY` is configured (Gemini/OpenAI as fallbacks). |
 
 **Enterprise** (future): For business accounts or teams; can map to Premium-level AI or custom limits.
 
@@ -49,7 +49,7 @@ This document defines Winkly subscription tiers (Free, Super, Premium), how AI i
 ## 4. What to do to activate the AI agent
 
 1. **Backend (Supabase)**  
-   - Set **Edge Function secret**: `OPENAI_API_KEY` for the `ai-gateway` function (see PRODUCT_DOCUMENTATION.md and AI_CONCIERGE_RECOMMENDATION.md).  
+   - Set **Edge Function secrets** for `ai-gateway`: **`ANTHROPIC_API_KEY`** (Claude — **primary for Premium/Enterprise**), and/or `GEMINI_API_KEY` / `OPENAI_API_KEY` (Super uses Gemini first; Premium falls back to them). See **docs/API_KEYS_AND_ENV.md**.  
    - Deploy: `supabase functions deploy ai-gateway`.  
    - Ensure **users** has a **subscription_tier** (or equivalent) so the app can gate by Free / Super / Premium.
 

@@ -349,8 +349,12 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-# [edge_runtime.secrets]
-# secret_key = "env(SECRET_VALUE)"
+# Edge Function secrets for local dev — values from supabase/functions/.env (or root .env via env()).
+# Cloud: set in Dashboard → Edge Functions → Secrets (or `npx supabase secrets set`).
+[edge_runtime.secrets]
+GEMINI_API_KEY = "env(GEMINI_API_KEY)"
+OPENAI_API_KEY = "env(OPENAI_API_KEY)"
+ANTHROPIC_API_KEY = "env(ANTHROPIC_API_KEY)"
 
 [analytics]
 enabled = true

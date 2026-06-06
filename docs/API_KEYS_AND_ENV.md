@@ -1,6 +1,6 @@
 # API Keys and Environment Variables — Winkly
 
-**Last updated:** 2026-05-06
+**Last updated:** 2026-06-06
 
 This doc lists every API key and env var used by Winkly, where they are used, and **how to set them**. You must set these yourself (in Supabase Dashboard / CLI and in the mobile app `.env`); the app cannot set them for you.
 
@@ -11,7 +11,7 @@ This doc lists every API key and env var used by Winkly, where they are used, an
 | Where | What | Set by you? |
 |-------|------|-------------|
 | **Mobile app** (`apps/mobile/.env`) | Supabase URL/key, auth redirect, PostHog, Google/Facebook OAuth | Yes — edit `.env` or use EAS/Expo env |
-| **Supabase Edge Functions** (Supabase secrets) | Service role (auto), OpenAI, Gemini, Meetup, Eventbrite | Yes — Dashboard or `supabase secrets set` |
+| **Supabase Edge Functions** (Supabase secrets) | Service role (auto), OpenAI, Gemini, Anthropic, Meetup, Eventbrite | Yes — Dashboard or `supabase secrets set` |
 
 ---
 
@@ -53,6 +53,7 @@ These are **server-side only**. Never put them in the mobile app.
 | `SUPABASE_SERVICE_ROLE_KEY` | ai-gateway, others | **Auto** | Injected by Supabase. Used to call Supabase APIs bypassing RLS (e.g. fetch events for AI tools). |
 | `OPENAI_API_KEY` | **ai-gateway** | Optional | OpenAI API key. When set **without** `GEMINI_API_KEY`, tasks `plan`, `concierge`, `event_suggest` use GPT + tools. When **both** keys are set, OpenAI is **fallback** only (after Gemini or on 429). |
 | `GEMINI_API_KEY` | **ai-gateway** | Optional | Google Gemini API key. **Primary** when set (including when both keys exist—matches free-tier usage in AI Studio). Optional overrides: `GEMINI_MODEL` (default **`gemini-2.0-flash`**), `GEMINI_MODEL_LITE` (**`gemini-2.0-flash-lite`**), `GEMINI_MODEL_TOPICS` (**`gemini-2.0-flash-lite`**), `GEMINI_MODEL_PLAN` (**`gemini-2.0-flash`**). |
+| `ANTHROPIC_API_KEY` | **ai-gateway** | **Recommended for Premium** | Anthropic API key for Claude. **Primary LLM for Premium/Enterprise** users (concierge, match_bridge, plan, event_suggest, winkly_plan). Super tier uses Gemini first. Fallback chain for Premium: Claude → Gemini → OpenAI. Optional overrides: `ANTHROPIC_MODEL` (default **`claude-sonnet-4-20250514`**), `ANTHROPIC_MODEL_LITE` (**`claude-3-5-haiku-20241022`**), `ANTHROPIC_MODEL_PLAN` (**`claude-sonnet-4-20250514`**). |
 | `GOOGLE_PLACES_API_KEY` or `GOOGLE_MAPS_API_KEY` | **ai-gateway** | Optional | Google Places **Text Search** (legacy API) for `EXTERNAL_PLACE_HINTS` during concierge/plan. When unset, OSM Nominatim is used (rate-limited; ok for hints). Enable “Places API” in Google Cloud for the key. |
 | `MEETUP_API_KEY` | **get-nearby-external-events** | Optional | Meetup API key (or token). When set, Edge Function can fetch nearby Meetup events for Events home. When unset, external events from Meetup are not fetched. |
 | `EVENTBRITE_PRIVATE_TOKEN` | **get-nearby-external-events** | Optional | Eventbrite private token. When set, Edge Function can fetch nearby Eventbrite events. |
@@ -63,7 +64,14 @@ These are **server-side only**. Never put them in the mobile app.
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | **recompute-behavior-ml** | Optional | Bust cache key `winkly:feed:{user_id}` after updates when `user_id` is in the request body. |
 | `AUTH_REDIRECT_STATE_SECRET` | **auth-redirect** | **Recommended (prod)** | Random string **≥ 16 characters**. Signs `winkly_state` CSRF tokens (`GET …/auth-redirect?action=mint`). Required for production when using HTTPS `EXPO_PUBLIC_AUTH_REDIRECT_URL`. |
 
-**How to set (Supabase secrets):**
+**Local Edge Functions (`supabase start` / `supabase functions serve`):**
+
+1. Copy `supabase/functions/.env.example` → `supabase/functions/.env`.
+2. Fill in the same values you set in the Supabase Dashboard (including `ANTHROPIC_API_KEY`). **Never put real keys in `.env.example`** — that file is tracked in git.
+3. For `supabase/config.toml` `[edge_runtime.secrets]`, also set `ANTHROPIC_API_KEY` in the **repo root** `.env` (git-ignored), or export it in your shell before `supabase start`.
+4. Restart the local stack if it is already running: `supabase stop` then `supabase start`.
+
+**How to set (Supabase secrets — cloud):**
 
 **Option A — Supabase Dashboard (recommended: key never touches your terminal or chat)**
 
@@ -82,6 +90,12 @@ Run the commands **on your machine** in PowerShell or Command Prompt. When you t
    ```bash
    npx supabase secrets set OPENAI_API_KEY=sk-your-actual-key-here
    npx supabase secrets set GEMINI_API_KEY=your-actual-gemini-key-here
+   npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-your-actual-key-here
+   ```
+   Or copy `supabase/functions/.env.example` → `supabase/functions/.env`, fill in values locally, then push all at once:
+   ```bash
+   cd supabase/functions
+   npx supabase secrets set --env-file .env
    ```
    Do **not** paste the key into Cursor chat or any shared place.
 4. Redeploy so functions see the new secrets:
@@ -103,6 +117,7 @@ Run the commands **on your machine** in PowerShell or Command Prompt. When you t
 | `EXPO_PUBLIC_EAS_PROJECT_ID` | `app.config.js` (`extra.eas.projectId`), `lib/notifications.ts` (Expo Push token registration) |
 | `OPENAI_API_KEY` | `supabase/functions/ai-gateway/index.ts` (fallback when `GEMINI_API_KEY` also set; primary when Gemini unset). |
 | `GEMINI_API_KEY` | `supabase/functions/ai-gateway/index.ts` (primary when set). |
+| `ANTHROPIC_API_KEY` | `supabase/functions/ai-gateway/index.ts` — **primary** for Premium/Enterprise; Gemini/OpenAI fallbacks. |
 | `GOOGLE_PLACES_API_KEY` / `GOOGLE_MAPS_API_KEY` | `supabase/functions/ai-gateway/index.ts` (optional Places Text Search for external venue hints). |
 | `MEETUP_API_KEY` / `EVENTBRITE_PRIVATE_TOKEN` | `supabase/functions/get-nearby-external-events/index.ts` (when implemented) |
 
@@ -114,7 +129,7 @@ Run the commands **on your machine** in PowerShell or Command Prompt. When you t
 - [ ] **Auth redirect:** If using email verification with redirect, set `EXPO_PUBLIC_AUTH_REDIRECT_URL` and add that URL to Supabase Auth → Redirect URLs.
 - [ ] **PostHog:** Optional. Set `EXPO_PUBLIC_POSTHOG_API_KEY` in `.env` to enable analytics.
 - [ ] **Google / Facebook sign-in:** Optional. Set the OAuth client/app IDs in `.env` and configure Supabase Auth providers.
-- [ ] **AI concierge:** Optional. In Supabase, set `GEMINI_API_KEY` and/or `OPENAI_API_KEY` and deploy `ai-gateway`. **Gemini is used first** when its key is set (free tier–friendly); OpenAI is fallback when both are set, or sole provider when only OpenAI is set. Apply migration `20260406120000_concierge_event_trgm_and_rpc.sql` for fuzzy event matching (`match_events_for_concierge`). Optional: `GOOGLE_PLACES_API_KEY` or `GOOGLE_MAPS_API_KEY` (Places API enabled) for richer **EXTERNAL_PLACE_HINTS**; otherwise Nominatim is used.
+- [ ] **AI concierge:** In Supabase, set `ANTHROPIC_API_KEY` for **Premium** Claude routing, and/or `GEMINI_API_KEY` / `OPENAI_API_KEY` (Super uses Gemini first; Premium falls back to them). Deploy `ai-gateway`. Apply migration `20260406120000_concierge_event_trgm_and_rpc.sql` for fuzzy event matching. Optional: `GOOGLE_PLACES_API_KEY` or `GOOGLE_MAPS_API_KEY` for richer **EXTERNAL_PLACE_HINTS**.
 - [ ] **External events (Meetup/Eventbrite):** Optional. Set `MEETUP_API_KEY` and/or `EVENTBRITE_PRIVATE_TOKEN` in Supabase secrets and deploy `get-nearby-external-events`. The Edge Function implements Meetup GraphQL and Eventbrite REST; when keys are set, Events home can show nearby external events.
 - [ ] **Expo Push / EAS:** Optional for dev in Expo Go. For **standalone / dev builds**, set `EXPO_PUBLIC_EAS_PROJECT_ID` to your Expo **project UUID** if you need remote push tokens; **Android Expo Go** cannot exercise remote push (SDK 53+) — build with **EAS** (`eas build`) when testing pushes end-to-end.
 
@@ -142,7 +157,7 @@ You should **never** paste real API keys into Cursor (or any chat). Here are saf
 - **Never commit** `apps/mobile/.env` or any file containing real API keys. Use `.env.example` (no real values) in the repo.
 - **Never paste** API keys in chat, terminal history, or screenshots. If you did, **rotate them immediately** (create new keys in the provider’s dashboard and revoke the old ones), then set the new values in Supabase secrets and redeploy the functions.
 - **Supabase anon key** is safe to ship in the app; RLS protects data. The **service role key** must stay only in Supabase (Edge Functions / backend).
-- **OpenAI / Gemini / Meetup / Eventbrite** keys must only be in Supabase secrets (or in your local `.env` for app vars), never pasted in chat or committed to the repo.
+- **OpenAI / Gemini / Anthropic / Meetup / Eventbrite** keys must only be in Supabase secrets (or in your local `supabase/functions/.env` for Edge dev), never pasted in chat or committed to the repo.
 
 ---
 
