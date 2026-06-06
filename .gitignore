@@ -8,6 +8,9 @@ node_modules/
 !**/.env.example
 !.env.*.example
 !**/.env.*.example
+# Supabase Edge Function secrets (local only)
+supabase/functions/.env
+
 # Real per-environment files (dev/staging/prod) must never be committed
 apps/mobile/.env
 apps/mobile/.env.development
