@@ -33,10 +33,15 @@ npm run mobile:android
 npm run mobile:ios
 ```
 
-Then, from `apps/mobile/`:
+Then, from the repo root or `apps/mobile/`:
 
 ```bash
-# Full critical path with a unique throwaway account
+# Full critical path (npm scripts wrap maestro)
+npm run mobile:test:e2e
+npm run mobile:test:e2e:ios      # iPhone 16 simulator
+npm run mobile:test:e2e:android  # emulator-5554
+
+# Or with a unique throwaway account (bash)
 maestro test \
   -e EMAIL="qa+$(date +%s)@winkly.test" \
   -e PASSWORD="Test1234!" \

@@ -1,16 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, FlatList, ActivityIndicator, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
+import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import * as Haptics from "expo-haptics";
-import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 
 import type { AppMode, Conversation, ConversationMember, Message, UserMini } from "@/lib/chats";
+import { subscribeChatsHubUpdates } from "@/lib/chats/hubRealtime";
 import { formatChatInboxTimestamp, loadChatInbox, sortChatInboxItems } from "@/lib/chats/inbox";
 import { ChatPreviewCard } from "@/components/chats/ChatPreviewCard";
 import { ChatsHeader } from "@/components/layout/ChatsHeader";
 import { Button } from "@/components/ui/Button";
-import { Colors, Layout, Typography } from "@/constants/tokens";
+import { Colors, Typography } from "@/constants/tokens";
 import { useModeContext } from "@/providers";
 
 type ChatTabKey = "all" | AppMode;
@@ -105,25 +104,10 @@ export default function ChatsHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
-  // realtime refresh (simple + reliable)
   useEffect(() => {
-    const channel = supabase
-      .channel("chats_hub_updates")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "messages" },
-        () => loadConversationsAndMeta()
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "conversations" },
-        () => loadConversationsAndMeta()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return subscribeChatsHubUpdates(() => {
+      void loadConversationsAndMeta();
+    }, activeTab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
@@ -221,7 +205,6 @@ export default function ChatsHome() {
 
       <View style={styles.contentArea}>
         <Button title="+ New chat" variant="secondary" onPress={goNewChat} style={styles.newChatBtn} />
-
       <FlatList
         style={{ flex: 1 }}
         data={sortedItems}
@@ -287,7 +270,6 @@ const styles = StyleSheet.create({
   },
   newChatBtn: {
     marginBottom: 12,
-    borderColor: Colors.gray200,
   },
   tab: {
     paddingVertical: 8,

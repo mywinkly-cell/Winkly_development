@@ -36,6 +36,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
+import { Routes } from "@/constants/routes";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { searchCities, type CityCountry } from "@/lib/location/citySearch";
 import {
@@ -56,6 +57,13 @@ import { BusinessSubProfile } from "@/components/onboarding/BusinessSubProfile";
 import { PhotoConfirmModal } from "@/components/media/PhotoConfirmModal";
 import { uploadLocalPhotos, uploadLocalVideos } from "@/lib/uploadMedia";
 import { validatePickerAsset } from "@/lib/mediaValidation";
+import {
+  MAX_CORE_BIO,
+  MAX_CORE_PHOTOS,
+  MIN_CORE_PHOTOS,
+  MIN_PHOTO_DIMENSION,
+  validateProfileCoreSubmit,
+} from "@/lib/profile/validation";
 
 const EDUCATION_OPTIONS = [
   "High school graduate",
@@ -66,16 +74,6 @@ const EDUCATION_OPTIONS = [
 ];
 
 const PROFILE_LANGS = PROFILE_LANGUAGE_OPTIONS.filter((l) => l !== "Any");
-
-// ─── Core photo rules ───────────────────────────────────────────────────────
-/** Minimum core photos required before a user can start matching. */
-const MIN_CORE_PHOTOS = 2;
-/** Maximum core photos a user can add. */
-const MAX_CORE_PHOTOS = 5;
-/** Minimum source resolution (shortest side, px) for a usable, sharp photo. */
-const MIN_PHOTO_DIMENSION = 500;
-/** Max length for the optional core bio. */
-const MAX_CORE_BIO = 300;
 
 function sortedProfileLanguages(selected: string[]): string[] {
   const set = new Set(selected);
@@ -958,23 +956,20 @@ export default function ProfileCore() {
 
   // ─────────────── SAVE TO SUPABASE ───────────────
   const handleContinue = async () => {
-    if (!firstName || !lastName || !gender || !birthday || !city) {
-      Alert.alert("Incomplete", "Please fill in all required fields.");
+    const validation = validateProfileCoreSubmit({
+      firstName,
+      lastName,
+      gender,
+      birthday,
+      city,
+      lookingFor,
+      corePhotoCount: corePhotos.length,
+    });
+    if (!validation.ok) {
+      Alert.alert(validation.title, validation.message);
       return;
     }
-
-    if (lookingFor.length === 0) {
-      Alert.alert("Almost there", "Please choose who you're looking to meet.");
-      return;
-    }
-
-    if (corePhotos.length < MIN_CORE_PHOTOS) {
-      Alert.alert(
-        "Add more photos",
-        `Please add at least ${MIN_CORE_PHOTOS} photos so you can start matching. You can add up to ${MAX_CORE_PHOTOS}.`
-      );
-      return;
-    }
+    if (!birthday) return;
 
     try {
       setSaving(true);
@@ -1141,7 +1136,7 @@ export default function ProfileCore() {
       }
       const skipWinklyWorld = await import("@/lib/introFlags").then((m) => m.shouldSkipWinklyWorld());
       if (skipWinklyWorld) {
-        router.push("/mode-selection");
+        router.push(Routes.modeSelection);
       } else {
         router.push("/(onboarding-personal)/winkly-world?variant=personal");
       }

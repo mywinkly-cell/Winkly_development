@@ -17,6 +17,7 @@ import {
   Alert,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { chatRoutes } from "@/lib/navigation/modeHub";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { ModeHeader } from "@/components/layout/ModeHeader";
@@ -70,6 +71,8 @@ export default function FriendsHome() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
   const [selfProfile, setSelfProfile] = useState<FriendsProfile | null>(null);
+  const [selfPhotoUrl, setSelfPhotoUrl] = useState<string | null>(null);
+  const [selfDisplayName, setSelfDisplayName] = useState<string | null>(null);
   const [superLikeRemainingToday, setSuperLikeRemainingToday] = useState(SUPER_LIKE_PER_DAY);
   const [incomingRequestCount, setIncomingRequestCount] = useState(0);
 
@@ -92,7 +95,23 @@ export default function FriendsHome() {
       if (!uid) {
         setProfiles([]);
         setSelfProfile(null);
+        setSelfPhotoUrl(null);
+        setSelfDisplayName(null);
         return;
+      }
+
+      const { data: friendSelf } = await supabase
+        .from("friend_profiles")
+        .select("main_photo_url, avatar_url, display_name")
+        .eq("user_id", uid)
+        .maybeSingle();
+      if (friendSelf) {
+        const row = friendSelf as { main_photo_url?: string | null; avatar_url?: string | null; display_name?: string | null };
+        setSelfPhotoUrl(row.main_photo_url ?? row.avatar_url ?? null);
+        setSelfDisplayName(row.display_name ?? null);
+      } else {
+        setSelfPhotoUrl(null);
+        setSelfDisplayName(null);
       }
 
       const { data: me } = await supabase
@@ -165,7 +184,9 @@ export default function FriendsHome() {
     try {
       const res = await friendsFollowProfile(profileId);
       if (res.is_connection && res.chat_id) {
-        router.push(`/chats/${res.chat_id}`);
+        router.push(
+          chatRoutes.conversation("friends", res.chat_id) as Parameters<typeof router.push>[0]
+        );
       }
     } catch (e) {
       console.warn("Follow failed", e);
@@ -375,7 +396,11 @@ export default function FriendsHome() {
     <View style={styles.container}>
       <ModeHeader
         currentMode="friends"
-        leftSlot="filters"
+        leftSlot="profile"
+        profilePhotoUrl={selfPhotoUrl}
+        profileInitials={selfDisplayName?.slice(0, 1) ?? "?"}
+        onProfilePress={() => router.push("/profile/view-profile")}
+        rightSlot="filters"
         onFilterPress={() => router.push("/(modes)/friends/filters")}
       />
 

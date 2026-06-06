@@ -15,6 +15,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { appModeToHub, chatRoutes } from "@/lib/navigation/modeHub";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout, Shadow } from "@/constants/tokens";
@@ -65,7 +66,9 @@ export function MatchesPanel({
         userData.user.id
       );
       onChatStart?.(match.id);
-      router.push(`/chats/${chatId}`);
+      router.push(
+        chatRoutes.conversation(appModeToHub(mode), chatId) as Parameters<typeof router.push>[0]
+      );
     } catch (_err) {
       // Error handling delegated to caller or global
     }

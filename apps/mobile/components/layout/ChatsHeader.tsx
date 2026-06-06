@@ -3,7 +3,8 @@
 
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, usePathname } from "expo-router";
+import { appModeToHub, chatRoutes, getModeHubFromPathname } from "@/lib/navigation/modeHub";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Layout, Shadow, Typography, FontFamily, HEADER } from "@/constants/tokens";
@@ -18,10 +19,17 @@ type ChatsHeaderProps = {
 
 export function ChatsHeader({ showBack = false, mode }: ChatsHeaderProps) {
   const router = useRouter();
+  const pathname = usePathname() ?? "";
+  const chatHub = getModeHubFromPathname(pathname);
+  const hub = chatHub !== "tabs" ? chatHub : appModeToHub(mode ?? null);
 
   const handleAddPress = () => {
     Haptics.selectionAsync();
-    router.push("/chats/start");
+    if (hub === "romance") {
+      router.push(chatRoutes.newChat(hub, "romance"));
+      return;
+    }
+    router.push(chatRoutes.start(hub));
   };
 
   const handleAIPress = () => {

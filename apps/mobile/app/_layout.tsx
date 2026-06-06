@@ -2,7 +2,8 @@
 // Root layout: Providers + Route guards (spec v8.1)
 
 import React, { useCallback, useEffect, useState } from "react";
-import { View, ActivityIndicator, LogBox, Platform } from "react-native";
+import { getAnalyticsConsent } from "@/lib/analyticsConsent";
+import { View, ActivityIndicator, LogBox } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -15,10 +16,9 @@ import {
   Poppins_700Bold,
 } from "@expo-google-fonts/poppins";
 import * as SplashScreen from "expo-splash-screen";
-import * as Sentry from "@sentry/react-native";
 import { PostHogProvider } from "posthog-react-native";
-import { initMonitoring } from "@/lib/monitoring/sentry";
 import { AuthProvider, ModeContextProvider, NetworkProvider, ThemeProvider } from "@/providers";
+import { LastActivitySync } from "@/components/LastActivitySync";
 import { RouteGuard } from "@/components/RouteGuard";
 import { NotificationDeepLinkHandler } from "@/components/NotificationDeepLinkHandler";
 import { ScreenTopSpacer } from "@/components/ScreenTopSpacer";
@@ -26,9 +26,10 @@ import { PostHogIdentitySync, PostHogScreenTracker } from "@/components/PostHogA
 import { Colors } from "@/constants/tokens";
 import { POSTHOG_API_KEY, POSTHOG_HOST } from "@/constants/config";
 import { initI18n } from "@/lib/i18n";
-
-// Initialize crash reporting as early as possible (no-op without a DSN).
-initMonitoring();
+import {
+  premiumContextStackScreenOptions,
+  premiumPushStackScreenOptions,
+} from "@/lib/navigation/screenOptions";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -51,12 +52,8 @@ if (!__DEV__) {
   ]);
 }
 
-/** Native-stack: horizontal transition enables swipe-to-go-back on Android; fade disables it. */
-function stackAnimation(): "default" | "slide_from_right" | "fade" {
-  if (Platform.OS === "ios") return "default";
-  if (Platform.OS === "android") return "slide_from_right";
-  return "fade";
-}
+/** Nested layouts only — cross-fade when switching tabs hub ↔ mode sub-app ↔ account. */
+const CONTEXT_ROUTE_GROUPS = ["(tabs)", "(modes)", "account"] as const;
 
 function RootLayout() {
   const segments = useSegments();
@@ -71,7 +68,9 @@ function RootLayout() {
 
   const [fontsTimedOut, setFontsTimedOut] = useState(false);
   const [i18nReady, setI18nReady] = useState(false);
+  const [analyticsConsent, setAnalyticsConsent] = useState(false);
   const readyToRender = (fontsLoaded || fontsTimedOut) && i18nReady;
+  const posthogEnabled = Boolean(POSTHOG_API_KEY) && analyticsConsent;
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -82,6 +81,10 @@ function RootLayout() {
 
   useEffect(() => {
     initI18n().then(() => setI18nReady(true));
+  }, []);
+
+  useEffect(() => {
+    getAnalyticsConsent().then(setAnalyticsConsent);
   }, []);
 
   const onLayoutRootView = useCallback(async () => {
@@ -103,35 +106,44 @@ function RootLayout() {
   const posthogOptions = {
     host: POSTHOG_HOST,
     captureAppLifecycleEvents: true,
-    disabled: !POSTHOG_API_KEY,
+    disabled: !posthogEnabled,
   };
 
   const content = (
     <NetworkProvider>
       <AuthProvider>
+        <LastActivitySync />
         <ModeContextProvider>
           <ThemeProvider>
-            {POSTHOG_API_KEY ? <PostHogIdentitySync /> : null}
+            {posthogEnabled ? <PostHogIdentitySync /> : null}
             <RouteGuard>
-              {POSTHOG_API_KEY ? <PostHogScreenTracker /> : null}
+              {posthogEnabled ? <PostHogScreenTracker /> : null}
               <NotificationDeepLinkHandler />
               <StatusBar style="dark" backgroundColor={Colors.backgroundMuted} />
               {isSplash ? null : <ScreenTopSpacer />}
               <Stack
                 screenOptions={() => ({
-                  headerShown: false,
-                  headerShadowVisible: false,
-                  headerTitle: "",
-                  contentStyle: {
-                    backgroundColor: isSplash ? Colors.primaryViolet : Colors.backgroundMuted,
-                  },
-                  animation: stackAnimation(),
-                  gestureEnabled: true,
+                  ...premiumPushStackScreenOptions({
+                    headerShown: false,
+                    headerShadowVisible: false,
+                    headerTitle: "",
+                    contentStyle: {
+                      backgroundColor: isSplash ? Colors.primaryViolet : Colors.backgroundMuted,
+                    },
+                  }),
                 })}
               >
+                {CONTEXT_ROUTE_GROUPS.map((name) => (
+                  <Stack.Screen
+                    key={name}
+                    name={name}
+                    options={premiumContextStackScreenOptions({ headerShown: false })}
+                  />
+                ))}
                 <Stack.Screen
                   name="concierge"
                   options={{
+                    ...premiumPushStackScreenOptions({ headerShown: false }),
                     // In-flow back is handled inside `ConciergePlanningFlow`; native swipe would exit the whole screen.
                     gestureEnabled: false,
                   }}
@@ -148,7 +160,7 @@ function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-          {POSTHOG_API_KEY ? (
+          {posthogEnabled ? (
             <PostHogProvider apiKey={POSTHOG_API_KEY} options={posthogOptions}>
               {content}
             </PostHogProvider>
@@ -161,6 +173,5 @@ function RootLayout() {
   );
 }
 
-// Sentry.wrap enables touch/navigation breadcrumbs + error boundary when a DSN
-// is configured; it is a transparent passthrough otherwise.
-export default Sentry.wrap(RootLayout);
+// @sentry/react-native/expo wraps the app entry (RootApp); init runs via sentry-init import above.
+export default RootLayout;

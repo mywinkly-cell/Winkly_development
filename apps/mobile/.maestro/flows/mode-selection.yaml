@@ -2,6 +2,9 @@
 # it as the deterministic entry to verify the gateway routes into a mode.
 appId: com.winkly.app
 ---
+- assertVisible:
+    id: "mode-selection-title"
+    optional: true
 - assertVisible: "What would you like to experience today?"
 - assertVisible: "Romance"
 - assertVisible: "Friends"
@@ -9,5 +12,8 @@ appId: com.winkly.app
 - assertVisible: "Events"
 
 # Events requires no completed sub-profile, so it always routes through.
+- tapOn:
+    id: "mode-card-events"
+    optional: true
 - tapOn: "Events"
 - waitForAnimationToEnd

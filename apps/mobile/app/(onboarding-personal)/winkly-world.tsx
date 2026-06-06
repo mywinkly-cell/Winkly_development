@@ -17,6 +17,7 @@ import * as Haptics from "expo-haptics";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { Routes } from "@/constants/routes";
 import { setWinklyWorldSeen, setWinklyWorldDontShow } from "@/lib/introFlags";
 
 type Variant = "personal" | "business";
@@ -31,7 +32,7 @@ export default function WinklyWorld() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await setWinklyWorldSeen();
     if (dontShowAgain) await setWinklyWorldDontShow();
-    router.replace("/mode-selection");
+    router.replace(Routes.modeSelection);
   };
 
   const isPersonal = variant === "personal";

@@ -10,6 +10,7 @@ import {
   Alert,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { chatRoutes } from "@/lib/navigation/modeHub";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -56,7 +57,9 @@ export default function FriendRequestsScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await refresh();
       if (res.chat_id) {
-        router.replace(`/chats/${res.chat_id}`);
+        router.replace(
+          chatRoutes.conversation("friends", res.chat_id) as Parameters<typeof router.replace>[0]
+        );
       }
     } catch (e) {
       Alert.alert("Error", e instanceof Error ? e.message : "Accept failed.");

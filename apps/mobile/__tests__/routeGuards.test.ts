@@ -56,7 +56,7 @@ describe("resolveRouteAction", () => {
         activeMode: "romance",
         permissions: ["events"],
       })
-    ).toEqual({ type: "redirect", to: "/mode-selection" });
+    ).toEqual({ type: "redirect", to: "/(tabs)/mode-selection" });
   });
 
   it("allows a permitted active mode", () => {

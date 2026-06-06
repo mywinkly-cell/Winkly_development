@@ -1,29 +1,22 @@
-// apps/mobile/app/(modes)/_layout.tsx
 // Parent navigator for the four mode sub-apps (Identity Firewall).
-// Each mode (romance/friends/business/events) is an isolated nested stack so
-// switching modes via router.replace() fully resets the stack for that mode.
+// Cross-mode switches use a short fade (not a horizontal push).
 
 import React from "react";
-import { Platform } from "react-native";
 import { Stack } from "expo-router";
 import { ModeLocationGate } from "@/components/location/ModeLocationGate";
+import { premiumContextStackScreenOptions } from "@/lib/navigation/screenOptions";
+
+const MODE_NAMES = ["romance", "friends", "business", "events"] as const;
 
 export default function ModesLayout() {
   return (
     <>
-    <ModeLocationGate />
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        gestureEnabled: true,
-        animation: Platform.OS === "android" ? "slide_from_right" : "default",
-      }}
-    >
-      <Stack.Screen name="romance" />
-      <Stack.Screen name="friends" />
-      <Stack.Screen name="business" />
-      <Stack.Screen name="events" />
-    </Stack>
+      <ModeLocationGate />
+      <Stack screenOptions={premiumContextStackScreenOptions({ headerShown: false })}>
+        {MODE_NAMES.map((name) => (
+          <Stack.Screen key={name} name={name} options={premiumContextStackScreenOptions()} />
+        ))}
+      </Stack>
     </>
   );
 }

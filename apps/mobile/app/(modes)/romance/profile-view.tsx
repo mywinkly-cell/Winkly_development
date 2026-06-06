@@ -24,6 +24,7 @@ import {
 } from "react-native";
 import * as Linking from "expo-linking";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { chatRoutes, plannerRoutes } from "@/lib/navigation/modeHub";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -210,7 +211,15 @@ export default function RomanceProfileView() {
       if (result?.is_match && result?.chat_id) {
         Alert.alert("It's a match! 💖", "You both liked each other. Start chatting?", [
           { text: "Later" },
-          { text: "Chat", onPress: () => router.push(`/chats/${result.chat_id}?matchBridge=1`) },
+          {
+            text: "Chat",
+            onPress: () =>
+              router.push(
+                chatRoutes.conversation("romance", result.chat_id!, { matchBridge: "1" }) as Parameters<
+                  typeof router.push
+                >[0]
+              ),
+          },
         ]);
       }
     } catch (err) {
@@ -220,7 +229,7 @@ export default function RomanceProfileView() {
   };
 
   const onOpenPlanner = () => {
-    router.push("/planner" as any);
+    router.push(plannerRoutes.index("romance"));
   };
 
   // ────────────────────────────────────────────────

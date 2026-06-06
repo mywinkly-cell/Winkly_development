@@ -32,6 +32,8 @@ export type MatchCardOverlayProps = {
   aiHint?: { score: number; tags: string[] } | null;
   /** Rounded, privacy-safe distance label (e.g. "~3 km away"). */
   distanceLabel?: string | null;
+  /** Someone sent you a chat invite (pre-match). */
+  hasIncomingMessage?: boolean;
   /** Border radius of the card (default 24) */
   cardRadius?: number;
 };
@@ -48,6 +50,7 @@ export function MatchCardOverlay({
   mode,
   aiHint,
   distanceLabel,
+  hasIncomingMessage = false,
   cardRadius = CARD_RADIUS,
 }: MatchCardOverlayProps) {
   const { i18n } = useTranslation();
@@ -67,6 +70,12 @@ export function MatchCardOverlay({
         },
       ]}
     >
+      {hasIncomingMessage ? (
+        <View style={styles.envelopeBadge}>
+          <Ionicons name="mail" size={16} color="#fff" />
+          <Text style={styles.envelopeBadgeText}>Message for you</Text>
+        </View>
+      ) : null}
       <Text style={styles.nameAge}>{nameAgeLine}</Text>
       <Text style={styles.cityOverlay}>{cityLine || "—"}</Text>
       {distanceLabel ? (
@@ -111,6 +120,22 @@ const styles = StyleSheet.create({
     paddingTop: 32,
     paddingBottom: 18,
     backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  envelopeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    backgroundColor: Colors.romance.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 10,
+  },
+  envelopeBadgeText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
   },
   nameAge: {
     ...Typography.h2,

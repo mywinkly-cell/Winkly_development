@@ -5,6 +5,7 @@ import React from "react";
 import { TouchableOpacity, View, Text, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { Routes } from "@/constants/routes";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import type { Mode } from "@/types";
 
@@ -24,7 +25,7 @@ export function ModeSwitch({ currentMode }: ModeSwitchProps) {
 
   const handlePress = () => {
     Haptics.selectionAsync();
-    router.push("/mode-selection");
+    router.replace(Routes.modeSelection);
   };
 
   return (

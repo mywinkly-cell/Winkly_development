@@ -4,7 +4,8 @@
  */
 
 import React, { useMemo, useState, useEffect, useCallback } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
@@ -315,12 +316,7 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
   };
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
-    >
+    <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
         <Ionicons name="arrow-back" size={22} color={Colors.primaryViolet} />
         <Text style={styles.backText}>Back</Text>
@@ -339,7 +335,7 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
       >
         <Text style={styles.nextBtnText}>{stepIndex >= visible.length - 1 ? "Continue to details" : "Next"}</Text>
       </TouchableOpacity>
-    </ScrollView>
+    </GestureScrollView>
   );
 }
 

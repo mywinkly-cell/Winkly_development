@@ -21,14 +21,12 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
+import { Routes } from "@/constants/routes";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { useTranslation } from "react-i18next";
+import { isInvalidRefreshToken, validateSigninInput } from "@/lib/auth/formValidation";
 import { getTermsAndCookiesAccepted } from "@/lib/legalFlags";
-
-function isInvalidRefreshToken(err: unknown): boolean {
-  const msg = String((err as any)?.message ?? "").toLowerCase();
-  return msg.includes("refresh token") && (msg.includes("invalid") || msg.includes("not found"));
-}
+import { hasKnownAccount, markHasAccount, recordLastActivity } from "@/lib/lastActivity";
 
 export default function Signin() {
   const { t } = useTranslation();
@@ -41,10 +39,15 @@ export default function Signin() {
   const [loading, setLoading] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
+  const [showWelcomeBack, setShowWelcomeBack] = useState(false);
 
   React.useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
   }, [fadeAnim]);
+
+  React.useEffect(() => {
+    hasKnownAccount().then(setShowWelcomeBack);
+  }, []);
 
   React.useEffect(() => {
     getTermsAndCookiesAccepted().then((accepted) => {
@@ -61,11 +64,12 @@ export default function Signin() {
   }, []);
 
   const onSignin = async () => {
-    const cleanEmail = email.trim();
-    if (!cleanEmail || !password) {
+    const validation = validateSigninInput({ email, password });
+    if (!validation.ok) {
       Alert.alert(t("auth.incomplete"), t("auth.enterEmailPassword"));
       return;
     }
+    const cleanEmail = validation.email;
     try {
       setLoading(true);
       const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
@@ -73,20 +77,22 @@ export default function Signin() {
       const { data: userData, error: userErr } = await supabase.auth.getUser();
       if (userErr) throw userErr;
       const accountType = userData?.user?.user_metadata?.account_type as string | undefined;
+      await markHasAccount();
+      await recordLastActivity();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (userData?.user?.email_confirmed_at) {
         const userId = userData.user.id;
         if (accountType === "business") {
           const { data: bp } = await supabase.from("business_profiles").select("business_name").or(`id.eq.${userId},user_id.eq.${userId}`).limit(1).maybeSingle();
           const hasBusinessProfile = !!(bp as any)?.business_name?.trim?.();
-          router.replace(hasBusinessProfile ? "/mode-selection" : "/(auth)/welcome-back-setup");
+          router.replace(hasBusinessProfile ? Routes.modeSelection : "/(auth)/welcome-back-setup");
         } else {
           const { data: up } = await supabase.from("user_profiles").select("first_name, last_name, gender, birthday, city, core_photos").eq("id", userId).maybeSingle();
           const u = up as any;
           const hasCoreProfile = !!(u?.first_name?.trim?.() && u?.last_name?.trim?.() && u?.gender?.trim?.() && u?.birthday && u?.city?.trim?.());
           const hasPhoto = Array.isArray(u?.core_photos) ? u.core_photos.filter(Boolean).length > 0 : false;
           const profileComplete = hasCoreProfile && hasPhoto;
-          router.replace(profileComplete ? "/mode-selection" : "/(auth)/welcome-back-setup");
+          router.replace(profileComplete ? Routes.modeSelection : "/(auth)/welcome-back-setup");
         }
       } else {
         router.replace("/(auth)/verify");
@@ -124,7 +130,9 @@ export default function Signin() {
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.title}>{t("auth.welcomeBack")}</Text>
+              <Text style={styles.title}>
+                {showWelcomeBack ? t("auth.welcomeBack") : t("auth.signin")}
+              </Text>
               <Text style={styles.subtitle}>{t("auth.signInSubtitle")}</Text>
 
               <Text style={styles.label}>{t("auth.email")}</Text>

@@ -1,7 +1,12 @@
 // Mint signed CSRF state for HTTPS auth-redirect flows (see supabase/functions/auth-redirect).
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AUTH_REDIRECT_URL } from "@/constants/config";
+import { getPublicEnv } from "@/lib/env";
+import { httpGet } from "@/lib/http/client";
+
+function authRedirectUrl(): string {
+  return getPublicEnv().authRedirectUrl.trim();
+}
 
 const PENDING_STATE_KEY = "winkly_pending_auth_state";
 
@@ -13,7 +18,8 @@ function supabaseFunctionsBase(): string | null {
 
 /** True when email links go through the HTTPS auth-redirect Edge Function. */
 export function usesHttpsAuthRedirect(): boolean {
-  return AUTH_REDIRECT_URL.startsWith("http://") || AUTH_REDIRECT_URL.startsWith("https://");
+  const base = authRedirectUrl();
+  return base.startsWith("http://") || base.startsWith("https://");
 }
 
 /**
@@ -21,19 +27,14 @@ export function usesHttpsAuthRedirect(): boolean {
  * Appends signed winkly_state when using HTTPS auth-redirect and mint succeeds.
  */
 export async function getEmailRedirectTo(): Promise<string> {
-  const base = AUTH_REDIRECT_URL.trim();
+  const base = authRedirectUrl();
   if (!usesHttpsAuthRedirect()) return base;
 
   const fnBase = supabaseFunctionsBase();
   if (!fnBase) return base;
 
   try {
-    const res = await fetch(`${fnBase}/auth-redirect?action=mint`, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-    });
-    if (!res.ok) return base;
-    const body = (await res.json()) as { state?: string };
+    const body = await httpGet<{ state?: string }>(`${fnBase}/auth-redirect?action=mint`);
     if (!body.state) return base;
 
     await AsyncStorage.setItem(PENDING_STATE_KEY, body.state);

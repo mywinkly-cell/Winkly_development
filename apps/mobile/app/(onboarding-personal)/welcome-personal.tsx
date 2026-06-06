@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, Image, ActivityIndicator } from "react-native";
 import { useRouter, type Href } from "expo-router";
+import { Routes } from "@/constants/routes";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { supabase } from "@/lib/supabase";
 
@@ -98,7 +99,7 @@ export default function WelcomePersonal() {
 
       {/* Option: Go back to Mode Selection */}
       <TouchableOpacity
-        onPress={() => router.push("/mode-selection")}
+        onPress={() => router.push(Routes.modeSelection)}
         style={{ marginTop: 18 }}
       >
         <Text

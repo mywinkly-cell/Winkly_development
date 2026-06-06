@@ -11,6 +11,7 @@ import {
   Image,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { chatRoutes } from "@/lib/navigation/modeHub";
 import * as Haptics from "expo-haptics";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import {
@@ -68,7 +69,9 @@ export function PendingInvitesSheet({ visible, onClose, onChanged }: Props) {
       onChanged();
       onClose();
       if (res.chat_id) {
-        router.push({ pathname: "/chats/[conversationId]", params: { conversationId: res.chat_id } });
+        router.push(
+          chatRoutes.conversation("business", res.chat_id) as Parameters<typeof router.push>[0]
+        );
       }
     } catch (e) {
       Alert.alert("Accept", e instanceof Error ? e.message : "Something went wrong.");

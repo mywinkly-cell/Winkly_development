@@ -8,6 +8,7 @@ import { View, Pressable, StyleSheet, Image } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
+import { Routes } from "@/constants/routes";
 import { Colors } from "@/constants/tokens";
 
 const EVENTS_ICON = require("@/assets/icons/events-icon_1.png");
@@ -39,7 +40,7 @@ export function ModeSwitchCenterButton({ mode }: ModeSwitchCenterButtonProps) {
 
   const onPress = () => {
     Haptics.selectionAsync();
-    router.push("/mode-selection");
+    router.replace(Routes.modeSelection);
   };
 
   // Same premium 3D as mode cards: neutral depth shadow (visible on all modes)

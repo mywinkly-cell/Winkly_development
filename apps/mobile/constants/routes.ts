@@ -22,7 +22,9 @@ export const Routes = {
   onboardingGetStartedPersonal: "/(onboarding-personal)/get-started-personal" as const,
   onboardingWelcomePersonal: "/(onboarding-personal)/welcome-personal" as const,
   onboardingProfileCore: "/(onboarding-personal)/profile-core" as const,
-  onboardingModeSelection: "/mode-selection" as const,
+  /** Post-auth mode gateway (tabs hub — avoid ambiguous `/mode-selection` legacy path). */
+  modeSelection: "/(tabs)/mode-selection" as const,
+  onboardingModeSelection: "/(tabs)/mode-selection" as const,
   onboardingWinklyWorld: "/(onboarding-personal)/winkly-world" as const,
 
   onboardingWelcomeBusiness: "/(onboarding-business)/welcome-business" as const,

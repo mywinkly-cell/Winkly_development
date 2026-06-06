@@ -1,14 +1,13 @@
-import { Platform } from "react-native";
 import { Stack } from "expo-router";
+import {
+  premiumHubStackScreenOptions,
+  premiumPushStackScreenOptions,
+} from "@/lib/navigation/screenOptions";
 
 export default function PlannerLayout() {
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        gestureEnabled: true,
-        animation: Platform.OS === "android" ? "slide_from_right" : "default",
-      }}
-    />
+    <Stack screenOptions={premiumPushStackScreenOptions({ headerShown: false })}>
+      <Stack.Screen name="index" options={premiumHubStackScreenOptions()} />
+    </Stack>
   );
 }

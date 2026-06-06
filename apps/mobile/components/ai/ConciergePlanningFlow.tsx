@@ -10,7 +10,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
   Linking,
   Share,
   ActivityIndicator,
@@ -59,6 +58,7 @@ import { getPartnersForConcierge, searchWinklyUsersForInvite, type ConciergePart
 import { getMergedDeviceWhiteSpaceSlots, formatCalendarWhiteSpaceForGateway } from "@/lib/integrations/calendarWhiteSpace";
 import { buildBookingContextForAi } from "@/lib/integrations/bookingLinks";
 import { Avatar } from "@/components/ui/Avatar";
+import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import { Colors, Typography, HEADER, HEADER_BAR_HEIGHT, Layout } from "@/constants/tokens";
 import type { Mode } from "@/types";
 
@@ -596,29 +596,21 @@ export function ConciergePlanningFlow({
     }
   }, [flowStep, onBack, showInviteStepBeforePlanner, activityKey]);
 
-  const panGesture = useMemo(
+  /** Swipe-back on the header only — avoids fighting vertical ScrollViews in step content. */
+  const headerBackSwipe = useMemo(
     () =>
-      Gesture.Simultaneous(
-        Gesture.Pan()
-          .onStart((e) => {
-            swipeStartX.current = e.x;
-          })
-          // Allow a little vertical jitter while swiping horizontally (important inside ScrollViews).
-          .failOffsetY([-15, 15])
-          // Require a more deliberate horizontal swipe so vertical scroll stays smooth.
-          .activeOffsetX([-44, 44])
-          .minDistance(72)
-          .onEnd((e) => {
-            // Swipe left to go back. Never allow a swipe gesture to exit the flow.
-            if (flowStep === "intent") return;
-            // Consistent + reliable: allow a deliberate left swipe without requiring extreme velocity.
-            // (ScrollViews often reduce reported velocity.)
-            if (e.translationX < -80) handleFlowBack();
-            // Optional: iOS-style edge swipe right
-            else if (swipeStartX.current < 50 && e.translationX > 70) handleFlowBack();
-          }),
-        Gesture.Native()
-      ),
+      Gesture.Pan()
+        .onStart((e) => {
+          swipeStartX.current = e.x;
+        })
+        .failOffsetY([-24, 24])
+        .activeOffsetX([-28, 28])
+        .minDistance(48)
+        .onEnd((e) => {
+          if (flowStep === "intent") return;
+          if (e.translationX < -72) handleFlowBack();
+          else if (swipeStartX.current < 50 && e.translationX > 64) handleFlowBack();
+        }),
     [handleFlowBack, flowStep]
   );
 
@@ -651,9 +643,9 @@ export function ConciergePlanningFlow({
             : "Add to planner";
 
   return (
-    <GestureDetector gesture={panGesture}>
-      <View style={styles.container}>
-      <View style={styles.flowHeader}>
+    <View style={styles.container}>
+      <GestureDetector gesture={headerBackSwipe}>
+        <View style={styles.flowHeader}>
         <TouchableOpacity
           onPress={handleFlowBack}
           style={styles.flowHeaderBtn}
@@ -676,7 +668,8 @@ export function ConciergePlanningFlow({
         >
           <Ionicons name="close" size={22} color={Colors.gray600} />
         </TouchableOpacity>
-      </View>
+        </View>
+      </GestureDetector>
 
       {/* Step indicator: 5 dots */}
       <View style={styles.stepRow}>
@@ -692,6 +685,7 @@ export function ConciergePlanningFlow({
         ))}
       </View>
 
+      <View style={styles.stepBody}>
       {flowStep === "intent" && (
         <ConciergeIntentStep
           mode={mode}
@@ -860,22 +854,22 @@ export function ConciergePlanningFlow({
       {flowStep === "suggestions" && (
         <View style={styles.suggestionsWrap}>
           {error ? (
-            <ScrollView contentContainerStyle={styles.errorContent}>
+            <GestureScrollView contentContainerStyle={styles.errorContent}>
               <Text style={styles.errorText}>{error}</Text>
               <TouchableOpacity style={styles.retryBtn} onPress={() => handleGenerate()} activeOpacity={0.9}>
                 <Text style={styles.retryBtnText}>Retry</Text>
               </TouchableOpacity>
-            </ScrollView>
+            </GestureScrollView>
           ) : message && !suggestions?.length && !structuredPlans?.length ? (
-            <ScrollView contentContainerStyle={styles.emptyContent}>
+            <GestureScrollView contentContainerStyle={styles.emptyContent}>
               <Text style={styles.messageText}>{message}</Text>
               {noOptionsReason && <Text style={styles.noOptionsReason}>{noOptionsReason}</Text>}
               <TouchableOpacity style={styles.tryAgainBtn} onPress={() => setFlowStep("summary")} activeOpacity={0.9}>
                 <Text style={styles.tryAgainBtnText}>Change details</Text>
               </TouchableOpacity>
-            </ScrollView>
+            </GestureScrollView>
           ) : !suggestions?.length && !structuredPlans?.length ? (
-            <ScrollView contentContainerStyle={styles.emptyContent}>
+            <GestureScrollView contentContainerStyle={styles.emptyContent}>
               <Text style={styles.messageText}>
                 {noOptionsReason || "No plans generated. Check your details or try again."}
               </Text>
@@ -887,9 +881,9 @@ export function ConciergePlanningFlow({
                   <Text style={styles.retryBtnText}>Retry</Text>
                 </TouchableOpacity>
               </View>
-            </ScrollView>
+            </GestureScrollView>
           ) : structuredPlans && structuredPlans.length > 0 ? (
-            <ScrollView style={styles.optionsScroll} contentContainerStyle={styles.optionsContent} showsVerticalScrollIndicator={false}>
+            <GestureScrollView style={styles.optionsScroll} contentContainerStyle={styles.optionsContent}>
               <View style={styles.optionsHeaderRow}>
                 <Text style={styles.optionsIntro}>Two options</Text>
                 <TouchableOpacity
@@ -1015,9 +1009,9 @@ export function ConciergePlanningFlow({
                   </View>
                 );
               })}
-            </ScrollView>
+            </GestureScrollView>
           ) : suggestions && suggestions.length > 0 ? (
-            <ScrollView style={styles.optionsScroll} contentContainerStyle={styles.optionsContent} showsVerticalScrollIndicator={false}>
+            <GestureScrollView style={styles.optionsScroll} contentContainerStyle={styles.optionsContent}>
               {message ? <Text style={styles.optionsIntro}>{message}</Text> : null}
               {suggestions.map((opt, idx) => {
                 const price = (opt.price_indicator as string) ?? (opt.logistics as { estimated_cost?: string })?.estimated_cost ?? "";
@@ -1115,7 +1109,7 @@ export function ConciergePlanningFlow({
                   </View>
                 );
               })}
-            </ScrollView>
+            </GestureScrollView>
           ) : null}
           {loading ? (
             <Animated.View style={[styles.loadingOverlay, { opacity: loadingFade }]}>
@@ -1188,7 +1182,7 @@ export function ConciergePlanningFlow({
                 />
               </View>
             ) : null}
-            <ScrollView style={styles.pickerScroll} contentContainerStyle={styles.pickerScrollContent}>
+            <GestureScrollView style={styles.pickerScroll} contentContainerStyle={styles.pickerScrollContent}>
               {invitePickerChoice === "contacts" ? (
                 contactsLoading ? (
                   <Text style={styles.pickerEmpty}>Searching…</Text>
@@ -1237,7 +1231,7 @@ export function ConciergePlanningFlow({
                   </TouchableOpacity>
                 ))
               )}
-            </ScrollView>
+            </GestureScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1264,6 +1258,8 @@ export function ConciergePlanningFlow({
           showInlineBack={false}
         />
       )}
+
+      </View>
 
       <Modal visible={showFeedbackFor != null} transparent animationType="fade">
         <Pressable style={styles.feedbackBackdrop} onPress={() => { setShowFeedbackFor(null); onClose(); }}>
@@ -1300,13 +1296,13 @@ export function ConciergePlanningFlow({
           </Pressable>
         </Pressable>
       </Modal>
-      </View>
-    </GestureDetector>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  stepBody: { flex: 1, minHeight: 0 },
   flowHeader: {
     flexDirection: "row",
     alignItems: "center",

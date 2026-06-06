@@ -47,6 +47,8 @@ export interface Conversation {
   expires_at: string | null;
   dm_source: DMSource | null;
   dm_initiator: string | null;
+  /** Romance invite DMs: pending until recipient accepts. */
+  romance_invite_status?: "pending" | "accepted" | "declined" | null;
 }
 
 export interface ConversationMember {

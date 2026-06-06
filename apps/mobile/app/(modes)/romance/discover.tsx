@@ -12,6 +12,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { chatRoutes } from "@/lib/navigation/modeHub";
 import { usePostHog } from "posthog-react-native";
 
 import { ModeHeader } from "@/components/layout/ModeHeader";
@@ -294,7 +295,13 @@ export default function RomanceDiscover() {
       if (result?.is_match) {
         matchCreatedFromDiscover(posthog ?? null, "romance", item.id);
         setPeopleWhoLikedYou((prev) => prev.filter((p) => p.id !== item.id));
-        if (result.chat_id) router.push(`/chats/${result.chat_id}?matchBridge=1`);
+        if (result.chat_id) {
+          router.push(
+            chatRoutes.conversation("romance", result.chat_id, { matchBridge: "1" }) as Parameters<
+              typeof router.push
+            >[0]
+          );
+        }
         else Alert.alert("It's a match! 💖", "You both liked each other. Open Chats to say hi.");
       } else {
         setPeopleWhoLikedYou((prev) => prev.filter((p) => p.id !== item.id));
@@ -317,7 +324,13 @@ export default function RomanceDiscover() {
       setRecommendations((prev) => prev.filter((p) => p.id !== item.id));
       if (result?.is_match) {
         matchCreatedFromDiscover(posthog ?? null, "romance", item.id);
-        if (result.chat_id) router.push(`/chats/${result.chat_id}?matchBridge=1`);
+        if (result.chat_id) {
+          router.push(
+            chatRoutes.conversation("romance", result.chat_id, { matchBridge: "1" }) as Parameters<
+              typeof router.push
+            >[0]
+          );
+        }
         else Alert.alert("It's a match! 💖", "Open Chats to say hi.");
       }
     } catch (e) {
@@ -353,7 +366,7 @@ export default function RomanceDiscover() {
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
-        <ModeHeader currentMode="romance" rightSlot="filterSettings" />
+        <ModeHeader currentMode="romance" />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator size="large" color={primaryColor} />
         </View>
@@ -364,7 +377,7 @@ export default function RomanceDiscover() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
-      <ModeHeader currentMode="romance" rightSlot="filterSettings" />
+      <ModeHeader currentMode="romance" />
 
       <ScrollView
         style={{ flex: 1 }}
@@ -373,15 +386,6 @@ export default function RomanceDiscover() {
         }
         contentContainerStyle={{ paddingBottom: 24 }}
       >
-        <View style={{ paddingHorizontal: 20, marginBottom: 6 }}>
-          <Text style={{ ...Typography.h1, fontSize: 24, color: Colors.textPrimary, marginBottom: 4 }}>
-            Discover
-          </Text>
-          <Text style={{ ...Typography.caption, color: Colors.gray700 }}>
-            Winkly already did the thinking for you. High-probability matches and curated recommendations.
-          </Text>
-        </View>
-
         <DiscoverPeopleWhoLikedYou
           mode="romance"
           items={peopleWhoLikedYou}
@@ -410,8 +414,8 @@ export default function RomanceDiscover() {
 
         {peopleWhoLikedYou.length === 0 && recommendations.length === 0 && (
           <View style={{ paddingHorizontal: 20, paddingVertical: 32, alignItems: "center" }}>
-            <Text style={{ ...Typography.body, color: Colors.gray700, textAlign: "center" }}>
-              No new recommendations right now. Check back later or refine your filters.
+            <Text style={{ ...Typography.body, color: Colors.gray700, textAlign: "center", lineHeight: 22 }}>
+              Nothing new here yet. Keep swiping on Home — we will add more strong fits as they appear.
             </Text>
           </View>
         )}

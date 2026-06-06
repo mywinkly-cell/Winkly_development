@@ -22,16 +22,35 @@ env:
     text: "Create account"
     optional: true
 
-# Signup screen
+# Signup screen (testIDs preferred; text fallbacks for older builds)
+- assertVisible:
+    id: "signup-screen"
+    optional: true
 - assertVisible: "Create your account"
-- tapOn: "Personal"
+- tapOn:
+    id: "signup-account-personal"
+    optional: true
+- tapOn:
+    text: "Personal"
+    optional: true
+- tapOn:
+    id: "signup-email"
+    optional: true
 - tapOn:
     text: "name@example.com"
+    optional: true
 - inputText: "${EMAIL}"
 - tapOn:
+    id: "signup-password"
+    optional: true
+- tapOn:
     below: "Password"
+    optional: true
 - inputText: "${PASSWORD}"
 - hideKeyboard
+- tapOn:
+    id: "signup-submit"
+    optional: true
 - tapOn: "Create account"
 
 # Either a verification screen or the onboarding entry should appear.

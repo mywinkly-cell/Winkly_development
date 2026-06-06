@@ -1,5 +1,11 @@
-import { Redirect } from "expo-router";
+import { useEffect } from "react";
+import { useRouter } from "expo-router";
+import { Routes } from "@/constants/routes";
 
 export default function LegacyModeSelectionChats() {
-  return <Redirect href="/chats" />;
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(Routes.chats);
+  }, [router]);
+  return null;
 }

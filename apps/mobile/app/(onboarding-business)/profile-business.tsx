@@ -22,6 +22,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Routes } from "@/constants/routes";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { pickAndUploadLogo } from "@/lib/uploadLogo";
 
@@ -132,7 +133,7 @@ export default function ProfileBusiness() {
       const { shouldSkipWinklyWorld } = await import("@/lib/introFlags");
       const skip = await shouldSkipWinklyWorld();
       if (skip) {
-        router.replace("/mode-selection");
+        router.replace(Routes.modeSelection);
       } else {
         router.replace("/(onboarding-personal)/winkly-world?variant=business");
       }

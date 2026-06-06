@@ -32,7 +32,9 @@ const EMPTY_INBOX: ChatInboxData = {
 export async function loadChatInbox(activeTab: ChatInboxTab): Promise<ChatInboxData> {
   let q = supabase
     .from("conversations")
-    .select("id,type,mode,name,last_message_at,archived,related_event_id,created_at")
+    .select(
+      "id,type,mode,name,last_message_at,archived,related_event_id,created_at,dm_source,dm_initiator,romance_invite_status"
+    )
     .eq("archived", false)
     .order("last_message_at", { ascending: false, nullsFirst: false })
     .limit(200);
@@ -153,13 +155,26 @@ export async function loadChatInbox(activeTab: ChatInboxTab): Promise<ChatInboxD
   };
 }
 
-/** Pinned first, then most recent activity. */
+function isPendingRomanceInvite(c: Conversation): boolean {
+  return (
+    c.type === "dm" &&
+    c.mode === "romance" &&
+    c.dm_source === "invite" &&
+    c.romance_invite_status === "pending"
+  );
+}
+
+/** Pending romance invites, then pinned, then most recent activity. */
 export function sortChatInboxItems(
   items: Conversation[],
   lastMessageByConv: Record<string, Message>,
   memberSettingsByConv: MemberSettingsByConv
 ): Conversation[] {
   return [...items].sort((a, b) => {
+    const inviteA = isPendingRomanceInvite(a) ? 1 : 0;
+    const inviteB = isPendingRomanceInvite(b) ? 1 : 0;
+    if (inviteA !== inviteB) return inviteB - inviteA;
+
     const pinA = memberSettingsByConv[a.id]?.pinned ? 1 : 0;
     const pinB = memberSettingsByConv[b.id]?.pinned ? 1 : 0;
     if (pinA !== pinB) return pinB - pinA;
