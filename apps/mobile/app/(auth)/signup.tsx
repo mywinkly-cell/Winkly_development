@@ -32,6 +32,7 @@ import {
 } from "@/lib/auth/formValidation";
 import { getTermsAndCookiesAccepted } from "@/lib/legalFlags";
 import { markHasAccount } from "@/lib/lastActivity";
+import { trackAccountCreated } from "@/lib/analytics/events";
 
 export default function Signup() {
   const router = useRouter();
@@ -89,6 +90,7 @@ export default function Signup() {
         options: { data: { account_type: accountType }, emailRedirectTo },
       });
       if (error) throw error;
+      trackAccountCreated({ account_type: accountType, method: "email" });
       await markHasAccount();
       await AsyncStorage.setItem("winkly_last_signup_email", cleanEmail);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

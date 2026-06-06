@@ -1,13 +1,13 @@
 # Branch strategy — Winkly
 
-**Last updated:** 2026-06-04
+**Last updated:** 2026-06-06
 
 ## Branches
 
 | Branch | Purpose | Deploy / data |
 |--------|---------|----------------|
-| **`main`** | Production-ready code | Maps to production Supabase + EAS `production` profile |
-| **`develop`** | Integration branch for the next release | Maps to staging Supabase + EAS `staging` / `preview` |
+| **`main`** | Production-ready code | Maps to **winkly-production** Supabase + EAS `production` profile |
+| **`develop`** | Integration branch for the next release | Local dev + EAS `preview` (winkly-production backend) |
 | **`feature/*`** | Short-lived work (e.g. `feature/romance-filters`) | Developer machines; PR into `develop` |
 
 ## Flow
@@ -23,14 +23,14 @@ gitGraph
   commit id: "work"
   checkout develop
   merge feature/foo
-  commit id: "staging QA"
+  commit id: "preview QA"
   checkout main
   merge develop tag: "release"
 ```
 
 1. Branch from **`develop`**: `git checkout develop && git pull && git checkout -b feature/my-change`
 2. Open a **pull request into `develop`**. CI must pass (`.github/workflows/ci.yml`).
-3. After staging QA on `develop`, open a **PR from `develop` → `main`** for release.
+3. After preview QA on `develop`, open a **PR from `develop` → `main`** for release.
 4. Hotfixes: branch `hotfix/description` from **`main`**, merge back to **both** `main` and `develop`.
 
 ## Pull request rules (recommended GitHub settings)
@@ -73,5 +73,5 @@ CI runs on:
 
 ## Related docs
 
-- [`docs/ENVIRONMENTS.md`](ENVIRONMENTS.md) — dev / staging / prod Supabase and EAS
+- [`docs/ENVIRONMENTS.md`](ENVIRONMENTS.md) — dev / production Supabase and EAS
 - [`README.md`](../README.md) — setup and migrations

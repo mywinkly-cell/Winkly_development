@@ -1,16 +1,15 @@
-# Winkly — Environments (dev / staging / production)
+# Winkly — Environments (dev / production)
 
 **Last updated:** 2026-06-06
 
-Winkly runs in three isolated environments. **Development uses local Supabase** (no cloud slot), so you only need **two cloud projects** on the Free plan until go-live.
+Winkly uses **two active environments** today. A separate **staging** Supabase project is deferred until app publishing.
 
 | Environment     | Backend                          | Mobile env file              | EAS profile / channel | Purpose |
 | --------------- | -------------------------------- | ---------------------------- | --------------------- | ------- |
 | **development** | Supabase **local** (`supabase start`) | `apps/mobile/.env.development` | `development`         | Day-to-day local work; disposable data. |
-| **staging**     | Cloud project **`orjccytcmklzcfjgqwwj`** | `apps/mobile/.env.staging`     | `staging` / `preview` | Pre-prod testing; [dashboard](https://supabase.com/dashboard/project/orjccytcmklzcfjgqwwj). GitHub: private `mywinkly-cell/winkly-staging`. |
-| **production**  | **WinklyApp** `gwgjdpqskusuejlwrsnd` | `apps/mobile/.env.production`  | `production`          | Live main project. GitHub: `mywinkly-cell/winkly-prod`. |
+| **production**  | **winkly-production** `orjccytcmklzcfjgqwwj` | `apps/mobile/.env.production`  | `production` / `preview` | Cloud backend for QA builds and release. [Dashboard](https://supabase.com/dashboard/project/orjccytcmklzcfjgqwwj). GitHub: [`mywinkly-cell/winkly-production`](https://github.com/mywinkly-cell/winkly-production). |
 
-**Never** test new features or run untested migrations against production data.
+**Never** test untested migrations or experiments against production without local verification first.
 
 ---
 
@@ -22,21 +21,18 @@ Copy each template and fill in values (the real files are git-ignored):
 
 ```bash
 cp apps/mobile/.env.development.example apps/mobile/.env.development
-cp apps/mobile/.env.staging.example     apps/mobile/.env.staging
 cp apps/mobile/.env.production.example   apps/mobile/.env.production
 ```
 
-### 1.2 Create the Supabase projects
+### 1.2 Create / link the Supabase projects
 
-- **development** — no project needed. Start the local stack:
+- **development** — no cloud project needed. Start the local stack:
   ```bash
   supabase start
   ```
   Copy the printed **API URL** and **anon key** into `apps/mobile/.env.development`.
-- **staging** — In the Supabase dashboard create a new project named e.g. `winkly-staging`.
-  Put its URL + anon key in `apps/mobile/.env.staging`.
-- **production** — your existing live project. Put its URL + anon key in
-  `apps/mobile/.env.production` (or, preferably, only as EAS production env vars).
+- **production** — **winkly-production** (`orjccytcmklzcfjgqwwj`). Copy its URL + anon key into
+  `apps/mobile/.env.production` (or, preferably, only as EAS production/preview env vars).
 
 ---
 
@@ -46,15 +42,13 @@ Expo loads `apps/mobile/.env` automatically. Pick which environment that points 
 
 ```bash
 npm run env:dev       # copies .env.development -> .env
-npm run env:staging   # copies .env.staging     -> .env
-npm run env:prod      # copies .env.production   -> .env  (warns: live data)
+npm run env:prod      # copies .env.production   -> .env  (warns: live cloud data)
 ```
 
 Or start in one step:
 
 ```bash
 npm run start:dev
-npm run start:staging
 npm run start:prod
 ```
 
@@ -62,33 +56,28 @@ At runtime the active environment is available via `Constants.expoConfig.extra.a
 
 ---
 
-## 3. Database migrations — promote dev → staging → prod
+## 3. Database migrations — promote dev → production
 
-Migrations live in `supabase/migrations/`. **Always** apply them to staging and verify
-before production.
+Migrations live in `supabase/migrations/`. **Always** verify locally before pushing to production.
 
 ```bash
 # 1) Develop locally — new migration files are picked up by db reset
 supabase db reset                 # rebuild local DB from migrations + seed
 
-# 2) Promote to STAGING and verify the app + data there
-supabase link --project-ref YOUR_STAGING_PROJECT_REF
-supabase db push
-
-# 3) Only after staging is verified, promote to PRODUCTION
-supabase link --project-ref YOUR_PROD_PROJECT_REF
+# 2) Promote to PRODUCTION and verify the app
+npm run supabase:push:production
+# or manually:
+supabase link --project-ref orjccytcmklzcfjgqwwj
 supabase db push
 ```
 
-Edge Functions follow the same flow — deploy to staging first, then production:
+Edge Functions follow the same flow — deploy to production after local verification:
 
 ```bash
-npx supabase functions deploy ai-gateway --project-ref YOUR_STAGING_PROJECT_REF --use-api
-# verify on staging, then:
-npx supabase functions deploy ai-gateway --project-ref YOUR_PROD_PROJECT_REF --use-api
+npx supabase functions deploy ai-gateway --project-ref orjccytcmklzcfjgqwwj --use-api
 ```
 
-Set per-project secrets (OpenAI, Gemini, etc.) separately for staging and production.
+Set production secrets once per project (see **docs/API_KEYS_AND_ENV.md** §3.1).
 
 ---
 
@@ -97,13 +86,13 @@ Set per-project secrets (OpenAI, Gemini, etc.) separately for staging and produc
 `apps/mobile/eas.json` defines profiles that stamp `APP_ENV`:
 
 ```bash
-eas build --profile development   # APP_ENV=development
-eas build --profile staging       # APP_ENV=staging
+eas build --profile development   # APP_ENV=development (local Supabase)
+eas build --profile preview       # APP_ENV=production (winkly-production backend)
 eas build --profile production    # APP_ENV=production (Play AAB)
 ```
 
 Store `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` (and other public
-vars) as **EAS environment variables** scoped to each environment in the Expo dashboard,
+vars) as **EAS environment variables** scoped to `preview` and `production` in the Expo dashboard,
 rather than committing real `.env.*` files.
 
 ---
@@ -124,7 +113,8 @@ On merge to **`main`**, `.github/workflows/eas-submit.yml` builds the **preview*
 
 ## 6. Golden rules
 
-- Never point local dev or staging at production data.
-- Test every migration on staging before production.
+- Never point local dev at production data unless you intend to test against the live cloud project.
+- Test every migration locally (`supabase db reset`) before `supabase db push` to production.
 - Keep real `.env.*` files off git (only `*.example` is tracked).
-- Use separate analytics keys per environment so staging traffic never pollutes product metrics.
+- Use separate analytics keys per environment so dev traffic never pollutes product metrics.
+- **Staging (future):** when the app is ready to publish, add a separate `winkly-staging` Supabase project for pre-release QA; until then, use local dev + winkly-production.

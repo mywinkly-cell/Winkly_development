@@ -151,8 +151,9 @@ export function RomanceSubProfile(props: {
   toggleMulti: (arr: string[], val: string, setter: (v: string[]) => void, max: number) => void;
   onAllergiesToggle?: (v: string) => void;
   onPetsToggle?: (v: string) => void;
+  hideToggle?: boolean;
 }) {
-  const { enabled, toggle, photos, onPickPhoto, video, onPickVideo, bio, onBioChange } = props;
+  const { enabled, toggle, photos, onPickPhoto, video, onPickVideo, bio, onBioChange, hideToggle } = props;
   const { height, onHeightChange, weight, onWeightChange } = props;
   const { lifestyle, onLifestyleChange, smoking, onSmokingChange, alcohol, onAlcoholChange, kids, onKidsChange } = props;
   const { interests, onInterestsChange, sexualViews, onSexualViewsChange } = props;
@@ -164,7 +165,7 @@ export function RomanceSubProfile(props: {
       <View style={{ marginBottom: 28 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>💖 Romance</Text>
-          <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />
+          {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />}
         </View>
       </View>
     );
@@ -174,7 +175,7 @@ export function RomanceSubProfile(props: {
     <View style={{ marginBottom: 28 }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>💖 Romance</Text>
-        <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />
+        {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />}
       </View>
 
       <Text style={label}>Photos <Text style={requiredMark}>*</Text></Text>

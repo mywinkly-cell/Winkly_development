@@ -329,7 +329,16 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
 
   return (
     <View style={{ flex: 1 }}>
-      {/* SUBHEADER — same tab bar as Planner */}
+      {/* SUBHEADER — same tab bar as Planner; mode accent when opened from a mode hub */}
+      {sourceMode !== "all" && (
+        <View
+          style={[
+            styles.modeContextBar,
+            { backgroundColor: CHAT_TAB_CONFIG.find((t) => t.key === sourceMode)?.accent },
+          ]}
+          accessibilityLabel={`${sourceMode} chats`}
+        />
+      )}
       <View style={styles.tabBar}>
         <ScrollView
           horizontal
@@ -394,6 +403,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
               timestamp={formatChatInboxTimestamp(ts)}
               unreadCount={unreadByConv[item.id] ?? 0}
               isPinned={settings?.pinned ?? false}
+              showModeContext={activeTab === "all"}
               isPendingRomanceInvite={
                 item.type === "dm" &&
                 item.mode === "romance" &&
@@ -457,6 +467,10 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
 }
 
 const styles = StyleSheet.create({
+  modeContextBar: {
+    height: 3,
+    width: "100%",
+  },
   tabBar: {
     backgroundColor: Colors.white,
     minHeight: 52,

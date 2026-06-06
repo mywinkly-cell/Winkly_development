@@ -223,6 +223,13 @@ export default function ChatsHome() {
               timestamp={formatChatInboxTimestamp(ts)}
               unreadCount={unreadByConv[item.id] ?? 0}
               isPinned={settings?.pinned ?? false}
+              showModeContext={activeTab === "all"}
+              isPendingRomanceInvite={
+                item.type === "dm" &&
+                item.mode === "romance" &&
+                item.dm_source === "invite" &&
+                item.romance_invite_status === "pending"
+              }
               onPress={() => router.push(`/chats/${item.id}`)}
               onAvatarPress={
                 item.mode && item.mode !== "events"

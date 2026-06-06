@@ -37,6 +37,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { Routes } from "@/constants/routes";
+import { trackOnboardingCompleted } from "@/lib/analytics/events";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { searchCities, type CityCountry } from "@/lib/location/citySearch";
 import {
@@ -54,6 +55,14 @@ import {
 import { RomanceSubProfile } from "@/components/onboarding/RomanceSubProfile";
 import { FriendsSubProfile } from "@/components/onboarding/FriendsSubProfile";
 import { BusinessSubProfile } from "@/components/onboarding/BusinessSubProfile";
+import { OnboardingStepIndicator } from "@/components/onboarding/OnboardingStepIndicator";
+import {
+  ONBOARDING_STEP_COUNT,
+  inferOnboardingResumeStep,
+  validateOnboardingStep,
+  type OnboardingStep,
+  type PrimaryOnboardingMode,
+} from "@/lib/profile/onboardingSteps";
 import { PhotoConfirmModal } from "@/components/media/PhotoConfirmModal";
 import { uploadLocalPhotos, uploadLocalVideos } from "@/lib/uploadMedia";
 import { validatePickerAsset } from "@/lib/mediaValidation";
@@ -220,8 +229,18 @@ export default function ProfileCore() {
   const [interestsBusiness, setInterestsBusiness] = useState<string[]>([]);
 
   const [saving, setSaving] = useState(false);
+  const [currentStep, setCurrentStep] = useState<OnboardingStep>(1);
+  const [selectedPrimaryMode, setSelectedPrimaryMode] = useState<PrimaryOnboardingMode>("romance");
   const [cropModalVisible, setCropModalVisible] = useState(false);
   const [pendingCrop, setPendingCrop] = useState<{ uri: string; type: "core" | "romance" | "friends" | "business"; index: number } | null>(null);
+
+  const selectPrimaryMode = useCallback((mode: PrimaryOnboardingMode) => {
+    Haptics.selectionAsync();
+    setSelectedPrimaryMode(mode);
+    setRomanceEnabled(mode === "romance");
+    setFriendsEnabled(mode === "friends");
+    setBusinessEnabled(mode === "business");
+  }, []);
 
   const maxAdultDate = useMemo(() => {
     const d = new Date();
@@ -235,6 +254,7 @@ export default function ProfileCore() {
       try {
         const { data: userData, error: userError } = await supabase.auth.getUser();
         let loadedFromSupabase = false;
+        let resumeFromDb: Parameters<typeof inferOnboardingResumeStep>[0] | null = null;
 
         if (!userError && userData?.user) {
           const userId = userData.user.id;
@@ -275,6 +295,13 @@ export default function ProfileCore() {
                 ? [upRow.main_photo_url]
                 : [];
             setCorePhotos(photos);
+            resumeFromDb = {
+              firstName: upRow.first_name ?? "",
+              lastName: upRow.last_name ?? "",
+              birthday: upRow.birthday ? new Date(upRow.birthday) : null,
+              city: dbCity,
+              corePhotoCount: photos.length,
+            };
           }
 
           const { data: subs } = await supabase
@@ -412,15 +439,42 @@ export default function ProfileCore() {
             setRomanceVideos(ensureLength(data.romanceVideos ?? [null], 1));
             setFriendsVideos(ensureLength(data.friendsVideos ?? [null], 1));
             setBusinessVideos(ensureLength(data.businessVideos ?? [null], 1));
+            if (data.selectedPrimaryMode === "friends" || data.selectedPrimaryMode === "business" || data.selectedPrimaryMode === "romance") {
+              setSelectedPrimaryMode(data.selectedPrimaryMode);
+              selectPrimaryMode(data.selectedPrimaryMode);
+            } else if (data.romanceEnabled) {
+              selectPrimaryMode("romance");
+            } else if (data.friendsEnabled) {
+              selectPrimaryMode("friends");
+            } else if (data.businessEnabled) {
+              selectPrimaryMode("business");
+            }
+            if (!isEditFlow) {
+              const photoCount = Array.isArray(data.corePhotos) ? data.corePhotos.filter(Boolean).length : 0;
+              setCurrentStep(
+                inferOnboardingResumeStep({
+                  firstName: data.firstName ?? "",
+                  lastName: data.lastName ?? "",
+                  birthday: data.birthday ? new Date(data.birthday) : null,
+                  city: data.city ?? "",
+                  corePhotoCount: photoCount,
+                  savedStep: data.onboardingStep ?? null,
+                })
+              );
+            }
           }
         }
 
-        // Location prompt is shown when user taps "Use my location" near city field
+        if (resumeFromDb && !isEditFlow) {
+          const draftRaw = await AsyncStorage.getItem("winkly_profile_draft");
+          const savedStep = draftRaw ? (JSON.parse(draftRaw).onboardingStep as number | undefined) : undefined;
+          setCurrentStep(inferOnboardingResumeStep({ ...resumeFromDb, savedStep: savedStep ?? null }));
+        }
       } catch (e) {
         console.warn("Profile draft/location init warning:", e);
       }
     })();
-  }, [appLanguage]);
+  }, [appLanguage, isEditFlow, selectPrimaryMode]);
 
   // ─────────────── AUTO-SAVE DRAFT ───────────────
   const autoSave = useCallback(async () => {
@@ -482,6 +536,8 @@ export default function ProfileCore() {
       romanceVideos,
       friendsVideos,
       businessVideos,
+      onboardingStep: currentStep,
+      selectedPrimaryMode,
     };
     try {
       await AsyncStorage.setItem("winkly_profile_draft", JSON.stringify(data));
@@ -547,6 +603,8 @@ export default function ProfileCore() {
     romanceVideos,
     friendsVideos,
     businessVideos,
+    currentStep,
+    selectedPrimaryMode,
   ]);
 
   useEffect(() => {
@@ -964,6 +1022,7 @@ export default function ProfileCore() {
       city,
       lookingFor,
       corePhotoCount: corePhotos.length,
+      requireLookingFor: isEditFlow ? romanceEnabled : selectedPrimaryMode === "romance",
     });
     if (!validation.ok) {
       Alert.alert(validation.title, validation.message);
@@ -1037,7 +1096,11 @@ export default function ProfileCore() {
       });
       if (coreErr) throw coreErr;
 
-      if (romanceEnabled) {
+      const saveRomance = isEditFlow ? romanceEnabled : selectedPrimaryMode === "romance";
+      const saveFriends = isEditFlow ? friendsEnabled : selectedPrimaryMode === "friends";
+      const saveBusiness = isEditFlow ? businessEnabled : selectedPrimaryMode === "business";
+
+      if (saveRomance) {
         const uploadedRomancePhotos = await uploadLocalPhotos(authUser.id, "romance", romancePhotos);
         const uploadedRomanceVideos = await uploadLocalVideos(authUser.id, "romance", romanceVideos);
         const romanceMeta: Record<string, unknown> = {
@@ -1071,7 +1134,7 @@ export default function ProfileCore() {
           { onConflict: "user_id,mode" }
         );
       }
-      if (friendsEnabled) {
+      if (saveFriends) {
         const uploadedFriendsPhotos = await uploadLocalPhotos(authUser.id, "friends", friendsPhotos);
         const uploadedFriendsVideos = await uploadLocalVideos(authUser.id, "friends", friendsVideos);
         const friendsMeta: Record<string, unknown> = {
@@ -1100,7 +1163,7 @@ export default function ProfileCore() {
           { onConflict: "user_id,mode" }
         );
       }
-      if (businessEnabled) {
+      if (saveBusiness) {
         const uploadedBusinessPhotos = await uploadLocalPhotos(authUser.id, "business", businessPhotos);
         const uploadedBusinessVideos = await uploadLocalVideos(authUser.id, "business", businessVideos);
         const businessMeta: Record<string, unknown> = {
@@ -1136,6 +1199,7 @@ export default function ProfileCore() {
       }
       const skipWinklyWorld = await import("@/lib/introFlags").then((m) => m.shouldSkipWinklyWorld());
       if (skipWinklyWorld) {
+        trackOnboardingCompleted({ account_type: "personal" });
         router.push(Routes.modeSelection);
       } else {
         router.push("/(onboarding-personal)/winkly-world?variant=personal");
@@ -1149,6 +1213,49 @@ export default function ProfileCore() {
       setSaving(false);
     }
   };
+
+  const handleStepContinue = async () => {
+    if (isEditFlow) {
+      await handleContinue();
+      return;
+    }
+    const stepValidation = validateOnboardingStep(currentStep, {
+      firstName,
+      lastName,
+      birthday,
+      city,
+      corePhotoCount: corePhotos.length,
+      gender,
+      lookingFor,
+      selectedMode: selectedPrimaryMode,
+    });
+    if (!stepValidation.ok) {
+      Alert.alert(stepValidation.title, stepValidation.message);
+      return;
+    }
+    if (currentStep < ONBOARDING_STEP_COUNT) {
+      await autoSave();
+      await saveToSupabase();
+      Haptics.selectionAsync();
+      setCurrentStep((s) => (s + 1) as OnboardingStep);
+      return;
+    }
+    await handleContinue();
+  };
+
+  const handleHeaderBack = () => {
+    Haptics.selectionAsync();
+    if (!isEditFlow && currentStep > 1) {
+      setCurrentStep((s) => (s - 1) as OnboardingStep);
+      return;
+    }
+    router.back();
+  };
+
+  const photoStepSubProgress = useMemo(
+    () => Math.min(corePhotos.length / MIN_CORE_PHOTOS, 1),
+    [corePhotos.length]
+  );
 
   const coreChecklist = useMemo(
     () => [
@@ -1217,7 +1324,7 @@ export default function ProfileCore() {
         {/* Header */}
         <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.gray200, shadowColor: "#1C1C1E", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 }}>
           <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); router.back(); }}
+            onPress={handleHeaderBack}
             style={headerBtn}
             activeOpacity={0.9}
           >
@@ -1246,6 +1353,8 @@ export default function ProfileCore() {
           keyboardShouldPersistTaps="handled"
         >
           <Animated.View style={{ opacity: fadeAnim }}>
+            {isEditFlow ? (
+              <>
             {/* Progress — matches mode selection formula (bio, photos, interests per sub-profile) */}
             <View style={{ marginBottom: 20 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
@@ -1256,11 +1365,23 @@ export default function ProfileCore() {
                 <View style={{ height: "100%", width: `${overallProgress}%`, backgroundColor: Colors.primaryViolet, borderRadius: 3 }} />
               </View>
             </View>
+              </>
+            ) : (
+              <OnboardingStepIndicator
+                currentStep={currentStep}
+                totalSteps={ONBOARDING_STEP_COUNT}
+                subProgress={currentStep === 2 ? photoStepSubProgress : undefined}
+              />
+            )}
 
-            {/* Section: About You */}
+            {(isEditFlow || currentStep === 1) && (
             <View style={[sectionCard, { marginBottom: 20 }]}>
-              <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 16, fontFamily: FontFamily.heading }}>About you 💫</Text>
+              <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 16, fontFamily: FontFamily.heading }}>
+                {isEditFlow ? "About you 💫" : "Let's start with the basics ✨"}
+              </Text>
 
+              {isEditFlow && (
+              <>
               <Text style={label}>Photos <Text style={requiredMark}>*</Text></Text>
               <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 12 }}>
                 Add {MIN_CORE_PHOTOS}–{MAX_CORE_PHOTOS} photos. Your first photo is your main one — tap any photo to reorder or remove it. ({corePhotos.length}/{MAX_CORE_PHOTOS})
@@ -1310,6 +1431,14 @@ export default function ProfileCore() {
               ) : (
                 <Text style={{ ...Typography.caption, color: Colors.gray500, marginTop: 6, marginBottom: 18 }}>
                   Tip: clear, well-lit photos of your face get more matches.
+                </Text>
+              )}
+              </>
+              )}
+
+              {!isEditFlow && (
+                <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 16 }}>
+                  Just the essentials — you can add more details later.
                 </Text>
               )}
 
@@ -1363,6 +1492,8 @@ export default function ProfileCore() {
           Your birthday will remain private — only your age will be visible.
         </Text>
 
+        {isEditFlow && (
+        <>
         <Text style={[label, { marginBottom: 8 }]}>Gender <Text style={requiredMark}>*</Text></Text>
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 16 }}>
           {["Female", "Male", "Other"].map((g) => (
@@ -1413,6 +1544,9 @@ export default function ProfileCore() {
             );
           })}
         </View>
+
+        </>
+        )}
 
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
           <Text style={[label, { marginBottom: 0 }]}>City <Text style={requiredMark}>*</Text></Text>
@@ -1472,6 +1606,8 @@ export default function ProfileCore() {
           </View>
         )}
 
+        {isEditFlow && (
+        <>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
           <Text style={[label, { marginBottom: 0 }]}>Short bio</Text>
           <Text style={{ ...Typography.caption, color: Colors.gray500 }}>{bio.length}/{MAX_CORE_BIO}</Text>
@@ -1487,9 +1623,63 @@ export default function ProfileCore() {
           onBlur={() => setFocusedField(null)}
           style={[inputBase, { minHeight: 90, textAlignVertical: "top", paddingTop: 12 }, focusedField === "bio" && inputFocused]}
         />
+        </>
+        )}
           </View>
+            )}
+
+            {!isEditFlow && currentStep === 2 && (
+            <View style={[sectionCard, { marginBottom: 20 }]}>
+              <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 4, fontFamily: FontFamily.heading }}>Add your photos 📸</Text>
+              <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 12 }}>
+                Add {MIN_CORE_PHOTOS}–{MAX_CORE_PHOTOS} clear photos. Minimum {MIN_PHOTO_DIMENSION}px on the short side — we&apos;ll let you know if one is too small.
+              </Text>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
+                <Text style={{ ...Typography.body, color: Colors.gray700 }}>{corePhotos.length} of {MIN_CORE_PHOTOS} required</Text>
+                <Text style={{ ...Typography.caption, color: corePhotos.length >= MIN_CORE_PHOTOS ? Colors.primaryViolet : Colors.errorRed }}>
+                  {corePhotos.length >= MIN_CORE_PHOTOS ? "Ready to continue" : `${MIN_CORE_PHOTOS - corePhotos.length} more needed`}
+                </Text>
+              </View>
+              <View style={{ height: 4, borderRadius: 2, backgroundColor: Colors.gray200, overflow: "hidden", marginBottom: 16 }}>
+                <View
+                  style={{
+                    height: "100%",
+                    width: `${Math.min(100, (corePhotos.length / MIN_CORE_PHOTOS) * 100)}%`,
+                    backgroundColor: corePhotos.length >= MIN_CORE_PHOTOS ? Colors.primaryViolet : Colors.accentYellow,
+                    borderRadius: 2,
+                  }}
+                />
+              </View>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -6 }}>
+                {corePhotos.map((uri, i) => (
+                  <View key={`core-step2-${i}-${uri}`} style={{ width: "33.333%", padding: 6 }}>
+                    <TouchableOpacity activeOpacity={0.85} onPress={() => openCorePhotoOptions(i)} style={corePhotoTile}>
+                      <Image source={{ uri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                      {i === 0 && (
+                        <View style={mainBadge}>
+                          <Text style={mainBadgeText}>Main</Text>
+                        </View>
+                      )}
+                      <TouchableOpacity onPress={() => removeCorePhoto(i)} style={removeBadge} hitSlop={8} accessibilityLabel="Remove photo">
+                        <Ionicons name="close" size={14} color={Colors.white} />
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {corePhotos.length < MAX_CORE_PHOTOS && (
+                  <View style={{ width: "33.333%", padding: 6 }}>
+                    <TouchableOpacity onPress={() => pickImage("core", corePhotos.length)} style={corePhotoAddTile} accessibilityLabel="Add photo">
+                      <Ionicons name="add" size={30} color={Colors.primaryViolet} />
+                      <Text style={{ ...Typography.caption, color: Colors.gray600, marginTop: 4 }}>Add</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </View>
+            )}
 
           {/* Section: What do you enjoy? (activity preferences — Winkly's differentiator) */}
+          {(isEditFlow || currentStep === 3) && (
           <View style={[sectionCard, { marginBottom: 20 }]}>
             <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 4, fontFamily: FontFamily.heading }}>What do you enjoy? 🎉</Text>
             <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 16 }}>
@@ -1527,8 +1717,10 @@ export default function ProfileCore() {
               })}
             </View>
           </View>
+          )}
 
-          {/* Section: More about you */}
+          {/* Section: More about you — edit flow only */}
+          {isEditFlow && (
           <View style={[sectionCard, { marginBottom: 20 }]}>
             <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 16, fontFamily: FontFamily.heading }}>More about you</Text>
 
@@ -1654,8 +1846,10 @@ export default function ProfileCore() {
         />
 
           </View>
+          )}
 
           {/* ─────── SUB-PROFILES ─────── */}
+          {isEditFlow ? (
           <View style={[sectionCard, { marginBottom: 8 }]}>
             <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 16, fontFamily: FontFamily.heading }}>Mode profiles</Text>
         <RomanceSubProfile
@@ -1760,10 +1954,215 @@ export default function ProfileCore() {
           toggleMulti={toggleMulti}
         />
           </View>
+          ) : currentStep === 4 ? (
+          <View style={[sectionCard, { marginBottom: 8 }]}>
+            <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 8, fontFamily: FontFamily.heading }}>
+              Set up your profile
+            </Text>
+            <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 16 }}>
+              Choose one mode to start — you can add others anytime from mode selection.
+            </Text>
+
+            <View style={{ flexDirection: "row", marginBottom: 20, marginHorizontal: -4 }}>
+              {(
+                [
+                  { key: "romance" as const, label: "Romance", emoji: "💕" },
+                  { key: "friends" as const, label: "Friends", emoji: "🤝" },
+                  { key: "business" as const, label: "Business", emoji: "💼" },
+                ] as const
+              ).map(({ key, label, emoji }) => {
+                const selected = selectedPrimaryMode === key;
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    onPress={() => selectPrimaryMode(key)}
+                    style={{
+                      flex: 1,
+                      marginHorizontal: 4,
+                      paddingVertical: 14,
+                      borderRadius: Layout.radii.control,
+                      borderWidth: 2,
+                      borderColor: selected ? Colors.primaryViolet : Colors.gray200,
+                      backgroundColor: selected ? Colors.primaryViolet + "12" : Colors.white,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={{ fontSize: 22, marginBottom: 4 }}>{emoji}</Text>
+                    <Text style={{ ...Typography.caption, fontWeight: selected ? "700" : "500", color: selected ? Colors.primaryViolet : Colors.textPrimary }}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={[label, { marginBottom: 8 }]}>Gender <Text style={requiredMark}>*</Text></Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 16 }}>
+              {["Female", "Male", "Other"].map((g) => (
+                <TouchableOpacity
+                  key={g}
+                  onPress={() => { Haptics.selectionAsync(); setGender(g); }}
+                  style={{
+                    flex: 1,
+                    marginHorizontal: 4,
+                    backgroundColor: gender === g ? Colors.primaryViolet : Colors.white,
+                    borderWidth: 2,
+                    borderColor: gender === g ? Colors.primaryViolet : Colors.gray200,
+                    borderRadius: Layout.radii.control,
+                    paddingVertical: 12,
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ ...Typography.body, color: gender === g ? "#FFF" : Colors.textPrimary }}>{g}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {selectedPrimaryMode === "romance" && (
+              <>
+                <Text style={[label, { marginBottom: 8 }]}>Looking for <Text style={requiredMark}>*</Text></Text>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 16 }}>
+                  {LOOKING_FOR_OPTIONS.map((opt) => {
+                    const selected = lookingFor.includes(opt);
+                    return (
+                      <TouchableOpacity
+                        key={opt}
+                        onPress={() => toggleLookingFor(opt)}
+                        style={{
+                          flex: 1,
+                          marginHorizontal: 4,
+                          backgroundColor: selected ? Colors.primaryViolet : Colors.white,
+                          borderWidth: 2,
+                          borderColor: selected ? Colors.primaryViolet : Colors.gray200,
+                          borderRadius: Layout.radii.control,
+                          paddingVertical: 12,
+                          alignItems: "center",
+                        }}
+                      >
+                        <Text style={{ ...Typography.body, color: selected ? "#FFF" : Colors.textPrimary }}>{opt}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
+            {selectedPrimaryMode === "romance" && (
+              <RomanceSubProfile
+                enabled
+                hideToggle
+                toggle={() => {}}
+                photos={romancePhotos}
+                onPickPhoto={(i) => pickImage("romance", i)}
+                video={romanceVideos[0]}
+                onPickVideo={() => pickVideo("romance")}
+                bio={bioRomance}
+                onBioChange={setBioRomance}
+                height={heightRomance}
+                onHeightChange={setHeightRomance}
+                weight={weightRomance}
+                onWeightChange={setWeightRomance}
+                lifestyle={lifestyleRomance}
+                onLifestyleChange={setLifestyleRomance}
+                smoking={smokingRomance}
+                onSmokingChange={setSmokingRomance}
+                alcohol={alcoholRomance}
+                onAlcoholChange={setAlcoholRomance}
+                kids={kidsRomance}
+                onKidsChange={setKidsRomance}
+                interests={interestsRomance}
+                onInterestsChange={setInterestsRomance}
+                sexualViews={sexualViewsRomance}
+                onSexualViewsChange={setSexualViewsRomance}
+                relationshipGoals={relationshipGoalsRomance}
+                onRelationshipGoalsChange={setRelationshipGoalsRomance}
+                religion={religionRomance}
+                onReligionChange={setReligionRomance}
+                politicalViews={politicalViewsRomance}
+                onPoliticalViewsChange={setPoliticalViewsRomance}
+                values={valuesRomance}
+                onValuesChange={setValuesRomance}
+                pets={petsRomance}
+                onPetsChange={setPetsRomance}
+                onPetsToggle={petsToggleRomance}
+                allergies={allergiesRomance}
+                onAllergiesChange={setAllergiesRomance}
+                onAllergiesToggle={allergiesToggleRomance}
+                food={foodRomance}
+                onFoodChange={setFoodRomance}
+                toggleMulti={toggleMulti}
+              />
+            )}
+            {selectedPrimaryMode === "friends" && (
+              <FriendsSubProfile
+                enabled
+                hideToggle
+                toggle={() => {}}
+                photos={friendsPhotos}
+                onPickPhoto={(i) => pickImage("friends", i)}
+                video={friendsVideos[0]}
+                onPickVideo={() => pickVideo("friends")}
+                bio={bioFriends}
+                onBioChange={setBioFriends}
+                interests={interestsFriends}
+                onInterestsChange={setInterestsFriends}
+                lifestyle={lifestyleFriends}
+                onLifestyleChange={setLifestyleFriends}
+                alcohol={alcoholFriends}
+                onAlcoholChange={setAlcoholFriends}
+                smoking={smokingFriends}
+                onSmokingChange={setSmokingFriends}
+                meetupGoals={meetupGoalsFriends}
+                onMeetupGoalsChange={setMeetupGoalsFriends}
+                status={statusFriends}
+                onStatusChange={setStatusFriends}
+                kids={kidsFriends}
+                onKidsChange={setKidsFriends}
+                pets={petsFriends}
+                onPetsChange={setPetsFriends}
+                onPetsToggle={petsToggleFriends}
+                allergies={allergiesFriends}
+                onAllergiesChange={setAllergiesFriends}
+                onAllergiesToggle={allergiesToggleFriends}
+                food={foodFriends}
+                onFoodChange={setFoodFriends}
+                toggleMulti={toggleMulti}
+              />
+            )}
+            {selectedPrimaryMode === "business" && (
+              <BusinessSubProfile
+                enabled
+                hideToggle
+                toggle={() => {}}
+                photos={businessPhotos}
+                onPickPhoto={(i) => pickImage("business", i)}
+                video={businessVideos[0]}
+                onPickVideo={() => pickVideo("business")}
+                bio={bioBusiness}
+                onBioChange={setBioBusiness}
+                role={roleBusiness}
+                onRoleChange={setRoleBusiness}
+                company={companyBusiness}
+                onCompanyChange={setCompanyBusiness}
+                area={areaBusiness}
+                onAreaChange={setAreaBusiness}
+                networkingGoals={networkingGoalsBusiness}
+                onNetworkingGoalsChange={setNetworkingGoalsBusiness}
+                skills={skillsBusiness}
+                onSkillsChange={setSkillsBusiness}
+                interests={interestsBusiness}
+                onInterestsChange={setInterestsBusiness}
+                instagram={instagramBusiness}
+                onInstagramChange={setInstagramBusiness}
+                toggleMulti={toggleMulti}
+              />
+            )}
+          </View>
+          ) : null}
 
         {/* ─────── Continue ─────── */}
         <TouchableOpacity
-          onPress={() => { Haptics.selectionAsync(); handleContinue(); }}
+          onPress={() => { Haptics.selectionAsync(); void handleStepContinue(); }}
           disabled={saving}
           style={{
             backgroundColor: Colors.primaryViolet,
@@ -1780,7 +2179,13 @@ export default function ProfileCore() {
           }}
         >
           <Text style={{ ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.heading }}>
-            {saving ? "Saving..." : isEditFlow ? "Save" : "Continue"}
+            {saving
+              ? "Saving..."
+              : isEditFlow
+                ? "Save"
+                : currentStep === ONBOARDING_STEP_COUNT
+                  ? "Finish profile"
+                  : "Continue"}
           </Text>
         </TouchableOpacity>
           </Animated.View>

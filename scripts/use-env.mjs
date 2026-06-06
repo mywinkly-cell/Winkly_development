@@ -7,10 +7,9 @@
  *
  * Usage (from repo root):
  *   node scripts/use-env.mjs development
- *   node scripts/use-env.mjs staging
  *   node scripts/use-env.mjs production
  *
- * Or via npm scripts: `npm run env:dev` | `npm run env:staging` | `npm run env:prod`.
+ * Or via npm scripts: `npm run env:dev` | `npm run env:prod`.
  *
  * This is a LOCAL convenience only. For EAS/CI builds, env values come from
  * EAS environment variables / GitHub Actions secrets, not from these files.
@@ -19,7 +18,7 @@ import { copyFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
-const VALID = new Set(["development", "staging", "production"]);
+const VALID = new Set(["development", "production"]);
 
 const arg = (process.argv[2] || "").toLowerCase();
 const env =
@@ -28,7 +27,7 @@ const env =
 if (!VALID.has(env)) {
   console.error(
     `Unknown environment "${process.argv[2] ?? ""}".\n` +
-      `Usage: node scripts/use-env.mjs <development|staging|production>`
+      `Usage: node scripts/use-env.mjs <development|production>`
   );
   process.exit(1);
 }

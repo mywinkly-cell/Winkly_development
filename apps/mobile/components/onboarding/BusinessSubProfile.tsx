@@ -72,8 +72,9 @@ export function BusinessSubProfile(props: {
   instagram: string;
   onInstagramChange: (v: string) => void;
   toggleMulti: (arr: string[], val: string, setter: (v: string[]) => void, max: number) => void;
+  hideToggle?: boolean;
 }) {
-  const { enabled, toggle, photos, onPickPhoto, video, onPickVideo, bio, onBioChange } = props;
+  const { enabled, toggle, photos, onPickPhoto, video, onPickVideo, bio, onBioChange, hideToggle } = props;
   const { role, onRoleChange, company, onCompanyChange, area, onAreaChange } = props;
   const { networkingGoals, onNetworkingGoalsChange, skills, onSkillsChange } = props;
   const { interests, onInterestsChange, instagram, onInstagramChange, toggleMulti } = props;
@@ -83,7 +84,7 @@ export function BusinessSubProfile(props: {
       <View style={{ marginBottom: 28 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>💼 Business</Text>
-          <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />
+          {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />}
         </View>
       </View>
     );
@@ -93,7 +94,7 @@ export function BusinessSubProfile(props: {
     <View style={{ marginBottom: 28 }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>💼 Business</Text>
-        <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />
+        {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />}
       </View>
 
       <Text style={label}>Photos <Text style={requiredMark}>*</Text></Text>
