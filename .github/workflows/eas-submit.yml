@@ -1,0 +1,55 @@
+name: EAS Build & Submit
+
+# On merge to main: build preview (internal) and auto-submit to TestFlight + Play internal.
+# Requires GitHub secrets: EXPO_TOKEN, GOOGLE_SERVICE_ACCOUNT_JSON (see docs/EAS_CI.md).
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: eas-submit-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-submit:
+    name: Preview build → TestFlight + Play internal
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: .
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: npm
+
+      - name: Write Google Play service account key
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$GOOGLE_SERVICE_ACCOUNT_JSON" ]; then
+            echo "GOOGLE_SERVICE_ACCOUNT_JSON secret not set — Android submit may fail."
+            exit 0
+          fi
+          printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > google-service-account.json
+
+      - name: Build and submit (iOS + Android, preview profile)
+        run: eas build --profile preview --platform all --non-interactive --auto-submit

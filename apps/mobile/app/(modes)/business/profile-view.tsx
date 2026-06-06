@@ -10,6 +10,7 @@ import {
 import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { chatRoutes } from "@/lib/navigation/modeHub";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { getProfileForMode } from "@/lib/access/profiles";
@@ -199,7 +200,9 @@ export default function BusinessProfileView() {
       if (!meId) throw new Error("Not signed in");
       const chatId = await createDirectChat(targetId, "business", "connection", meId);
       Haptics.selectionAsync();
-      router.push({ pathname: "/chats/[conversationId]", params: { conversationId: chatId } });
+      router.push(
+        chatRoutes.conversation("business", chatId) as Parameters<typeof router.push>[0]
+      );
     } catch (e) {
       Alert.alert("Message", e instanceof Error ? e.message : "Could not open chat.");
     } finally {

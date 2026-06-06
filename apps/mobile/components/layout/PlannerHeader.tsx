@@ -4,7 +4,8 @@
 
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, usePathname } from "expo-router";
+import { getModeHubFromPathname, plannerRoutes } from "@/lib/navigation/modeHub";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Layout, Shadow, Typography, FontFamily, HEADER } from "@/constants/tokens";
@@ -19,13 +20,14 @@ type PlannerHeaderProps = {
 
 export function PlannerHeader({ onFilterPress, onAIPress }: PlannerHeaderProps) {
   const router = useRouter();
+  const plannerHub = getModeHubFromPathname(usePathname() ?? "");
 
   const handleFilterPress = () => {
     Haptics.selectionAsync();
     if (onFilterPress) {
       onFilterPress();
     } else {
-      router.push("/planner");
+      router.push(plannerRoutes.index(plannerHub));
     }
   };
 

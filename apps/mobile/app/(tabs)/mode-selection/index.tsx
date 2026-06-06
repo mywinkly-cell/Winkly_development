@@ -1,6 +1,6 @@
 // ────────────────────────────────────────────────
 // Winkly Mode Selection Screen – Premium v8.1
-// Route: /mode-selection via (tabs)/mode-selection — post-auth mode gateway
+// Route: /(tabs)/mode-selection — post-auth mode gateway
 // Home tab: 2x2 mode grid — Romance / Friends / Business / Events → setActiveMode()
 // ────────────────────────────────────────────────
 
@@ -114,12 +114,12 @@ export default function ModeSelectionIndex() {
   useFocusEffect(
     useCallback(() => {
       // Clear stale active_mode so RouteGuard does not fight the gateway after a bounce-back.
-      resetMode();
+      if (context.active_mode) resetMode();
       load();
       // Force authz permissions to re-sync at the mode gateway so a newly
       // completed sub-profile is reflected before the user enters a mode.
       void refresh();
-    }, [load, refresh, resetMode])
+    }, [load, refresh, resetMode, context.active_mode])
   );
 
   const handleModePress = async (mode: ModeKey) => {
@@ -215,6 +215,7 @@ export default function ModeSelectionIndex() {
         keyboardShouldPersistTaps="handled"
       >
         <Text
+          testID="mode-selection-title"
           style={{
             ...Typography.h2,
             fontSize: 24,
@@ -237,6 +238,7 @@ export default function ModeSelectionIndex() {
             return (
               <ModeCard
                 key={mode}
+                testID={`mode-card-${mode}`}
                 label={cfg.label}
                 description={cfg.description}
                 color={MODE_CARD_COLORS[mode]}
@@ -257,6 +259,7 @@ export default function ModeSelectionIndex() {
 }
 
 type ModeCardProps = {
+  testID?: string;
   label: string;
   description: string;
   color: string;
@@ -276,7 +279,7 @@ const CARD_RADIUS = 28;
 const CARD_PADDING = 24;
 const ACTIVE_SCALE = 1.08;
 
-function ModeCard({ label, description, color, icon, iconImage, active, ready, busy, onPress }: ModeCardProps) {
+function ModeCard({ testID, label, description, color, icon, iconImage, active, ready, busy, onPress }: ModeCardProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -304,6 +307,7 @@ function ModeCard({ label, description, color, icon, iconImage, active, ready, b
       }}
     >
       <Pressable
+        testID={testID}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         onPress={onPress}

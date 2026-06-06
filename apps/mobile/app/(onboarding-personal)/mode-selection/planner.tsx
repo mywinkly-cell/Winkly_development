@@ -1,5 +1,11 @@
-import { Redirect } from "expo-router";
+import { useEffect } from "react";
+import { useRouter } from "expo-router";
+import { Routes } from "@/constants/routes";
 
 export default function LegacyModeSelectionPlanner() {
-  return <Redirect href="/planner" />;
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(Routes.planner);
+  }, [router]);
+  return null;
 }

@@ -10,6 +10,7 @@ import { useRouter, usePathname } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import { Ionicons } from "@expo/vector-icons";
+import { Routes } from "@/constants/routes";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 
 type Tab = "home" | "chats" | "planner";
@@ -29,7 +30,7 @@ export function ModeSelectionBottomBar() {
 
   const nav = (tab: Tab) => {
     Haptics.selectionAsync();
-    if (tab === "home") router.replace("/mode-selection");
+    if (tab === "home") router.replace(Routes.modeSelection);
     else if (tab === "chats") router.replace("/chats");
     else router.replace("/planner");
   };

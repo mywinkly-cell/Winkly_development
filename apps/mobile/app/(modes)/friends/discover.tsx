@@ -11,6 +11,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { chatRoutes } from "@/lib/navigation/modeHub";
 import { usePostHog } from "posthog-react-native";
 
 import { ModeHeader } from "@/components/layout/ModeHeader";
@@ -273,7 +274,9 @@ export default function FriendsDiscover() {
       likedYouLikeBack(posthog ?? null, "friends", item.id);
       setPeopleWhoWantToConnect((prev) => prev.filter((p) => p.id !== item.id));
       if (res.is_connection && res.chat_id) {
-        router.push(`/chats/${res.chat_id}`);
+        router.push(
+          chatRoutes.conversation("friends", res.chat_id) as Parameters<typeof router.push>[0]
+        );
       }
     } catch (e) {
       Alert.alert("Error", (e as Error).message ?? "Could not connect.");
@@ -292,7 +295,9 @@ export default function FriendsDiscover() {
       recommendationLike(posthog ?? null, "friends", item.id);
       setRecommendations((prev) => prev.filter((p) => p.id !== item.id));
       if (res.is_connection && res.chat_id) {
-        router.push(`/chats/${res.chat_id}`);
+        router.push(
+          chatRoutes.conversation("friends", res.chat_id) as Parameters<typeof router.push>[0]
+        );
       }
     } catch (e) {
       Alert.alert("Error", (e as Error).message ?? "Could not send like.");
@@ -327,7 +332,7 @@ export default function FriendsDiscover() {
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
-        <ModeHeader currentMode="friends" rightSlot="filters" onFilterPress={() => router.push("/(modes)/friends/filters")} />
+        <ModeHeader currentMode="friends" />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator size="large" color={primaryColor} />
         </View>
@@ -338,7 +343,7 @@ export default function FriendsDiscover() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
-      <ModeHeader currentMode="friends" rightSlot="filters" onFilterPress={() => router.push("/(modes)/friends/filters")} />
+      <ModeHeader currentMode="friends" />
 
       <ScrollView
         style={{ flex: 1 }}
@@ -347,15 +352,6 @@ export default function FriendsDiscover() {
         }
         contentContainerStyle={{ paddingBottom: 24 }}
       >
-        <View style={{ paddingHorizontal: 20, marginBottom: 6 }}>
-          <Text style={{ ...Typography.h1, fontSize: 24, color: Colors.textPrimary, marginBottom: 4 }}>
-            Discover
-          </Text>
-          <Text style={{ ...Typography.caption, color: Colors.gray700 }}>
-            Winkly already did the thinking for you. People who want to connect and curated recommendations.
-          </Text>
-        </View>
-
         <DiscoverPeopleWhoLikedYou
           mode="friends"
           items={peopleWhoWantToConnect}
@@ -384,8 +380,8 @@ export default function FriendsDiscover() {
 
         {peopleWhoWantToConnect.length === 0 && recommendations.length === 0 && (
           <View style={{ paddingHorizontal: 20, paddingVertical: 32, alignItems: "center" }}>
-            <Text style={{ ...Typography.body, color: Colors.gray700, textAlign: "center" }}>
-              No new recommendations right now. Check back later or refine your filters.
+            <Text style={{ ...Typography.body, color: Colors.gray700, textAlign: "center", lineHeight: 22 }}>
+              Nothing new here yet. Keep exploring on Home — we will surface more friend fits when they are ready.
             </Text>
           </View>
         )}

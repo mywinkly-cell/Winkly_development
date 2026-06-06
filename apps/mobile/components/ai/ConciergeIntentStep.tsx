@@ -3,7 +3,8 @@
  */
 
 import React, { useMemo } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
@@ -33,12 +34,7 @@ export function ConciergeIntentStep({
   const derived = useMemo(() => sections ?? [], [sections]);
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-    >
+    <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <Text style={styles.title}>What would you like to plan?</Text>
 
       {derived.map((section) => (
@@ -88,11 +84,11 @@ export function ConciergeIntentStep({
           </View>
         </View>
       ))}
-    </ScrollView>
+    </GestureScrollView>
   );
 }
 
-function CardButton({
+const CardButton = React.memo(function CardButton({
   card,
   onPress,
 }: {
@@ -119,7 +115,7 @@ function CardButton({
       ) : null}
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },

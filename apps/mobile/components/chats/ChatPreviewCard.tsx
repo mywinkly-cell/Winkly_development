@@ -20,6 +20,8 @@ type ChatPreviewCardProps = {
   onPress: () => void;
   /** When set and this is a 1:1 chat, tapping the avatar opens this user's profile. */
   onAvatarPress?: (userId: string) => void;
+  /** Romance pre-match invite awaiting accept/decline. */
+  isPendingRomanceInvite?: boolean;
 };
 
 function getLastMessagePreview(msg: Message | null): string {
@@ -41,6 +43,7 @@ export function ChatPreviewCard({
   isPinned,
   onPress,
   onAvatarPress,
+  isPendingRomanceInvite = false,
 }: ChatPreviewCardProps) {
   const hasUnread = unreadCount > 0;
   const isDm = conversation.type === "dm";
@@ -113,6 +116,12 @@ export function ChatPreviewCard({
             <Text style={[styles.chatName, hasUnread && styles.chatNameUnread]} numberOfLines={1}>
               {chatName}
             </Text>
+            {isPendingRomanceInvite && (
+              <View style={styles.inviteBadge}>
+                <Ionicons name="mail" size={11} color={Colors.romance.primary} />
+                <Text style={styles.inviteBadgeText}>Invite</Text>
+              </View>
+            )}
             {conversation.type === "event" && (
               <View style={styles.eventBadge}>
                 <Text style={styles.eventBadgeText}>Event</Text>
@@ -214,6 +223,21 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     flex: 1,
     marginRight: 6,
+  },
+  inviteBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: Colors.romance.primary + "18",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  inviteBadgeText: {
+    ...Typography.caption,
+    fontSize: 10,
+    fontWeight: "700",
+    color: Colors.romance.primary,
   },
   eventBadge: {
     backgroundColor: Colors.events.secondary,

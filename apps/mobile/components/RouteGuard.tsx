@@ -25,9 +25,18 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
       permissions: context.permissions,
     });
     if (action.type === "redirect") {
-      router.replace(action.to as never);
+      const path = (segments as string[]).join("/");
+      const dest = action.to.replace(/^\//, "");
+      const onModeGateway = (segments as string[]).some((s) => s === "mode-selection");
+      const alreadyThere =
+        path === dest ||
+        path.endsWith(`/${dest}`) ||
+        (dest.includes("mode-selection") && onModeGateway);
+      if (!alreadyThere) {
+        router.replace(action.to as never);
+      }
     }
-  }, [loading, modeLoading, session, context, segments, router]);
+  }, [loading, modeLoading, session, context.active_mode, context.permissions, segments, router]);
 
   return <>{children}</>;
 }

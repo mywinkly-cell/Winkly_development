@@ -25,12 +25,13 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { getEmailRedirectTo } from "@/lib/authRedirectUrl";
+import {
+  isExistingUserError,
+  isInvalidRefreshToken,
+  validateSignupInput,
+} from "@/lib/auth/formValidation";
 import { getTermsAndCookiesAccepted } from "@/lib/legalFlags";
-
-function isInvalidRefreshToken(err: unknown): boolean {
-  const msg = String((err as any)?.message ?? "").toLowerCase();
-  return msg.includes("refresh token") && (msg.includes("invalid") || msg.includes("not found"));
-}
+import { markHasAccount } from "@/lib/lastActivity";
 
 export default function Signup() {
   const router = useRouter();
@@ -73,19 +74,12 @@ export default function Signup() {
   }, []);
 
   const onSignup = async () => {
-    const cleanEmail = email.trim();
-    if (!cleanEmail || !password) {
-      Alert.alert("Incomplete", "Please enter email and password.");
+    const validation = validateSignupInput({ email, password, isAdult });
+    if (!validation.ok) {
+      Alert.alert(validation.title, validation.message);
       return;
     }
-    if (password.length < 8) {
-      Alert.alert("Password too short", "Use at least 8 characters.");
-      return;
-    }
-    if (!isAdult) {
-      Alert.alert("Confirmation required", "Please confirm you are 18 or older.");
-      return;
-    }
+    const cleanEmail = validation.email;
     try {
       setLoading(true);
       const emailRedirectTo = await getEmailRedirectTo();
@@ -95,6 +89,7 @@ export default function Signup() {
         options: { data: { account_type: accountType }, emailRedirectTo },
       });
       if (error) throw error;
+      await markHasAccount();
       await AsyncStorage.setItem("winkly_last_signup_email", cleanEmail);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/(auth)/verify");
@@ -104,9 +99,7 @@ export default function Signup() {
         try { await signOut(); } catch { /* already cleared */ }
         Alert.alert("Session expired", "Your previous session has expired. Please sign in again or create a new account.");
       } else {
-        const msg = String(err?.message ?? err ?? "").toLowerCase();
-        const isExistingUser = msg.includes("already registered") || msg.includes("already exists") || msg.includes("user already");
-        if (isExistingUser) {
+        if (isExistingUserError(err)) {
           Alert.alert(
             "Account exists",
             "A user with this email already exists. Please sign in or use a different email.",
@@ -134,13 +127,14 @@ export default function Signup() {
               <Image source={require("../../assets/icons/winkly-logo.png")} resizeMode="contain" style={styles.wordmark} />
             </View>
 
-            <View style={styles.card}>
+            <View style={styles.card} testID="signup-screen">
               <Text style={styles.title}>Create your account</Text>
               <Text style={styles.subtitle}>Join Winkly and start meaningful connections.</Text>
 
               <Text style={styles.label}>Account type</Text>
               <View style={styles.accountTypeRow}>
                 <TouchableOpacity
+                  testID="signup-account-personal"
                   onPress={() => { setAccountType("personal"); Haptics.selectionAsync(); }}
                   style={[styles.accountTypeBtn, accountType === "personal" && styles.accountTypeActive]}
                 >
@@ -156,6 +150,7 @@ export default function Signup() {
 
               <Text style={styles.label}>Email</Text>
               <TextInput
+                testID="signup-email"
                 placeholder="name@example.com"
                 placeholderTextColor={Colors.gray500}
                 value={email}
@@ -172,6 +167,7 @@ export default function Signup() {
               <Text style={styles.label}>Password</Text>
               <View style={styles.passwordRow}>
                 <TextInput
+                  testID="signup-password"
                   placeholder="Use device password manager for a strong password"
                   placeholderTextColor={Colors.gray500}
                   value={password}
@@ -200,6 +196,7 @@ export default function Signup() {
               </View>
 
               <TouchableOpacity
+                testID="signup-submit"
                 onPress={onSignup}
                 disabled={loading}
                 activeOpacity={0.85}

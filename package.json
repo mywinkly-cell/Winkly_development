@@ -15,6 +15,10 @@
     "mobile:lint": "npm run -w apps/mobile lint",
     "mobile:typecheck": "npm run -w apps/mobile typecheck",
     "mobile:test": "npm run -w apps/mobile test",
+    "mobile:test:e2e": "npm run -w apps/mobile test:e2e",
+    "mobile:test:e2e:ios": "npm run -w apps/mobile test:e2e:ios",
+    "mobile:test:e2e:android": "npm run -w apps/mobile test:e2e:android",
+    "mobile:audit-i18n": "npm run -w apps/mobile audit-i18n",
     "env:dev": "node scripts/use-env.mjs development",
     "env:staging": "node scripts/use-env.mjs staging",
     "env:prod": "node scripts/use-env.mjs production",
@@ -23,11 +27,15 @@
     "start:prod": "npm run env:prod && npm run mobile:start",
     "ci": "npm run mobile:lint && npm run mobile:typecheck && npm run mobile:test",
     "postinstall": "patch-package --patch-dir apps/mobile/patches",
-    "supabase:deploy-auth-redirect": "supabase functions deploy auth-redirect"
+    "supabase:deploy-auth-redirect": "supabase functions deploy auth-redirect",
+    "supabase:link:staging": "node scripts/supabase-link.mjs staging",
+    "supabase:link:production": "node scripts/supabase-link.mjs production",
+    "supabase:push:staging": "node scripts/supabase-push.mjs staging",
+    "supabase:push:production": "node scripts/supabase-push.mjs production"
   },
   "overrides": {
     "@expo/vector-icons": "15.1.1",
-    "expo-file-system": "19.0.22",
+    "expo-file-system": "19.0.23",
     "expo-image-loader": "6.0.0",
     "expo-image-manipulator": "14.0.8"
   },

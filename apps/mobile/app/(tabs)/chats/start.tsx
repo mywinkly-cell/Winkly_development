@@ -13,6 +13,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { chatRoutes, useModeHub } from "@/lib/navigation/modeHub";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -88,6 +89,13 @@ async function loadWinklyContacts(userId: string, search: string): Promise<UserM
 export default function StartChat() {
   const { i18n } = useTranslation();
   const router = useRouter();
+  const chatHub = useModeHub();
+
+  useEffect(() => {
+    if (chatHub === "romance") {
+      router.replace(chatRoutes.newChat(chatHub, "romance") as Parameters<typeof router.replace>[0]);
+    }
+  }, [chatHub, router]);
   const [meId, setMeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -133,14 +141,22 @@ export default function StartChat() {
     [users, meId]
   );
 
-  const handleNewChat = (otherUserId: string) => {
+  const handleNewChat = (user: UserMini) => {
     if (!meId || creating) return;
     setCreating(true);
     setError(null);
-    createDirectChat(otherUserId, mode, "invite", meId)
+    const photo =
+      user.main_photo_url ?? user.romance_photos?.[0] ?? user.core_photos?.[0] ?? "";
+    createDirectChat(user.id, mode, "invite", meId)
       .then((conversationId) => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        router.replace(`/chats/${conversationId}`);
+        router.replace(
+          chatRoutes.conversation(chatHub, conversationId, {
+            partnerUserId: user.id,
+            partnerName: formatName(user),
+            partnerPhotoUrl: photo,
+          }) as Parameters<typeof router.replace>[0]
+        );
       })
       .catch((e) => setError(e?.message ?? "Failed to start chat."))
       .finally(() => setCreating(false));
@@ -176,7 +192,7 @@ export default function StartChat() {
       <View style={styles.content}>
         <View style={styles.optionsRow}>
           <Pressable
-            onPress={() => router.push("/chats/new-chat?mode=friends")}
+            onPress={() => router.push(chatRoutes.newChat(chatHub, "friends"))}
             style={styles.optionCard}
           >
             <View style={styles.optionIconWrap}>
@@ -241,7 +257,7 @@ export default function StartChat() {
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
             renderItem={({ item }) => (
               <Pressable
-                onPress={() => handleNewChat(item.id)}
+                onPress={() => handleNewChat(item)}
                 disabled={creating}
                 style={({ pressed }) => [
                   styles.contactRow,

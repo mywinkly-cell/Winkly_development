@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { useRouter } from "expo-router";
+import { chatRoutes } from "@/lib/navigation/modeHub";
 import * as Haptics from "expo-haptics";
 
 import { Colors, Typography, Layout } from "@/constants/tokens";
@@ -195,7 +196,9 @@ export default function RomanceMatches() {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) return;
       const chatId = await createDirectChat(item.id, "romance", "match", userData.user.id);
-      router.push(`/chats/${chatId}`);
+      router.push(
+        chatRoutes.conversation("romance", chatId) as Parameters<typeof router.push>[0]
+      );
     } catch (_err) {
       Alert.alert("Error", "Could not open chat.");
     }

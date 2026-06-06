@@ -5,13 +5,45 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, Easing, StyleSheet, Image } from "react-native";
 import { useRouter } from "expo-router";
+import { Routes } from "@/constants/routes";
 import { Colors, Typography, FontFamily } from "@/constants/tokens";
 import { getIntroSeen, clearIntroSeen } from "@/lib/introFlags";
+import {
+  getEffectiveLastActivityMs,
+  getLastActivityAt,
+  isActivityRecent,
+  markHasAccount,
+  recordLastActivity,
+} from "@/lib/lastActivity";
+import {
+  isBusinessProfileComplete,
+  isPersonalProfileComplete,
+  resolveAuthenticatedSplashRoute,
+  resolveUnauthenticatedSplashRoute,
+  type SplashDestination,
+} from "@/lib/routing/splash";
 import { supabase } from "@/lib/supabase";
 
 const WINK_DURATION_MS = 1300;
 const HOLD_AFTER_WINK_MS = 2000;
 const SPLASH_TOTAL_MS = WINK_DURATION_MS + HOLD_AFTER_WINK_MS;
+
+function destinationToPath(dest: SplashDestination): string {
+  switch (dest.route) {
+    case "welcome-intro":
+      return "/(auth)/welcome-intro";
+    case "signin":
+      return "/(auth)/signin";
+    case "verify":
+      return "/(auth)/verify";
+    case "mode-selection":
+      return Routes.modeSelection;
+    case "welcome-back-setup":
+      return "/(auth)/welcome-back-setup";
+    default:
+      return "/(auth)/welcome-intro";
+  }
+}
 
 export default function Splash() {
   const router = useRouter();
@@ -69,19 +101,13 @@ export default function Splash() {
     const t = setTimeout(async () => {
       try {
         const seen = await getIntroSeen();
-
         const { data: { session } } = await supabase.auth.getSession();
 
         if (!session?.user) {
-          if (!seen) {
-            router.replace("/(auth)/welcome-intro");
-          } else {
-            router.replace("/(auth)/signin");
-          }
+          router.replace(destinationToPath(resolveUnauthenticatedSplashRoute({ introSeen: seen })) as never);
           return;
         }
 
-        // Validate session with server — clear if stale (e.g. user deleted in Supabase)
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError || !user) {
           await supabase.auth.signOut({ scope: "local" });
@@ -90,27 +116,48 @@ export default function Splash() {
           return;
         }
 
-        if (!session.user.email_confirmed_at) {
-          router.replace("/(auth)/verify");
-          return;
-        }
+        await markHasAccount();
+
+        const localActivity = await getLastActivityAt();
+        const recentActivity = isActivityRecent(
+          getEffectiveLastActivityMs(localActivity, user.last_sign_in_at)
+        );
 
         const accountType = session.user.user_metadata?.account_type as string | undefined;
         const userId = session.user.id;
+        let profileComplete = false;
+
         if (accountType === "business") {
-          const { data: bp } = await supabase.from("business_profiles").select("business_name").or(`id.eq.${userId},user_id.eq.${userId}`).limit(1).maybeSingle();
-          const hasProfile = !!(bp as any)?.business_name?.trim?.();
-          router.replace(hasProfile ? "/mode-selection" : "/(auth)/welcome-back-setup");
+          const { data: bp } = await supabase
+            .from("business_profiles")
+            .select("business_name")
+            .or(`id.eq.${userId},user_id.eq.${userId}`)
+            .limit(1)
+            .maybeSingle();
+          profileComplete = isBusinessProfileComplete(bp as { business_name?: string });
         } else {
-          const { data: up } = await supabase.from("user_profiles").select("first_name, last_name, gender, birthday, city, core_photos").eq("id", userId).maybeSingle();
-          const u = up as any;
-          const hasCore = !!(u?.first_name?.trim?.() && u?.last_name?.trim?.() && u?.gender?.trim?.() && u?.birthday && u?.city?.trim?.());
-          const hasPhoto = Array.isArray(u?.core_photos) ? u.core_photos.filter(Boolean).length > 0 : false;
-          const profileComplete = hasCore && hasPhoto;
-          router.replace(profileComplete ? "/mode-selection" : "/(auth)/welcome-back-setup");
+          const { data: up } = await supabase
+            .from("user_profiles")
+            .select("first_name, last_name, gender, birthday, city, core_photos")
+            .eq("id", userId)
+            .maybeSingle();
+          profileComplete = isPersonalProfileComplete(up as Parameters<typeof isPersonalProfileComplete>[0]);
         }
+
+        const dest = resolveAuthenticatedSplashRoute({
+          emailConfirmed: Boolean(session.user.email_confirmed_at),
+          recentActivity,
+          profileComplete,
+        });
+
+        if (dest.route === "signin" && dest.staleSession) {
+          await supabase.auth.signOut({ scope: "local" });
+        } else if (dest.route === "mode-selection" || dest.route === "welcome-back-setup") {
+          await recordLastActivity();
+        }
+
+        router.replace(destinationToPath(dest) as never);
       } catch {
-        // If anything throws (network, Supabase, etc.), send to welcome-intro so app doesn't crash or blink
         router.replace("/(auth)/welcome-intro");
       }
     }, SPLASH_TOTAL_MS);

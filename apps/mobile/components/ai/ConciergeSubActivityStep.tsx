@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout, Shadow } from "@/constants/tokens";
@@ -41,7 +42,7 @@ export function ConciergeSubActivityStep({
   const prompt = category.subActivityPrompt?.trim() || `What kind of ${category.label.toLowerCase()}?`;
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       {showInlineBack ? (
         <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={22} color={Colors.primaryViolet} />
@@ -74,7 +75,7 @@ export function ConciergeSubActivityStep({
           </TouchableOpacity>
         ))}
       </View>
-    </ScrollView>
+    </GestureScrollView>
   );
 }
 

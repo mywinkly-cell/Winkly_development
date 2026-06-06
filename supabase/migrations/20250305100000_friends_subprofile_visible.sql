@@ -14,9 +14,9 @@ CREATE POLICY profiles_mode_select_authenticated ON public.profiles_mode
   FOR SELECT TO authenticated USING (true);
 
 -- 2. Recreate friend_profiles view with photos array and meta for full sub-profile display
--- Idempotent: if friend_profiles exists as a table, drop it first (DROP VIEW errors otherwise)
+-- Idempotent: drop view before table (DROP TABLE on a view errors in Postgres)
+DROP VIEW IF EXISTS public.friend_profiles CASCADE;
 DROP TABLE IF EXISTS public.friend_profiles CASCADE;
-DROP VIEW IF EXISTS public.friend_profiles;
 CREATE VIEW public.friend_profiles AS
 SELECT
   pm.id,

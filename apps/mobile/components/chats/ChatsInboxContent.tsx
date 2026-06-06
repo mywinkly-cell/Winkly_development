@@ -10,6 +10,8 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import type { AppMode, Conversation, ConversationMember, Message, UserMini } from "@/lib/chats";
+import { subscribeChatsHubUpdates } from "@/lib/chats/hubRealtime";
+import { appModeToHub, chatRoutes } from "@/lib/navigation/modeHub";
 import { formatChatInboxTimestamp, loadChatInbox, sortChatInboxItems } from "@/lib/chats/inbox";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { ChatPreviewCard } from "./ChatPreviewCard";
@@ -47,6 +49,7 @@ type ChatsInboxContentProps = {
 };
 
 export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
+  const chatHub = appModeToHub(sourceMode === "all" ? null : sourceMode);
   const { i18n } = useTranslation();
   const router = useRouter();
   const tabs = useMemo(() => getTabsWithModeFirst(sourceMode), [sourceMode]);
@@ -275,16 +278,10 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
   }, [loadConversationsAndMeta, loadRomanceMatches, loadFriendsConnections, loadBusinessConnections]);
 
   useEffect(() => {
-    const channel = supabase
-      .channel("chats_hub_updates")
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => loadConversationsAndMeta())
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, () => loadConversationsAndMeta())
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [loadConversationsAndMeta]);
+    return subscribeChatsHubUpdates(() => {
+      void loadConversationsAndMeta();
+    }, sourceMode);
+  }, [loadConversationsAndMeta, sourceMode]);
 
   function getConversationTitle(conv: Conversation): string {
     if (conv.type === "dm") {
@@ -375,6 +372,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
         businessLoading={businessConnectionsLoading}
         onRefresh={refreshMatchesAndConversations}
         myCity={myCity}
+        chatHub={chatHub}
       />
 
       <View style={styles.contentArea}>
@@ -396,7 +394,33 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
               timestamp={formatChatInboxTimestamp(ts)}
               unreadCount={unreadByConv[item.id] ?? 0}
               isPinned={settings?.pinned ?? false}
-              onPress={() => router.push(`/chats/${item.id}`)}
+              isPendingRomanceInvite={
+                item.type === "dm" &&
+                item.mode === "romance" &&
+                item.dm_source === "invite" &&
+                item.romance_invite_status === "pending"
+              }
+              onPress={() => {
+                if (item.type === "dm") {
+                  const parts = participantsByConv[item.id] ?? [];
+                  const otherId = parts.find((p) => p.user_id !== meId)?.user_id ?? null;
+                  const peer = otherId ? usersById[otherId] : null;
+                  const avatars = getParticipantAvatars(item);
+                  router.push(
+                    chatRoutes.conversation(chatHub, item.id, {
+                      ...(otherId
+                        ? {
+                            partnerUserId: otherId,
+                            partnerName: formatName(peer),
+                            partnerPhotoUrl: avatars[0]?.photoUrl ?? "",
+                          }
+                        : {}),
+                    }) as Parameters<typeof router.push>[0]
+                  );
+                } else {
+                  router.push(chatRoutes.conversation(chatHub, item.id) as Parameters<typeof router.push>[0]);
+                }
+              }}
               onAvatarPress={
                 item.mode && item.mode !== "events"
                   ? (userId) => {

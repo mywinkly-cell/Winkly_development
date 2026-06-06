@@ -10,6 +10,7 @@ import React from "react";
 import { TouchableOpacity, View, Text, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { Routes } from "@/constants/routes";
 import { Colors, Typography } from "@/constants/tokens";
 
 type ModeSwitchButtonProps = {
@@ -30,7 +31,7 @@ export default function ModeSwitchButton({ currentMode, aboveBottomBar }: ModeSw
 
   const handlePress = () => {
     Haptics.selectionAsync();
-    router.push("/mode-selection");
+    router.replace(Routes.modeSelection);
   };
 
   return (

@@ -19,16 +19,13 @@ import {
   Image,
   Alert,
   Modal,
+  StyleSheet,
 } from "react-native";
+import { Avatar } from "@/components/ui/Avatar";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  AudioModule,
-  RecordingPresets,
-  setAudioModeAsync,
-  useAudioRecorder,
-  useAudioRecorderState,
-} from "expo-audio";
 import { SafeScreenView } from "@/components/SafeScreenView";
+import { ChatComposer } from "@/components/chats/ChatComposer";
+import { RomanceChatInviteBanner } from "@/components/chats/RomanceChatInviteBanner";
 import { Colors } from "@/constants/tokens";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { supabase } from "@/lib/supabase";
@@ -85,6 +82,7 @@ import {
 import { recordPairBehaviorSignal } from "@/lib/matching/behaviorSignals";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
+import { chatRoutes, useModeHub } from "@/lib/navigation/modeHub";
 import {
   isConversationEligibleForStaleNudge,
   dismissStaleConciergeNudge,
@@ -109,15 +107,40 @@ type ConversationRow = {
   related_event_id: string | null;
   related_group_id: string | null;
   dm_source: string | null;
+  dm_initiator: string | null;
+  romance_invite_status: string | null;
 };
 
-type Props = { conversationId: string };
+type Props = {
+  conversationId: string;
+  partnerUserId?: string;
+  partnerName?: string;
+  partnerPhotoUrl?: string;
+  matchBridge?: string;
+};
 
-function formatName(u?: UserMini | null) {
-  if (!u) return "Unknown";
+function formatName(u?: UserMini | null, fallback = "Chat") {
+  if (!u) return fallback;
   const fn = (u.first_name ?? "").trim();
   const ln = (u.last_name ?? "").trim();
-  return `${fn} ${ln}`.trim() || "Unknown";
+  return `${fn} ${ln}`.trim() || fallback;
+}
+
+function peerPhotoUrl(user: UserMini | null, mode: string | undefined, previewUrl?: string | null) {
+  if (previewUrl) return previewUrl;
+  if (!user) return null;
+  const first = (photos?: (string | null)[]) => photos?.find((x) => !!x) ?? null;
+  if (mode === "romance") return first(user.romance_photos) ?? user.main_photo_url ?? null;
+  if (mode === "friends") return first(user.friends_photos) ?? user.main_photo_url ?? null;
+  if (mode === "business") return first(user.business_photos) ?? user.main_photo_url ?? null;
+  return user.main_photo_url ?? null;
+}
+
+function nameInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2);
+  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`;
 }
 
 const QUICK_REACTIONS = ["❤️", "👍", "😊", "😂", "😮", "🔥"];
@@ -138,8 +161,6 @@ function inferOptimisticType(attachments: MessageAttachment[]): MessageType {
   return "file";
 }
 
-const MAX_VOICE_SECONDS = 180;
-
 const REPORT_REASONS: { key: string; label: string }[] = [
   { key: "spam", label: "Spam" },
   { key: "harassment", label: "Harassment" },
@@ -148,9 +169,17 @@ const REPORT_REASONS: { key: string; label: string }[] = [
   { key: "other", label: "Other" },
 ];
 
-export default function ChatView({ conversationId }: Props) {
+export default function ChatView({
+  conversationId,
+  partnerUserId: partnerUserIdParam,
+  partnerName: partnerNameParam,
+  partnerPhotoUrl: partnerPhotoUrlParam,
+  matchBridge: matchBridgeProp,
+}: Props) {
   const router = useRouter();
-  const { matchBridge: matchBridgeParam } = useLocalSearchParams<{ matchBridge?: string }>();
+  const chatHub = useModeHub();
+  const { matchBridge: matchBridgeQuery } = useLocalSearchParams<{ matchBridge?: string }>();
+  const matchBridgeParam = matchBridgeProp ?? matchBridgeQuery;
   const fmtLocationLine = useFormatLocationDisplay();
   const convId = useMemo(() => String(conversationId), [conversationId]);
 
@@ -160,6 +189,9 @@ export default function ChatView({ conversationId }: Props) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [messagesLoadError, setMessagesLoadError] = useState<string | null>(null);
+  const [otherMemberId, setOtherMemberId] = useState<string | null>(partnerUserIdParam ?? null);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [readReceiptsOn, setReadReceiptsOn] = useState(true);
   const [muted, setMuted] = useState(false);
@@ -188,12 +220,8 @@ export default function ChatView({ conversationId }: Props) {
   const [strategicPlanOptions, setStrategicPlanOptions] = useState<PlannerThemePlanOption[] | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
   const inputRef = useRef<TextInput>(null);
-  const chatRecordUriRef = useRef<string | null>(null);
 
   const { context: modeContext } = useModeContext();
-
-  const chatVoiceRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const chatVoiceRecorderState = useAudioRecorderState(chatVoiceRecorder);
 
   const {
     messages,
@@ -218,18 +246,49 @@ export default function ChatView({ conversationId }: Props) {
   const reactionsByMessage = useMessageReactions(messageIds);
 
   const otherUser = useMemo(() => {
-    if (!meId) return null;
-    return participants.find((p) => p.id !== meId) ?? null;
-  }, [participants, meId]);
+    const targetId =
+      otherMemberId ??
+      (meId ? participants.find((p) => p.id !== meId)?.id : null) ??
+      partnerUserIdParam ??
+      null;
+    if (!targetId) return null;
+    const fromParticipants = participants.find((p) => p.id === targetId);
+    if (fromParticipants) return fromParticipants;
+    if (partnerUserIdParam === targetId && partnerNameParam) {
+      return {
+        id: targetId,
+        first_name: partnerNameParam,
+        last_name: null,
+        city: null,
+        main_photo_url: partnerPhotoUrlParam ?? null,
+      } satisfies UserMini;
+    }
+    return null;
+  }, [participants, meId, otherMemberId, partnerUserIdParam, partnerNameParam, partnerPhotoUrlParam]);
 
   const isGroup = conversation?.type === "group";
-  const otherPartyLabel = isGroup
+  const peerDisplayName = isGroup
     ? (conversation?.name?.trim() || "Group chat")
-    : formatName(otherUser) || "Chat";
+    : formatName(otherUser, partnerNameParam?.trim() || "Chat");
+  const peerAvatarUri = peerPhotoUrl(otherUser, conversation?.mode, partnerPhotoUrlParam);
   const isRomance = conversation?.mode === "romance";
   const accentColor = isRomance ? Colors.romance.primary : Colors.primaryViolet;
   const conversationMode = (conversation?.mode ?? "romance") as Mode;
   const isDm = conversation?.type === "dm";
+  const isPendingRomanceInvite =
+    isDm &&
+    conversation?.mode === "romance" &&
+    conversation?.dm_source === "invite" &&
+    conversation?.romance_invite_status === "pending";
+  const isRomanceInviteRecipient =
+    isPendingRomanceInvite && !!meId && conversation?.dm_initiator !== meId;
+  const showRomanceInviteComposer = !isPendingRomanceInvite;
+
+  const invitePreviewMessage = useMemo(() => {
+    if (!isPendingRomanceInvite || !conversation?.dm_initiator) return null;
+    const opener = messages.find((m) => m.sender_id === conversation.dm_initiator);
+    return opener?.content?.trim() ?? null;
+  }, [isPendingRomanceInvite, conversation?.dm_initiator, messages]);
 
   // Delivered/seen status of the current user's own messages (live).
   const myMessageIds = useMemo(
@@ -247,8 +306,8 @@ export default function ChatView({ conversationId }: Props) {
       router.back();
       return;
     }
-    router.replace(`/(modes)/${conversationMode}/chats`);
-  }, [router, conversationMode]);
+    router.replace(chatRoutes.index(chatHub) as Parameters<typeof router.replace>[0]);
+  }, [router, chatHub]);
 
   const recordDmFirstOutreachIfNeeded = useCallback(
     async (hadMineBeforeSend: boolean) => {
@@ -695,12 +754,16 @@ export default function ChatView({ conversationId }: Props) {
   }, [isDm, meId, otherUser?.id, convId, conversationMode, messages.length]);
 
   const loadMeta = useCallback(async () => {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth.user?.id ?? null;
+
     const { data: conv } = await supabase
       .from("conversations")
-      .select("id,type,mode,name,related_event_id,related_group_id,dm_source")
+      .select("id,type,mode,name,related_event_id,related_group_id,dm_source,dm_initiator,romance_invite_status")
       .eq("id", convId)
       .single();
     setConversation(conv as ConversationRow);
+    const convMode = (conv as ConversationRow | null)?.mode;
 
     const { data: cps } = await supabase
       .from("conversation_members")
@@ -708,30 +771,56 @@ export default function ChatView({ conversationId }: Props) {
       .eq("conversation_id", convId)
       .is("left_at", null);
     const ids = (cps ?? []).map((x) => x.user_id).filter(Boolean) as string[];
+    const peerId = uid ? ids.find((id) => id !== uid) ?? null : ids[0] ?? null;
+    if (peerId) setOtherMemberId(peerId);
 
     if (ids.length > 0) {
-      const { data: profs } = await supabase
-        .from("user_profiles")
-        .select("id,first_name,last_name,city,main_photo_url")
-        .in("id", ids);
-      setParticipants((profs ?? []) as UserMini[]);
+      const [minisRes, modeProfilesRes] = await Promise.all([
+        supabase.from("user_profiles").select("id,first_name,last_name,city,main_photo_url").in("id", ids),
+        supabase
+          .from("profiles_mode")
+          .select("user_id,mode,photos")
+          .in("user_id", ids)
+          .in("mode", ["romance", "friends", "business"]),
+      ]);
+      const usersById: Record<string, UserMini> = {};
+      for (const u of (minisRes.data ?? []) as UserMini[]) usersById[u.id] = { ...u };
+      for (const row of (modeProfilesRes.data ?? []) as {
+        user_id: string;
+        mode: string;
+        photos: (string | null)[];
+      }[]) {
+        const u = usersById[row.user_id];
+        if (!u) continue;
+        if (row.mode === "romance") u.romance_photos = row.photos ?? [];
+        else if (row.mode === "friends") u.friends_photos = row.photos ?? [];
+        else if (row.mode === "business") u.business_photos = row.photos ?? [];
+      }
+      setParticipants(Object.values(usersById));
+      if (!peerId && partnerUserIdParam) setOtherMemberId(partnerUserIdParam);
+    } else if (partnerUserIdParam) {
+      setOtherMemberId(partnerUserIdParam);
     }
 
     const { data: settings } = await supabase
       .from("conversation_member_settings")
       .select("muted")
       .eq("conversation_id", convId)
-      .eq("user_id", (await supabase.auth.getUser()).data.user?.id ?? "")
+      .eq("user_id", uid ?? "")
       .maybeSingle();
     if (settings) setMuted((settings as { muted?: boolean }).muted ?? false);
-  }, [convId]);
+  }, [convId, partnerUserIdParam]);
 
   useEffect(() => {
     loadMeta();
   }, [loadMeta]);
 
   useEffect(() => {
-    if (loadErr) setError(loadErr);
+    if (!loadErr) {
+      setMessagesLoadError(null);
+      return;
+    }
+    setMessagesLoadError(loadErr);
   }, [loadErr]);
 
   const onRealtimeMessage = useCallback(
@@ -793,6 +882,7 @@ export default function ChatView({ conversationId }: Props) {
       setDraft("");
       setReplyTo(null);
       setError(null);
+      setSending(true);
 
       try {
         const inserted = await sendMessage(convId, meId, content, attachments, {
@@ -804,6 +894,8 @@ export default function ChatView({ conversationId }: Props) {
       } catch (e: unknown) {
         markOptimisticFailed(clientId);
         setError(e instanceof Error ? e.message : "Failed to send");
+      } finally {
+        setSending(false);
       }
     },
     [
@@ -862,34 +954,24 @@ export default function ChatView({ conversationId }: Props) {
     }
   }, [meId, handleSend, replyTo]);
 
-  const onToggleVoiceNote = useCallback(async () => {
-    if (!meId || !convId || sending) return;
-    if (chatVoiceRecorderState.isRecording) {
-      const durMs = chatVoiceRecorderState.durationMillis ?? 0;
+  const onSendVoice = useCallback(
+    async (uri: string, _durationMs: number) => {
+      if (!meId || !convId || sending) return;
       const hadMineBeforeSend = messages.some((m) => m.sender_id === meId);
       const clientId = newClientId();
+      setSending(true);
+      setError(null);
+      addOptimisticMessage({
+        clientId,
+        senderId: meId,
+        content: "Voice message",
+        messageType: "audio",
+        replyToId: replyTo?.id ?? null,
+      });
       try {
-        await chatVoiceRecorder.stop();
-        const uri = chatVoiceRecorder.uri ?? chatRecordUriRef.current;
-        chatRecordUriRef.current = uri ?? null;
-        if (durMs > (MAX_VOICE_SECONDS + 1) * 1000) {
-          Alert.alert("Voice message", `Please keep voice messages under ${MAX_VOICE_SECONDS} seconds.`);
-          return;
-        }
-        if (!uri) return;
-        setSending(true);
-        setError(null);
-        addOptimisticMessage({
-          clientId,
-          senderId: meId,
-          content: "Voice message",
-          messageType: "audio",
-          replyToId: replyTo?.id ?? null,
-        });
         const att = await uploadChatVoiceFromUri(meId, uri);
         if (!att) {
           removeOptimisticMessage(clientId);
-          setSending(false);
           return;
         }
         const inserted = await sendMessage(convId, meId, " ", [att], {
@@ -905,32 +987,20 @@ export default function ChatView({ conversationId }: Props) {
       } finally {
         setSending(false);
       }
-      return;
-    }
-    const perm = await AudioModule.requestRecordingPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert("Microphone", "Permission is required to record a voice message.");
-      return;
-    }
-    chatRecordUriRef.current = null;
-    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
-    await chatVoiceRecorder.prepareToRecordAsync();
-    chatVoiceRecorder.record();
-  }, [
-    meId,
-    convId,
-    sending,
-    chatVoiceRecorderState.isRecording,
-    chatVoiceRecorderState.durationMillis,
-    messages,
-    recordDmFirstOutreachIfNeeded,
-    chatVoiceRecorder,
-    replyTo?.id,
-    mergeIncomingMessage,
-    addOptimisticMessage,
-    removeOptimisticMessage,
-    markOptimisticFailed,
-  ]);
+    },
+    [
+      meId,
+      convId,
+      sending,
+      messages,
+      replyTo?.id,
+      mergeIncomingMessage,
+      addOptimisticMessage,
+      removeOptimisticMessage,
+      markOptimisticFailed,
+      recordDmFirstOutreachIfNeeded,
+    ]
+  );
 
   const onAddReaction = useCallback(
     async (messageId: string, emoji: string) => {
@@ -1206,6 +1276,26 @@ export default function ChatView({ conversationId }: Props) {
                         >
                           <Text style={{ fontSize: 14, fontWeight: "700", color: Colors.accentYellow }}>Tap to confirm</Text>
                         </Pressable>
+                      </View>
+                    );
+                  }
+                  if (p.type === "romance_invite_declined") {
+                    return (
+                      <View
+                        style={{
+                          padding: 14,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: Colors.gray300,
+                          backgroundColor: Colors.gray100,
+                          minWidth: 240,
+                        }}
+                      >
+                        <Text style={{ fontSize: 15, lineHeight: 22, color: Colors.textPrimary }}>
+                          {typeof p.body === "string"
+                            ? p.body
+                            : "Unfortunately, they declined your chat invite."}
+                        </Text>
                       </View>
                     );
                   }
@@ -1679,8 +1769,23 @@ export default function ChatView({ conversationId }: Props) {
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </Pressable>
 
+        {isDm && (otherUser || otherMemberId) ? (
+          <Pressable
+            onPress={() => {
+              const peerId = otherUser?.id ?? otherMemberId;
+              if (!peerId || !conversation?.mode) return;
+              const mode = conversation.mode as "romance" | "friends" | "business";
+              if (mode === "romance") router.push(`/(modes)/romance/profile-view?id=${peerId}`);
+              else router.push(`/(modes)/${mode}/profile-view?user_id=${peerId}`);
+            }}
+            accessibilityLabel={`${peerDisplayName} profile`}
+          >
+            <Avatar uri={peerAvatarUri} initials={nameInitials(peerDisplayName)} size={40} />
+          </Pressable>
+        ) : null}
+
         <Pressable
-          style={{ flex: 1 }}
+          style={{ flex: 1, minWidth: 0 }}
           onPress={() => {
             if (isDm && otherUser && conversation?.mode) {
               const mode = conversation.mode as "romance" | "friends" | "business";
@@ -1689,8 +1794,10 @@ export default function ChatView({ conversationId }: Props) {
             }
           }}
         >
-          <Text style={{ fontWeight: "900", fontSize: 16 }} numberOfLines={1}>{otherPartyLabel}</Text>
-          <Text style={{ opacity: 0.65, fontSize: 12 }}>
+          <Text style={{ fontWeight: "900", fontSize: 16 }} numberOfLines={1}>
+            {peerDisplayName}
+          </Text>
+          <Text style={{ opacity: 0.65, fontSize: 12 }} numberOfLines={1}>
             {typingUserIds.size > 0
               ? "typing…"
               : conversation
@@ -2037,27 +2144,25 @@ export default function ChatView({ conversationId }: Props) {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
-        <View style={{ flex: 1, padding: 14 }}>
-          {error ? <Text style={{ color: Colors.errorRed, marginBottom: 10 }}>{error}</Text> : null}
+        {isRomanceInviteRecipient ? (
+          <RomanceChatInviteBanner
+            conversationId={convId}
+            partnerName={peerDisplayName}
+            previewMessage={invitePreviewMessage}
+            onAccepted={() => {
+              void loadMeta();
+            }}
+            onDeclined={() => {
+              backToModeChats();
+            }}
+          />
+        ) : null}
 
-          {replyTo && (
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: 8,
-                backgroundColor: Colors.gray100,
-                borderRadius: 8,
-                marginBottom: 8,
-              }}
-            >
-              <Text numberOfLines={1} style={{ flex: 1 }}>Replying to: {replyTo.content.slice(0, 40)}…</Text>
-              <Pressable onPress={() => setReplyTo(null)}>
-                <Ionicons name="close" size={20} color={Colors.gray600} />
-              </Pressable>
-            </View>
-          )}
+        <View style={{ flex: 1, paddingHorizontal: 14 }}>
+          {messagesLoadError && messages.length === 0 ? (
+            <Text style={{ color: Colors.errorRed, marginBottom: 10 }}>{messagesLoadError}</Text>
+          ) : null}
+          {error ? <Text style={{ color: Colors.errorRed, marginBottom: 10 }}>{error}</Text> : null}
 
           <FlatList
             ref={listRef}
@@ -2066,7 +2171,13 @@ export default function ChatView({ conversationId }: Props) {
             renderItem={renderMessage}
             inverted
             contentContainerStyle={{ paddingVertical: 10 }}
-            ListEmptyComponent={<Text style={{ opacity: 0.7, textAlign: "center" }}>No messages yet.</Text>}
+            ListEmptyComponent={
+              !messagesLoadError ? (
+                <Text style={styles.emptyHistory}>
+                  There is no history yet. Start a chat.
+                </Text>
+              ) : null
+            }
             onEndReached={loadMore}
             onEndReachedThreshold={0.5}
           />
@@ -2093,216 +2204,172 @@ export default function ChatView({ conversationId }: Props) {
               onSuggestAnother={fetchChatExperienceSuggestion}
             />
           ) : null)}
-
-          {/* Composer */}
-          <View style={{ flexDirection: "row", gap: 8, marginTop: 10, alignItems: "flex-end" }}>
-            <Pressable
-              onPress={onSendImages}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: Colors.gray100,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              accessibilityLabel="Add photo"
-            >
-              <Ionicons name="image-outline" size={24} color={Colors.textPrimary} />
-            </Pressable>
-
-            <Pressable
-              onPress={() => setShowGifSheet(true)}
-              disabled={sending}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: Colors.gray100,
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: sending ? 0.5 : 1,
-              }}
-              accessibilityLabel="Add GIF from URL"
-            >
-              <Ionicons name="happy-outline" size={24} color={Colors.textPrimary} />
-            </Pressable>
-
-            <Pressable
-              onPress={onToggleVoiceNote}
-              disabled={sending && !chatVoiceRecorderState.isRecording}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: chatVoiceRecorderState.isRecording ? Colors.errorRed + "22" : Colors.gray100,
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: sending && !chatVoiceRecorderState.isRecording ? 0.5 : 1,
-              }}
-              accessibilityLabel={chatVoiceRecorderState.isRecording ? "Stop recording and send" : "Record voice message"}
-            >
-              <Ionicons
-                name={chatVoiceRecorderState.isRecording ? "stop-circle" : "mic-outline"}
-                size={24}
-                color={chatVoiceRecorderState.isRecording ? Colors.errorRed : Colors.textPrimary}
-              />
-            </Pressable>
-
-            {isDm && otherUser && (
-              <Pressable
-                onPress={() => {
-                  setInviteInitialActivity(undefined);
-                  setShowInviteModal(true);
-                }}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: Colors.primaryViolet + "18",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-                accessibilityLabel="Invite to activity"
-              >
-                <Ionicons name="calendar-outline" size={22} color={Colors.primaryViolet} />
-              </Pressable>
-            )}
-
-            {showMatchAgentButton && (
-              <Pressable
-                onPress={onRunMatchAgent}
-                disabled={matchAgentLoading}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: Colors.primaryViolet + "20",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  opacity: matchAgentLoading ? 0.55 : 1,
-                }}
-                accessibilityLabel="Match Agent: suggest a place and time"
-              >
-                {matchAgentLoading ? (
-                  <ActivityIndicator size="small" color={Colors.primaryViolet} />
-                ) : (
-                  <SparklesIcon size={22} color={Colors.primaryViolet} />
-                )}
-              </Pressable>
-            )}
-
-            {showChatExperienceCard && (
-              <Pressable
-                onPress={openStrategicHost}
-                disabled={strategicLoading}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: Colors.primaryViolet + "12",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  opacity: strategicLoading ? 0.6 : 1,
-                }}
-                accessibilityLabel="Strategic Host: topic suggestions"
-              >
-                <Ionicons name="star-outline" size={22} color={Colors.primaryViolet} />
-              </Pressable>
-            )}
-
-            {isDm && otherUser && (
-              <Pressable
-                onPress={onSendIcebreaker}
-                disabled={sending}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: Colors.gray100,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  opacity: sending ? 0.5 : 1,
-                }}
-                accessibilityLabel="Send icebreaker"
-              >
-                <Ionicons name="game-controller-outline" size={22} color={Colors.primaryViolet} />
-              </Pressable>
-            )}
-
-            {isDm && otherUser && (
-              <Pressable
-                onPress={onVideoCall}
-                disabled={videoCallLoading}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: Colors.gray100,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  opacity: videoCallLoading ? 0.5 : 1,
-                }}
-                accessibilityLabel="Video call"
-              >
-                <Ionicons name="videocam-outline" size={22} color={Colors.primaryViolet} />
-              </Pressable>
-            )}
-
-            <Pressable
-              onPress={() => inputRef.current?.focus()}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: Colors.gray100,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              accessibilityLabel="Emoji"
-            >
-              <Text style={{ fontSize: 22 }}>😊</Text>
-            </Pressable>
-
-            <TextInput
-              ref={inputRef}
-              value={draft}
-              onChangeText={setDraft}
-              onFocus={() => setTyping(true)}
-              onBlur={() => setTyping(false)}
-              onSubmitEditing={onSendText}
-              placeholder="Message…"
-              multiline
-              maxLength={4000}
-              style={{
-                flex: 1,
-                borderWidth: 1,
-                borderRadius: 22,
-                paddingHorizontal: 16,
-                paddingVertical: 10,
-                maxHeight: 120,
-                fontSize: 16,
-              }}
-            />
-
-            <Pressable
-              onPress={onSendText}
-              disabled={sending || (draft.trim().length === 0 && !replyTo)}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: accentColor,
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: sending || (draft.trim().length === 0 && !replyTo) ? 0.5 : 1,
-              }}
-            >
-              <Ionicons name="send" size={20} color="#FFF" />
-            </Pressable>
-          </View>
         </View>
+
+        {showRomanceInviteComposer ? (
+        <>
+        <ChatComposer
+          draft={draft}
+          onChangeDraft={(text) => {
+            setDraft(text);
+            if (text.trim()) void setTyping(true);
+          }}
+          onFocus={() => setTyping(true)}
+          onBlur={() => setTyping(false)}
+          accentColor={accentColor}
+          sending={sending}
+          replyPreview={replyTo ? `${replyTo.content.slice(0, 48)}${replyTo.content.length > 48 ? "…" : ""}` : null}
+          onClearReply={() => setReplyTo(null)}
+          onSendText={onSendText}
+          onSendVoice={onSendVoice}
+          onAttachPress={() => setShowAttachMenu(true)}
+          inputRef={inputRef}
+        />
+
+        <Modal visible={showAttachMenu && showRomanceInviteComposer} transparent animationType="fade" onRequestClose={() => setShowAttachMenu(false)}>
+            <View style={styles.attachBackdrop}>
+              <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowAttachMenu(false)} />
+              <View style={styles.attachSheet}>
+                <Text style={styles.attachSheetTitle}>Add to chat</Text>
+                <View style={styles.attachGrid}>
+                  <Pressable
+                    style={styles.attachItem}
+                    onPress={() => {
+                      setShowAttachMenu(false);
+                      void onSendImages();
+                    }}
+                  >
+                    <Ionicons name="image-outline" size={26} color={Colors.primaryViolet} />
+                    <Text style={styles.attachLabel}>Photo</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.attachItem}
+                    onPress={() => {
+                      setShowAttachMenu(false);
+                      setShowGifSheet(true);
+                    }}
+                  >
+                    <Ionicons name="happy-outline" size={26} color={Colors.primaryViolet} />
+                    <Text style={styles.attachLabel}>GIF</Text>
+                  </Pressable>
+                  {isDm && otherUser ? (
+                    <Pressable
+                      style={styles.attachItem}
+                      onPress={() => {
+                        setShowAttachMenu(false);
+                        setInviteInitialActivity(undefined);
+                        setShowInviteModal(true);
+                      }}
+                    >
+                      <Ionicons name="calendar-outline" size={26} color={Colors.primaryViolet} />
+                      <Text style={styles.attachLabel}>Plan</Text>
+                    </Pressable>
+                  ) : null}
+                  {isDm && otherUser ? (
+                    <Pressable
+                      style={styles.attachItem}
+                      onPress={() => {
+                        setShowAttachMenu(false);
+                        void onVideoCall();
+                      }}
+                    >
+                      <Ionicons name="videocam-outline" size={26} color={Colors.primaryViolet} />
+                      <Text style={styles.attachLabel}>Video</Text>
+                    </Pressable>
+                  ) : null}
+                  {isDm && otherUser ? (
+                    <Pressable
+                      style={styles.attachItem}
+                      onPress={() => {
+                        setShowAttachMenu(false);
+                        void onSendIcebreaker();
+                      }}
+                    >
+                      <Ionicons name="game-controller-outline" size={26} color={Colors.primaryViolet} />
+                      <Text style={styles.attachLabel}>Icebreaker</Text>
+                    </Pressable>
+                  ) : null}
+                  {showMatchAgentButton ? (
+                    <Pressable
+                      style={styles.attachItem}
+                      onPress={() => {
+                        setShowAttachMenu(false);
+                        void onRunMatchAgent();
+                      }}
+                    >
+                      <SparklesIcon size={26} color={Colors.primaryViolet} />
+                      <Text style={styles.attachLabel}>Match AI</Text>
+                    </Pressable>
+                  ) : null}
+                  {showChatExperienceCard ? (
+                    <Pressable
+                      style={styles.attachItem}
+                      onPress={() => {
+                        setShowAttachMenu(false);
+                        openStrategicHost();
+                      }}
+                    >
+                      <Ionicons name="star-outline" size={26} color={Colors.primaryViolet} />
+                      <Text style={styles.attachLabel}>Topics</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
+            </View>
+          </Modal>
+        </>
+        ) : isPendingRomanceInvite && !isRomanceInviteRecipient ? (
+          <View style={{ padding: 16, alignItems: "center" }}>
+            <Text style={{ textAlign: "center", color: Colors.gray600, fontSize: 14 }}>
+              Waiting for them to accept your chat invite…
+            </Text>
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
     </SafeScreenView>
   );
 }
+
+const styles = StyleSheet.create({
+  emptyHistory: {
+    opacity: 0.75,
+    textAlign: "center",
+    paddingVertical: 24,
+    fontSize: 15,
+    color: Colors.gray600,
+  },
+  attachBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "flex-end",
+  },
+  attachSheet: {
+    backgroundColor: Colors.backgroundLight,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 28,
+  },
+  attachSheetTitle: {
+    fontWeight: "800",
+    fontSize: 15,
+    color: Colors.textPrimary,
+    marginBottom: 14,
+  },
+  attachGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 16,
+  },
+  attachItem: {
+    width: 72,
+    alignItems: "center",
+    gap: 6,
+  },
+  attachLabel: {
+    fontSize: 12,
+    color: Colors.gray600,
+    textAlign: "center",
+  },
+});

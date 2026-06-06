@@ -1,15 +1,9 @@
-import { Platform } from "react-native";
 import { Stack } from "expo-router";
+import { premiumHubStackScreenOptions } from "@/lib/navigation/screenOptions";
 
 export default function ModeSelectionLayout() {
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        gestureEnabled: true,
-        animation: Platform.OS === "android" ? "slide_from_right" : "default",
-      }}
-    >
+    <Stack screenOptions={premiumHubStackScreenOptions({ headerShown: false, gestureEnabled: true })}>
       <Stack.Screen name="index" />
     </Stack>
   );

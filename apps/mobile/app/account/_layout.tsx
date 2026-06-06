@@ -1,14 +1,6 @@
-import { Platform } from "react-native";
 import { Stack } from "expo-router";
+import { premiumPushStackScreenOptions } from "@/lib/navigation/screenOptions";
 
 export default function AccountLayout() {
-  return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        gestureEnabled: true,
-        animation: Platform.OS === "android" ? "slide_from_right" : "default",
-      }}
-    />
-  );
+  return <Stack screenOptions={premiumPushStackScreenOptions({ headerShown: false })} />;
 }

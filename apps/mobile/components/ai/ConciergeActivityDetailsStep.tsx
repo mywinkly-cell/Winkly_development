@@ -10,7 +10,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
   ActivityIndicator,
   Modal,
   Pressable,
@@ -20,6 +19,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout, Shadow } from "@/constants/tokens";
+import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import {
   getWeatherForCityAndDate,
   getWeatherForCityAndDateRange,
@@ -509,12 +509,7 @@ export function ConciergeActivityDetailsStep({
   });
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-    >
+    <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       {showInlineBack ? (
         <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={22} color={Colors.primaryViolet} />
@@ -1066,7 +1061,7 @@ export function ConciergeActivityDetailsStep({
       <TouchableOpacity style={styles.nextBtn} onPress={handleNext} activeOpacity={0.92}>
         <Text style={styles.nextBtnText}>Continue</Text>
       </TouchableOpacity>
-    </ScrollView>
+    </GestureScrollView>
   );
 }
 

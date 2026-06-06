@@ -131,7 +131,7 @@ export function useMessages(conversationId: string | null, pageSize = 50) {
         let q = supabase
           .from("messages")
           .select(
-            "id,conversation_id,sender_id,content,message_type,attachments,reply_to_id,edited_at,deleted_at,delete_type,status,created_at,client_id"
+            "id,conversation_id,sender_id,content,message_type,attachments,reply_to_id,edited_at,deleted_at,delete_type,status,created_at"
           )
           .eq("conversation_id", conversationId)
           .order("created_at", { ascending: false })

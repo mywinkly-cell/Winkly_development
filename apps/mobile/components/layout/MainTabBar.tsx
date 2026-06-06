@@ -23,6 +23,7 @@ export function MainTabBar({ state, navigation }: BottomTabBarProps) {
 
   return (
     <View
+      testID="bottom-bar"
       style={{
         flexDirection: "row",
         alignItems: "center",

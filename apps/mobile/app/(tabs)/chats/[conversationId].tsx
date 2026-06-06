@@ -4,7 +4,19 @@ import { View, ActivityIndicator } from "react-native";
 import ChatView from "./chat-view";
 
 export default function ChatDetail() {
-  const { conversationId } = useLocalSearchParams<{ conversationId?: string }>();
+  const {
+    conversationId,
+    partnerUserId,
+    partnerName,
+    partnerPhotoUrl,
+    matchBridge,
+  } = useLocalSearchParams<{
+    conversationId?: string;
+    partnerUserId?: string;
+    partnerName?: string;
+    partnerPhotoUrl?: string;
+    matchBridge?: string;
+  }>();
 
   if (!conversationId) {
     return (
@@ -14,5 +26,13 @@ export default function ChatDetail() {
     );
   }
 
-  return <ChatView conversationId={conversationId} />;
+  return (
+    <ChatView
+      conversationId={conversationId}
+      partnerUserId={typeof partnerUserId === "string" ? partnerUserId : undefined}
+      partnerName={typeof partnerName === "string" ? partnerName : undefined}
+      partnerPhotoUrl={typeof partnerPhotoUrl === "string" ? partnerPhotoUrl : undefined}
+      matchBridge={matchBridge === "1" ? "1" : undefined}
+    />
+  );
 }

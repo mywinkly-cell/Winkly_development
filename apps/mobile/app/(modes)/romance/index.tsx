@@ -16,6 +16,7 @@ import {
   Platform,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { chatRoutes } from "@/lib/navigation/modeHub";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { ModeHeader } from "@/components/layout/ModeHeader";
@@ -34,6 +35,12 @@ import { blockUser, recordSwipe, reportUser } from "@/lib/matching/actions";
 import { buildRomanceSuperLikeIcebreaker } from "@/lib/matching/romanceIcebreaker";
 import { fetchRomanceSwipeDeckProfiles } from "@/lib/discover/romanceSwipeDeck";
 import { updateMyLocationOnAppOpen } from "@/lib/location/updateLocation";
+import {
+  acceptRomanceChatInvite,
+  declineRomanceChatInvite,
+  fetchRomancePendingChatInvites,
+  formatRomanceInviteName,
+} from "@/lib/romance/chatInvites";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const CARD_WIDTH = SCREEN_WIDTH * 0.9;
@@ -58,6 +65,10 @@ type Profile = {
   photoUrl: string;
   /** Rounded, privacy-safe distance label from the server (e.g. "~3 km away"). */
   distanceLabel?: string | null;
+  /** Pre-match chat invite — shown first on Home with envelope badge. */
+  isPendingInvite?: boolean;
+  conversationId?: string;
+  invitePreviewMessage?: string | null;
 };
 
 type MatchState = {
@@ -154,8 +165,27 @@ export default function RomanceHome() {
         setSelfProfile(null);
       }
 
-      const deck = await fetchRomanceSwipeDeckProfiles(uid, selfForDeck);
-      setProfiles(deck);
+      const [pendingInvites, deck] = await Promise.all([
+        fetchRomancePendingChatInvites(uid).catch(() => []),
+        fetchRomanceSwipeDeckProfiles(uid, selfForDeck),
+      ]);
+      const pendingProfiles: Profile[] = pendingInvites.map((inv) => {
+        const photos = inv.romance_photos.length ? inv.romance_photos : inv.core_photos;
+        return {
+          id: inv.id,
+          name: formatRomanceInviteName(inv),
+          age: inv.age ?? 0,
+          city: inv.city ?? "",
+          occupation: inv.occupation,
+          chipItems: inv.super_like ? ["Super like", "New message"] : ["New message"],
+          photoUrl: photos[0] ?? "",
+          isPendingInvite: true,
+          conversationId: inv.conversation_id,
+          invitePreviewMessage: inv.preview_message,
+        };
+      });
+      const pendingIds = new Set(pendingProfiles.map((p) => p.id));
+      setProfiles([...pendingProfiles, ...deck.filter((p) => !pendingIds.has(p.id))]);
       setCurrentIndex(0);
       cardAnim.setValue({ x: 0, y: 0 });
     } catch (e) {
@@ -368,9 +398,18 @@ export default function RomanceHome() {
   };
 
   const handleCardPress = () => {
-    if (currentProfile) {
-      router.push(`/(modes)/romance/profile-view?id=${currentProfile.id}`);
+    if (!currentProfile) return;
+    if (currentProfile.isPendingInvite && currentProfile.conversationId) {
+      router.push(
+        chatRoutes.conversation("romance", currentProfile.conversationId, {
+          partnerUserId: currentProfile.id,
+          partnerName: currentProfile.name,
+          partnerPhotoUrl: currentProfile.photoUrl,
+        }) as Parameters<typeof router.push>[0]
+      );
+      return;
     }
+    router.push(`/(modes)/romance/profile-view?id=${currentProfile.id}`);
   };
 
   type SwipeAction = "pass" | "like" | "intent";
@@ -396,6 +435,22 @@ export default function RomanceHome() {
       duration: 250,
       useNativeDriver: true,
     }).start(async () => {
+      if (swipedProfile?.isPendingInvite && swipedProfile.conversationId) {
+        try {
+          if (action === "like") {
+            const res = await acceptRomanceChatInvite(swipedProfile.conversationId);
+            if (res.ok) {
+              celebrateMatch(swipedProfile, res.chat_id ?? swipedProfile.conversationId);
+            }
+          } else if (action === "pass") {
+            await declineRomanceChatInvite(swipedProfile.conversationId);
+          }
+        } catch (e) {
+          console.warn("Pending invite action failed", e);
+        }
+        advanceToNext();
+        return;
+      }
       if (profileId && action === "pass") applyPass(profileId);
       if (profileId && action === "like") await applyLike(profileId, swipedProfile);
       if (profileId && action === "intent")
@@ -487,7 +542,15 @@ export default function RomanceHome() {
 
   return (
     <View style={styles.container}>
-      <ModeHeader currentMode="romance" leftSlot="filters" onFilterPress={() => router.push("/(modes)/romance/filters")} />
+      <ModeHeader
+        currentMode="romance"
+        leftSlot="profile"
+        profilePhotoUrl={selfPhotoUrl}
+        profileInitials={selfProfile?.first_name?.slice(0, 1) ?? "?"}
+        onProfilePress={() => router.push("/profile/view-profile")}
+        rightSlot="filters"
+        onFilterPress={() => router.push("/(modes)/romance/filters")}
+      />
 
       {deckLoading ? (
         <View style={styles.center}>
@@ -583,6 +646,7 @@ export default function RomanceHome() {
                   mode="romance"
                   aiHint={romanceAiHint}
                   distanceLabel={currentProfile.distanceLabel}
+                  hasIncomingMessage={currentProfile.isPendingInvite}
                   cardRadius={CARD_RADIUS}
                 />
               </Animated.View>
@@ -741,9 +805,13 @@ export default function RomanceHome() {
           const chatId = matchState.chatId;
           setMatchState((s) => ({ ...s, visible: false }));
           if (chatId) {
-            router.push(`/chats/${chatId}?matchBridge=1`);
+            router.push(
+              chatRoutes.conversation("romance", chatId, { matchBridge: "1" }) as Parameters<
+                typeof router.push
+              >[0]
+            );
           } else {
-            router.push("/(modes)/romance/chats");
+            router.push(chatRoutes.index("romance"));
           }
         }}
         onKeepSwiping={() => setMatchState((s) => ({ ...s, visible: false }))}

@@ -1,15 +1,6 @@
-import { Platform } from "react-native";
-import { Stack } from "expo-router";
+import { Slot } from "expo-router";
 
-/** Legacy path group — screens redirect to /(tabs) hubs. */
+/** Legacy path group — child screens replace to /(tabs) hubs (no nested stack). */
 export default function LegacyModeSelectionLayout() {
-  return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        gestureEnabled: true,
-        animation: Platform.OS === "android" ? "slide_from_right" : "default",
-      }}
-    />
-  );
+  return <Slot />;
 }

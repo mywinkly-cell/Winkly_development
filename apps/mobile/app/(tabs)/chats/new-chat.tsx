@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { Colors, Typography } from "@/constants/tokens";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { chatRoutes, useModeHub } from "@/lib/navigation/modeHub";
 import { supabase } from "@/lib/supabase";
 import { createDirectChat } from "@/lib/chats";
 import type { AppMode, DMSource } from "@/lib/chats";
@@ -77,6 +78,7 @@ async function loadRomanceMatches(userId: string): Promise<UserMini[]> {
 
 export default function NewChat() {
   const router = useRouter();
+  const chatHub = useModeHub();
   const fmtLoc = useFormatLocationDisplay();
   const params = useLocalSearchParams<{ mode?: string }>();
 
@@ -165,7 +167,7 @@ export default function NewChat() {
     return users.filter((u) => u.id !== meId);
   }, [users, meId]);
 
-  async function handleCreateDirectChat(otherUserId: string) {
+  async function handleCreateDirectChat(user: UserMini) {
     if (!meId) {
       setError("You are not signed in.");
       return;
@@ -178,8 +180,16 @@ export default function NewChat() {
     try {
       // create_direct_chat RPC returns existing chat id if one exists (idempotent)
       const source: DMSource = isRomance ? "match" : "invite";
-      const conversationId = await createDirectChat(otherUserId, mode, source, meId);
-      router.replace(`/chats/${conversationId}`);
+      const conversationId = await createDirectChat(user.id, mode, source, meId);
+      const photo =
+        user.main_photo_url ?? user.romance_photos?.[0] ?? user.core_photos?.[0] ?? "";
+      router.replace(
+        chatRoutes.conversation(chatHub, conversationId, {
+          partnerUserId: user.id,
+          partnerName: formatName(user),
+          partnerPhotoUrl: photo,
+        }) as Parameters<typeof router.replace>[0]
+      );
     } catch (e: any) {
       setError(e?.message ?? "Failed to create chat.");
     } finally {
@@ -220,10 +230,12 @@ export default function NewChat() {
         </Pressable>
 
         <View style={{ flex: 1 }}>
-          <Text style={{ fontWeight: "900", fontSize: 16 }}>New chat</Text>
+          <Text style={{ fontWeight: "900", fontSize: 16 }}>
+            {isRomance ? "Message a match" : "New chat"}
+          </Text>
           <Text style={{ opacity: 0.65, marginTop: 2, fontSize: 12 }}>
             {isRomance
-              ? "1:1 chats with your matches only"
+              ? "Romance is 1:1 only — pick someone you have already matched with."
               : `Start a 1:1 chat or create a group — ${mode}`}
           </Text>
         </View>
@@ -290,7 +302,7 @@ export default function NewChat() {
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
             renderItem={({ item }) => (
               <Pressable
-                onPress={() => handleCreateDirectChat(item.id)}
+                onPress={() => handleCreateDirectChat(item)}
                 disabled={creating}
                 style={{
                   flexDirection: "row",

@@ -1,6 +1,6 @@
 # Secrets & environment audit
 
-**Last updated:** 2026-06-04  
+**Last updated:** 2026-06-06  
 **Status:** No committed secrets found in tracked files.
 
 ## Checks performed
@@ -20,7 +20,8 @@
 | Supabase **anon** key | `apps/mobile/.env` (local), EAS env vars (builds) |
 | Supabase **service_role** | Supabase Edge Function secrets only (auto-injected + Dashboard) |
 | OpenAI / Gemini / Meetup / etc. | `npx supabase secrets set` or Dashboard |
-| Google Play submit key | `apps/mobile/google-service-account.json` (local only, gitignored) |
+| Google Play submit key | `apps/mobile/google-service-account.json` (local only, gitignored) or GitHub secret `GOOGLE_SERVICE_ACCOUNT_JSON` (CI) |
+| Expo / EAS token | GitHub secret `EXPO_TOKEN` (`.github/workflows/eas-submit.yml`) |
 | Sentry upload token | EAS secrets (`SENTRY_AUTH_TOKEN`), not `EXPO_PUBLIC_*` |
 
 ## Local setup checklist
@@ -29,6 +30,7 @@
 - [ ] Optional: `cp apps/mobile/.env.local.example apps/mobile/.env.local` for machine-specific overrides
 - [ ] EAS: create project secrets for `staging` and `production` profiles (see [`README.md`](../README.md))
 - [ ] Supabase: separate projects for staging vs production; never use prod anon key in dev
+- [ ] GitHub: add repository secrets `EXPO_TOKEN`, `GOOGLE_SERVICE_ACCOUNT_JSON` for EAS submit (`docs/EAS_CI.md`)
 - [ ] GitHub: enable **Secret scanning** and **Dependabot security updates** (Settings → Code security)
 
 ## If a secret was ever committed

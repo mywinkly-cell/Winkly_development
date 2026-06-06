@@ -1,16 +1,16 @@
 # Winkly — Environments (dev / staging / production)
 
-**Last updated:** 2026-06-01
+**Last updated:** 2026-06-06
 
-Winkly runs in three isolated environments. Each has its own Supabase project (or
-local stack), its own data, and its own `.env` file. **Never test new features or run
-untested migrations against production data.**
+Winkly runs in three isolated environments. **Development uses local Supabase** (no cloud slot), so you only need **two cloud projects** on the Free plan until go-live.
 
 | Environment     | Backend                          | Mobile env file              | EAS profile / channel | Purpose |
 | --------------- | -------------------------------- | ---------------------------- | --------------------- | ------- |
 | **development** | Supabase **local** (`supabase start`) | `apps/mobile/.env.development` | `development`         | Day-to-day local work; disposable data. |
-| **staging**     | Separate Supabase **project**    | `apps/mobile/.env.staging`     | `staging` / `preview` | Pre-prod testing; test migrations + features here first. |
-| **production**  | Live Supabase **project**        | `apps/mobile/.env.production`  | `production`          | Real users. Read/observe only; promote vetted changes. |
+| **staging**     | Cloud project **`orjccytcmklzcfjgqwwj`** | `apps/mobile/.env.staging`     | `staging` / `preview` | Pre-prod testing; [dashboard](https://supabase.com/dashboard/project/orjccytcmklzcfjgqwwj). GitHub: private `mywinkly-cell/winkly-staging`. |
+| **production**  | **WinklyApp** `gwgjdpqskusuejlwrsnd` | `apps/mobile/.env.production`  | `production`          | Live main project. GitHub: `mywinkly-cell/winkly-prod`. |
+
+**Never** test new features or run untested migrations against production data.
 
 ---
 
@@ -110,14 +110,15 @@ rather than committing real `.env.*` files.
 
 ## 5. CI (GitHub Actions)
 
-`.github/workflows/ci.yml` runs on every PR and on pushes to `main`:
+`.github/workflows/ci.yml` runs on every PR and on pushes to `main` / `develop` as **three required jobs**:
 
-- `npm ci` (workspace install; root **`postinstall`** runs `patch-package --patch-dir apps/mobile/patches` so hoisted deps like `react-native-range-slider-expo` typecheck in CI)
-- `npm run mobile:lint`
-- `npm run mobile:typecheck` (the RN "build" check)
-- `npm run mobile:test`
+- **Lint** — `npm run mobile:lint`
+- **Typecheck** — `npm run mobile:typecheck` (TypeScript `strict` + `noImplicitAny`)
+- **Unit tests** — `npm run mobile:test`
 
-Keep CI green before merging. Locally you can reproduce it with `npm run ci`.
+Configure branch protection to require all three before merge (`docs/BRANCHING.md`). Reproduce locally with `npm run ci`.
+
+On merge to **`main`**, `.github/workflows/eas-submit.yml` builds the **preview** profile and auto-submits to TestFlight + Play internal (`docs/EAS_CI.md`).
 
 ---
 

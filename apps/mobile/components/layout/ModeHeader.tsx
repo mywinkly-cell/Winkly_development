@@ -10,8 +10,10 @@ import {
   TextInput,
   ScrollView,
   Pressable,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { appModeToHub, plannerRoutes } from "@/lib/navigation/modeHub";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Layout, Shadow, Typography, FontFamily, HEADER } from "@/constants/tokens";
@@ -20,7 +22,7 @@ import { BUSINESS_FILTER_CHIPS } from "@/constants/profileOptions";
 import type { BusinessChipFilter } from "@/hooks/useBusinessSearch";
 
 type RightSlot = "settings" | "filterSettings" | "filters" | "ai";
-type LeftSlot = "filters";
+type LeftSlot = "filters" | "profile";
 type ModeKey = "romance" | "friends" | "business" | "events";
 export type HeaderVariant = "default" | "planner";
 
@@ -30,6 +32,9 @@ type ModeHeaderProps = {
   rightSlot?: RightSlot;
   variant?: HeaderVariant;
   onFilterPress?: () => void;
+  onProfilePress?: () => void;
+  profilePhotoUrl?: string | null;
+  profileInitials?: string;
   onSettingsPress?: () => void;
   showSearchBar?: boolean;
   searchValue?: string;
@@ -46,6 +51,9 @@ export function ModeHeader({
   rightSlot = "settings",
   variant = "default",
   onFilterPress,
+  onProfilePress,
+  profilePhotoUrl,
+  profileInitials,
   showSearchBar = false,
   searchValue = "",
   onSearchChange,
@@ -60,7 +68,7 @@ export function ModeHeader({
 
   const onFilterPressDefault = () => {
     Haptics.selectionAsync();
-    router.push("/planner");
+    router.push(plannerRoutes.index(appModeToHub(currentMode)));
   };
 
   const handleFilterPress = () => {
@@ -75,6 +83,12 @@ export function ModeHeader({
   const handleFiltersOnlyPress = () => {
     Haptics.selectionAsync();
     if (onFilterPress) onFilterPress();
+  };
+
+  const handleProfilePress = () => {
+    Haptics.selectionAsync();
+    if (onProfilePress) onProfilePress();
+    else router.push("/profile");
   };
 
   const handleAiPress = () => {
@@ -117,7 +131,7 @@ export function ModeHeader({
     <TouchableOpacity
       onPress={handleFiltersOnlyPress}
       style={styles.rightBtn}
-      accessibilityLabel="Filtering"
+      accessibilityLabel="Filters"
     >
       <Ionicons name="options-outline" size={24} color={filterIconColor} />
       {filterBadgeCount > 0 ? (
@@ -125,6 +139,27 @@ export function ModeHeader({
           <Text style={styles.badgeText}>{filterBadgeCount > 9 ? "9+" : filterBadgeCount}</Text>
         </View>
       ) : null}
+    </TouchableOpacity>
+  );
+
+  const profileButton = (
+    <TouchableOpacity
+      onPress={handleProfilePress}
+      style={styles.profileBtn}
+      activeOpacity={0.85}
+      accessibilityLabel="Your profile"
+    >
+      {profilePhotoUrl ? (
+        <Image source={{ uri: profilePhotoUrl }} style={styles.profileImage} />
+      ) : (
+        <View style={styles.profilePlaceholder}>
+          {profileInitials ? (
+            <Text style={styles.profileInitials}>{profileInitials.slice(0, 2).toUpperCase()}</Text>
+          ) : (
+            <Ionicons name="person" size={22} color={Colors.gray600} />
+          )}
+        </View>
+      )}
     </TouchableOpacity>
   );
 
@@ -139,8 +174,6 @@ export function ModeHeader({
           accessibilityLabel="Winkly AI"
         />
       </View>
-    ) : leftSlot === "filters" ? (
-      <View style={styles.placeholder} />
     ) : rightSlot === "filterSettings" ? (
       <TouchableOpacity onPress={handleFilterPress} style={styles.rightBtn} accessibilityLabel="Planner filters">
         <Ionicons name="filter" size={HEADER.iconSize} color={Colors.textPrimary} />
@@ -156,7 +189,13 @@ export function ModeHeader({
   return (
     <View style={styles.wrapper}>
       <View style={[styles.container, showBusinessChrome && styles.containerNoBorder]}>
-        {isBusiness && onFilterPress ? filterButton : leftSlot === "filters" && onFilterPress ? filterButton : <View style={styles.placeholder} />}
+        {leftSlot === "profile"
+          ? profileButton
+          : isBusiness && onFilterPress
+            ? filterButton
+            : leftSlot === "filters" && onFilterPress
+              ? filterButton
+              : <View style={styles.placeholder} />}
 
         <View style={styles.centerTitleWrap}>
           <Text style={styles.centerTitle}>Winkly</Text>
@@ -268,6 +307,36 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 4,
+  },
+  profileBtn: {
+    width: HEADER.buttonSize,
+    height: HEADER.buttonSize,
+    borderRadius: HEADER.buttonSize / 2,
+    overflow: "hidden",
+    backgroundColor: Colors.gray100,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#1C1C1E",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  profileImage: {
+    width: HEADER.buttonSize,
+    height: HEADER.buttonSize,
+  },
+  profilePlaceholder: {
+    width: HEADER.buttonSize,
+    height: HEADER.buttonSize,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.gray200,
+  },
+  profileInitials: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: Colors.gray600,
   },
   badge: {
     position: "absolute",

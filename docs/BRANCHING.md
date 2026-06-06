@@ -40,7 +40,7 @@ Configure in **Settings → Branches → Branch protection rules**:
 ### `main`
 
 - Require pull request before merging (1+ approval)
-- Require status check: **Lint, typecheck & test** (`CI / build`)
+- Require status checks: **Lint**, **Typecheck**, **Unit tests** (from `.github/workflows/ci.yml`)
 - Require branches to be up to date before merge
 - Do not allow force-push
 - Restrict who can push (maintainers only)
@@ -48,7 +48,7 @@ Configure in **Settings → Branches → Branch protection rules**:
 ### `develop`
 
 - Require pull request before merging
-- Require status check: **Lint, typecheck & test**
+- Require status checks: **Lint**, **Typecheck**, **Unit tests**
 - Allow force-push: **off**
 
 ### Creating `develop` (one-time)

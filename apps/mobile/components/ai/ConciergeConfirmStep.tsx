@@ -11,9 +11,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  ScrollView,
   Share,
 } from "react-native";
+import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography } from "@/constants/tokens";
@@ -383,7 +383,7 @@ export function ConciergeConfirmStep({
   };
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+    <GestureScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
       {showInlineBack ? (
         <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={22} color={Colors.primaryViolet} />
@@ -570,7 +570,7 @@ export function ConciergeConfirmStep({
           )}
         </TouchableOpacity>
       )}
-    </ScrollView>
+    </GestureScrollView>
   );
 }
 

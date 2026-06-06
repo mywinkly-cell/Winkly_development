@@ -16,6 +16,7 @@ import {
   Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { appModeToHub, chatRoutes, type ModeHub } from "@/lib/navigation/modeHub";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
@@ -102,6 +103,8 @@ type MatchesConnectionsSubheaderProps = {
   onRefresh: () => void;
   /** Current user's city for "Same city" and distance context (optional). */
   myCity?: string | null;
+  /** Keeps chat opens inside the active mode stack (Romance bottom nav, etc.). */
+  chatHub?: ModeHub;
 };
 
 export function MatchesConnectionsSubheader({
@@ -114,10 +117,14 @@ export function MatchesConnectionsSubheader({
   businessLoading = false,
   onRefresh,
   myCity = null,
+  chatHub: chatHubProp,
 }: MatchesConnectionsSubheaderProps) {
   const { i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
   const router = useRouter();
+  const chatHub =
+    chatHubProp ??
+    appModeToHub(activeTab === "all" || activeTab === "events" ? null : activeTab);
 
   const isRomance = activeTab === "romance";
   const isFriends = activeTab === "friends";
@@ -165,7 +172,9 @@ export function MatchesConnectionsSubheader({
               isRomance ? "match" : "connection",
               userData.user.id
             );
-            router.push(`/chats/${chatId}`);
+            router.push(
+              chatRoutes.conversation(chatHub, chatId) as Parameters<typeof router.push>[0]
+            );
           } catch {
             Alert.alert("Error", "Could not start chat.");
           }
