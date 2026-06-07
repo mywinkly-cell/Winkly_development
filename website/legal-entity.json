@@ -1,0 +1,12 @@
+{
+  "legalName": "Winkly Technologies UG (haftungsbeschränkt)",
+  "streetAddress": "[Registered street address — update legal-entity.json before launch]",
+  "postalCode": "[PLZ]",
+  "city": "[City]",
+  "country": "Germany",
+  "managingDirector": "[Managing director name — update before launch]",
+  "registerCourt": "[Amtsgericht, e.g. Amtsgericht Berlin-Charlottenburg]",
+  "registerNumber": "[HRB number]",
+  "vatId": "[USt-IdNr., or “not yet assigned”]",
+  "contactEmail": "support@winkly.app"
+}

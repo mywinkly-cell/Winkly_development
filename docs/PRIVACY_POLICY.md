@@ -1,6 +1,6 @@
 # Winkly — Privacy Policy
 
-**Last updated:** 25 February 2026
+**Last updated:** 7 June 2026
 
 Winkly Technologies UG (haftungsbeschränkt) (“**we**”, “**us**”, “**Winkly**”) respects your privacy. This Privacy Policy explains what personal data we collect, how we use it, and your rights. It applies to the Winkly mobile application and related services (“**Service**”).
 
@@ -12,7 +12,8 @@ If you are in the European Economic Area (EEA) or the United Kingdom, we process
 
 **Data controller:**  
 Winkly Technologies UG (haftungsbeschränkt)  
-[Insert full address when available]
+{{company.streetAddress}}  
+{{company.postalCode}} {{company.city}}, {{company.country}}
 
 **Contact:**  
 For privacy requests and questions: use **General settings → Support & legal → Contact Support** in the app, or email **support@winkly.app** (or the address shown in the app).
@@ -149,7 +150,35 @@ We may update this Privacy Policy from time to time. We will post the updated ve
 
 ---
 
-## 11. Contact
+<a id="cookies"></a>
+
+## 11. Cookies and similar technologies
+
+Winkly is primarily a mobile app. We do not use advertising cookies and we do **not** sell your personal data.
+
+### 11.1 What we use
+
+| Technology | Purpose | Required? |
+|------------|---------|-----------|
+| **Authentication session** | Keep you signed in securely (Supabase Auth; secure storage on device) | Yes — needed to use the Service |
+| **Local app storage** | Remember preferences (e.g. terms acceptance, language) | Mostly essential; some optional settings |
+| **Analytics (PostHog)** | Understand aggregate app usage (screens, feature events). We do **not** send your name, email, or message content. | No — we ask for consent on first use before enabling analytics |
+
+### 11.2 Your choices
+
+- On first use, you can accept or decline non-essential analytics as described in our cookie notice in the app.
+- You can review **Privacy Policy**, **Cookies**, and related settings at any time under **General settings → Support & legal → Legal**.
+- You may withdraw consent for analytics by contacting us or, where available, through in-app privacy settings.
+
+### 11.3 Website
+
+If you visit **winkly.app**, our hosting provider may process standard server logs (e.g. IP address, browser type) for security and operation. We do not use third-party advertising trackers on our legal pages.
+
+For more on analytics data, see section 2.4 above. For legal entity details, see our [Imprint](/imprint).
+
+---
+
+## 12. Contact
 
 For any privacy-related questions or to exercise your rights:
 
@@ -158,4 +187,4 @@ For any privacy-related questions or to exercise your rights:
 
 ---
 
-*By using Winkly, you confirm that you have read and understood this Privacy Policy. For the terms governing your use of the Service, see our [Terms of Service](TERMS_OF_SERVICE.md).*
+*By using Winkly, you confirm that you have read and understood this Privacy Policy. For the terms governing your use of the Service, see our [Terms of Service](/terms).*

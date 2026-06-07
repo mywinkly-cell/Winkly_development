@@ -5,6 +5,12 @@
 
 import { useMemo } from "react";
 
+export type OAuthEnv = {
+  googleAndroidClientId: string;
+  googleIosClientId: string;
+  facebookAppId: string;
+};
+
 export type PublicEnv = {
   supabaseUrl: string;
   supabaseAnonKey: string;
@@ -12,6 +18,7 @@ export type PublicEnv = {
   posthogApiKey: string;
   posthogHost: string;
   sentryDsn: string;
+  oauth: OAuthEnv;
   /** True when a PostHog key is present — gate analytics UI/providers on this. */
   analyticsEnabled: boolean;
   /** True when a Sentry DSN is present — gate crash reporting on this. */
@@ -54,9 +61,19 @@ export function readPublicEnv(source: EnvSource = process.env): PublicEnv {
     posthogApiKey,
     posthogHost,
     sentryDsn,
+    oauth: {
+      googleAndroidClientId: read(source, "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID"),
+      googleIosClientId: read(source, "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID"),
+      facebookAppId: read(source, "EXPO_PUBLIC_FACEBOOK_APP_ID"),
+    },
     analyticsEnabled: posthogApiKey.length > 0,
     monitoringEnabled: sentryDsn.length > 0,
   };
+}
+
+/** OAuth client IDs (optional — required for production Google sign-in). */
+export function getOAuthConfig(source: EnvSource = process.env): OAuthEnv {
+  return readPublicEnv(source).oauth;
 }
 
 /** Pure: the env is usable only when both required Supabase vars are present. */

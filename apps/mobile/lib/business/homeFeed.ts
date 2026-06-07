@@ -121,7 +121,7 @@ export function buildViewerContext(opts: {
     roles: [...roles, ...roleFromMeta],
     networkingGoals,
     interests,
-    tags: opts.tags ?? [],
+    tags: [...(opts.tags ?? []), ...companyFromMeta],
   };
 }
 

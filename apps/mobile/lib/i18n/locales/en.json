@@ -52,6 +52,8 @@
   "auth.accountExists": "Account exists",
   "auth.accountExistsMessage": "A user with this email already exists. Please sign in or use a different email.",
   "auth.oauthNotConfigured": "OAuth not configured",
+  "auth.oauthNotConfiguredHint": "Add Google or Apple in Supabase Auth and set EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID / EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID in your build env (see docs/GO_LIVE_AND_PLAY_STORE.md).",
+  "auth.oauthFailed": "Sign-in failed. Please try again or use email.",
   "auth.comingSoon": "Coming soon",
 
   "settings.general": "General settings",

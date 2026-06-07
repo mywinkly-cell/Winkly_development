@@ -23,24 +23,19 @@ import { BusinessHomeEmptyState } from "@/components/business/BusinessHomeEmptyS
 import { PendingInvitesSheet } from "@/components/business/PendingInvitesSheet";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { supabase } from "@/lib/supabase";
-import { getProfilesForMode } from "@/lib/access/profiles";
+import { getProfilesForMode, getOwnProfileCore, getOwnProfileMode } from "@/lib/access/profiles";
 import { getBlockedUserIdSet } from "@/lib/access/blocks";
 import { countPendingBusinessInvites } from "@/lib/access/businessConnections";
 import { useBusinessSearch } from "@/hooks/useBusinessSearch";
-import { BUSINESS_FILTER_CHIPS } from "@/constants/profileOptions";
 import {
   mapProfilesBusinessRow,
   rankSimilarProfiles,
   buildViewerContext,
   type BusinessPersonItem,
 } from "@/lib/business/homeFeed";
-import {
-  getBusinessRecentEntries,
-  recordBusinessProfileView,
-  type BusinessRecentEntry,
-} from "@/lib/business/recentSearchStorage";
+import { recordBusinessProfileView } from "@/lib/business/recentSearchStorage";
 import { getLastDiscoverQuery } from "@/lib/business/discoverQueryStorage";
-import { getOwnProfileCore, getOwnProfileMode } from "@/lib/access/profiles";
+import { isBusinessProfileComplete } from "@/lib/routing/splash";
 import * as Location from "expo-location";
 
 const COL_WIDTH = (Dimensions.get("window").width - 40 - 12) / 3;
@@ -59,6 +54,7 @@ export default function BusinessHome() {
   const [lastSearchPeople, setLastSearchPeople] = useState<BusinessPersonItem[]>([]);
   const [nearby, setNearby] = useState<BusinessPersonItem[]>([]);
   const [hasLocation, setHasLocation] = useState(false);
+  const [businessProfileComplete, setBusinessProfileComplete] = useState(true);
 
   const openProfile = useCallback(
     (person: BusinessPersonItem, source: "home" | "discover" = "home") => {
@@ -87,10 +83,16 @@ export default function BusinessHome() {
         return;
       }
 
-      const [blocked, core, modeProfile, feedRows, pending, lastDiscover] = await Promise.all([
+      const [blocked, core, modeProfile, businessProfileRow, feedRows, pending, lastDiscover] = await Promise.all([
         getBlockedUserIdSet(uid),
         getOwnProfileCore(uid),
         getOwnProfileMode(uid, "business"),
+        supabase
+          .from("business_profiles")
+          .select("business_name")
+          .or(`id.eq.${uid},user_id.eq.${uid}`)
+          .limit(1)
+          .maybeSingle(),
         getProfilesForMode("business", uid, 20, {
           query: search.feedParams.query,
           roleType: search.feedParams.roleType,
@@ -102,6 +104,9 @@ export default function BusinessHome() {
       ]);
 
       setPendingCount(pending);
+      setBusinessProfileComplete(
+        isBusinessProfileComplete(businessProfileRow.data as { business_name?: string } | null)
+      );
 
       const meta = (modeProfile?.meta ?? {}) as Record<string, unknown>;
       const viewer = buildViewerContext({
@@ -172,9 +177,8 @@ export default function BusinessHome() {
   const showHomeEmptyState =
     !loading &&
     !search.hasActiveFilter &&
-    suggested.length === 0 &&
-    lastSearchPeople.length === 0 &&
-    nearby.length === 0;
+    (!businessProfileComplete ||
+      (suggested.length === 0 && lastSearchPeople.length === 0 && nearby.length === 0));
 
   return (
     <View style={styles.screen}>
@@ -206,26 +210,31 @@ export default function BusinessHome() {
         </Pressable>
       ) : null}
 
-      <View style={styles.newsletterCard}>
-        <Text style={styles.newsletterTitle}>Network brief</Text>
-        <Text style={styles.newsletterBody}>
-          Send thoughtful invites (20+ chars), respond on Home, then plan a meet-up or co-host an event from chat.
-        </Text>
-        <TouchableOpacity
-          onPress={() => router.push("/(modes)/business/discover")}
-          style={styles.newsletterCta}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.newsletterCtaText}>Explore Discover</Text>
-        </TouchableOpacity>
-      </View>
+      {!showHomeEmptyState && !loading ? (
+        <View style={styles.newsletterCard}>
+          <Text style={styles.newsletterTitle}>Network brief</Text>
+          <Text style={styles.newsletterBody}>
+            Send thoughtful invites (20+ chars), respond on Home, then plan a meet-up or co-host an event from chat.
+          </Text>
+          <TouchableOpacity
+            onPress={() => router.push("/(modes)/business/discover")}
+            style={styles.newsletterCta}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.newsletterCtaText}>Explore Discover</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={primary} />
         </View>
       ) : showHomeEmptyState ? (
-        <BusinessHomeEmptyState onEditProfile={() => router.push("/profile/edit-business")} />
+        <BusinessHomeEmptyState
+          onEditProfile={() => router.push("/profile/edit-business")}
+          onExploreDiscover={() => router.push("/(modes)/business/discover")}
+        />
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}

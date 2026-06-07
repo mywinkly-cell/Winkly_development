@@ -48,11 +48,19 @@ Set in [Expo dashboard](https://expo.dev) → Project → **Environment variable
 | `EXPO_PUBLIC_SUPABASE_URL` | All non-dev builds (`https://orjccytcmklzcfjgqwwj.supabase.co`) |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | All non-dev builds |
 | `EXPO_PUBLIC_AUTH_REDIRECT_URL` | Email auth (HTTPS redirect) |
-| `EXPO_PUBLIC_EAS_PROJECT_ID` | Push notifications |
+| `EXPO_PUBLIC_EAS_PROJECT_ID` | All non-dev builds | Push notifications (`5a6f6f9d-5969-4867-9572-5ee50a938066`; also in `app.config.js`) |
 | `EXPO_PUBLIC_POSTHOG_API_KEY` | Analytics (optional) |
 | `EXPO_PUBLIC_SENTRY_DSN` | Crash reporting (optional) |
 
 `npm run validate-env` (hooked via `eas-build-pre-install`) **fails production builds** when required vars are missing or placeholders.
+
+**Sync from local `.env` to EAS (production + preview):**
+
+```bash
+cd apps/mobile
+npm run eas:sync-production-env          # uses .env
+npm run eas:sync-production-env -- --file .env.production
+```
 
 ---
 

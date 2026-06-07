@@ -5,9 +5,10 @@ import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/toke
 
 type BusinessHomeEmptyStateProps = {
   onEditProfile: () => void;
+  onExploreDiscover?: () => void;
 };
 
-export function BusinessHomeEmptyState({ onEditProfile }: BusinessHomeEmptyStateProps) {
+export function BusinessHomeEmptyState({ onEditProfile, onExploreDiscover }: BusinessHomeEmptyStateProps) {
   const accent = Colors.business.primary;
   const softBg = Colors.business.secondary;
 
@@ -32,6 +33,16 @@ export function BusinessHomeEmptyState({ onEditProfile }: BusinessHomeEmptyState
         <Ionicons name="create-outline" size={20} color={Colors.white} />
         <Text style={styles.primaryBtnText}>Complete profile</Text>
       </Pressable>
+
+      {onExploreDiscover ? (
+        <Pressable
+          onPress={onExploreDiscover}
+          style={({ pressed }) => [styles.secondaryBtn, pressed && styles.secondaryBtnPressed]}
+          accessibilityLabel="Explore Discover"
+        >
+          <Text style={[styles.secondaryBtnText, { color: accent }]}>Explore Discover</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -89,5 +100,18 @@ const styles = StyleSheet.create({
     ...Typography.button,
     fontFamily: FontFamily.heading,
     color: Colors.white,
+  },
+  secondaryBtn: {
+    marginTop: Layout.spacing.md,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    minHeight: 44,
+    justifyContent: "center",
+  },
+  secondaryBtnPressed: { opacity: 0.75 },
+  secondaryBtnText: {
+    ...Typography.button,
+    fontFamily: FontFamily.heading,
+    textAlign: "center",
   },
 });

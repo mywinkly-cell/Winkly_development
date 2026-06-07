@@ -19,7 +19,7 @@ export async function isAppleSignInAvailable() {
   }
 }
 
-export async function signInWithApple(): Promise<AppleSignInResult> {
+export async function signInWithApple(hashedNonce?: string): Promise<AppleSignInResult> {
   const available = await isAppleSignInAvailable();
   if (!available) return { ok: false, reason: "unavailable" };
 
@@ -29,6 +29,7 @@ export async function signInWithApple(): Promise<AppleSignInResult> {
         AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
         AppleAuthentication.AppleAuthenticationScope.EMAIL,
       ],
+      ...(hashedNonce ? { nonce: hashedNonce } : {}),
     });
 
     if (!res.identityToken) {

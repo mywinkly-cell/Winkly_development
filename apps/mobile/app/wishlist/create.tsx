@@ -16,15 +16,25 @@ export default function WishlistCreate() {
   const [url, setUrl] = useState("");
   const [price, setPrice] = useState("");
 
-  const onSave = () => {
+  const [saving, setSaving] = useState(false);
+
+  const onSave = async () => {
     const clean = title.trim();
     if (!clean) {
       Alert.alert("Missing title", "Please add a title for your wishlist item.");
       return;
     }
 
-    const created = createWishlistItem({ title: clean, description, url, price });
-    router.replace({ pathname: "/wishlist/details", params: { id: created.id } });
+    try {
+      setSaving(true);
+      const created = await createWishlistItem({ title: clean, description, url, price });
+      router.replace({ pathname: "/wishlist/details", params: { id: created.id } });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Could not save item.";
+      Alert.alert("Error", message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -74,8 +84,8 @@ export default function WishlistCreate() {
             style={styles.input}
           />
 
-          <TouchableOpacity onPress={onSave} style={styles.primaryBtn} activeOpacity={0.9}>
-            <Text style={styles.primaryText}>Save item</Text>
+          <TouchableOpacity onPress={() => void onSave()} disabled={saving} style={styles.primaryBtn} activeOpacity={0.9}>
+            <Text style={styles.primaryText}>{saving ? "Saving…" : "Save item"}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -87,7 +97,6 @@ export default function WishlistCreate() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.note}>MVP: stored locally. Next: save to Supabase.</Text>
       </ScrollView>
     </View>
   );

@@ -1,0 +1,15 @@
+{
+  "name": "winkly-website",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "verify": "node scripts/build.mjs && node scripts/verify-dist.mjs",
+    "verify:dist": "node scripts/verify-dist.mjs",
+    "verify:live": "node scripts/verify-links.mjs",
+    "verify:local": "node scripts/verify-links.mjs --base http://localhost:4173"
+  },
+  "devDependencies": {
+    "marked": "^15.0.6"
+  }
+}

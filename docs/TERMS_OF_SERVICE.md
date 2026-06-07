@@ -1,6 +1,6 @@
 # Winkly — Terms of Service
 
-**Last updated:** 25 February 2026
+**Last updated:** 7 June 2026
 
 These Terms of Service (“**Terms**”) govern your use of the Winkly mobile application and related services (“**Winkly**”, “**Service**”, “**we**”, “**us**”). By creating an account or using Winkly, you agree to these Terms. If you do not agree, do not use the Service.
 
@@ -140,4 +140,4 @@ For questions about these Terms, contact us via the details in the app under **G
 
 ---
 
-*By using Winkly, you confirm that you have read, understood, and agree to these Terms of Service and to our [Privacy Policy](PRIVACY_POLICY.md).*
+*By using Winkly, you confirm that you have read, understood, and agree to these Terms of Service and to our [Privacy Policy](/privacy).*

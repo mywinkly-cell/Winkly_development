@@ -13,14 +13,20 @@ function isLikelyUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
 }
 
+/** Linked EAS project (@winkly/winkly). Override with EXPO_PUBLIC_EAS_PROJECT_ID if needed. */
+const LINKED_EAS_PROJECT_ID = "5a6f6f9d-5969-4867-9572-5ee50a938066";
+
 const easProjectId = isLikelyUuid(process.env.EXPO_PUBLIC_EAS_PROJECT_ID)
   ? String(process.env.EXPO_PUBLIC_EAS_PROJECT_ID).trim()
-  : undefined;
+  : isLikelyUuid(LINKED_EAS_PROJECT_ID)
+    ? LINKED_EAS_PROJECT_ID
+    : undefined;
 
 module.exports = {
   expo: {
     name: "Winkly",
     slug: "winkly",
+    owner: "winkly",
     displayName: "Winkly",
     version: "1.0.0",
     orientation: "portrait",
