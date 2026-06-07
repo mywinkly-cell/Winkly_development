@@ -1,120 +1,87 @@
-# Winkly — Environments (dev / production)
+# Winkly — Environments (local / cloud dev / cloud production)
 
 **Last updated:** 2026-06-06
 
-Winkly uses **two active environments** today. A separate **staging** Supabase project is deferred until app publishing.
+### Repositories ↔ Supabase projects
 
-| Environment     | Backend                          | Mobile env file              | EAS profile / channel | Purpose |
-| --------------- | -------------------------------- | ---------------------------- | --------------------- | ------- |
-| **development** | Supabase **local** (`supabase start`) | `apps/mobile/.env.development` | `development`         | Day-to-day local work; disposable data. |
-| **production**  | **winkly-production** `orjccytcmklzcfjgqwwj` | `apps/mobile/.env.production`  | `production` / `preview` | Cloud backend for QA builds and release. [Dashboard](https://supabase.com/dashboard/project/orjccytcmklzcfjgqwwj). GitHub: [`mywinkly-cell/winkly-production`](https://github.com/mywinkly-cell/winkly-production). |
+| Repo | Supabase | Project ref | Role |
+| ---- | -------- | ----------- | ---- |
+| [**WinklyApp_3**](https://github.com/mywinkly-cell/WinklyApp_3) (public) | **WinklyApp** (development) | `gwgjdpqskusuejlwrsnd` | Author migrations & Edge Functions; push here first |
+| [**winkly-production**](https://github.com/mywinkly-cell/winkly-production) (private) | **winkly-production** | `orjccytcmklzcfjgqwwj` | Production snapshot + store builds; receive mirrored `supabase/` on promote |
 
-**Never** test untested migrations or experiments against production without local verification first.
+See **docs/BRANCHING.md** for code promote (`WinklyApp_3/main` → `winkly-production/main`). See **supabase/PROJECTS.md** for migration rules.
+
+| Environment | Backend | Mobile env file | EAS profile | Purpose |
+| ----------- | ------- | --------------- | ----------- | ------- |
+| **local** | `supabase start` | `.env.development` | `development` | Fast iteration; disposable data |
+| **cloud dev** | WinklyApp `gwgjdpqskusuejlwrsnd` | `.env.cloud-development` (optional) | — | Shared team QA after local verify |
+| **production** | winkly-production `orjccytcmklzcfjgqwwj` | `.env.production` | `preview` / `production` | Ship target; never experiment here |
 
 ---
 
 ## 1. One-time setup
 
-### 1.1 Create the env files (local)
-
-Copy each template and fill in values (the real files are git-ignored):
-
 ```bash
-cp apps/mobile/.env.development.example apps/mobile/.env.development
-cp apps/mobile/.env.production.example   apps/mobile/.env.production
+cp apps/mobile/.env.development.example       apps/mobile/.env.development
+cp apps/mobile/.env.cloud-development.example apps/mobile/.env.cloud-development   # optional
+cp apps/mobile/.env.production.example        apps/mobile/.env.production
 ```
 
-### 1.2 Create / link the Supabase projects
-
-- **development** — no cloud project needed. Start the local stack:
-  ```bash
-  supabase start
-  ```
-  Copy the printed **API URL** and **anon key** into `apps/mobile/.env.development`.
-- **production** — **winkly-production** (`orjccytcmklzcfjgqwwj`). Copy its URL + anon key into
-  `apps/mobile/.env.production` (or, preferably, only as EAS production/preview env vars).
+- **Local:** `supabase start` → copy API URL + anon key into `.env.development`.
+- **Cloud dev:** [WinklyApp dashboard](https://supabase.com/dashboard/project/gwgjdpqskusuejlwrsnd) → Settings → API → `.env.cloud-development`.
+- **Production:** [winkly-production dashboard](https://supabase.com/dashboard/project/orjccytcmklzcfjgqwwj) → `.env.production` or EAS secrets only.
 
 ---
 
-## 2. Running locally against an environment
-
-Expo loads `apps/mobile/.env` automatically. Pick which environment that points at:
+## 2. Running the mobile app against a backend
 
 ```bash
-npm run env:dev       # copies .env.development -> .env
-npm run env:prod      # copies .env.production   -> .env  (warns: live cloud data)
+npm run env:dev       # .env.development  → local stack
+npm run env:prod      # .env.production   → production cloud (warns)
 ```
 
-Or start in one step:
-
-```bash
-npm run start:dev
-npm run start:prod
-```
-
-At runtime the active environment is available via `Constants.expoConfig.extra.appEnv`.
+For **cloud dev**, copy manually: `cp apps/mobile/.env.cloud-development apps/mobile/.env` (or add a team script). Never point `.env.development` at production.
 
 ---
 
-## 3. Database migrations — promote dev → production
+## 3. Migrations — one direction only
 
-Migrations live in `supabase/migrations/`. **Always** verify locally before pushing to production.
+**Author in `WinklyApp_3` only.** Never create migrations in `winkly-production`.
 
 ```bash
-# 1) Develop locally — new migration files are picked up by db reset
-supabase db reset                 # rebuild local DB from migrations + seed
+# 1) Local verify
+supabase db reset
 
-# 2) Promote to PRODUCTION and verify the app
+# 2) Cloud development (WinklyApp)
+npm run supabase:push:development:dry-run   # inspect first
+npm run supabase:push:development
+
+# 3) QA app against gwgjdpqskusuejlwrsnd if needed
+
+# 4) Promote WinklyApp_3/main → winkly-production/main (mirrors supabase/)
+
+# 5) Cloud production — dry-run before apply
+npm run supabase:push:production:dry-run
 npm run supabase:push:production
-# or manually:
-supabase link --project-ref orjccytcmklzcfjgqwwj
-supabase db push
 ```
 
-Edge Functions follow the same flow — deploy to production after local verification:
-
-```bash
-npx supabase functions deploy ai-gateway --project-ref orjccytcmklzcfjgqwwj --use-api
-```
-
-Set production secrets once per project (see **docs/API_KEYS_AND_ENV.md** §3.1).
+Edge Functions: deploy to **development** ref first, then **production** after QA.
 
 ---
 
-## 4. EAS builds per environment
+## 4. EAS builds
 
-`apps/mobile/eas.json` defines profiles that stamp `APP_ENV`:
-
-```bash
-eas build --profile development   # APP_ENV=development (local Supabase)
-eas build --profile preview       # APP_ENV=production (winkly-production backend)
-eas build --profile production    # APP_ENV=production (Play AAB)
-```
-
-Store `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` (and other public
-vars) as **EAS environment variables** scoped to `preview` and `production` in the Expo dashboard,
-rather than committing real `.env.*` files.
+| Profile | Repo | Supabase backend |
+| ------- | ---- | ---------------- |
+| `development` | `WinklyApp_3` | Local (dev client) |
+| `preview` | `WinklyApp_3` | Production cloud (`orjccytcmklzcfjgqwwj`) for device QA |
+| `production` | **`winkly-production` only** | `orjccytcmklzcfjgqwwj` |
 
 ---
 
-## 5. CI (GitHub Actions)
+## 5. Golden rules
 
-`.github/workflows/ci.yml` runs on every PR and on pushes to `main` / `develop` as **three required jobs**:
-
-- **Lint** — `npm run mobile:lint`
-- **Typecheck** — `npm run mobile:typecheck` (TypeScript `strict` + `noImplicitAny`)
-- **Unit tests** — `npm run mobile:test`
-
-Configure branch protection to require all three before merge (`docs/BRANCHING.md`). Reproduce locally with `npm run ci`.
-
-On merge to **`main`**, `.github/workflows/eas-submit.yml` builds the **preview** profile and auto-submits to TestFlight + Play internal (`docs/EAS_CI.md`).
-
----
-
-## 6. Golden rules
-
-- Never point local dev at production data unless you intend to test against the live cloud project.
-- Test every migration locally (`supabase db reset`) before `supabase db push` to production.
-- Keep real `.env.*` files off git (only `*.example` is tracked).
-- Use separate analytics keys per environment so dev traffic never pollutes product metrics.
-- **Staging (future):** when the app is ready to publish, add a separate `winkly-staging` Supabase project for pre-release QA; until then, use local dev + winkly-production.
+- Migrations flow: **WinklyApp_3 → local → `gwgjdpqskusuejlwrsnd` → promote → `orjccytcmklzcfjgqwwj`** — never skip dev cloud, never author in the private repo.
+- Always `supabase:push:production:dry-run` before a prod push.
+- Keep real `.env.*` off git (only `*.example` tracked).
+- Separate PostHog/analytics keys per environment.

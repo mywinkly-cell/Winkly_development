@@ -19,7 +19,7 @@ This doc lists every API key and env var used by Winkly, where they are used, an
 
 All mobile env vars are prefixed with `EXPO_PUBLIC_` so they are available at build time. Copy `apps/mobile/.env.example` to `apps/mobile/.env` and fill in values.
 
-> **Environments (dev / production):** Winkly uses local development plus **winkly-production** (`orjccytcmklzcfjgqwwj`). Copy `apps/mobile/.env.{development,production}.example` to real files and switch with `npm run env:dev | env:prod` (copies the chosen `.env.<env>` → `.env`, which Expo loads). Full guide: **docs/ENVIRONMENTS.md**. A separate staging project is deferred until app publishing.
+> **Environments:** Local (`supabase start`), cloud **development** (`gwgjdpqskusuejlwrsnd` / WinklyApp_3), cloud **production** (`orjccytcmklzcfjgqwwj`). Templates: `.env.development`, `.env.cloud-development`, `.env.production`. Migrations authored only in WinklyApp_3. Full guide: **docs/ENVIRONMENTS.md**, **supabase/PROJECTS.md**.
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
@@ -108,7 +108,17 @@ Run the commands **on your machine** in PowerShell or Command Prompt. When you t
    npx supabase functions deploy notify-fanout
    ```
 
-### 3.1 Production checklist (`orjccytcmklzcfjgqwwj` — winkly-production)
+### 3.1 Development checklist (`gwgjdpqskusuejlwrsnd` — WinklyApp)
+
+Push migrations here **before** production. Audit secrets:
+
+```bash
+npx supabase secrets list --project-ref gwgjdpqskusuejlwrsnd
+```
+
+Use `CORS_ALLOWED_ORIGINS=https://gwgjdpqskusuejlwrsnd.supabase.co` and matching `private.webhook_config.function_base_url` when testing push on dev cloud.
+
+### 3.2 Production checklist (`orjccytcmklzcfjgqwwj` — winkly-production)
 
 Audit what's set (names only — no values):
 

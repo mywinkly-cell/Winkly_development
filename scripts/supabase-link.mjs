@@ -1,23 +1,27 @@
 #!/usr/bin/env node
 /**
- * Link the Supabase CLI to winkly-production.
- * Usage: node scripts/supabase-link.mjs production
+ * Link the Supabase CLI to development or production cloud.
+ * Usage: node scripts/supabase-link.mjs development|production
  */
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-const PRODUCTION_REF = "orjccytcmklzcfjgqwwj";
+const REFS = {
+  development: "gwgjdpqskusuejlwrsnd", // WinklyApp — WinklyApp_3 cloud dev
+  production: "orjccytcmklzcfjgqwwj", // winkly-production
+};
 
 const target = process.argv[2];
-if (target !== "production") {
-  console.error("Usage: node scripts/supabase-link.mjs production");
+if (!target || !REFS[target]) {
+  console.error("Usage: node scripts/supabase-link.mjs <development|production>");
   process.exit(1);
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-console.log(`Linking Supabase CLI to production (${PRODUCTION_REF})…`);
-const r = spawnSync("npx", ["supabase", "link", "--project-ref", PRODUCTION_REF], {
+const ref = REFS[target];
+console.log(`Linking Supabase CLI to ${target} (${ref})…`);
+const r = spawnSync("npx", ["supabase", "link", "--project-ref", ref], {
   cwd: root,
   stdio: "inherit",
   shell: true,
