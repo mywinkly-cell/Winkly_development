@@ -26,8 +26,13 @@
     "ci": "npm run mobile:lint && npm run mobile:typecheck && npm run mobile:test",
     "postinstall": "patch-package --patch-dir apps/mobile/patches",
     "supabase:deploy-auth-redirect": "supabase functions deploy auth-redirect",
+    "supabase:link:development": "node scripts/supabase-link.mjs development",
     "supabase:link:production": "node scripts/supabase-link.mjs production",
+    "supabase:push:development": "node scripts/supabase-push.mjs development",
+    "supabase:push:development:dry-run": "node scripts/supabase-push.mjs development --dry-run",
     "supabase:push:production": "node scripts/supabase-push.mjs production",
+    "supabase:push:production:dry-run": "node scripts/supabase-push.mjs production --dry-run",
+    "supabase:secrets:development": "npx supabase secrets list --project-ref gwgjdpqskusuejlwrsnd",
     "supabase:secrets:production": "npx supabase secrets list --project-ref orjccytcmklzcfjgqwwj"
   },
   "overrides": {

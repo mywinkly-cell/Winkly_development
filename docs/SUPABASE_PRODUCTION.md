@@ -1,99 +1,81 @@
-# Supabase — Production project & backups
+# Supabase — Cloud projects, migrations & backups
 
 **Last updated:** 2026-06-06
 
-Winkly uses **two active environments** today. A separate staging project is **deferred until app publishing**.
+| Repo | Supabase | Project ref | Role |
+| ---- | -------- | ----------- | ---- |
+| [**WinklyApp_3**](https://github.com/mywinkly-cell/WinklyApp_3) | **WinklyApp** (development) | `gwgjdpqskusuejlwrsnd` | Author `supabase/`; push migrations here first |
+| [**winkly-production**](https://github.com/mywinkly-cell/winkly-production) | **winkly-production** | `orjccytcmklzcfjgqwwj` | Mirrored snapshot; prod push + store builds |
 
-| Environment | Backend | Project ref | GitHub (team) |
-| ----------- | ------- | ----------- | ------------- |
-| **development** | Local (`supabase start`) | n/a | Main app repo (`develop` / feature branches) |
-| **production** | Supabase cloud — **winkly-production** | **`orjccytcmklzcfjgqwwj`** ([dashboard](https://supabase.com/dashboard/project/orjccytcmklzcfjgqwwj)) | [`mywinkly-cell/winkly-production`](https://github.com/mywinkly-cell/winkly-production) |
+Optional **local** stack: `supabase start` on developer machines (fastest loop). Full matrix: **docs/ENVIRONMENTS.md**.
 
-The former `winkly-staging` project was **renamed to winkly-production** and is now the single cloud backend. **Development** stays local — no second cloud slot needed until go-live staging is introduced.
-
----
-
-## 0. Current layout
-
-1. **Development** → `supabase start` locally.
-2. **Production** → `orjccytcmklzcfjgqwwj` — migrations, Edge Functions, EAS **preview** and **production** builds.
-
-**Never** run `supabase db reset` against the linked remote project. **Never** apply untested migrations to production.
+The former staging project (`orjccytcmklzcfjgqwwj`) is now **production**. Development cloud is the long-running **WinklyApp** project (`gwgjdpqskusuejlwrsnd`).
 
 ---
 
-## 1. One-time: production project setup
+## 0. Migration flow (strict)
 
-1. Open [winkly-production](https://supabase.com/dashboard/project/orjccytcmklzcfjgqwwj) in the Supabase dashboard.
-2. Copy **Project URL** + **anon key** into `apps/mobile/.env.production` (local) and EAS **preview** / **production** env vars.
-3. Link CLI: `npm run supabase:link:production` (or `supabase link --project-ref orjccytcmklzcfjgqwwj`).
-4. Apply migrations: `npm run supabase:push:production`.
-5. Deploy Edge Functions + set production secrets (see **docs/API_KEYS_AND_ENV.md** §3.1).
+```
+WinklyApp_3 (author) → db reset (local) → push dev → promote repo → dry-run prod → push prod
+```
+
+**Never** author migrations in `winkly-production`. See **supabase/PROJECTS.md**.
+
+**Status (2026-06-06):** `npm run supabase:push:production:dry-run` and `supabase:push:development:dry-run` from WinklyApp_3 both report **Remote database is up to date** (52 migrations on dev and prod).
+
+---
+
+## 1. Development cloud (`gwgjdpqskusuejlwrsnd`)
+
+1. [WinklyApp dashboard](https://supabase.com/dashboard/project/gwgjdpqskusuejlwrsnd) → copy URL + anon key → `apps/mobile/.env.cloud-development`.
+2. `npm run supabase:link:development`
+3. After local `supabase db reset`: `npm run supabase:push:development:dry-run` then `npm run supabase:push:development`
+4. Deploy changed Edge Functions to dev ref first; set dev secrets (see **docs/API_KEYS_AND_ENV.md** §3.1).
+
+---
+
+## 2. Production cloud (`orjccytcmklzcfjgqwwj`)
+
+1. [winkly-production dashboard](https://supabase.com/dashboard/project/orjccytcmklzcfjgqwwj) → `.env.production` / EAS env vars.
+2. Promote `WinklyApp_3/main` → `winkly-production/main` (must include mirrored `supabase/`).
+3. From `winkly-production` checkout: `npm run supabase:push:production:dry-run` then `npm run supabase:push:production`
+4. Deploy Edge Functions + production secrets (see **docs/API_KEYS_AND_ENV.md** §3.2).
 
 ### Auth redirect URLs (production)
 
-In production **Authentication → URL configuration**:
-
-- **Site URL**: `winkly://` or your production web URL
+- **Site URL**: `winkly://` or production web URL
 - **Redirect URLs**: `winkly://callback`, `winkly://**`, HTTPS auth-redirect function URL
 
 ---
 
-## 2. Migration promotion checklist
+## 3. winkly-production repo — `supabase/` mirror
 
+On each promote, **`winkly-production/main` must contain the full `supabase/` tree** from `WinklyApp_3/main` (migrations, `functions/`, `config.toml`). Verify:
+
+```bash
+# After first promote, in winkly-production checkout:
+ls supabase/migrations/*.sql | wc -l   # should match WinklyApp_3 (52)
+npm run supabase:push:production:dry-run
 ```
-local (db reset) → production (db push + app QA)
-```
 
-1. `supabase db reset` locally — verify app + tests
-2. `npm run supabase:push:production`
-3. Run EAS preview build; smoke-test critical flows
-4. Deploy Edge Functions to production if changed
-
-**Future (at app publish):** add a separate `winkly-staging` project and promote `local → staging → production`.
+Could not verify the private repo contents from this environment (no local clone, API 404 without auth). **Action:** clone `winkly-production` and confirm `supabase/migrations/` exists; if empty, promote `WinklyApp_3/main` now to seed it.
 
 ---
 
-## 3. Backups — enable and verify
+## 4. Backups (production only)
 
-Supabase backup options depend on your plan:
+Before go-live on `orjccytcmklzcfjgqwwj`:
 
-| Feature | Free | Pro+ |
-| ------- | ---- | ---- |
-| Daily logical backups | 7-day retention | Configurable |
-| Point-in-time recovery (PITR) | No | Yes (recommended for production) |
-
-### Production checklist (blocking before go-live)
-
-- [ ] Production project is on a **paid plan** with **PITR enabled** (Dashboard → **Database → Backups**).
-- [ ] Confirm **daily backup schedule** is active and retention meets your policy (minimum 7 days; 30+ recommended).
-- [ ] Document the **recovery procedure**: restore to a new project or use PITR to a timestamp (Supabase support/docs).
-- [ ] Store the **service role key** and **database password** in a team password manager — not in git.
-- [ ] Enable **database network restrictions** if your deployment model allows fixed egress IPs.
-
-### Verify backups in dashboard
-
-1. Open **winkly-production** (`orjccytcmklzcfjgqwwj`).
-2. Go to **Database → Backups**.
-3. Confirm status is **Enabled** and recent backup timestamps are listed.
-4. For PITR: note the earliest recoverable time and test window.
-
----
-
-## 4. Monitoring production
-
-- **Database → Reports** — connection count, disk, slow queries
-- **Advisors** (CLI `supabase db lint` or dashboard) — RLS gaps, missing indexes
-- **Logs** — Auth errors, Edge Function failures
-- Run `supabase/scripts/verify-setup.sql` after major migrations
+- [ ] Paid plan with **PITR** (Dashboard → Database → Backups)
+- [ ] Document recovery procedure; store DB password + service role in password manager
+- [ ] Never run `supabase db reset` against a linked remote project
 
 ---
 
 ## 5. Golden rules
 
-- Never point `development` mobile builds at the production Supabase URL.
-- Never run `supabase db reset` against a linked remote project.
-- Never apply migrations to production without local verification.
-- Rotate keys if a `.env` or service account is exposed.
+- One-direction migrations: **WinklyApp_3 → dev cloud → prod cloud**
+- Dry-run prod before every push
+- Dev experiments on `gwgjdpqskusuejlwrsnd`, never on `orjccytcmklzcfjgqwwj` without promote checklist
 
-See also: `docs/ENVIRONMENTS.md`, `docs/GO_LIVE_AND_PLAY_STORE.md`.
+See also: **docs/BRANCHING.md**, **docs/GO_LIVE_AND_PLAY_STORE.md**.
