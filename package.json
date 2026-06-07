@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "website"
   ],
   "scripts": {
     "start": "npm run mobile:start",
@@ -23,7 +24,7 @@
     "env:prod": "node scripts/use-env.mjs production",
     "start:dev": "npm run env:dev && npm run mobile:start",
     "start:prod": "npm run env:prod && npm run mobile:start",
-    "ci": "npm run mobile:lint && npm run mobile:typecheck && npm run mobile:test",
+    "ci": "npm run mobile:lint && npm run mobile:typecheck && npm run mobile:test && npm run website:verify",
     "postinstall": "patch-package --patch-dir apps/mobile/patches",
     "supabase:deploy-auth-redirect": "supabase functions deploy auth-redirect",
     "supabase:link:development": "node scripts/supabase-link.mjs development",
@@ -33,7 +34,10 @@
     "supabase:push:production": "node scripts/supabase-push.mjs production",
     "supabase:push:production:dry-run": "node scripts/supabase-push.mjs production --dry-run",
     "supabase:secrets:development": "npx supabase secrets list --project-ref gwgjdpqskusuejlwrsnd",
-    "supabase:secrets:production": "npx supabase secrets list --project-ref orjccytcmklzcfjgqwwj"
+    "supabase:secrets:production": "npx supabase secrets list --project-ref orjccytcmklzcfjgqwwj",
+    "website:build": "npm run -w website build",
+    "website:verify": "npm run -w website verify",
+    "website:verify:live": "npm run -w website verify:live"
   },
   "overrides": {
     "@expo/vector-icons": "15.1.1",

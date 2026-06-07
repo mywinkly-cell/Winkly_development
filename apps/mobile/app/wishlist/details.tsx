@@ -4,7 +4,7 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Linking } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Linking, ActivityIndicator } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { deleteWishlistItem, getWishlistItem, WishlistItem } from "@/lib/wishlistStore";
@@ -15,26 +15,42 @@ export default function WishlistDetails() {
 
   const [item, setItem] = useState<WishlistItem | null>(null);
 
-  const refresh = () => {
-    const found = getWishlistItem(String(id));
-    setItem(found);
-  };
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    try {
+      setLoading(true);
+      const found = await getWishlistItem(String(id));
+      setItem(found);
+    } catch {
+      setItem(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
 
   useFocusEffect(
     useCallback(() => {
-      refresh();
-    }, [id])
+      void refresh();
+    }, [refresh])
   );
 
   const onDelete = () => {
-    Alert.alert("Delete item?", "This cannot be undone (MVP local).", [
+    Alert.alert("Delete item?", "This cannot be undone.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
         style: "destructive",
         onPress: () => {
-          deleteWishlistItem(String(id));
-          router.replace("/wishlist");
+          void (async () => {
+            try {
+              await deleteWishlistItem(String(id));
+              router.replace("/wishlist");
+            } catch (err: unknown) {
+              const message = err instanceof Error ? err.message : "Could not delete item.";
+              Alert.alert("Error", message);
+            }
+          })();
         },
       },
     ]);
@@ -52,6 +68,14 @@ export default function WishlistDetails() {
     }
     Linking.openURL(safe);
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.screen, { alignItems: "center", justifyContent: "center" }]}>
+        <ActivityIndicator size="large" color={Colors.primaryViolet} />
+      </View>
+    );
+  }
 
   if (!item) {
     return (
@@ -127,7 +151,6 @@ export default function WishlistDetails() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.note}>Next: connect to Supabase wishlist_items + sharing.</Text>
       </ScrollView>
     </View>
   );

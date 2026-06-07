@@ -4,7 +4,7 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { getWishlistItem, updateWishlistItem, WishlistItem } from "@/lib/wishlistStore";
@@ -21,35 +21,60 @@ export default function WishlistEdit() {
   const [url, setUrl] = useState("");
   const [price, setPrice] = useState("");
 
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
   useFocusEffect(
     useCallback(() => {
-      const found = getWishlistItem(String(id));
-      setItem(found);
-
-      if (found && !loaded) {
-        setTitle(found.title);
-        setDescription(found.description ?? "");
-        setUrl(found.url ?? "");
-        setPrice(found.price ?? "");
-        setLoaded(true);
-      }
+      void (async () => {
+        try {
+          setLoading(true);
+          const found = await getWishlistItem(String(id));
+          setItem(found);
+          if (found && !loaded) {
+            setTitle(found.title);
+            setDescription(found.description ?? "");
+            setUrl(found.url ?? "");
+            setPrice(found.price ?? "");
+            setLoaded(true);
+          }
+        } finally {
+          setLoading(false);
+        }
+      })();
     }, [id, loaded])
   );
 
-  const onSave = () => {
+  const onSave = async () => {
     if (!title.trim()) {
       Alert.alert("Missing title", "Please add a title.");
       return;
     }
 
-    const updated = updateWishlistItem(String(id), { title, description, url, price });
-    if (!updated) {
-      Alert.alert("Not found", "This item no longer exists.");
-      router.replace("/wishlist");
-      return;
+    try {
+      setSaving(true);
+      const updated = await updateWishlistItem(String(id), { title, description, url, price });
+      if (!updated) {
+        Alert.alert("Not found", "This item no longer exists.");
+        router.replace("/wishlist");
+        return;
+      }
+      router.replace({ pathname: "/wishlist/details", params: { id: updated.id } });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Could not save changes.";
+      Alert.alert("Error", message);
+    } finally {
+      setSaving(false);
     }
-    router.replace({ pathname: "/wishlist/details", params: { id: updated.id } });
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.screen, { alignItems: "center", justifyContent: "center" }]}>
+        <ActivityIndicator size="large" color={Colors.primaryViolet} />
+      </View>
+    );
+  }
 
   if (!item) {
     return (
@@ -122,8 +147,8 @@ export default function WishlistEdit() {
             style={styles.input}
           />
 
-          <TouchableOpacity onPress={onSave} style={styles.primaryBtn} activeOpacity={0.9}>
-            <Text style={styles.primaryText}>Save changes</Text>
+          <TouchableOpacity onPress={() => void onSave()} disabled={saving} style={styles.primaryBtn} activeOpacity={0.9}>
+            <Text style={styles.primaryText}>{saving ? "Saving…" : "Save changes"}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => router.back()} style={styles.secondaryBtn} activeOpacity={0.9}>
@@ -131,7 +156,6 @@ export default function WishlistEdit() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.note}>Next: persist edits to Supabase + support shared lists.</Text>
       </ScrollView>
     </View>
   );

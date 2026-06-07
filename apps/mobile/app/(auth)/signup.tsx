@@ -33,6 +33,7 @@ import {
 import { getTermsAndCookiesAccepted } from "@/lib/legalFlags";
 import { markHasAccount } from "@/lib/lastActivity";
 import { trackAccountCreated } from "@/lib/analytics/events";
+import { OAuthButtons } from "@/components/auth/OAuthButtons";
 
 export default function Signup() {
   const router = useRouter();
@@ -199,9 +200,12 @@ export default function Signup() {
                 )}
               </TouchableOpacity>
 
-              <Text style={styles.oauthComingSoonNote}>
-                Social sign-in coming soon — use email for now.
-              </Text>
+              <OAuthButtons
+                accountType={accountType}
+                requireAdult
+                isAdult={isAdult}
+                disabled={loading}
+              />
 
               <Text style={styles.legal}>
                 By continuing, you agree to Winkly&apos;s <Text style={styles.link}>Terms</Text> & <Text style={styles.link}>Privacy Policy</Text>.
@@ -301,15 +305,6 @@ const styles = StyleSheet.create({
   },
   primaryBtnDisabled: { opacity: 0.7 },
   primaryText: { ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.headingBold },
-
-  oauthComingSoonNote: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    textAlign: "center",
-    marginTop: 8,
-    marginBottom: 4,
-    lineHeight: 20,
-  },
 
   legal: { ...Typography.caption, color: Colors.gray500, textAlign: "center", marginTop: 16, lineHeight: 20 },
   link: { color: Colors.primaryViolet, fontWeight: "600" },

@@ -1,6 +1,6 @@
 # API Keys and Environment Variables — Winkly
 
-**Last updated:** 2026-06-06
+**Last updated:** 2026-06-07
 
 This doc lists every API key and env var used by Winkly, where they are used, and **how to set them**. You must set these yourself (in Supabase Dashboard / CLI and in the mobile app `.env`); the app cannot set them for you.
 
@@ -32,7 +32,7 @@ All mobile env vars are prefixed with `EXPO_PUBLIC_` so they are available at bu
 | `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` | No | Google OAuth iOS client ID. |
 | `EXPO_PUBLIC_FACEBOOK_APP_ID` | No | Facebook App ID (for Sign in with Facebook). |
 | `EXPO_PUBLIC_ABLY_KEY` | No | Optional Ably API key for future pub/sub (match notifications). When unset, `lib/realtime/ablyOptional.ts` is a no-op; chat uses Supabase Realtime. |
-| `EXPO_PUBLIC_EAS_PROJECT_ID` | No | **Expo Push:** must be your Expo/EAS **Project ID UUID** (Dashboard → Project settings). Wired into `app.config.js` `extra.eas.projectId` only when valid; omit or leave unset for local **Expo Go**—especially **Android** (SDK 53+ remote push is not supported there; use an **EAS development build** to test push). |
+| `EXPO_PUBLIC_EAS_PROJECT_ID` | No | **Expo Push:** EAS **Project ID UUID**. **Linked project:** `5a6f6f9d-5969-4867-9572-5ee50a938066` (`@winkly/winkly`) — baked into `app.config.js` as fallback; also set on EAS for builds. Omit locally for **Expo Go**; use an **EAS development build** to test push (Android Expo Go cannot register remote push on SDK 53+). |
 
 
 **How to set (mobile):**
@@ -179,7 +179,7 @@ Remove any misnamed legacy secrets (e.g. old `WinklyApp` label) from Dashboard �
 - [ ] **External events (Meetup/Eventbrite):** Optional. Set `MEETUP_API_KEY` and/or `EVENTBRITE_PRIVATE_TOKEN` in Supabase secrets and deploy `get-nearby-external-events`. The Edge Function implements Meetup GraphQL and Eventbrite REST; when keys are set, Events home can show nearby external events.
 - [ ] **Server push:** Set `EXPO_ACCESS_TOKEN` + `WEBHOOK_SECRET` in Supabase secrets; sync `private.webhook_config`; deploy `notify-fanout`. See §3.1.
 - [ ] **Production CORS + Redis:** Set `CORS_ALLOWED_ORIGINS` and `UPSTASH_REDIS_REST_*` for ai-gateway scale/abuse protection.
-- [ ] **Expo Push / EAS:** Optional for dev in Expo Go. For **standalone / dev builds**, set `EXPO_PUBLIC_EAS_PROJECT_ID` to your Expo **project UUID** if you need remote push tokens; **Android Expo Go** cannot exercise remote push (SDK 53+) — build with **EAS** (`eas build`) when testing pushes end-to-end.
+- [ ] **Expo Push / EAS:** Linked project `@winkly/winkly` (`5a6f6f9d-5969-4867-9572-5ee50a938066`). Production/preview vars: `npm run eas:sync-production-env` in `apps/mobile` (reads `.env`). Test push on an **EAS build**, not Android Expo Go.
 
 ---
 

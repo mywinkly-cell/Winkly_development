@@ -31,9 +31,9 @@ Checklist to **activate** the app (production-ready backend + build) and **publi
 
 ### 1.3 EAS project
 
-- [ ] Install EAS CLI: `npm install -g eas-cli`
-- [ ] Log in: `eas login`
-- [ ] From `apps/mobile`: `eas init` to create/link an Expo project (replaces placeholder `projectId` in `app.config.js` with a real one from expo.dev).
+- [x] **Linked:** `@winkly/winkly` — project ID `5a6f6f9d-5969-4867-9572-5ee50a938066` (see `app.config.js` `LINKED_EAS_PROJECT_ID` and [expo.dev](https://expo.dev/accounts/winkly/projects/winkly)).
+- [x] Production/preview EAS env vars set for Supabase URL, anon key, auth redirect, and EAS project ID (`npm run eas:sync-production-env` from `apps/mobile` to refresh from `.env`).
+- [ ] Optional: add `EXPO_PUBLIC_POSTHOG_API_KEY` and `EXPO_PUBLIC_SENTRY_DSN` in Expo dashboard → Environment variables (production + preview), then re-run sync script or set manually.
 
 ### 1.4 OAuth (Google / Facebook) for production
 
@@ -42,10 +42,15 @@ Checklist to **activate** the app (production-ready backend + build) and **publi
 
 ### 1.5 Legal and support
 
-- [ ] **Privacy policy** URL (required for Play and for many auth providers). Source: `docs/PRIVACY_POLICY.md` — host at e.g. `https://winkly.app/privacy`.
-- [ ] **Terms of service** URL (recommended). Source: `docs/TERMS_OF_SERVICE.md` — host at e.g. `https://winkly.app/terms`.
+- [ ] **Update `website/legal-entity.json`** with registered address, managing director, Handelsregister, and VAT ID (required for Impressum).
+- [ ] **Deploy legal site** from `website/` to **winkly.app** (Vercel: root directory `website`; see `website/README.md`). **Important:** the domain may currently serve unrelated content — replace with this build.
+- [ ] **Privacy policy** URL (required for Play and for many auth providers). Source: `docs/PRIVACY_POLICY.md` → `https://winkly.app/privacy`.
+- [ ] **Terms of service** URL (required before submission). Source: `docs/TERMS_OF_SERVICE.md` → `https://winkly.app/terms`.
+- [ ] **Imprint** URL (required for Germany): `https://winkly.app/imprint`.
+- [ ] **Community guidelines**: `https://winkly.app/community`.
+- [ ] Verify built pages (no domain needed): `npm run website:verify`. After deploy: `npm run website:verify:live`.
 - [ ] Point account/legal screens to these URLs (see `app/account/legal.tsx`). For GDPR/EEA, ensure the Privacy Policy is live before launch.
-- [ ] Optional: **Community guidelines** — host and link from legal screen; see `docs/` for data protection context (`DATA_PROTECTION_AND_PRIVACY_ASSESSMENT.md`).
+- [ ] **Play Store Data safety:** complete form using **docs/PLAY_STORE_DATA_SAFETY.md** (approximate location, photos, messages, PostHog analytics; no ads; data not sold).
 
 ### 1.6 Build a production Android app
 

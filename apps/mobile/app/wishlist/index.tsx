@@ -1,10 +1,18 @@
 // apps/mobile/app/wishlist/index.tsx
-// Winkly – Wishlist (MVP-safe)
-// Purpose: List wishlist items + entry to Create.
+// Wishlist list + search (Supabase-backed).
 
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useMemo, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  TextInput,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { listWishlistItems, WishlistItem } from "@/lib/wishlistStore";
@@ -13,13 +21,26 @@ export default function WishlistIndex() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<WishlistItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const refresh = () => setItems(listWishlistItems());
+  const refresh = useCallback(async () => {
+    try {
+      setLoading(true);
+      const rows = await listWishlistItems();
+      setItems(rows);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Could not load wishlist.";
+      Alert.alert("Error", message);
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      refresh();
-    }, [])
+      void refresh();
+    }, [refresh])
   );
 
   const filtered = useMemo(() => {
@@ -58,11 +79,15 @@ export default function WishlistIndex() {
           />
         </View>
 
-        {filtered.length === 0 ? (
+        {loading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color={Colors.primaryViolet} />
+          </View>
+        ) : filtered.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>No items yet</Text>
             <Text style={styles.emptySub}>
-              Add gifts, goals, or ideas you want to remember.
+              Add gifts, goals, or ideas you want to remember. Saved to your account.
             </Text>
             <TouchableOpacity
               onPress={() => router.push("/wishlist/create")}
@@ -102,10 +127,6 @@ export default function WishlistIndex() {
             ))}
           </>
         )}
-
-        <Text style={styles.note}>
-          MVP: Local store. Next: persist to Supabase (wishlist_items table).
-        </Text>
       </ScrollView>
     </View>
   );
@@ -143,6 +164,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     color: Colors.textPrimary,
   },
+
+  loadingWrap: { paddingVertical: 40, alignItems: "center" },
 
   sectionTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 10 },
 
@@ -196,6 +219,4 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   primaryText: { ...Typography.button, color: Colors.accentYellow },
-
-  note: { ...Typography.caption, color: Colors.gray600, textAlign: "center", marginTop: 14 },
 });

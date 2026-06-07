@@ -1,6 +1,8 @@
 // apps/mobile/lib/wishlistStore.ts
-// Minimal in-memory Wishlist store (MVP-safe).
-// Later: replace with Supabase table: wishlists + wishlist_items.
+// Wishlist CRUD backed by Supabase public.wishlist_items.
+
+import { supabase } from "@/lib/supabase";
+import type { AppMode } from "@/types/database";
 
 export type WishlistItem = {
   id: string;
@@ -8,84 +10,166 @@ export type WishlistItem = {
   description?: string;
   url?: string;
   price?: string;
-  createdAt: string; // ISO
-  updatedAt: string; // ISO
+  mode: AppMode;
+  createdAt: string;
+  updatedAt: string;
 };
 
-const nowIso = () => new Date().toISOString();
-const uid = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const META_SUFFIX = "\n<!--winkly-wishlist-meta:";
 
-let items: WishlistItem[] = [
-  {
-    id: uid(),
-    title: "Weekend spa gift card",
-    description: "Relaxing spa day (placeholder item).",
-    url: "",
-    price: "€150",
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-  },
-  {
-    id: uid(),
-    title: "Elegant coffee machine",
-    description: "Premium design, compact size.",
-    url: "https://example.com",
-    price: "€220",
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-  },
-];
+type WishlistMeta = { url?: string; price?: string };
 
-export function listWishlistItems(): WishlistItem[] {
-  return [...items].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+function encodeDescription(description: string | undefined, url?: string, price?: string): string | null {
+  const base = description?.trim() ?? "";
+  const meta: WishlistMeta = {};
+  const cleanUrl = url?.trim();
+  const cleanPrice = price?.trim();
+  if (cleanUrl) meta.url = cleanUrl;
+  if (cleanPrice) meta.price = cleanPrice;
+  if (!Object.keys(meta).length) return base || null;
+  return `${base}${META_SUFFIX}${JSON.stringify(meta)}-->`;
 }
 
-export function getWishlistItem(id: string): WishlistItem | null {
-  return items.find((x) => x.id === id) ?? null;
+function decodeDescription(raw: string | null | undefined): { description: string; url: string; price: string } {
+  if (!raw) return { description: "", url: "", price: "" };
+  const idx = raw.indexOf(META_SUFFIX);
+  if (idx < 0) return { description: raw, url: "", price: "" };
+  const description = raw.slice(0, idx).trimEnd();
+  const tail = raw.slice(idx + META_SUFFIX.length);
+  const end = tail.indexOf("-->");
+  if (end < 0) return { description: raw, url: "", price: "" };
+  try {
+    const meta = JSON.parse(tail.slice(0, end)) as WishlistMeta;
+    return {
+      description,
+      url: meta.url?.trim() ?? "",
+      price: meta.price?.trim() ?? "",
+    };
+  } catch {
+    return { description: raw, url: "", price: "" };
+  }
 }
 
-export function createWishlistItem(input: {
+function mapRow(row: {
+  id: string;
+  title: string;
+  description: string | null;
+  mode: AppMode;
+  created_at: string;
+  updated_at: string;
+}): WishlistItem {
+  const decoded = decodeDescription(row.description);
+  return {
+    id: row.id,
+    title: row.title,
+    description: decoded.description || undefined,
+    url: decoded.url || undefined,
+    price: decoded.price || undefined,
+    mode: row.mode,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+async function requireUserId(): Promise<string> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) throw error;
+  const uid = data?.user?.id;
+  if (!uid) throw new Error("Sign in to manage your wishlist.");
+  return uid;
+}
+
+export async function listWishlistItems(mode?: AppMode): Promise<WishlistItem[]> {
+  const uid = await requireUserId();
+  let query = supabase
+    .from("wishlist_items")
+    .select("id, title, description, mode, created_at, updated_at")
+    .eq("user_id", uid)
+    .order("updated_at", { ascending: false });
+
+  if (mode) query = query.eq("mode", mode);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []).map((row) => mapRow(row as Parameters<typeof mapRow>[0]));
+}
+
+export async function getWishlistItem(id: string): Promise<WishlistItem | null> {
+  const uid = await requireUserId();
+  const { data, error } = await supabase
+    .from("wishlist_items")
+    .select("id, title, description, mode, created_at, updated_at")
+    .eq("user_id", uid)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+  return mapRow(data as Parameters<typeof mapRow>[0]);
+}
+
+export async function createWishlistItem(input: {
   title: string;
   description?: string;
   url?: string;
   price?: string;
-}): WishlistItem {
-  const created = {
-    id: uid(),
-    title: input.title.trim(),
-    description: input.description?.trim() || "",
-    url: input.url?.trim() || "",
-    price: input.price?.trim() || "",
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-  };
-  items = [created, ...items];
-  return created;
+  mode?: AppMode;
+}): Promise<WishlistItem> {
+  const uid = await requireUserId();
+  const mode = input.mode ?? "romance";
+  const { data, error } = await supabase
+    .from("wishlist_items")
+    .insert({
+      user_id: uid,
+      title: input.title.trim(),
+      description: encodeDescription(input.description, input.url, input.price),
+      mode,
+    })
+    .select("id, title, description, mode, created_at, updated_at")
+    .single();
+
+  if (error) throw error;
+  return mapRow(data as Parameters<typeof mapRow>[0]);
 }
 
-export function updateWishlistItem(
+export async function updateWishlistItem(
   id: string,
   patch: Partial<Pick<WishlistItem, "title" | "description" | "url" | "price">>
-): WishlistItem | null {
-  const existing = getWishlistItem(id);
+): Promise<WishlistItem | null> {
+  const existing = await getWishlistItem(id);
   if (!existing) return null;
 
-  const updated: WishlistItem = {
-    ...existing,
-    title: patch.title !== undefined ? patch.title.trim() : existing.title,
-    description:
-      patch.description !== undefined ? patch.description.trim() : existing.description,
-    url: patch.url !== undefined ? patch.url.trim() : existing.url,
-    price: patch.price !== undefined ? patch.price.trim() : existing.price,
-    updatedAt: nowIso(),
-  };
+  const title = patch.title !== undefined ? patch.title.trim() : existing.title;
+  const description =
+    patch.description !== undefined ? patch.description : existing.description ?? "";
+  const url = patch.url !== undefined ? patch.url : existing.url ?? "";
+  const price = patch.price !== undefined ? patch.price : existing.price ?? "";
 
-  items = items.map((x) => (x.id === id ? updated : x));
-  return updated;
+  const uid = await requireUserId();
+  const { data, error } = await supabase
+    .from("wishlist_items")
+    .update({
+      title,
+      description: encodeDescription(description, url, price),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", uid)
+    .eq("id", id)
+    .select("id, title, description, mode, created_at, updated_at")
+    .single();
+
+  if (error) throw error;
+  return mapRow(data as Parameters<typeof mapRow>[0]);
 }
 
-export function deleteWishlistItem(id: string): boolean {
-  const before = items.length;
-  items = items.filter((x) => x.id !== id);
-  return items.length !== before;
+export async function deleteWishlistItem(id: string): Promise<boolean> {
+  const uid = await requireUserId();
+  const { error, count } = await supabase
+    .from("wishlist_items")
+    .delete({ count: "exact" })
+    .eq("user_id", uid)
+    .eq("id", id);
+
+  if (error) throw error;
+  return (count ?? 0) > 0;
 }

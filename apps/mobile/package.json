@@ -6,6 +6,7 @@
   "scripts": {
     "validate-env": "node scripts/validate-env.js",
     "eas-build-pre-install": "node scripts/validate-env.js",
+    "eas:sync-production-env": "node scripts/sync-eas-production-env.mjs",
     "start": "expo start",
     "start:clear": "expo start -c",
     "android": "expo run:android",
@@ -16,7 +17,8 @@
     "test": "jest",
     "test:e2e": "maestro test -e EMAIL=qa@winkly.test -e PASSWORD=Test1234! .maestro/critical-path.yaml",
     "test:e2e:ios": "maestro test --device \"iPhone 16\" -e EMAIL=qa@winkly.test -e PASSWORD=Test1234! .maestro/critical-path.yaml",
-    "test:e2e:android": "maestro test --device emulator-5554 -e EMAIL=qa@winkly.test -e PASSWORD=Test1234! .maestro/critical-path.yaml"
+    "test:e2e:android": "maestro test --device emulator-5554 -e EMAIL=qa@winkly.test -e PASSWORD=Test1234! .maestro/critical-path.yaml",
+    "audit-i18n": "node scripts/audit-i18n.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/poppins": "^0.4.1",
