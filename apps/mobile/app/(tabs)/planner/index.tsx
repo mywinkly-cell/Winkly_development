@@ -261,73 +261,7 @@ const TOPIC_OPTIONS = [
   "Business meetings",
 ];
 
-const INITIAL_ITEMS: PlannerItem[] = [
-  { id: "d1", title: "Coffee date", timeLabel: "Fri • 18:30", dateStr: "31.01.2026", source: "dates", sortKey: 5.75, topic: "Coffee", description: "Casual coffee with a match.", location: "Café Blüte, Munich", isOrganiser: false, status: "active", participants: [{ id: "me", photoUrl: null }, { id: "date1", photoUrl: null }] },
-  { id: "d2", title: "Dinner reservation", timeLabel: "Sat • 20:00", dateStr: "01.02.2026", source: "dates", sortKey: 6.83, topic: "Dining", description: "Dinner at the Italian place.", location: "Trattoria Bella", isOrganiser: true, status: "active", participants: [{ id: "me", photoUrl: null }, { id: "date2", photoUrl: null }] },
-  { id: "d3", title: "Walk in park", timeLabel: "Sun • 14:00", dateStr: "02.02.2026", source: "dates", sortKey: 7.58, topic: "Outdoors", description: "Afternoon walk.", location: "Englischer Garten", isOrganiser: false, status: "active", participants: [{ id: "me", photoUrl: null }, { id: "date3", photoUrl: null }] },
-  { id: "f1", title: "Reggaeton class", timeLabel: "Wed • 19:00", dateStr: "29.01.2026", source: "meetups", sortKey: 3.79, topic: "Dancing", description: "Beginner-friendly reggaeton class.", location: "Dance Studio Munich", isOrganiser: false, status: "active", participants: [{ id: "me", photoUrl: null }, { id: "friend1", photoUrl: null }] },
-  { id: "f2", title: "Brunch with new friend", timeLabel: "Sat • 11:30", dateStr: "01.02.2026", source: "meetups", sortKey: 6.48, topic: "Dining", description: "Sunday brunch.", location: "Brunch & Coffee", isOrganiser: true, status: "active", participants: [{ id: "me", photoUrl: null }, { id: "friend2", photoUrl: null }] },
-  { id: "f3", title: "Hiking group meetup", timeLabel: "Sun • 09:00", dateStr: "02.02.2026", source: "meetups", sortKey: 7.38, topic: "Outdoors", description: "Morning hike with the group.", location: "Isar Trail", isOrganiser: false, status: "active", participants: [{ id: "me", photoUrl: null }, { id: "g1", photoUrl: null }, { id: "g2", photoUrl: null }, { id: "g3", photoUrl: null }, { id: "g4", photoUrl: null }] },
-  { id: "b1", title: "Intro call — Product Manager", timeLabel: "Mon • 10:00", dateStr: "27.01.2026", source: "business", sortKey: 1.42, topic: "Business meetings", description: "Initial intro call.", location: "Video call", isOrganiser: false, status: "active", participants: [{ id: "me", photoUrl: null }, { id: "pm1", photoUrl: null }] },
-  { id: "b2", title: "Coffee — Startup founder", timeLabel: "Thu • 16:30", dateStr: "30.01.2026", source: "business", sortKey: 4.69, topic: "Coffee", description: "Networking coffee chat.", location: "Werksviertel Café", isOrganiser: true, status: "active", participants: [{ id: "me", photoUrl: null }, { id: "founder", photoUrl: null }] },
-  { id: "b3", title: "Partnership meeting", timeLabel: "Fri • 13:00", dateStr: "31.01.2026", source: "business", sortKey: 5.54, topic: "Business meetings", description: "Discuss partnership terms.", location: "Office", isOrganiser: false, status: "active", participants: [{ id: "me", photoUrl: null }, { id: "p1", photoUrl: null }, { id: "p2", photoUrl: null }, { id: "p3", photoUrl: null }] },
-  {
-    id: "e1",
-    title: "Latin night — Munich",
-    timeLabel: "Sat • 22:00",
-    dateStr: "01.02.2026",
-    source: "events",
-    sortKey: 6.92,
-    topic: "Dancing",
-    description: "Latin dance night at the club.",
-    location: "P1 Club, Munich",
-    isOrganiser: false,
-    status: "active",
-    participants: [
-      { id: "me", photoUrl: null },
-      { id: "e1-host", photoUrl: null, firstName: "Maria", birthday: "1990-05-15", city: "Munich", occupation: "Dance instructor", isOrganizer: true },
-      { id: "e1a", photoUrl: null, firstName: "Alex", birthday: "1992-08-20", city: "Munich", occupation: "Software dev" },
-      { id: "e1b", photoUrl: null, firstName: "Sofia", birthday: "1995-03-10", city: "Munich", occupation: "Designer" },
-    ],
-  },
-  {
-    id: "e2",
-    title: "Startup meetup",
-    timeLabel: "Thu • 18:30",
-    dateStr: "30.01.2026",
-    source: "events",
-    sortKey: 4.77,
-    topic: "Networking",
-    description: "Monthly startup networking.",
-    location: "Factory Munich",
-    isOrganiser: false,
-    status: "active",
-    participants: [
-      { id: "me", photoUrl: null },
-      { id: "e2-host", photoUrl: null, firstName: "Tom", birthday: "1988-01-22", city: "Munich", occupation: "Startup founder", isOrganizer: true },
-      { id: "e2a", photoUrl: null, firstName: "Lisa", birthday: "1991-11-05", city: "Munich", occupation: "PM" },
-      { id: "e2b", photoUrl: null, firstName: "Jon", birthday: "1985-07-30", city: "Munich", occupation: "Investor" },
-    ],
-  },
-  {
-    id: "e3",
-    title: "Art exhibition",
-    timeLabel: "Sun • 12:00",
-    dateStr: "02.02.2026",
-    source: "events",
-    sortKey: 7.5,
-    topic: "Arts & Culture",
-    description: "Contemporary art exhibition.",
-    location: "Pinakothek der Moderne",
-    isOrganiser: false,
-    status: "active",
-    participants: [
-      { id: "me", photoUrl: null },
-      { id: "e3-host", photoUrl: null, firstName: "Clara", birthday: "1989-04-18", city: "Munich", occupation: "Curator", isOrganizer: true },
-      { id: "e3a", photoUrl: null, firstName: "Max", birthday: "1993-09-12", city: "Munich", occupation: "Artist" },
-    ],
-  },
-];
+const INITIAL_ITEMS: PlannerItem[] = [];
 
 function ParticipantAvatars({
   participants,
@@ -719,6 +653,14 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     );
   }, [activeTab, timeRange, topic, itemsState, listSortOrder, isPastContext, todayStart]);
 
+  const activePlannerCount = useMemo(
+    () => itemsState.filter((it) => it.status === "active").length,
+    [itemsState]
+  );
+
+  const showConciergePromoCard =
+    !embedded && activeTab !== "archive" && overviewMode === "list" && activePlannerCount === 0;
+
   const today = todayStart;
 
   const weekDays = useMemo(() => {
@@ -842,7 +784,10 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     <View style={styles.screen}>
       {/* TOP HEADER — Filter | Winkly | optional AI Spark (no profile/settings; those only at Mode Selection) */}
       {!embedded && (
-        <PlannerHeader onFilterPress={onFiltersPress} onAIPress={openConcierge} />
+        <PlannerHeader
+          onFilterPress={onFiltersPress}
+          onAIPress={showConciergePromoCard ? undefined : openConcierge}
+        />
       )}
 
       {/* CONTENT WRAPPER — tabs + scroll (filter overlay covers only this so header & bottom bar stay visible) */}
@@ -933,6 +878,18 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
             <Ionicons name="chevron-forward" size={20} color={Colors.gray500} />
           </TouchableOpacity>
         )}
+        {showConciergePromoCard ? (
+          <TouchableOpacity
+            style={styles.conciergePromoCard}
+            onPress={() => { Haptics.selectionAsync(); openConcierge(); }}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.conciergePromoText}>Ask Winkly AI to plan something ✨</Text>
+            <Text style={styles.conciergePromoSub}>
+              Weather-aware venues, backup options, and invites — in one flow.
+            </Text>
+          </TouchableOpacity>
+        ) : null}
         {overviewMode === "list" && (
           <>
             {items.length === 0 ? (
@@ -1568,6 +1525,26 @@ const styles = StyleSheet.create({
     flex: 1,
     fontWeight: "600",
     color: Colors.textPrimary,
+  },
+  conciergePromoCard: {
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: Layout.radii.card,
+    backgroundColor: Colors.primaryViolet + "14",
+    borderWidth: 1,
+    borderColor: Colors.primaryViolet + "44",
+  },
+  conciergePromoText: {
+    ...Typography.body,
+    fontFamily: FontFamily.headingBold,
+    color: Colors.primaryViolet,
+    fontWeight: "800",
+    marginBottom: 6,
+  },
+  conciergePromoSub: {
+    ...Typography.caption,
+    color: Colors.textSecondary,
+    lineHeight: 18,
   },
   itemCard: {
     backgroundColor: Colors.white,

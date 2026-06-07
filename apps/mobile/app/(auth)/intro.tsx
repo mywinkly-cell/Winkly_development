@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
   content: { alignItems: "center", justifyContent: "center", flex: 1 },
   wordmark: { width: 220, height: 80, marginBottom: 32 },
   title: {
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
     fontSize: 26,
     lineHeight: 36,
     color: Colors.textPrimary,
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     ...Shadow.button,
   },
-  primaryText: { ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.heading },
+  primaryText: { ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.headingBold },
   secondaryBtn: {
     width: "100%",
     maxWidth: 360,
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     justifyContent: "center",
   },
-  secondaryText: { ...Typography.button, color: Colors.primaryViolet, fontFamily: FontFamily.heading },
+  secondaryText: { ...Typography.button, color: Colors.primaryViolet, fontFamily: FontFamily.headingBold },
   legal: { ...Typography.caption, color: Colors.gray600, textAlign: "center", paddingHorizontal: 16, lineHeight: 20 },
   link: { color: Colors.primaryViolet, fontWeight: "600" },
 });

@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...(Typography?.h2 ?? {}),
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
     letterSpacing: 0,
     textAlign: "center",
     fontWeight: "800",

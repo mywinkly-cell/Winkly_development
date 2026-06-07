@@ -8,7 +8,7 @@ Supabase Storage can serve HTML as plain text. The Edge Function ensures correct
 
 ### 1. Deploy the function
 
-From the project root (WinklyApp_3):
+From the project root (Winkly_development):
 
 ```powershell
 npm run supabase:deploy-auth-redirect

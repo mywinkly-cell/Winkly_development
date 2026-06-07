@@ -292,7 +292,7 @@ export default function NewChat() {
 
         {loading ? (
           <View style={{ flex: 1, justifyContent: "center" }}>
-            <ActivityIndicator />
+            <ActivityIndicator size="large" color={Colors.primaryViolet} />
             <Text style={{ textAlign: "center", marginTop: 8, opacity: 0.7 }}>Loading…</Text>
           </View>
         ) : (

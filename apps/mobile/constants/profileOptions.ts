@@ -20,6 +20,9 @@ export type ActivityPreferenceOption = {
   emoji: string;
 };
 
+/** Pre-selected on onboarding step 3 so the grid never feels blank. */
+export const POPULAR_ACTIVITY_PREFERENCE_KEYS = ["coffee", "restaurants", "hiking"] as const;
+
 export const ACTIVITY_PREFERENCE_OPTIONS: ActivityPreferenceOption[] = [
   { key: "hiking", label: "Hiking", emoji: "🥾" },
   { key: "restaurants", label: "Restaurants", emoji: "🍽️" },

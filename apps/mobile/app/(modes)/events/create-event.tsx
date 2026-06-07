@@ -435,7 +435,11 @@ export default function CreateEvent() {
             style={[styles.cta, { backgroundColor: Colors.primary, opacity: saving ? 0.7 : 1 }]}
             activeOpacity={0.9}
           >
-            {saving ? <ActivityIndicator /> : <Text style={{ color: Colors.onPrimary, fontWeight: "900" }}>Create</Text>}
+            {saving ? (
+              <ActivityIndicator size="small" color={Colors.white} />
+            ) : (
+              <Text style={{ color: Colors.onPrimary, fontWeight: "900" }}>Create</Text>
+            )}
           </TouchableOpacity>
 
           <Text style={{ color: Colors.mutedText, marginTop: 10, lineHeight: 18 }}>

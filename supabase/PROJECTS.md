@@ -2,29 +2,29 @@
 
 | Repo | Supabase project | Project ref | Region | Role |
 | ---- | ---------------- | ----------- | ------ | ---- |
-| [**WinklyApp_3**](https://github.com/mywinkly-cell/WinklyApp_3) (public) | **WinklyApp** (development) | `gwgjdpqskusuejlwrsnd` | eu-central-1 | Cloud dev — test migrations & Edge Functions here first |
+| [**Winkly_development**](https://github.com/mywinkly-cell/Winkly_development) (public) | **Winkly_development** | `gwgjdpqskusuejlwrsnd` | eu-central-1 | Cloud dev — test migrations & Edge Functions here first |
 | [**winkly-production**](https://github.com/mywinkly-cell/winkly-production) (private) | **winkly-production** | `orjccytcmklzcfjgqwwj` | eu-west-1 | Production — ship only after dev cloud QA |
-| *WinklyApp_3* (local) | `supabase start` | n/a | n/a | Optional fast iteration before cloud dev push |
+| *Winkly_development* (local) | `supabase start` | n/a | n/a | Optional fast iteration before cloud dev push |
 
-Dashboards: [WinklyApp (dev)](https://supabase.com/dashboard/project/gwgjdpqskusuejlwrsnd) · [winkly-production](https://supabase.com/dashboard/project/orjccytcmklzcfjgqwwj)
+Dashboards: [Winkly_development](https://supabase.com/dashboard/project/gwgjdpqskusuejlwrsnd) · [winkly-production](https://supabase.com/dashboard/project/orjccytcmklzcfjgqwwj)
 
 ---
 
 ## Migration rule (strict — one direction only)
 
-**`supabase/migrations/` is owned by `WinklyApp_3` only.** Never author or edit migrations in `winkly-production`.
+**`supabase/migrations/` is owned by `Winkly_development` only.** Never author or edit migrations in `winkly-production`.
 
 ```
-WinklyApp_3 (author)  →  supabase db reset (local)  →  push dev cloud  →  promote code  →  push prod cloud
+Winkly_development (author)  →  supabase db reset (local)  →  push dev cloud  →  promote code  →  push prod cloud
                               ↓                              ↓                                    ↓
                          local stack                  gwgjdpqskusuejlwrsnd              orjccytcmklzcfjgqwwj
 ```
 
-1. Create migration files only in **WinklyApp_3** (`supabase migration new …`).
+1. Create migration files only in **Winkly_development** (`supabase migration new …`).
 2. Verify locally: `supabase db reset`.
 3. Push to **development** cloud: `npm run supabase:push:development`.
 4. QA on dev cloud (app pointed at `gwgjdpqskusuejlwrsnd` if needed).
-5. Promote **`WinklyApp_3/main` → `winkly-production/main`** (code snapshot includes mirrored `supabase/`).
+5. Promote **`Winkly_development/main` → `winkly-production/main`** (code snapshot includes mirrored `supabase/`).
 6. Push to **production** cloud from either checkout **with identical migration files**: `npm run supabase:push:production` (typically run from `winkly-production` after promote).
 
 Before any prod push, always dry-run:
@@ -35,7 +35,7 @@ npm run supabase:push:production:dry-run
 
 ---
 
-## CLI helpers (from **WinklyApp_3** repo root)
+## CLI helpers (from **Winkly_development** repo root)
 
 ```bash
 npm run supabase:link:development
@@ -84,19 +84,19 @@ Optional: `MEETUP_API_KEY`, `EVENTBRITE_PRIVATE_TOKEN`, `GOOGLE_PLACES_API_KEY`.
 
 ## winkly-production repo — does it need `supabase/`?
 
-**Yes.** On each promote, `winkly-production/main` should include the **full mirrored** `supabase/` tree from `WinklyApp_3/main` (migrations, `functions/`, `config.toml`, scripts). That way:
+**Yes.** On each promote, `winkly-production/main` should include the **full mirrored** `supabase/` tree from `Winkly_development/main` (migrations, `functions/`, `config.toml`, scripts). That way:
 
 - `supabase db push` run from the **private** repo reflects exactly what ships to `orjccytcmklzcfjgqwwj`.
 - The private repo stays a complete deployable snapshot, not just mobile app code.
 
-**Authoring stays in WinklyApp_3** — `winkly-production` only receives copies via promote PR/merge, never hand-edited migration files.
+**Authoring stays in Winkly_development** — `winkly-production` only receives copies via promote PR/merge, never hand-edited migration files.
 
 Verify mirror after first promote:
 
 ```bash
 # In winkly-production checkout
-ls supabase/migrations | wc -l    # should match WinklyApp_3 (52 SQL files + README)
+ls supabase/migrations | wc -l    # should match Winkly_development (52 SQL files + README)
 npm run supabase:push:production:dry-run
 ```
 
-**Status (2026-06-06):** Dry-run from **WinklyApp_3** against both cloud projects reports **Remote database is up to date** (52 migrations applied on dev and prod). Re-run dry-run after any new migration before prod push.
+**Status (2026-06-06):** Dry-run from **Winkly_development** against both cloud projects reports **Remote database is up to date** (52 migrations applied on dev and prod). Re-run dry-run after any new migration before prod push.

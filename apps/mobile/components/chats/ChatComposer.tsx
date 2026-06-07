@@ -26,6 +26,7 @@ import {
   useAudioRecorderState,
 } from "expo-audio";
 import { Colors, Typography } from "@/constants/tokens";
+import { RecordingWaveform } from "@/components/chats/RecordingWaveform";
 
 const MAX_VOICE_SECONDS = 180;
 
@@ -254,8 +255,8 @@ export function ChatComposer({
           {isRecording ? (
             <View style={styles.recordingRow}>
               <View style={styles.recordingDot} />
-              <Text style={styles.recordingLabel}>Recording</Text>
               <Text style={styles.recordingTime}>{formatDurationMs(recordingMs)}</Text>
+              <RecordingWaveform active={isRecording} accentColor={accentColor} />
               <Pressable
                 onPress={() => void stopRecordingToPreview()}
                 style={styles.recordingStopBtn}
@@ -423,18 +424,12 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: Colors.errorRed,
   },
-  recordingLabel: {
-    ...Typography.caption,
-    fontWeight: "700",
-    color: Colors.errorRed,
-  },
   recordingTime: {
-    flex: 1,
-    textAlign: "right",
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "600",
     color: Colors.textPrimary,
     fontVariant: ["tabular-nums"],
+    minWidth: 44,
   },
   recordingStopBtn: {
     width: 36,

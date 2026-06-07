@@ -21,7 +21,7 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useModeContext } from "@/providers";
-import { Colors, Typography, FontFamily } from "@/constants/tokens";
+import { Colors, Typography, FontFamily, Layout } from "@/constants/tokens";
 import { ModeSelectionHeader } from "@/components/layout/ModeSelectionHeader";
 import {
   computeModeProgressFromSubProfiles,
@@ -29,6 +29,16 @@ import {
   getModeSubProfileEditRoute,
   type ModeProgressMap,
 } from "@/lib/mode/subProfileProgress";
+import {
+  clearOnboardingSubProfileSkipped,
+  getOnboardingSubProfileSkipped,
+  type SkippedOnboardingMode,
+} from "@/lib/introFlags";
+import {
+  fetchModeDiscoverCounts,
+  formatModeDiscoverCount,
+  type ModeDiscoverCounts,
+} from "@/lib/discover/modeDiscoverCounts";
 import type { Mode } from "@/types";
 
 type ModeKey = Mode;
@@ -52,6 +62,15 @@ const MODE_CONFIG: Record<
   events: { label: "Events", subProfileName: "Events", description: "Join & create", icon: "calendar-outline", iconImage: EVENTS_ICON },
 };
 
+const SKIPPED_MODE_BANNER: Record<
+  SkippedOnboardingMode,
+  { message: string; cta: string }
+> = {
+  romance: { message: "Set up your Romance profile to start matching", cta: "Set up profile" },
+  friends: { message: "Set up your Friends profile to start meeting people", cta: "Set up profile" },
+  business: { message: "Set up your Business profile to start networking", cta: "Set up profile" },
+};
+
 type AccountType = "personal" | "business";
 
 export default function ModeSelectionIndex() {
@@ -67,6 +86,8 @@ export default function ModeSelectionIndex() {
     business: 0,
   });
   const [enteringMode, setEnteringMode] = useState<ModeKey | null>(null);
+  const [discoverCounts, setDiscoverCounts] = useState<ModeDiscoverCounts>({});
+  const [skippedMode, setSkippedMode] = useState<SkippedOnboardingMode | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -81,6 +102,14 @@ export default function ModeSelectionIndex() {
 
       setProgress(computeModeProgressFromSubProfiles(profiles ?? []));
       setAccountType((context.account_type as AccountType) ?? "personal");
+
+      const pendingSkip = await getOnboardingSubProfileSkipped();
+      if (pendingSkip && computeModeProgressFromSubProfiles(profiles ?? [])[pendingSkip] >= 100) {
+        await clearOnboardingSubProfileSkipped();
+        setSkippedMode(null);
+      } else {
+        setSkippedMode(pendingSkip);
+      }
 
       if ((context.account_type as AccountType) === "personal") {
         const { data: up } = await supabase
@@ -100,6 +129,10 @@ export default function ModeSelectionIndex() {
         const logo = (bp as any)?.logo_uri;
         if (logo) setProfilePhotoUri(logo);
       }
+
+      void fetchModeDiscoverCounts(userId)
+        .then(setDiscoverCounts)
+        .catch(() => setDiscoverCounts({}));
     } catch (err) {
       console.warn("Failed to load mode progress", err);
     } finally {
@@ -214,6 +247,34 @@ export default function ModeSelectionIndex() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {skippedMode && progress[skippedMode] < 100 ? (
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync();
+              router.push(getModeSubProfileEditRoute(skippedMode) as never);
+            }}
+            style={{
+              marginBottom: 20,
+              padding: 14,
+              borderRadius: 14,
+              backgroundColor: Colors.primaryViolet + "12",
+              borderWidth: 1,
+              borderColor: Colors.primaryViolet + "44",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <Text style={{ ...Typography.body, flex: 1, color: Colors.textPrimary, fontWeight: "600" }}>
+              {SKIPPED_MODE_BANNER[skippedMode].message}
+            </Text>
+            <Text style={{ ...Typography.caption, color: Colors.primaryViolet, fontWeight: "800" }}>
+              {SKIPPED_MODE_BANNER[skippedMode].cta} →
+            </Text>
+          </Pressable>
+        ) : null}
+
         <Text
           testID="mode-selection-title"
           style={{
@@ -221,7 +282,7 @@ export default function ModeSelectionIndex() {
             fontSize: 24,
             fontWeight: "800",
             color: Colors.primaryViolet,
-            fontFamily: FontFamily.heading,
+            fontFamily: FontFamily.headingBold,
             textAlign: "center",
             marginBottom: 28,
           }}
@@ -241,6 +302,7 @@ export default function ModeSelectionIndex() {
                 testID={`mode-card-${mode}`}
                 label={cfg.label}
                 description={cfg.description}
+                discoverLine={formatModeDiscoverCount(mode, discoverCounts[mode])}
                 color={MODE_CARD_COLORS[mode]}
                 icon={cfg.icon}
                 iconImage={cfg.iconImage}
@@ -262,6 +324,7 @@ type ModeCardProps = {
   testID?: string;
   label: string;
   description: string;
+  discoverLine?: string | null;
   color: string;
   icon: keyof typeof Ionicons.glyphMap;
   iconImage?: number;
@@ -275,11 +338,11 @@ const CARD_GAP = 12;
 const CARD_ICON_SIZE = 36;
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CARD_SIZE = (SCREEN_WIDTH - 48 - CARD_GAP * 2) / 2;
-const CARD_RADIUS = 28;
+const CARD_RADIUS = Layout.radii.card + 8;
 const CARD_PADDING = 24;
 const ACTIVE_SCALE = 1.08;
 
-function ModeCard({ testID, label, description, color, icon, iconImage, active, ready, busy, onPress }: ModeCardProps) {
+function ModeCard({ testID, label, description, discoverLine, color, icon, iconImage, active, ready, busy, onPress }: ModeCardProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -349,12 +412,27 @@ function ModeCard({ testID, label, description, color, icon, iconImage, active, 
               ) : (
                 <Ionicons name={icon} size={CARD_ICON_SIZE} color={Colors.white} style={{ marginBottom: 12 }} />
               )}
-              <Text selectable={false} style={{ ...Typography.h3, color: Colors.white, marginBottom: 4, textAlign: "center", fontFamily: FontFamily.heading }}>
+              <Text selectable={false} style={{ ...Typography.h3, color: Colors.white, marginBottom: 4, textAlign: "center", fontFamily: FontFamily.headingBold }}>
                 {label}
               </Text>
               <Text selectable={false} style={{ ...Typography.caption, color: Colors.white, textAlign: "center", lineHeight: 18 }}>
                 {description}
               </Text>
+              {discoverLine ? (
+                <Text
+                  selectable={false}
+                  style={{
+                    ...Typography.caption,
+                    fontSize: 11,
+                    color: "rgba(255,255,255,0.88)",
+                    textAlign: "center",
+                    marginTop: 6,
+                    fontWeight: "600",
+                  }}
+                >
+                  {discoverLine}
+                </Text>
+              ) : null}
             </View>
           </View>
         </Animated.View>

@@ -250,7 +250,7 @@ export default function BusinessProfileView() {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator />
+            <ActivityIndicator size="large" color={Colors.business.primary} />
             <Text style={{ marginTop: 10, color: Colors.mutedText }}>Loading profile…</Text>
           </View>
         ) : !profile ? (

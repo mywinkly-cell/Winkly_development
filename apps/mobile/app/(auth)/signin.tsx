@@ -1,7 +1,7 @@
 // apps/mobile/app/(auth)/signin.tsx
 // Winkly Sign-in — Premium, modern, professional (SDK 54)
 
-import React, { useMemo, useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -55,14 +55,6 @@ export default function Signin() {
     });
   }, [router]);
 
-  const oauthReady = useMemo(() => {
-    const googleAndroid = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
-    const googleIos = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
-    const facebook = process.env.EXPO_PUBLIC_FACEBOOK_APP_ID;
-    const googleReady = Platform.OS === "android" ? !!googleAndroid : Platform.OS === "ios" ? !!googleIos : false;
-    return { googleReady, facebookReady: !!facebook, appleReady: Platform.OS === "ios" };
-  }, []);
-
   const onSignin = async () => {
     const validation = validateSigninInput({ email, password });
     if (!validation.ok) {
@@ -109,16 +101,6 @@ export default function Signin() {
       setLoading(false);
     }
   };
-
-  const handleGoogleSignin = () => {
-    if (!oauthReady.googleReady) Alert.alert(t("auth.oauthNotConfigured"), "Add OAuth client IDs in .env.");
-    else Alert.alert(t("auth.comingSoon"), "Google sign-in will be enabled after OAuth setup.");
-  };
-  const handleFacebookSignin = () => {
-    if (!oauthReady.facebookReady) Alert.alert(t("auth.oauthNotConfigured"), "Add Facebook App ID in .env.");
-    else Alert.alert(t("auth.comingSoon"), "Facebook sign-in will be enabled after OAuth setup.");
-  };
-  const handleAppleSignin = () => oauthReady.appleReady && Alert.alert(t("auth.comingSoon"), "Apple sign-in requires EAS build.");
 
   return (
     <SafeScreenView style={styles.safe}>
@@ -184,35 +166,9 @@ export default function Signin() {
                 <Text style={styles.resetTextSecondary}>Already have a reset link?</Text>
               </TouchableOpacity>
 
-              <View style={styles.dividerRow}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>{t("auth.orContinueWith")}</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <View style={styles.oauthStack}>
-                {oauthReady.googleReady && (
-                  <TouchableOpacity onPress={handleGoogleSignin} activeOpacity={0.85} style={styles.oauthBtnFull}>
-                    <Image source={require("../../assets/icons/google.png")} style={styles.oauthIcon} />
-                    <Text style={styles.oauthLabel}>{t("auth.continueWithGoogle")}</Text>
-                  </TouchableOpacity>
-                )}
-                {oauthReady.facebookReady && (
-                  <TouchableOpacity onPress={handleFacebookSignin} activeOpacity={0.85} style={styles.oauthBtnFull}>
-                    <Image source={require("../../assets/icons/facebook.png")} style={styles.oauthIcon} />
-                    <Text style={styles.oauthLabel}>{t("auth.continueWithFacebook")}</Text>
-                  </TouchableOpacity>
-                )}
-                {Platform.OS === "ios" && (
-                  <TouchableOpacity onPress={handleAppleSignin} activeOpacity={0.85} style={styles.oauthBtnFull}>
-                    <Image source={require("../../assets/icons/apple.png")} style={styles.oauthIcon} />
-                    <Text style={styles.oauthLabel}>{t("auth.continueWithApple")}</Text>
-                  </TouchableOpacity>
-                )}
-                {!oauthReady.googleReady && !oauthReady.facebookReady && !oauthReady.appleReady && (
-                  <Text style={styles.oauthHint}>OAuth sign-in available after configuration.</Text>
-                )}
-              </View>
+              <Text style={styles.oauthComingSoonNote}>
+                Social sign-in coming soon — use email for now.
+              </Text>
 
               <TouchableOpacity onPress={() => router.replace("/(onboarding-personal)/get-started")} style={styles.footerLink}>
                 <Text style={styles.footerText}>
@@ -244,7 +200,7 @@ const styles = StyleSheet.create({
     ...Shadow.card,
   },
 
-  title: { fontFamily: FontFamily.heading, fontSize: 24, lineHeight: 32, color: Colors.textPrimary, marginBottom: 8 },
+  title: { fontFamily: FontFamily.headingBold, fontSize: 24, lineHeight: 32, color: Colors.textPrimary, marginBottom: 8 },
   subtitle: { ...Typography.body, color: Colors.textSecondary, marginBottom: 24 },
 
   label: { ...Typography.caption, color: Colors.textSecondary, marginBottom: 8 },
@@ -274,35 +230,22 @@ const styles = StyleSheet.create({
     ...Shadow.button,
   },
   primaryBtnDisabled: { opacity: 0.7 },
-  primaryText: { ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.heading },
+  primaryText: { ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.headingBold },
 
   resetLink: { alignItems: "center", marginBottom: 8, minHeight: 44, justifyContent: "center" },
   resetText: { ...Typography.caption, color: Colors.primaryViolet },
-  resetLinkSecondary: { alignItems: "center", marginBottom: 24, minHeight: 44, justifyContent: "center" },
+  resetLinkSecondary: { alignItems: "center", marginBottom: 16, minHeight: 44, justifyContent: "center" },
   resetTextSecondary: { ...Typography.caption, color: Colors.gray600, fontSize: 13 },
 
-  dividerRow: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.gray200 },
-  dividerText: { ...Typography.caption, color: Colors.gray600, marginHorizontal: 12 },
-
-  oauthStack: { gap: 12 },
-  oauthBtnFull: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: Layout.radii.control,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    backgroundColor: Colors.white,
-    minHeight: Layout.touchTargetMin,
+  oauthComingSoonNote: {
+    ...Typography.caption,
+    color: Colors.gray600,
+    textAlign: "center",
+    marginBottom: 8,
+    lineHeight: 20,
   },
-  oauthIcon: { width: 20, height: 20, marginRight: 12 },
-  oauthLabel: { ...Typography.button, color: Colors.textPrimary },
-  oauthHint: { ...Typography.caption, color: Colors.gray500, textAlign: "center", paddingVertical: 8 },
 
-  footerLink: { marginTop: 24, alignItems: "center", minHeight: 44, justifyContent: "center" },
+  footerLink: { marginTop: 16, alignItems: "center", minHeight: 44, justifyContent: "center" },
   footerText: { ...Typography.body, color: Colors.gray600 },
   link: { color: Colors.primaryViolet, fontWeight: "600" },
 });

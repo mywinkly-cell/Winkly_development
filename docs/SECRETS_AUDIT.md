@@ -28,7 +28,7 @@
 
 - [ ] `cp apps/mobile/.env.example apps/mobile/.env` (or use `npm run env:dev` with `.env.development`)
 - [ ] Optional: `cp apps/mobile/.env.local.example apps/mobile/.env.local` for machine-specific overrides
-- [ ] EAS: env vars for `preview` (QA from `WinklyApp_3`) and `production` (store builds from `winkly-production` repo) — winkly-production Supabase URL + anon key
+- [ ] EAS: env vars for `preview` (QA from `Winkly_development`) and `production` (store builds from `winkly-production` repo) — winkly-production Supabase URL + anon key
 - [ ] Supabase: use local dev for day-to-day work; never use production anon key in local `.env.development`
 - [ ] GitHub: add repository secrets `EXPO_TOKEN`, `GOOGLE_SERVICE_ACCOUNT_JSON` for EAS submit (`docs/EAS_CI.md`)
 - [ ] GitHub: enable **Secret scanning** and **Dependabot security updates** (Settings → Code security)

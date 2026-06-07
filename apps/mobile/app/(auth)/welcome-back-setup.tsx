@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...Typography.h1,
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
     color: Colors.primaryViolet,
     textAlign: "center",
     marginBottom: 12,
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   },
   ctaText: {
     ...Typography.button,
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
     color: Colors.accentYellow,
   },
 });

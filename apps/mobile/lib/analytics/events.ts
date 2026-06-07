@@ -19,6 +19,7 @@ export const AnalyticsEvents = {
   // Supporting funnel events
   AccountCreated: "account_created",
   OnboardingCompleted: "onboarding_completed",
+  OnboardingSubProfileSkipped: "onboarding_subprofile_skipped",
 } as const;
 
 export type AnalyticsEventName = (typeof AnalyticsEvents)[keyof typeof AnalyticsEvents];
@@ -65,4 +66,11 @@ export function trackAccountCreated(p: { account_type: string; method?: string }
 
 export function trackOnboardingCompleted(p: { account_type: string }): void {
   track(AnalyticsEvents.OnboardingCompleted, { ...p });
+}
+
+export function trackOnboardingSubProfileSkipped(p: {
+  skipped_mode: "romance" | "friends" | "business";
+  onboarding_step: number;
+}): void {
+  track(AnalyticsEvents.OnboardingSubProfileSkipped, { ...p });
 }

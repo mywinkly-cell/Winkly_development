@@ -12,7 +12,7 @@ export default function GetStartedBusiness() {
     <SafeScreenView style={[styles.screen, { backgroundColor: Colors.backgroundMuted }]}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40, padding: 24 }} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={[Typography.h1, styles.title, { fontFamily: FontFamily.heading }]}>Business on Winkly</Text>
+          <Text style={[Typography.h1, styles.title, { fontFamily: FontFamily.headingBold }]}>Business on Winkly</Text>
           <Text style={styles.subtitle}>
             Build meaningful professional connections — not noisy networking.
           </Text>

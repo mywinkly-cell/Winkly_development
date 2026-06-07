@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
     fontSize: 26,
     lineHeight: 34,
     color: Colors.textPrimary,
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   ctaText: {
     ...Typography.button,
     color: Colors.accentYellow,
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
   },
   ctaTextDisabled: {
     color: Colors.gray500,

@@ -159,8 +159,15 @@ export async function createPlannerInvite(
   return { planner_item_id: item.id, planner_invitation_id: inv.id };
 }
 
+export type AcceptPlannerInviteResult = {
+  planner_item_id: string;
+  source_mode: string;
+  starts_at: string;
+  partner_user_id: string;
+};
+
 /** Accept: add invitee to planner_participants and set invitation status. */
-export async function acceptPlannerInvite(invitationId: string): Promise<void> {
+export async function acceptPlannerInvite(invitationId: string): Promise<AcceptPlannerInviteResult> {
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
   if (!uid) throw new Error("Not signed in");
@@ -177,7 +184,7 @@ export async function acceptPlannerInvite(invitationId: string): Promise<void> {
 
   const { data: itemRow } = await supabase
     .from("planner_items")
-    .select("source_mode, title")
+    .select("source_mode, title, starts_at")
     .eq("id", inv.planner_item_id)
     .maybeSingle();
 
@@ -227,6 +234,14 @@ export async function acceptPlannerInvite(invitationId: string): Promise<void> {
       kind: "invite_accepted",
     });
   }
+
+  const startsAt = (itemRow as { starts_at?: string } | null)?.starts_at ?? new Date().toISOString();
+  return {
+    planner_item_id: inv.planner_item_id,
+    source_mode: sm ?? "romance",
+    starts_at: startsAt,
+    partner_user_id: inv.inviter_id,
+  };
 }
 
 /** Decline: set invitation status only. */

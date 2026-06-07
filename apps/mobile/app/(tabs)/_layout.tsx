@@ -3,6 +3,7 @@
 import React from "react";
 import { Tabs } from "expo-router";
 import { MainTabBar } from "@/components/layout/MainTabBar";
+import { Colors } from "@/constants/tokens";
 
 export default function TabsLayout() {
   return (
@@ -11,6 +12,7 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         lazy: true,
+        sceneStyle: { backgroundColor: Colors.backgroundLight },
       }}
     >
       <Tabs.Screen name="mode-selection" options={{ title: "Modes" }} />

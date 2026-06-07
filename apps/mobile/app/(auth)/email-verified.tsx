@@ -29,7 +29,7 @@ export default function EmailVerified() {
 
   return (
     <SafeScreenView style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24, backgroundColor: Colors.backgroundMuted }}>
-      <Text style={{ fontFamily: FontFamily.heading, fontSize: 24, color: Colors.primaryViolet, textAlign: "center", marginBottom: 12 }}>
+      <Text style={{ fontFamily: FontFamily.headingBold, fontSize: 24, color: Colors.primaryViolet, textAlign: "center", marginBottom: 12 }}>
         ✅ Your email was verified!
       </Text>
       <Text style={{ ...Typography.body, color: Colors.textSecondary, textAlign: "center", marginBottom: 24 }}>

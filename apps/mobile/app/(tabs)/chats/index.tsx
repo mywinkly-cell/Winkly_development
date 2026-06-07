@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
+import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, ScrollView, StyleSheet, RefreshControl } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 
@@ -9,7 +9,7 @@ import { formatChatInboxTimestamp, loadChatInbox, sortChatInboxItems } from "@/l
 import { ChatPreviewCard } from "@/components/chats/ChatPreviewCard";
 import { ChatsHeader } from "@/components/layout/ChatsHeader";
 import { Button } from "@/components/ui/Button";
-import { Colors, Typography } from "@/constants/tokens";
+import { Colors, Typography, Layout } from "@/constants/tokens";
 import { useModeContext } from "@/providers";
 
 type ChatTabKey = "all" | AppMode;
@@ -46,6 +46,7 @@ export default function ChatsHome() {
 
   const [activeTab, setActiveTab] = useState<"all" | AppMode>(initialTab);
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState<Conversation[]>([]);
   const [, setError] = useState<string | null>(null);
 
@@ -74,8 +75,9 @@ export default function ChatsHome() {
     router.push(`/chats/new-chat?mode=${m}`);
   };
 
-  async function loadConversationsAndMeta() {
-    setLoading(true);
+  async function loadConversationsAndMeta(options?: { refresh?: boolean }) {
+    const isRefresh = options?.refresh === true;
+    if (!isRefresh) setLoading(true);
     setError(null);
 
     try {
@@ -95,9 +97,15 @@ export default function ChatsHome() {
       setMemberSettingsByConv({});
       setUnreadByConv({});
     } finally {
-      setLoading(false);
+      if (!isRefresh) setLoading(false);
+      if (isRefresh) setRefreshing(false);
     }
   }
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    void loadConversationsAndMeta({ refresh: true });
+  };
 
   useEffect(() => {
     loadConversationsAndMeta();
@@ -152,13 +160,18 @@ export default function ChatsHome() {
     [items, lastMessageByConv, memberSettingsByConv]
   );
 
+  const refreshTintColor = useMemo(() => {
+    if (activeTab === "all") return Colors.primaryViolet;
+    return TABS.find((t) => t.key === activeTab)?.accent ?? Colors.primaryViolet;
+  }, [activeTab]);
+
   if (loading) {
     return (
       <View style={styles.screen}>
         <ChatsHeader mode={modeContext.active_mode ?? undefined} />
         <View style={styles.tabBar} />
-        <View style={{ flex: 1, padding: 20, justifyContent: "center" }}>
-          <ActivityIndicator />
+        <View style={{ flex: 1, paddingHorizontal: Layout.screenPadding, justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={Colors.primaryViolet} />
           <Text style={{ textAlign: "center", marginTop: 8 }}>Loading chats…</Text>
         </View>
       </View>
@@ -207,8 +220,13 @@ export default function ChatsHome() {
         <Button title="+ New chat" variant="secondary" onPress={goNewChat} style={styles.newChatBtn} />
       <FlatList
         style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 0 }}
         data={sortedItems}
         keyExtractor={(c) => c.id}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={refreshTintColor} />
+        }
+        keyboardShouldPersistTaps="handled"
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         renderItem={({ item }) => {
           const last = lastMessageByConv[item.id];
@@ -223,7 +241,8 @@ export default function ChatsHome() {
               timestamp={formatChatInboxTimestamp(ts)}
               unreadCount={unreadByConv[item.id] ?? 0}
               isPinned={settings?.pinned ?? false}
-              showModeContext={activeTab === "all"}
+              showModeContext
+              mutedModeContext={activeTab === "all"}
               isPendingRomanceInvite={
                 item.type === "dm" &&
                 item.mode === "romance" &&
@@ -273,7 +292,8 @@ const styles = StyleSheet.create({
   },
   contentArea: {
     flex: 1,
-    padding: 20,
+    paddingHorizontal: Layout.screenPadding,
+    paddingTop: Layout.screenPadding,
   },
   newChatBtn: {
     marginBottom: 12,

@@ -85,6 +85,18 @@ export const Typography = {
     lineHeight: 18,
     fontWeight: "400" as const,
   },
+  /** Bottom tab bar labels — lighter than caption for native feel. */
+  navTabLabel: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "400" as const,
+  },
+  /** In-screen section headers — below app bar title in hierarchy. */
+  sectionTitle: {
+    fontSize: 20,
+    lineHeight: 28,
+    fontWeight: "600" as const,
+  },
   button: {
     fontSize: 16,
     lineHeight: 20,

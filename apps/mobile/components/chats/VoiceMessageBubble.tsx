@@ -8,10 +8,18 @@ type Props = {
   audioUrl: string;
   mine?: boolean;
   accentColor: string;
+  pending?: boolean;
+  durationMs?: number;
 };
 
-export function VoiceMessageBubble({ audioUrl, mine, accentColor }: Props) {
-  const player = useAudioPlayer(audioUrl, { downloadFirst: true });
+export function VoiceMessageBubble({
+  audioUrl,
+  mine,
+  accentColor,
+  pending = false,
+  durationMs,
+}: Props) {
+  const player = useAudioPlayer(audioUrl, { downloadFirst: !pending });
   const status = useAudioPlayerStatus(player);
 
   const toggle = useCallback(() => {
@@ -22,10 +30,22 @@ export function VoiceMessageBubble({ audioUrl, mine, accentColor }: Props) {
     }
   }, [player, status.playing]);
 
-  const dur = status.duration > 0 ? status.duration : null;
+  const durSec =
+    durationMs != null
+      ? Math.max(1, Math.round(durationMs / 1000))
+      : status.duration > 0
+        ? Math.floor(status.duration)
+        : null;
   const pos = status.currentTime ?? 0;
-  const label =
-    dur != null ? `${Math.floor(pos)}s / ${Math.floor(dur)}s` : status.isLoaded === false ? "Loading…" : "Voice message";
+  const label = pending
+    ? durSec != null
+      ? `Sending · 0:${durSec.toString().padStart(2, "0")}`
+      : "Sending voice message…"
+    : durSec != null
+      ? `${Math.floor(pos)}s / ${durSec}s`
+      : status.isLoaded === false
+        ? "Loading…"
+        : "Voice message";
 
   return (
     <View
@@ -37,14 +57,17 @@ export function VoiceMessageBubble({ audioUrl, mine, accentColor }: Props) {
         paddingHorizontal: 12,
         borderRadius: 14,
         borderWidth: 1,
-        borderColor: mine ? accentColor + "40" : Colors.gray200,
-        backgroundColor: mine ? accentColor + "12" : Colors.backgroundLight,
+        borderColor: mine ? accentColor + (pending ? "28" : "40") : Colors.gray200,
+        backgroundColor: mine ? accentColor + (pending ? "08" : "12") : Colors.backgroundLight,
         minWidth: 200,
+        opacity: pending ? 0.82 : 1,
       }}
     >
       <Pressable
         onPress={toggle}
-        accessibilityLabel={status.playing ? "Pause voice message" : "Play voice message"}
+        accessibilityLabel={
+          pending ? "Voice message sending" : status.playing ? "Pause voice message" : "Play voice message"
+        }
         style={{
           width: 40,
           height: 40,
@@ -54,7 +77,7 @@ export function VoiceMessageBubble({ audioUrl, mine, accentColor }: Props) {
           justifyContent: "center",
         }}
       >
-        {status.isBuffering ? (
+        {pending || status.isBuffering ? (
           <ActivityIndicator size="small" color={accentColor} />
         ) : (
           <Ionicons name={status.playing ? "pause" : "play"} size={22} color={accentColor} />

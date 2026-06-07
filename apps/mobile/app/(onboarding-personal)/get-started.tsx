@@ -48,7 +48,7 @@ export default function GetStarted() {
         style={{ width: 140, height: 140, marginBottom: 24 }}
       />
 
-      <Text style={{ ...Typography.h1, color: Colors.primaryViolet, textAlign: "center", marginBottom: 12, fontFamily: FontFamily.heading }}>
+      <Text style={{ ...Typography.h1, color: Colors.primaryViolet, textAlign: "center", marginBottom: 12, fontFamily: FontFamily.headingBold }}>
         Welcome to Winkly 💫
       </Text>
 
@@ -124,7 +124,7 @@ const cardButton: ViewStyle = {
 
 const cardTitle = {
   ...Typography.h3,
-  fontFamily: FontFamily.heading,
+  fontFamily: FontFamily.headingBold,
   color: Colors.textPrimary,
   marginBottom: 4,
 };

@@ -8,11 +8,11 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { Colors, Typography, FontFamily } from "@/constants/tokens";
+import { Colors, Typography, FontFamily, Layout } from "@/constants/tokens";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 
-const CARD_RADIUS = 24;
+const CARD_RADIUS = Layout.radii.card;
 
 export type MatchCardMode = "romance" | "friends";
 
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
   nameAge: {
     ...Typography.h2,
     fontSize: 24,
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
     color: Colors.white,
     marginBottom: 4,
     textShadowColor: "rgba(0,0,0,0.3)",
