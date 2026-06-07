@@ -13,12 +13,13 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test": "jest",
     "test:e2e": "maestro test -e EMAIL=qa@winkly.test -e PASSWORD=Test1234! .maestro/critical-path.yaml",
     "test:e2e:ios": "maestro test --device \"iPhone 16\" -e EMAIL=qa@winkly.test -e PASSWORD=Test1234! .maestro/critical-path.yaml",
     "test:e2e:android": "maestro test --device emulator-5554 -e EMAIL=qa@winkly.test -e PASSWORD=Test1234! .maestro/critical-path.yaml",
-    "audit-i18n": "node scripts/audit-i18n.mjs"
+    "audit-i18n": "node scripts/audit-i18n.mjs",
+    "sync-i18n": "node scripts/sync-i18n-keys.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/poppins": "^0.4.1",
@@ -91,7 +92,12 @@
     "@expo/vector-icons": "15.1.1",
     "expo-file-system": "19.0.23",
     "expo-image-loader": "6.0.0",
-    "expo-image-manipulator": "14.0.8"
+    "expo-image-manipulator": "14.0.8",
+    "expo-dynamic-image-crop": {
+      "@expo/vector-icons": "15.1.1",
+      "expo-image-loader": "6.0.0",
+      "expo-image-manipulator": "14.0.8"
+    }
   },
   "expo": {
     "doctor": {

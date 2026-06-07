@@ -2,46 +2,25 @@
 // Winkly — App language selection
 // Entry: Notifications & Preferences → Language
 
-import React, { useState, useCallback } from "react";
+import React from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { SafeScreenView } from "@/components/SafeScreenView";
+import { LanguageList } from "@/components/i18n/LanguageList";
 import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
-import {
-  SUPPORTED_LANGUAGES,
-  changeLanguage,
-  type SupportedLanguageCode,
-} from "@/lib/i18n";
 
 export default function LanguageScreen() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const router = useRouter();
-  const currentCode = (i18n.language ?? "en") as SupportedLanguageCode;
-  const [saving, setSaving] = useState<string | null>(null);
-
-  const onSelect = useCallback(
-    async (code: string) => {
-      if (code === currentCode) return;
-      Haptics.selectionAsync();
-      setSaving(code);
-      try {
-        await changeLanguage(code);
-      } finally {
-        setSaving(null);
-      }
-    },
-    [currentCode]
-  );
 
   return (
     <SafeScreenView style={styles.screen}>
@@ -68,30 +47,7 @@ export default function LanguageScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.card}>
-          {SUPPORTED_LANGUAGES.map(({ code, name }, idx) => {
-            const isSelected = currentCode === code;
-            const isSaving = saving === code;
-            return (
-              <TouchableOpacity
-                key={code}
-                onPress={() => onSelect(code)}
-                style={[styles.row, idx < SUPPORTED_LANGUAGES.length - 1 && styles.rowBorder]}
-                activeOpacity={0.7}
-                disabled={!!saving}
-              >
-                <Text style={styles.rowText}>{name}</Text>
-                {isSelected && !isSaving && (
-                  <Ionicons name="checkmark-circle" size={24} color={Colors.primaryViolet} />
-                )}
-                {isSaving && (
-                  <ActivityIndicator size="small" color={Colors.primaryViolet} />
-                )}
-                {!isSelected && !isSaving && <View style={styles.checkPlaceholder} />}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <LanguageList />
       </ScrollView>
     </SafeScreenView>
   );
@@ -133,21 +89,4 @@ const styles = StyleSheet.create({
   },
   scroll: { flex: 1 },
   scrollContent: { padding: Layout.screenPadding, paddingBottom: 40 },
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: Layout.radii.card,
-    overflow: "hidden",
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-  },
-  rowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-  },
-  rowText: { ...Typography.body, flex: 1, color: Colors.textPrimary },
-  checkPlaceholder: { width: 24, height: 24 },
 });

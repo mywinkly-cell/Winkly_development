@@ -1,7 +1,6 @@
 /**
- * ChatPreviewCard — Displays conversation preview with:
- * Avatar(s) | Chat name | Last message | Timestamp | Unread count | Pinned badge
- * Mixed inbox (All tab): mode color on left accent bar only; neutral avatar, pill, and unread badge.
+ * ChatPreviewCard — Conversation row for chat inboxes.
+ * Avatar mode badge (icon), online dot, inline Invite pill, mode-colored unread badge.
  */
 
 import React from "react";
@@ -11,23 +10,31 @@ import { Colors, Typography } from "@/constants/tokens";
 import { getChatModeDisplay } from "@/lib/chats/modeDisplay";
 import type { Conversation, Message } from "@/lib/chats/types";
 
+const EVENTS_ICON = require("@/assets/icons/events-icon_1.png");
+const ONLINE_GREEN = "#34C759";
+
+type AvatarEntry = {
+  userId: string;
+  photoUrl?: string | null;
+  placeholderEmoji?: string;
+  placeholderBg?: string;
+};
+
 type ChatPreviewCardProps = {
   conversation: Conversation;
   chatName: string;
   lastMessage: Message | null;
-  participantAvatars: { userId: string; photoUrl?: string | null }[];
+  participantAvatars: AvatarEntry[];
   timestamp: string;
   unreadCount: number;
   isPinned: boolean;
   onPress: () => void;
-  /** When set and this is a 1:1 chat, tapping the avatar opens this user's profile. */
   onAvatarPress?: (userId: string) => void;
-  /** Romance pre-match invite awaiting accept/decline. */
   isPendingRomanceInvite?: boolean;
-  /** Show mode badge + accent. */
   showModeContext?: boolean;
-  /** When true (All tab mixed inbox), mode color only on left accent — avatar/pill/badge stay neutral. */
-  mutedModeContext?: boolean;
+  isOnline?: boolean;
+  /** Override preview text (e.g. demo rows). */
+  lastMessagePreview?: string;
 };
 
 function getLastMessagePreview(msg: Message | null): string {
@@ -37,6 +44,23 @@ function getLastMessagePreview(msg: Message | null): string {
   if (msg.message_type === "audio") return "🎤 Voice message";
   if (msg.content?.trim()) return msg.content.trim();
   return "Message";
+}
+
+function ModeBadgeIcon({ mode }: { mode: ReturnType<typeof getChatModeDisplay> }) {
+  if (!mode) return null;
+  return (
+    <View style={styles.modeBadge} accessibilityLabel={`${mode.label} chat`}>
+      {mode.useEventsImage ? (
+        <Image
+          source={EVENTS_ICON}
+          style={[styles.modeBadgeEventsIcon, { tintColor: mode.primary }]}
+          resizeMode="contain"
+        />
+      ) : (
+        <Ionicons name={mode.icon} size={11} color={mode.primary} />
+      )}
+    </View>
+  );
 }
 
 export function ChatPreviewCard({
@@ -50,105 +74,100 @@ export function ChatPreviewCard({
   onPress,
   onAvatarPress,
   isPendingRomanceInvite = false,
-  showModeContext = false,
-  mutedModeContext = false,
+  showModeContext = true,
+  isOnline = false,
+  lastMessagePreview,
 }: ChatPreviewCardProps) {
   const hasUnread = unreadCount > 0;
   const isDm = conversation.type === "dm";
   const canOpenProfile = isDm && participantAvatars.length === 1 && onAvatarPress;
   const modeDisplay =
-    showModeContext && conversation.type !== "event"
+    showModeContext && conversation.mode
       ? getChatModeDisplay(conversation.mode)
       : null;
-  // All-tab mixed inbox: mode color only on the left accent bar; everything else neutral.
-  const mutedMixedInbox = Boolean(modeDisplay && mutedModeContext);
-  const unreadBadgeColor = mutedMixedInbox ? Colors.gray600 : (modeDisplay?.primary ?? Colors.primaryViolet);
+  const unreadBadgeColor = modeDisplay?.primary ?? Colors.primaryViolet;
+  const previewText =
+    lastMessagePreview ??
+    (isPendingRomanceInvite ? "Sent you a chat invite" : getLastMessagePreview(lastMessage));
 
-  const avatarRingStyle = mutedMixedInbox
-    ? undefined
-    : modeDisplay
-      ? { borderWidth: 2, borderColor: modeDisplay.primary }
-      : isPendingRomanceInvite
-        ? { borderWidth: 2, borderColor: Colors.romance.primary, borderStyle: "dashed" as const }
-        : undefined;
-
-  const avatarDecorations = (
-    <>
-      {modeDisplay && !mutedMixedInbox && (
-        <View
-          style={[styles.modeDot, { backgroundColor: modeDisplay.primary }]}
-          accessibilityLabel={`${modeDisplay.label} chat`}
-        />
-      )}
-      {isPendingRomanceInvite && (
-        <View style={styles.inviteAvatarBadge} accessibilityLabel="Chat invite">
-          <Ionicons name="mail-unread" size={12} color={Colors.white} />
+  const renderSingleAvatar = (entry: AvatarEntry) => (
+    <View
+      style={[
+        styles.avatarWrap,
+        entry.placeholderBg ? { backgroundColor: entry.placeholderBg } : null,
+      ]}
+    >
+      {entry.photoUrl ? (
+        <Image source={{ uri: entry.photoUrl }} style={styles.avatar} resizeMode="cover" />
+      ) : entry.placeholderEmoji ? (
+        <View style={[styles.avatar, styles.avatarPlaceholder]}>
+          <Text style={styles.avatarEmoji}>{entry.placeholderEmoji}</Text>
         </View>
-      )}
-    </>
-  );
-
-  const avatarContent = participantAvatars.length === 1 ? (
-    <View style={[styles.avatarWrap, avatarRingStyle]}>
-      {participantAvatars[0].photoUrl ? (
-        <Image
-          source={{ uri: participantAvatars[0].photoUrl }}
-          style={styles.avatar}
-          resizeMode="cover"
-        />
       ) : (
         <View style={[styles.avatar, styles.avatarPlaceholder]}>
           <Ionicons name="person" size={24} color={Colors.gray500} />
         </View>
       )}
-      {avatarDecorations}
-    </View>
-  ) : participantAvatars.length > 1 ? (
-    <View style={styles.avatarStack}>
-      {participantAvatars.slice(0, 2).map((a, i) => (
-        <View
-          key={a.userId}
-          style={[
-            styles.avatarWrap,
-            styles.avatarStacked,
-            i === 0 && avatarRingStyle,
-            { marginLeft: i === 1 ? -16 : 0, zIndex: 2 - i },
-          ]}
-        >
-          {a.photoUrl ? (
-            <Image source={{ uri: a.photoUrl }} style={styles.avatarStackedImg} resizeMode="cover" />
-          ) : (
-            <View style={[styles.avatarStackedImg, styles.avatarPlaceholder]}>
-              <Ionicons name="person" size={18} color={Colors.gray500} />
-            </View>
-          )}
-          {i === 0 && avatarDecorations}
-        </View>
-      ))}
-    </View>
-  ) : (
-    <View style={[styles.avatarWrap, styles.avatarPlaceholder, avatarRingStyle]}>
-      <Ionicons name="chatbubbles" size={24} color={Colors.gray500} />
-      {avatarDecorations}
+      {modeDisplay && <ModeBadgeIcon mode={modeDisplay} />}
+      {isOnline && <View style={styles.onlineDot} accessibilityLabel="Online" />}
     </View>
   );
+
+  const avatarContent =
+    participantAvatars.length === 1 ? (
+      renderSingleAvatar(participantAvatars[0])
+    ) : participantAvatars.length > 1 ? (
+      <View style={styles.avatarStack}>
+        {participantAvatars.slice(0, 2).map((a, i) => (
+          <View
+            key={a.userId}
+            style={[
+              styles.avatarWrap,
+              styles.avatarStacked,
+              a.placeholderBg ? { backgroundColor: a.placeholderBg } : null,
+              { marginLeft: i === 1 ? -14 : 0, zIndex: 2 - i },
+            ]}
+          >
+            {a.photoUrl ? (
+              <Image source={{ uri: a.photoUrl }} style={styles.avatarStackedImg} resizeMode="cover" />
+            ) : a.placeholderEmoji ? (
+              <View style={[styles.avatarStackedImg, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarEmojiSmall}>{a.placeholderEmoji}</Text>
+              </View>
+            ) : (
+              <View style={[styles.avatarStackedImg, styles.avatarPlaceholder]}>
+                <Ionicons name="person" size={16} color={Colors.gray500} />
+              </View>
+            )}
+            {i === 0 && modeDisplay && <ModeBadgeIcon mode={modeDisplay} />}
+            {i === 0 && isOnline && <View style={styles.onlineDotSmall} />}
+          </View>
+        ))}
+      </View>
+    ) : (
+      <View
+        style={[
+          styles.avatarWrap,
+          modeDisplay ? { backgroundColor: modeDisplay.secondary } : styles.avatarPlaceholder,
+        ]}
+      >
+        {conversation.type === "event" ? (
+          <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: modeDisplay?.primary ?? Colors.events.primary }]}>
+            <Ionicons name="musical-notes" size={22} color={Colors.white} />
+          </View>
+        ) : (
+          <View style={[styles.avatar, styles.avatarPlaceholder]}>
+            <Ionicons name="chatbubbles" size={22} color={Colors.gray500} />
+          </View>
+        )}
+        {modeDisplay && <ModeBadgeIcon mode={modeDisplay} />}
+      </View>
+    );
 
   return (
     <Pressable
       onPress={onPress}
-      style={[
-        styles.card,
-        modeDisplay && {
-          borderLeftWidth: 3,
-          borderLeftColor: modeDisplay.primary,
-          paddingLeft: 12,
-        },
-        isPendingRomanceInvite && !modeDisplay && {
-          borderLeftWidth: 4,
-          borderLeftColor: Colors.romance.primary,
-          paddingLeft: 11,
-        },
-      ]}
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       android_ripple={{ color: Colors.gray200 }}
     >
       <View style={styles.avatarSection}>
@@ -168,90 +187,56 @@ export function ChatPreviewCard({
       </View>
 
       <View style={styles.content}>
-        <View style={styles.headerRow}>
-          <View style={styles.titleBlock}>
+        <View style={styles.topRow}>
+          <View style={styles.titleRow}>
             <Text style={[styles.chatName, hasUnread && styles.chatNameUnread]} numberOfLines={1}>
               {chatName}
             </Text>
-            {(modeDisplay || isPendingRomanceInvite || conversation.type === "event") && (
-              <View style={styles.badgeRow}>
-                {modeDisplay && (
-                  <View
-                    style={[
-                      styles.modeBadge,
-                      mutedMixedInbox
-                        ? styles.modeBadgeMuted
-                        : { backgroundColor: modeDisplay.secondary },
-                    ]}
-                  >
-                    {!mutedMixedInbox && (
-                      <View style={[styles.modeBadgeDot, { backgroundColor: modeDisplay.primary }]} />
-                    )}
-                    <Text
-                      style={[
-                        styles.modeBadgeText,
-                        mutedMixedInbox
-                          ? styles.modeBadgeTextMuted
-                          : { color: modeDisplay.primary },
-                      ]}
-                    >
-                      {modeDisplay.label}
-                    </Text>
-                  </View>
-                )}
-                {isPendingRomanceInvite && (
-                  <View style={styles.inviteBadge}>
-                    <Ionicons name="mail-unread" size={11} color={Colors.romance.primary} />
-                    <Text style={styles.inviteBadgeText}>Invite</Text>
-                  </View>
-                )}
-                {conversation.type === "event" && (
-                  <View style={styles.eventBadge}>
-                    <Text style={styles.eventBadgeText}>Event</Text>
-                  </View>
-                )}
-              </View>
-            )}
-          </View>
-          <View style={styles.rightMeta}>
-            {hasUnread && (
-              <View style={[styles.unreadBadge, { backgroundColor: unreadBadgeColor }]}>
-                <Text style={styles.unreadCount}>{unreadCount > 99 ? "99+" : unreadCount}</Text>
+            {isPendingRomanceInvite && (
+              <View style={styles.inviteBadge}>
+                <Ionicons name="mail" size={11} color={Colors.romance.primary} />
+                <Text style={styles.inviteBadgeText}>Invite</Text>
               </View>
             )}
             {isPinned && (
-              <Ionicons name="pin" size={12} color={Colors.gray500} style={styles.pinnedBadge} />
+              <Ionicons name="pin" size={12} color={Colors.gray500} style={styles.pinnedIcon} />
             )}
-            <Text style={[styles.timestamp, hasUnread && styles.timestampUnread]} numberOfLines={1}>
-              {timestamp}
-            </Text>
           </View>
+          <Text style={[styles.timestamp, hasUnread && styles.timestampUnread]} numberOfLines={1}>
+            {timestamp}
+          </Text>
         </View>
-        <Text
-          style={[styles.lastMessage, hasUnread && styles.lastMessageUnread]}
-          numberOfLines={1}
-        >
-          {isPendingRomanceInvite ? "Sent you a chat invite" : getLastMessagePreview(lastMessage)}
-        </Text>
+
+        <View style={styles.bottomRow}>
+          <Text
+            style={[styles.lastMessage, hasUnread && styles.lastMessageUnread]}
+            numberOfLines={1}
+          >
+            {previewText}
+          </Text>
+          {hasUnread && (
+            <View style={[styles.unreadBadge, { backgroundColor: unreadBadgeColor }]}>
+              <Text style={styles.unreadCount}>{unreadCount > 99 ? "99+" : unreadCount}</Text>
+            </View>
+          )}
+        </View>
       </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
+  row: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 14,
-    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.gray200,
+  },
+  rowPressed: {
+    backgroundColor: Colors.gray100,
   },
   avatarSection: {
     marginRight: 12,
@@ -277,6 +262,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  avatarEmoji: {
+    fontSize: 26,
+  },
+  avatarEmojiSmall: {
+    fontSize: 18,
+  },
   avatarStack: {
     flexDirection: "row",
     width: 52,
@@ -294,49 +285,69 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: "hidden",
   },
-  modeDot: {
+  modeBadge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.white,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: Colors.gray200,
+    zIndex: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  modeBadgeEventsIcon: {
+    width: 11,
+    height: 11,
+  },
+  onlineDot: {
     position: "absolute",
     bottom: 0,
     right: 0,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: ONLINE_GREEN,
     borderWidth: 2,
     borderColor: Colors.white,
     zIndex: 3,
   },
-  inviteAvatarBadge: {
+  onlineDotSmall: {
     position: "absolute",
-    top: -2,
-    right: -2,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: Colors.romance.primary,
-    alignItems: "center",
-    justifyContent: "center",
+    bottom: -1,
+    right: -1,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: ONLINE_GREEN,
     borderWidth: 2,
     borderColor: Colors.white,
-    zIndex: 4,
-    shadowColor: Colors.romance.primary,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.35,
-    shadowRadius: 3,
-    elevation: 3,
+    zIndex: 3,
   },
   content: {
     flex: 1,
     minWidth: 0,
   },
-  headerRow: {
+  topRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 4,
     gap: 8,
   },
-  titleBlock: {
+  titleRow: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     minWidth: 0,
   },
   chatName: {
@@ -345,48 +356,16 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     flexShrink: 1,
   },
-  badgeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: 4,
-  },
-  modeBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    flexShrink: 0,
-  },
-  modeBadgeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  modeBadgeText: {
-    ...Typography.caption,
-    fontSize: 10,
+  chatNameUnread: {
     fontWeight: "700",
-  },
-  modeBadgeMuted: {
-    backgroundColor: Colors.gray100,
-  },
-  modeBadgeTextMuted: {
-    color: Colors.gray700,
-    fontWeight: "600",
   },
   inviteBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    backgroundColor: Colors.romance.primary + "22",
-    borderWidth: 1,
-    borderColor: Colors.romance.primary + "55",
+    backgroundColor: Colors.romance.secondary,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 2,
     borderRadius: 10,
     flexShrink: 0,
   },
@@ -396,31 +375,8 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.romance.primary,
   },
-  eventBadge: {
-    backgroundColor: Colors.events.secondary,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+  pinnedIcon: {
     flexShrink: 0,
-  },
-  eventBadgeText: {
-    ...Typography.caption,
-    fontSize: 10,
-    fontWeight: "700",
-    color: Colors.events.primary,
-  },
-  chatNameUnread: {
-    fontWeight: "700",
-  },
-  rightMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    flexShrink: 0,
-    maxWidth: "42%",
-  },
-  pinnedBadge: {
-    marginRight: 0,
   },
   timestamp: {
     ...Typography.caption,
@@ -429,10 +385,17 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   timestampUnread: {
-    color: Colors.primaryViolet,
+    color: Colors.textPrimary,
     fontWeight: "600",
   },
+  bottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
   lastMessage: {
+    flex: 1,
     fontSize: 14,
     color: Colors.gray600,
   },
@@ -444,7 +407,6 @@ const styles = StyleSheet.create({
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: Colors.primaryViolet,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 5,
@@ -456,4 +418,3 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
 });
-

@@ -2,32 +2,38 @@
 /**
  * Select the active Winkly environment for local development.
  *
- * Copies apps/mobile/.env.<env> -> apps/mobile/.env so that Expo (which loads
- * .env automatically) runs against the chosen environment.
+ * Copies apps/mobile/.env.<env> -> apps/mobile/.env so that Expo loads the
+ * chosen Supabase backend.
  *
  * Usage (from repo root):
- *   node scripts/use-env.mjs development
- *   node scripts/use-env.mjs production
+ *   npm run env:dev        → Winkly_development cloud (gwgjdpqskusuejlwrsnd)
+ *   npm run env:local      → local `supabase start` stack
+ *   npm run env:prod       → winkly-production cloud (orjccytcmklzcfjgqwwj)
  *
- * Or via npm scripts: `npm run env:dev` | `npm run env:prod`.
- *
- * This is a LOCAL convenience only. For EAS/CI builds, env values come from
- * EAS environment variables / GitHub Actions secrets, not from these files.
+ * EAS/CI builds use EAS environment variables — not these files.
  */
 import { copyFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
-const VALID = new Set(["development", "production"]);
+const VALID = new Set(["development", "cloud-development", "production"]);
+
+const ALIASES = {
+  dev: "cloud-development",
+  "cloud-dev": "cloud-development",
+  cloud: "cloud-development",
+  local: "development",
+  prod: "production",
+};
 
 const arg = (process.argv[2] || "").toLowerCase();
-const env =
-  arg === "dev" ? "development" : arg === "prod" ? "production" : arg;
+const env = ALIASES[arg] ?? arg;
 
 if (!VALID.has(env)) {
   console.error(
     `Unknown environment "${process.argv[2] ?? ""}".\n` +
-      `Usage: node scripts/use-env.mjs <development|production>`
+      `Usage: node scripts/use-env.mjs <cloud-development|development|production>\n` +
+      `Aliases: dev, cloud-dev, local, prod`
   );
   process.exit(1);
 }
@@ -46,10 +52,15 @@ if (!existsSync(source)) {
 }
 
 copyFileSync(source, target);
-console.log(`Active environment: ${env}  (apps/mobile/.env.${env} -> apps/mobile/.env)`);
+const labels = {
+  "cloud-development": "Winkly_development cloud (gwgjdpqskusuejlwrsnd)",
+  development: "local Supabase stack (supabase start)",
+  production: "winkly-production cloud (orjccytcmklzcfjgqwwj)",
+};
+console.log(`Active environment: ${env} — ${labels[env]}`);
+console.log(`  apps/mobile/.env.${env} → apps/mobile/.env`);
 if (env === "production") {
   console.warn(
-    "WARNING: You selected PRODUCTION. This points at live user data. " +
-      "Do not run experiments or untested migrations against it."
+    "WARNING: PRODUCTION backend. Do not run experiments or untested migrations here."
   );
 }

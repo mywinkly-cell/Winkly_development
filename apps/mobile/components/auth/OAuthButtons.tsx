@@ -33,6 +33,10 @@ type OAuthButtonsProps = {
   requireAdult?: boolean;
   isAdult?: boolean;
   disabled?: boolean;
+  /** Hide the "or continue with" divider (compact auth screens). */
+  hideDivider?: boolean;
+  /** Tighter vertical spacing for single-screen auth layouts. */
+  compact?: boolean;
 };
 
 export function OAuthButtons({
@@ -40,6 +44,8 @@ export function OAuthButtons({
   requireAdult = false,
   isAdult = true,
   disabled = false,
+  hideDivider = false,
+  compact = false,
 }: OAuthButtonsProps) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -110,8 +116,8 @@ export function OAuthButtons({
   if (!showGoogle && !showApple) return null;
 
   return (
-    <View style={styles.wrap}>
-      <Text style={styles.dividerLabel}>{t("auth.orContinueWith")}</Text>
+    <View style={[styles.wrap, compact && styles.wrapCompact]}>
+      {hideDivider ? null : <Text style={styles.dividerLabel}>{t("auth.orContinueWith")}</Text>}
 
       {showGoogle ? (
         <TouchableOpacity
@@ -156,6 +162,7 @@ export function OAuthButtons({
 
 const styles = StyleSheet.create({
   wrap: { marginTop: 8, marginBottom: 8 },
+  wrapCompact: { marginTop: 0, marginBottom: 0 },
   dividerLabel: {
     ...Typography.caption,
     color: Colors.gray600,

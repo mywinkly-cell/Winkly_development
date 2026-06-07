@@ -2,11 +2,12 @@ import {
   inferOnboardingResumeStep,
   validateOnboardingStep,
   ONBOARDING_STEP_COUNT,
+  type OnboardingStepInput,
 } from "@/lib/profile/onboardingSteps";
 import { MIN_CORE_PHOTOS } from "@/lib/profile/validation";
 
 describe("validateOnboardingStep", () => {
-  const identity = {
+  const identity: OnboardingStepInput = {
     firstName: "Kate",
     lastName: "Smith",
     birthday: "2000-01-01",

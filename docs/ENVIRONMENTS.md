@@ -1,6 +1,8 @@
 # Winkly — Environments (local / cloud dev / cloud production)
 
-**Last updated:** 2026-06-06
+**Last updated:** 2026-06-07
+
+> **No staging environment.** The old staging Supabase project was renamed to **winkly-production** (`orjccytcmklzcfjgqwwj`). Day-to-day app work uses **Winkly_development** (`gwgjdpqskusuejlwrsnd`) via `npm run env:dev`.
 
 ### Repositories ↔ Supabase projects
 
@@ -36,11 +38,12 @@ cp apps/mobile/.env.production.example        apps/mobile/.env.production
 ## 2. Running the mobile app against a backend
 
 ```bash
-npm run env:dev       # .env.development  → local stack
-npm run env:prod      # .env.production   → production cloud (warns)
+npm run env:dev       # .env.cloud-development → Winkly_development cloud (default)
+npm run env:local     # .env.development       → local `supabase start` only
+npm run env:prod      # .env.production        → winkly-production (warns)
 ```
 
-For **cloud dev**, copy manually: `cp apps/mobile/.env.cloud-development apps/mobile/.env` (or add a team script). Never point `.env.development` at production.
+Create each file once from the matching `*.example` template. Never point `.env` at production while doing daily development.
 
 ---
 

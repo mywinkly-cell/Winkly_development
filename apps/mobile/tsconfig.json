@@ -1,25 +1,46 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "expo/tsconfig.base",
   "compilerOptions": {
+    "allowJs": true,
+    "esModuleInterop": true,
+    "jsx": "react-native",
+    "lib": [
+      "DOM",
+      "ESNext"
+    ],
+    "module": "esnext",
+    "moduleDetection": "force",
+    "moduleResolution": "bundler",
+    "customConditions": [
+      "react-native"
+    ],
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "target": "ESNext",
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
-    "jsx": "react-native",
-    "allowJs": true,
-    "noEmit": true,
-    "resolveJsonModule": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"],
-      "@app/*": ["./app/*"],
-      "@components/*": ["./components/*"],
-      "@lib/*": ["./lib/*"],
-      "@constants/*": ["./constants/*"],
-      "@providers/*": ["./providers/*"]
+      "@/*": [
+        "./*"
+      ],
+      "@app/*": [
+        "./app/*"
+      ],
+      "@components/*": [
+        "./components/*"
+      ],
+      "@lib/*": [
+        "./lib/*"
+      ],
+      "@constants/*": [
+        "./constants/*"
+      ],
+      "@providers/*": [
+        "./providers/*"
+      ]
     }
   },
   "include": [
@@ -39,5 +60,6 @@
     "node_modules",
     "babel.config.js",
     "metro.config.js"
-  ]
+  ],
+  "extends": "expo/tsconfig.base"
 }
