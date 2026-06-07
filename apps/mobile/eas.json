@@ -25,9 +25,6 @@
         "buildType": "apk"
       }
     },
-    "staging": {
-      "extends": "preview"
-    },
     "production": {
       "autoIncrement": true,
       "channel": "production",

@@ -1,49 +1,83 @@
 // app/account/profile-settings.tsx
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import type { AccountType } from "@/types";
+import {
+  accountTypeActionVerb,
+  fetchAccountProfileStatus,
+  routeAfterAccountTypeChange,
+  setActiveAccountType,
+  type AccountProfileStatus,
+} from "@/lib/account/accountTypeSwitch";
 
 export default function ProfileSettingsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
-  const { accountType } = useAuth();
+  const { user, accountType } = useAuth();
   const [switching, setSwitching] = useState(false);
+  const [profileStatus, setProfileStatus] = useState<AccountProfileStatus | null>(null);
+
+  const loadProfileStatus = useCallback(async () => {
+    if (!user?.id) return;
+    const status = await fetchAccountProfileStatus(user.id);
+    setProfileStatus(status);
+  }, [user?.id]);
+
+  useEffect(() => {
+    void loadProfileStatus();
+  }, [loadProfileStatus]);
+
+  const current = (accountType as AccountType) || "personal";
+  const target: AccountType = current === "personal" ? "business" : "personal";
+  const verb = profileStatus ? accountTypeActionVerb(target, profileStatus) : "switch";
+  const switchLabel =
+    target === "business"
+      ? verb === "create"
+        ? t("auth.createBusinessAccount")
+        : t("auth.switchToBusinessAccount")
+      : verb === "create"
+        ? t("auth.createPersonalAccount")
+        : t("auth.switchToPersonalAccount");
 
   const handleSwitchAccountType = async () => {
-    const current = (accountType as string) || "personal";
-    const target = current === "personal" ? "business" : "personal";
-    const targetLabel = target === "personal" ? "Personal" : "Business";
-    Alert.alert(
-      `Switch to ${targetLabel} Account`,
-      `You'll need to complete the ${targetLabel.toLowerCase()} profile setup. Continue?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Switch",
-          onPress: async () => {
-            setSwitching(true);
-            Haptics.selectionAsync();
-            try {
-              const { error } = await supabase.auth.updateUser({ data: { account_type: target } });
-              if (error) throw error;
-              if (target === "business") {
-                router.replace("/(onboarding-business)/get-started-business");
-              } else {
-                router.replace("/(onboarding-personal)/profile-core?edit=1");
-              }
-            } catch (err: any) {
-              Alert.alert("Error", err?.message ?? "Could not switch account type.");
-            } finally {
-              setSwitching(false);
-            }
-          },
+    if (!user?.id) return;
+    const targetLabel =
+      target === "personal" ? t("auth.accountTypePersonal") : t("auth.accountTypeBusiness");
+    const title =
+      verb === "create"
+        ? t("auth.createAccountTypeTitle", { type: targetLabel })
+        : t("auth.switchAccountTypeTitle", { type: targetLabel });
+    const message =
+      verb === "create"
+        ? t("auth.createAccountTypeMessage", { type: targetLabel.toLowerCase() })
+        : t("auth.switchAccountTypeMessage");
+
+    Alert.alert(title, message, [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: verb === "create" ? t("common.next") : t("common.apply"),
+        onPress: async () => {
+          setSwitching(true);
+          Haptics.selectionAsync();
+          try {
+            await setActiveAccountType(target);
+            const status = await fetchAccountProfileStatus(user.id);
+            setProfileStatus(status);
+            await routeAfterAccountTypeChange(router, target, status);
+          } catch (err: unknown) {
+            Alert.alert(t("common.error"), (err as Error)?.message ?? t("auth.oauthFailed"));
+          } finally {
+            setSwitching(false);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   return (
@@ -174,7 +208,7 @@ export default function ProfileSettingsScreen() {
             style={{ paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
           >
             <Text style={{ ...Typography.body, color: Colors.primaryViolet }}>
-              {((accountType as string) || "personal") === "personal" ? "Switch to Business Account" : "Switch to Personal Account"}
+              {switchLabel}
             </Text>
             {switching && <ActivityIndicator size="small" color={Colors.primaryViolet} />}
           </TouchableOpacity>

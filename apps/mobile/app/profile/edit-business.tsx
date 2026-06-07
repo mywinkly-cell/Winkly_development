@@ -13,6 +13,13 @@ import {
   upsertOwnProfileBusiness,
 } from "@/lib/access/profiles";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import type { BusinessProfileType } from "@/types";
+
+const BUSINESS_TYPE_OPTIONS: Array<{ value: BusinessProfileType; label: string }> = [
+  { value: "professional", label: "Individual professional" },
+  { value: "venue", label: "Venue" },
+  { value: "brand", label: "Brand / company" },
+];
 
 function toTagsArray(s: string): string[] {
   return s
@@ -36,6 +43,7 @@ export default function EditBusiness() {
   const [company, setCompany] = useState("");
   const [networkingGoal, setNetworkingGoal] = useState("");
   const [skills, setSkills] = useState("");
+  const [businessType, setBusinessType] = useState<BusinessProfileType>("brand");
 
   useEffect(() => {
     if (!user?.id) return;
@@ -47,6 +55,7 @@ export default function EditBusiness() {
         setCompany(profile?.business_name ?? "");
         setNetworkingGoal(profile?.bio ?? "");
         setSkills(fromTagsArray(profile?.tags ?? undefined));
+        setBusinessType((profile?.business_type as BusinessProfileType) ?? "brand");
         setRole("");
           } else {
         const profile = await getOwnProfileMode(user.id, "business");
@@ -68,6 +77,7 @@ export default function EditBusiness() {
     if (isBusinessAccount) {
       const { error } = await upsertOwnProfileBusiness(user.id, {
         business_name: company.trim() || "My Business",
+        business_type: businessType,
         bio: networkingGoal.trim() || null,
         tags: toTagsArray(skills).length ? toTagsArray(skills) : null,
       });
@@ -125,6 +135,30 @@ export default function EditBusiness() {
               />
             </>
           )}
+
+          {isBusinessAccount ? (
+            <>
+              <Label text="Profile type" />
+              <View style={styles.typeRow}>
+                {BUSINESS_TYPE_OPTIONS.map((opt) => {
+                  const selected = businessType === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      onPress={() => setBusinessType(opt.value)}
+                      style={[styles.typeChip, selected && styles.typeChipSelected]}
+                      activeOpacity={0.9}
+                      disabled={saving}
+                    >
+                      <Text style={[styles.typeChipText, selected && styles.typeChipTextSelected]}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          ) : null}
 
           <Label text={isBusinessAccount ? "Business name" : "Company (optional)"} />
           <TextInput
@@ -225,4 +259,16 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginBottom: 12,
   },
+  typeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
+  typeChip: {
+    borderWidth: 1,
+    borderColor: Colors.gray300,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#FFF",
+  },
+  typeChipSelected: { borderColor: Colors.primaryViolet, backgroundColor: "#F5F1FF" },
+  typeChipText: { ...Typography.caption, color: Colors.gray700 },
+  typeChipTextSelected: { color: Colors.primaryViolet, fontWeight: "700" },
 });

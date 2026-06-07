@@ -1,13 +1,12 @@
 /**
  * Winkly i18n — Multi-language support
- * Uses i18next + react-i18next + expo-localization.
+ * Uses i18next + react-i18next. Default language is English until the user selects another in Settings.
  * User language override persisted in AsyncStorage.
  */
 
 import i18n from "i18next";
 import type { InitOptions } from "i18next";
 import { initReactI18next } from "react-i18next";
-import * as Localization from "expo-localization";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const STORAGE_KEY = "winkly_app_language";
@@ -44,6 +43,9 @@ export const SUPPORTED_LANGUAGES = [
 export type SupportedLanguageCode = (typeof SUPPORTED_LANGUAGES)[number]["code"];
 export const SUPPORTED_CODES = SUPPORTED_LANGUAGES.map((l) => l.code);
 
+/** App language on first launch and when the user has not chosen a language in Settings. */
+export const DEFAULT_LANGUAGE: SupportedLanguageCode = "en";
+
 async function getStoredLanguage(): Promise<string | null> {
   try {
     return await AsyncStorage.getItem(STORAGE_KEY);
@@ -63,10 +65,8 @@ export async function setStoredLanguage(code: string): Promise<void> {
 async function resolveInitialLanguage(): Promise<string> {
   const stored = await getStoredLanguage();
   if (stored && SUPPORTED_CODES.includes(stored as SupportedLanguageCode)) return stored;
-
-  const deviceCode = Localization.getLocales()[0]?.languageCode ?? "en";
-  const match = SUPPORTED_CODES.find((c) => c === deviceCode);
-  return match ?? "en";
+  // English by default — device locale is not used until the user picks a language in Settings.
+  return DEFAULT_LANGUAGE;
 }
 
 type TranslationModule = Record<string, string> | { default: Record<string, string> };
@@ -144,6 +144,8 @@ export async function initI18n(): Promise<void> {
       fallbackLng: "en",
       supportedLngs: SUPPORTED_CODES,
       partialBundledLanguages: true,
+      // Locale JSON uses flat dotted keys (e.g. "auth.signin"), not nested objects.
+      keySeparator: false,
       interpolation: { escapeValue: false },
       react: { useSuspense: false },
     } as InitOptions);

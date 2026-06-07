@@ -19,7 +19,7 @@ This doc lists every API key and env var used by Winkly, where they are used, an
 
 All mobile env vars are prefixed with `EXPO_PUBLIC_` so they are available at build time. Copy `apps/mobile/.env.example` to `apps/mobile/.env` and fill in values.
 
-> **Environments:** Local (`supabase start`), cloud **development** (`gwgjdpqskusuejlwrsnd` / Winkly_development), cloud **production** (`orjccytcmklzcfjgqwwj`). Templates: `.env.development`, `.env.cloud-development`, `.env.production`. Migrations authored only in Winkly_development. Full guide: **docs/ENVIRONMENTS.md**, **supabase/PROJECTS.md**.
+> **Environments (no staging):** **Winkly_development** cloud (`gwgjdpqskusuejlwrsnd`) — default via `npm run env:dev` / `.env.cloud-development`; optional **local** stack (`npm run env:local` / `.env.development`); **winkly-production** (`orjccytcmklzcfjgqwwj`) via `npm run env:prod`. Full guide: **docs/ENVIRONMENTS.md**, **supabase/PROJECTS.md**.
 
 | Variable | Required | Purpose |
 |----------|----------|---------|

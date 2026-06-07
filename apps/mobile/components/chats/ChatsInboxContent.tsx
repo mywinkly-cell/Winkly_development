@@ -4,37 +4,21 @@
 // ────────────────────────────────────────────────
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, ScrollView, StyleSheet, RefreshControl } from "react-native";
+import { View, Text, FlatList, ActivityIndicator, StyleSheet, RefreshControl } from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import type { AppMode, Conversation, ConversationMember, Message, UserMini } from "@/lib/chats";
+import { CHAT_TAB_CONFIG, getChatTabsWithModeFirst } from "@/lib/chats/chatTabs";
+import { getDemoInboxPreview, shouldShowDemoInboxPreview, type DemoChatPreviewRow } from "@/lib/chats/demoInboxPreview";
 import { subscribeChatsHubUpdates } from "@/lib/chats/hubRealtime";
 import { appModeToHub, chatRoutes } from "@/lib/navigation/modeHub";
 import { formatChatInboxTimestamp, loadChatInbox, sortChatInboxItems } from "@/lib/chats/inbox";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Colors, Layout } from "@/constants/tokens";
+import { ChatModeTabBar } from "./ChatModeTabBar";
 import { ChatPreviewCard } from "./ChatPreviewCard";
 import { MatchesConnectionsSubheader, type MatchConnectionItem } from "./MatchesConnectionsSubheader";
-
-type ChatTabKey = "all" | AppMode;
-
-const CHAT_TAB_CONFIG: { key: ChatTabKey; label: string; secondary: string; accent: string }[] = [
-  { key: "all", label: "All", secondary: Colors.white, accent: Colors.primaryViolet },
-  { key: "romance", label: "Romance", secondary: Colors.romance.secondary, accent: Colors.romance.primary },
-  { key: "friends", label: "Friends", secondary: Colors.friends.secondary, accent: Colors.friends.primary },
-  { key: "business", label: "Business", secondary: Colors.business.secondary, accent: Colors.business.primary },
-  { key: "events", label: "Events", secondary: Colors.events.secondary, accent: Colors.events.primary },
-];
-
-function getTabsWithModeFirst(
-  sourceMode: "romance" | "friends" | "business" | "events" | "all"
-): typeof CHAT_TAB_CONFIG {
-  if (sourceMode === "all") return CHAT_TAB_CONFIG;
-  const modeTab = CHAT_TAB_CONFIG.find((t) => t.key === sourceMode)!;
-  const rest = CHAT_TAB_CONFIG.filter((t) => t.key !== sourceMode && t.key !== "all");
-  return [modeTab, CHAT_TAB_CONFIG.find((t) => t.key === "all")!, ...rest];
-}
 
 function formatName(u?: UserMini | null) {
   if (!u) return "Unknown";
@@ -52,7 +36,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
   const chatHub = appModeToHub(sourceMode === "all" ? null : sourceMode);
   const { i18n } = useTranslation();
   const router = useRouter();
-  const tabs = useMemo(() => getTabsWithModeFirst(sourceMode), [sourceMode]);
+  const tabs = useMemo(() => getChatTabsWithModeFirst(sourceMode), [sourceMode]);
   const initialTab: "all" | AppMode = sourceMode === "all" ? "all" : sourceMode;
 
   const [activeTab, setActiveTab] = useState<"all" | AppMode>(initialTab);
@@ -329,6 +313,12 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
     [items, lastMessageByConv, memberSettingsByConv]
   );
 
+  const useDemoPreview = shouldShowDemoInboxPreview(sortedItems.length);
+  const demoRows = useMemo(
+    () => (useDemoPreview ? getDemoInboxPreview(activeTab) : []),
+    [useDemoPreview, activeTab]
+  );
+
   const spinnerColor =
     sourceMode === "all" ? Colors.primaryViolet : Colors[sourceMode].primary;
 
@@ -353,37 +343,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
           accessibilityLabel={`${sourceMode} chats`}
         />
       )}
-      <View style={styles.tabBar}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabBarContent}
-          style={styles.tabBarScroll}
-        >
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.key;
-            const bgColor = tab.key === "all" ? Colors.white : tab.secondary;
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                onPress={() => setActiveTab(tab.key)}
-                style={[styles.tab, { backgroundColor: bgColor }]}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={[
-                    styles.tabLabel,
-                    { fontWeight: isActive ? "700" : "400" },
-                    isActive && { color: tab.accent },
-                  ]}
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+      <ChatModeTabBar tabs={tabs} activeTab={activeTab} onTabPress={setActiveTab} />
 
       <MatchesConnectionsSubheader
         activeTab={activeTab}
@@ -399,92 +359,121 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
       />
 
       <View style={styles.contentArea}>
-      <FlatList
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 0 }}
-        data={sortedItems}
-        keyExtractor={(c) => c.id}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={tabs.find((t) => t.key === activeTab)?.accent ?? Colors.primaryViolet}
+        {useDemoPreview ? (
+          <FlatList<DemoChatPreviewRow>
+            style={{ flex: 1 }}
+            data={demoRows}
+            keyExtractor={(row) => row.conversation.id}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={tabs.find((t) => t.key === activeTab)?.accent ?? Colors.primaryViolet}
+              />
+            }
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => (
+              <ChatPreviewCard
+                conversation={item.conversation}
+                chatName={item.chatName}
+                lastMessage={null}
+                lastMessagePreview={item.lastMessagePreview}
+                participantAvatars={item.participantAvatars}
+                timestamp={item.timestamp}
+                unreadCount={item.unreadCount}
+                isPinned={item.isPinned}
+                isPendingRomanceInvite={item.isPendingRomanceInvite}
+                isOnline={item.isOnline}
+                showModeContext
+                onPress={() => {}}
+              />
+            )}
           />
-        }
-        keyboardShouldPersistTaps="handled"
-        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-        renderItem={({ item }) => {
-          const last = lastMessageByConv[item.id];
-          const ts = last?.created_at ?? item.last_message_at ?? item.created_at;
-          const settings = memberSettingsByConv[item.id];
-          return (
-            <ChatPreviewCard
-              conversation={item}
-              chatName={getConversationTitle(item)}
-              lastMessage={last ?? null}
-              participantAvatars={getParticipantAvatars(item)}
-              timestamp={formatChatInboxTimestamp(ts)}
-              unreadCount={unreadByConv[item.id] ?? 0}
-              isPinned={settings?.pinned ?? false}
-              showModeContext
-              mutedModeContext={activeTab === "all"}
-              isPendingRomanceInvite={
-                item.type === "dm" &&
-                item.mode === "romance" &&
-                item.dm_source === "invite" &&
-                item.romance_invite_status === "pending"
-              }
-              onPress={() => {
-                if (item.type === "dm") {
-                  const parts = participantsByConv[item.id] ?? [];
-                  const otherId = parts.find((p) => p.user_id !== meId)?.user_id ?? null;
-                  const peer = otherId ? usersById[otherId] : null;
-                  const avatars = getParticipantAvatars(item);
-                  router.push(
-                    chatRoutes.conversation(chatHub, item.id, {
-                      ...(otherId
-                        ? {
-                            partnerUserId: otherId,
-                            partnerName: formatName(peer),
-                            partnerPhotoUrl: avatars[0]?.photoUrl ?? "",
-                          }
-                        : {}),
-                    }) as Parameters<typeof router.push>[0]
-                  );
-                } else {
-                  router.push(chatRoutes.conversation(chatHub, item.id) as Parameters<typeof router.push>[0]);
-                }
-              }}
-              onAvatarPress={
-                item.mode && item.mode !== "events"
-                  ? (userId) => {
-                      if (item.mode === "romance") router.push(`/(modes)/romance/profile-view?id=${userId}`);
-                      else if (item.mode === "friends") router.push(`/(modes)/friends/profile-view?user_id=${userId}`);
-                      else if (item.mode === "business") router.push(`/(modes)/business/profile-view?user_id=${userId}`);
+        ) : (
+          <FlatList<Conversation>
+            style={{ flex: 1 }}
+            data={sortedItems}
+            keyExtractor={(conv) => conv.id}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={tabs.find((t) => t.key === activeTab)?.accent ?? Colors.primaryViolet}
+              />
+            }
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => {
+              const last = lastMessageByConv[item.id];
+              const ts = last?.created_at ?? item.last_message_at ?? item.created_at;
+              const settings = memberSettingsByConv[item.id];
+              return (
+                <ChatPreviewCard
+                  conversation={item}
+                  chatName={getConversationTitle(item)}
+                  lastMessage={last ?? null}
+                  participantAvatars={getParticipantAvatars(item)}
+                  timestamp={formatChatInboxTimestamp(ts)}
+                  unreadCount={unreadByConv[item.id] ?? 0}
+                  isPinned={settings?.pinned ?? false}
+                  showModeContext
+                  isPendingRomanceInvite={
+                    item.type === "dm" &&
+                    item.mode === "romance" &&
+                    item.dm_source === "invite" &&
+                    item.romance_invite_status === "pending"
+                  }
+                  onPress={() => {
+                    if (item.type === "dm") {
+                      const parts = participantsByConv[item.id] ?? [];
+                      const otherId = parts.find((p) => p.user_id !== meId)?.user_id ?? null;
+                      const peer = otherId ? usersById[otherId] : null;
+                      const avatars = getParticipantAvatars(item);
+                      router.push(
+                        chatRoutes.conversation(chatHub, item.id, {
+                          ...(otherId
+                            ? {
+                                partnerUserId: otherId,
+                                partnerName: formatName(peer),
+                                partnerPhotoUrl: avatars[0]?.photoUrl ?? "",
+                              }
+                            : {}),
+                        }) as Parameters<typeof router.push>[0]
+                      );
+                    } else {
+                      router.push(chatRoutes.conversation(chatHub, item.id) as Parameters<typeof router.push>[0]);
                     }
-                  : undefined
-              }
-            />
-          );
-        }}
-        ListEmptyComponent={
-          <Text style={{ opacity: 0.7, textAlign: "center" }}>
-            {sourceMode === "romance"
-              ? hasRomanceMatches
-                ? "No active chats yet.\nIt's time to spark a conversation ✨"
-                : "No matches yet.\nDiscover people and let the spark happen"
-              : sourceMode === "friends"
-              ? hasFriendsConnections
-                ? "No active chats yet.\nIt's time to connect! ✨"
-                : "No matches yet.\nFind people who share your interests and vibe."
-              : sourceMode === "business"
-              ? hasBusinessConnections
-                ? "No active conversations yet.\nReach out and explore opportunities."
-                : "No professional connections yet.\nExpand your network and connect with the right people."
-              : "There is no active chats yet. It's time to spark a conversation!"}
-          </Text>
-        }
-      />
+                  }}
+                  onAvatarPress={
+                    item.mode && item.mode !== "events"
+                      ? (userId) => {
+                          if (item.mode === "romance") router.push(`/(modes)/romance/profile-view?id=${userId}`);
+                          else if (item.mode === "friends") router.push(`/(modes)/friends/profile-view?user_id=${userId}`);
+                          else if (item.mode === "business") router.push(`/(modes)/business/profile-view?user_id=${userId}`);
+                        }
+                      : undefined
+                  }
+                />
+              );
+            }}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>
+                {sourceMode === "romance"
+                  ? hasRomanceMatches
+                    ? "No active chats yet.\nIt's time to spark a conversation ✨"
+                    : "No matches yet.\nDiscover people and let the spark happen"
+                  : sourceMode === "friends"
+                  ? hasFriendsConnections
+                    ? "No active chats yet.\nIt's time to connect! ✨"
+                    : "No matches yet.\nFind people who share your interests and vibe."
+                  : sourceMode === "business"
+                  ? hasBusinessConnections
+                    ? "No active conversations yet.\nReach out and explore opportunities."
+                    : "No professional connections yet.\nExpand your network and connect with the right people."
+                  : "There is no active chats yet. It's time to spark a conversation!"}
+              </Text>
+            }
+          />
+        )}
       </View>
     </View>
   );
@@ -495,43 +484,13 @@ const styles = StyleSheet.create({
     height: 3,
     width: "100%",
   },
-  tabBar: {
-    backgroundColor: Colors.white,
-    minHeight: 52,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  tabBarScroll: { flex: 1 },
-  tabBarContent: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "center",
-    paddingHorizontal: 12,
-  },
   contentArea: {
     flex: 1,
+  },
+  emptyText: {
+    opacity: 0.7,
+    textAlign: "center",
     paddingHorizontal: Layout.screenPadding,
-    paddingTop: Layout.screenPadding,
-  },
-  tab: {
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 22,
-    minHeight: 40,
-  },
-  tabLabel: {
-    ...Typography.caption,
-    fontSize: 14,
-    fontWeight: "500",
-    color: Colors.textPrimary,
+    paddingTop: 24,
   },
 });

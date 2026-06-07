@@ -1,7 +1,7 @@
 // lib/access/profiles.ts — Mode-safe profile reads and writes
 
 import { supabase } from "@/lib/supabase";
-import type { Mode } from "@/types";
+import type { BusinessProfileType, Mode } from "@/types";
 
 export function getAgeFromBirthday(birthday: string | Date | null | undefined): number | null {
   if (!birthday) return null;
@@ -303,6 +303,7 @@ export async function getOwnProfileBusiness(userId: string) {
 
 export type ProfileBusinessUpdate = {
   business_name: string;
+  business_type?: BusinessProfileType;
   location?: string | null;
   area?: string | null;
   bio?: string | null;

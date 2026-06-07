@@ -29,6 +29,8 @@ type CreateEventPayload = {
   price_eur: number | null;
 
   visibility: "public" | "private";
+  mode: "events";
+  allow_group_chat: boolean;
 };
 
 const EVENT_TITLE_MAX_LENGTH = 40;
@@ -137,6 +139,8 @@ export default function CreateEvent() {
       price_eur: toFloatOrNull(price),
 
       visibility,
+      mode: "events",
+      allow_group_chat: visibility === "public" && allowEventChat,
       created_by: user.id,
     };
 

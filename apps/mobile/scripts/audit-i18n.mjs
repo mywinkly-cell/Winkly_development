@@ -14,7 +14,9 @@ const en = JSON.parse(fs.readFileSync(path.join(localesDir, "en.json"), "utf8"))
 const enKeys = Object.keys(en).sort();
 
 let failed = false;
-const files = fs.readdirSync(localesDir).filter((f) => f.endsWith(".json") && f !== "en.json");
+const files = fs
+  .readdirSync(localesDir)
+  .filter((f) => f.endsWith(".json") && f !== "en.json" && !f.startsWith("_"));
 
 console.log(`Reference: en.json (${enKeys.length} keys)\n`);
 

@@ -1,4 +1,25 @@
-# Seed test users and matches (Kateryna)
+# Seed test users and chats (Kateryna)
+
+## Demo inbox (recommended)
+
+**`seed-kateryna-demo-chats.sql`** seeds **5 fake users** and **6 conversations** matching the Chats UI reference for `kateryna.my.wellness@gmail.com`:
+
+| Chat | Mode | Notes |
+|------|------|--------|
+| Sofia Müller | Romance | Pending **Invite**, 2 unread |
+| Marco Rossi | Friends | 1 unread |
+| Group: Munich Hikers | Friends | Group thread |
+| Petra Müller | Business | Read |
+| Lisa Weber | Romance | Match, 3 unread |
+| Event: Jazz Night | Events | Event chat |
+
+Run in [Supabase SQL Editor](https://supabase.com/dashboard/project/gwgjdpqskusuejlwrsnd/sql) (paste file contents) or via MCP `execute_sql`. Safe to re-run.
+
+Demo accounts use emails `*.demo@winkly-test.local` (password `TestPassword123!` — not needed for testing as you).
+
+---
+
+## Legacy script (3 generic test users)
 
 Creates **3 fake users** and **matches/connections** with `kateryna.my.wellness@gmail.com` so you can test 1:1 and group chats in Romance, Friends, and Business modes.
 

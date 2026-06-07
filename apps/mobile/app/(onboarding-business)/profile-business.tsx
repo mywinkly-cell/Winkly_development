@@ -26,6 +26,13 @@ import { Routes } from "@/constants/routes";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { pickAndUploadLogo } from "@/lib/uploadLogo";
 import { trackOnboardingCompleted } from "@/lib/analytics/events";
+import type { BusinessProfileType } from "@/types";
+
+const BUSINESS_TYPE_OPTIONS: Array<{ value: BusinessProfileType; label: string; hint: string }> = [
+  { value: "professional", label: "Individual professional", hint: "Consultant, founder, freelancer" },
+  { value: "venue", label: "Venue", hint: "Restaurant, bar, studio, coworking space" },
+  { value: "brand", label: "Brand / company", hint: "Company or organization account" },
+];
 
 export default function ProfileBusiness() {
   const router = useRouter();
@@ -36,6 +43,7 @@ export default function ProfileBusiness() {
   // STATE
   // ───────────────────────────────
   const [businessName, setBusinessName] = useState("");
+  const [businessType, setBusinessType] = useState<BusinessProfileType>("brand");
   const [location, setLocation] = useState("");
   const [area, setArea] = useState("");
   const [bio, setBio] = useState("");
@@ -110,6 +118,7 @@ export default function ProfileBusiness() {
           {
             id: userData.user.id,
             business_name: businessName,
+            business_type: businessType,
             location,
             area,
             bio,
@@ -205,6 +214,29 @@ export default function ProfileBusiness() {
           onChangeText={setBusinessName}
           style={inputStyle}
         />
+
+        <Text style={[label, { marginBottom: 6 }]}>Profile type</Text>
+        {BUSINESS_TYPE_OPTIONS.map((opt) => {
+          const selected = businessType === opt.value;
+          return (
+            <TouchableOpacity
+              key={opt.value}
+              onPress={() => setBusinessType(opt.value)}
+              style={{
+                borderWidth: 1,
+                borderColor: selected ? Colors.primaryViolet : Colors.gray300,
+                backgroundColor: selected ? "#F5F1FF" : "#FFF",
+                borderRadius: 12,
+                padding: 12,
+                marginBottom: 8,
+              }}
+              activeOpacity={0.9}
+            >
+              <Text style={{ fontWeight: "700", color: Colors.textPrimary }}>{opt.label}</Text>
+              <Text style={{ color: Colors.gray600, fontSize: 13, marginTop: 2 }}>{opt.hint}</Text>
+            </TouchableOpacity>
+          );
+        })}
 
         {/* Location */}
         <Text style={label}>Location</Text>

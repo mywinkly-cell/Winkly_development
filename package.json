@@ -20,12 +20,14 @@
     "mobile:test:e2e:ios": "npm run -w apps/mobile test:e2e:ios",
     "mobile:test:e2e:android": "npm run -w apps/mobile test:e2e:android",
     "mobile:audit-i18n": "npm run -w apps/mobile audit-i18n",
-    "env:dev": "node scripts/use-env.mjs development",
+    "env:dev": "node scripts/use-env.mjs cloud-development",
+    "env:local": "node scripts/use-env.mjs development",
     "env:prod": "node scripts/use-env.mjs production",
     "start:dev": "npm run env:dev && npm run mobile:start",
+    "start:local": "npm run env:local && npm run mobile:start",
     "start:prod": "npm run env:prod && npm run mobile:start",
     "ci": "npm run mobile:lint && npm run mobile:typecheck && npm run mobile:test && npm run website:verify",
-    "postinstall": "patch-package --patch-dir apps/mobile/patches",
+    "postinstall": "patch-package --patch-dir apps/mobile/patches && node scripts/prune-expo-dynamic-image-crop-nested.mjs",
     "supabase:deploy-auth-redirect": "supabase functions deploy auth-redirect",
     "supabase:link:development": "node scripts/supabase-link.mjs development",
     "supabase:link:production": "node scripts/supabase-link.mjs production",
@@ -43,7 +45,12 @@
     "@expo/vector-icons": "15.1.1",
     "expo-file-system": "19.0.23",
     "expo-image-loader": "6.0.0",
-    "expo-image-manipulator": "14.0.8"
+    "expo-image-manipulator": "14.0.8",
+    "expo-dynamic-image-crop": {
+      "@expo/vector-icons": "15.1.1",
+      "expo-image-loader": "6.0.0",
+      "expo-image-manipulator": "14.0.8"
+    }
   },
   "devDependencies": {
     "patch-package": "^8.0.1",

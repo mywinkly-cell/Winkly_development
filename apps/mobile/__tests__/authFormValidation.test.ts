@@ -9,24 +9,21 @@ describe("validateSignupInput", () => {
   it("rejects empty email or password", () => {
     expect(validateSignupInput({ email: "", password: "", isAdult: true })).toEqual({
       ok: false,
-      title: "Incomplete",
-      message: "Please enter email and password.",
+      code: "incomplete",
     });
   });
 
   it("rejects passwords shorter than 8 characters", () => {
     expect(validateSignupInput({ email: "a@b.com", password: "short", isAdult: true })).toEqual({
       ok: false,
-      title: "Password too short",
-      message: "Use at least 8 characters.",
+      code: "password_too_short",
     });
   });
 
   it("requires 18+ confirmation", () => {
     expect(validateSignupInput({ email: "a@b.com", password: "longenough", isAdult: false })).toEqual({
       ok: false,
-      title: "Confirmation required",
-      message: "Please confirm you are 18 or older.",
+      code: "confirm_18_required",
     });
   });
 
@@ -42,8 +39,7 @@ describe("validateSigninInput", () => {
   it("rejects empty credentials", () => {
     expect(validateSigninInput({ email: " ", password: "" })).toEqual({
       ok: false,
-      title: "Incomplete",
-      message: "Please enter email and password.",
+      code: "incomplete",
     });
   });
 

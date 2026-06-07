@@ -20,6 +20,7 @@ import { InviteModal } from "@/components/business/InviteModal";
 import { mapProfilesBusinessRow, type BusinessPersonItem } from "@/lib/business/homeFeed";
 import { openPlanTogetherCreateEvent } from "@/lib/social/planTogether";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
+import { recordBusinessAnalyticsEvent } from "@/lib/business/analyticsStore";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import type { BusinessConnectionStatus } from "@/types/business";
 
@@ -128,6 +129,14 @@ export default function BusinessProfileView() {
         instagram: (row.instagram as string | null) ?? null,
         created_at: (row.created_at as string | null) ?? null,
       });
+
+      if (viewerId !== userId) {
+        void recordBusinessAnalyticsEvent({
+          businessId: userId,
+          eventType: "profile_view",
+          viewerId,
+        });
+      }
     } finally {
       setLoading(false);
     }

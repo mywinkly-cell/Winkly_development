@@ -1,0 +1,15 @@
+diff --git a/node_modules/expo-dynamic-image-crop/package.json b/node_modules/expo-dynamic-image-crop/package.json
+index 1111111..2222222 100644
+--- a/node_modules/expo-dynamic-image-crop/package.json
++++ b/node_modules/expo-dynamic-image-crop/package.json
+@@ -41,8 +41,8 @@
+     "react-native": ">=0.70.0"
+   },
+   "dependencies": {
+-    "@expo/vector-icons": "^14.0.0",
+-    "expo-image-manipulator": "^13.0.0",
++    "@expo/vector-icons": "^15.1.1",
++    "expo-image-manipulator": "^14.0.8",
+     "react-native-gesture-handler": "^2.20.0",
+     "zustand": "^5.0.5"
+   },

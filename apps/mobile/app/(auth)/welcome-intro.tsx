@@ -8,10 +8,13 @@ import { SafeScreenView } from "@/components/SafeScreenView";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { setIntroSeen } from "@/lib/introFlags";
+import { LanguageGlobeButton } from "@/components/i18n/LanguageGlobeButton";
 
 export default function WelcomeIntro() {
+  const { t } = useTranslation();
   const router = useRouter();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideY = useRef(new Animated.Value(20)).current;
@@ -49,20 +52,16 @@ export default function WelcomeIntro() {
         ]}
       >
         <View style={styles.content}>
-          <Text style={styles.title}>Welcome to Winkly</Text>
-          <Text style={styles.subtitle}>
-            Winkly is an AI-powered networking app for intentional connections across personal life, professional goals, and real-world experiences.
-          </Text>
+          <Text style={styles.title}>{t("onboarding.welcomeIntro.title")}</Text>
+          <Text style={styles.subtitle}>{t("onboarding.welcomeIntro.subtitle")}</Text>
 
           <View style={styles.section}>
             <View style={styles.iconWrap}>
               <Ionicons name="heart" size={24} color={Colors.primaryViolet} />
             </View>
             <View style={styles.sectionText}>
-              <Text style={styles.sectionTitle}>Personal</Text>
-              <Text style={styles.sectionBody}>
-                Romance, friends, lifestyle — no mixed signals.
-              </Text>
+              <Text style={styles.sectionTitle}>{t("onboarding.welcomeIntro.personalTitle")}</Text>
+              <Text style={styles.sectionBody}>{t("onboarding.welcomeIntro.personalBody")}</Text>
             </View>
           </View>
 
@@ -71,10 +70,8 @@ export default function WelcomeIntro() {
               <Ionicons name="briefcase" size={24} color={Colors.primaryViolet} />
             </View>
             <View style={styles.sectionText}>
-              <Text style={styles.sectionTitle}>Business</Text>
-              <Text style={styles.sectionBody}>
-                Professional networking, collaboration, opportunities.
-              </Text>
+              <Text style={styles.sectionTitle}>{t("onboarding.welcomeIntro.businessTitle")}</Text>
+              <Text style={styles.sectionBody}>{t("onboarding.welcomeIntro.businessBody")}</Text>
             </View>
           </View>
 
@@ -83,10 +80,8 @@ export default function WelcomeIntro() {
               <Ionicons name="calendar" size={24} color={Colors.primaryViolet} />
             </View>
             <View style={styles.sectionText}>
-              <Text style={styles.sectionTitle}>Events & Planner</Text>
-              <Text style={styles.sectionBody}>
-                Discover events, plan meetups, move from online to real life with an AI planner.
-              </Text>
+              <Text style={styles.sectionTitle}>{t("onboarding.welcomeIntro.eventsTitle")}</Text>
+              <Text style={styles.sectionBody}>{t("onboarding.welcomeIntro.eventsBody")}</Text>
             </View>
           </View>
         </View>
@@ -97,8 +92,9 @@ export default function WelcomeIntro() {
             style={styles.cta}
             activeOpacity={0.9}
           >
-            <Text style={styles.ctaText}>Continue</Text>
+            <Text style={styles.ctaText}>{t("onboarding.welcomeIntro.continue")}</Text>
           </TouchableOpacity>
+          <LanguageGlobeButton />
         </View>
       </Animated.View>
     </SafeScreenView>
@@ -155,8 +151,13 @@ const styles = StyleSheet.create({
     color: Colors.gray600,
     lineHeight: 20,
   },
-  footer: { paddingTop: 16 },
+  footer: {
+    paddingTop: 16,
+    alignItems: "center",
+    gap: 16,
+  },
   cta: {
+    width: "100%",
     backgroundColor: Colors.primaryViolet,
     borderRadius: Layout.radii.control,
     paddingVertical: 16,

@@ -37,12 +37,15 @@ import { recordBusinessProfileView } from "@/lib/business/recentSearchStorage";
 import { getLastDiscoverQuery } from "@/lib/business/discoverQueryStorage";
 import { isBusinessProfileComplete } from "@/lib/routing/splash";
 import * as Location from "expo-location";
+import { useAuth } from "@/providers";
 
 const COL_WIDTH = (Dimensions.get("window").width - 40 - 12) / 3;
 
 export default function BusinessHome() {
   const router = useRouter();
+  const { accountType } = useAuth();
   const primary = Colors.business.primary;
+  const isBusinessAccount = accountType === "business";
 
   const search = useBusinessSearch();
   const [loading, setLoading] = useState(true);
@@ -216,13 +219,25 @@ export default function BusinessHome() {
           <Text style={styles.newsletterBody}>
             Send thoughtful invites (20+ chars), respond on Home, then plan a meet-up or co-host an event from chat.
           </Text>
-          <TouchableOpacity
-            onPress={() => router.push("/(modes)/business/discover")}
-            style={styles.newsletterCta}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.newsletterCtaText}>Explore Discover</Text>
-          </TouchableOpacity>
+          <View style={styles.newsletterActions}>
+            <TouchableOpacity
+              onPress={() => router.push("/(modes)/business/discover")}
+              style={styles.newsletterCta}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.newsletterCtaText}>Explore Discover</Text>
+            </TouchableOpacity>
+            {isBusinessAccount ? (
+              <TouchableOpacity
+                onPress={() => router.push("/(modes)/business/analytics")}
+                style={styles.insightsCta}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="stats-chart-outline" size={16} color={primary} />
+                <Text style={styles.insightsCtaText}>Insights</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
       ) : null}
 
@@ -370,14 +385,26 @@ const styles = StyleSheet.create({
   },
   newsletterTitle: { ...Typography.body, fontWeight: "700", color: Colors.textPrimary, marginBottom: 6 },
   newsletterBody: { ...Typography.caption, color: Colors.gray600, lineHeight: 18, marginBottom: 10 },
+  newsletterActions: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
   newsletterCta: {
-    alignSelf: "flex-start",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
     backgroundColor: Colors.business.primary,
   },
   newsletterCtaText: { ...Typography.caption, fontWeight: "700", color: Colors.white },
+  insightsCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.business.primary + "55",
+    backgroundColor: Colors.business.secondary,
+  },
+  insightsCtaText: { ...Typography.caption, fontWeight: "700", color: Colors.business.primary },
   section: { marginBottom: 24 },
   sectionTitle: {
     ...Typography.h3,

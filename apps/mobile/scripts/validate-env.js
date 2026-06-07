@@ -5,7 +5,7 @@
  * Runs automatically before every EAS build via the `eas-build-pre-install`
  * npm hook, and can be run manually with `npm run validate-env`. It fails the
  * build LOUDLY (non-zero exit) when required EXPO_PUBLIC_* secrets are missing
- * or obviously invalid for staging/production — instead of shipping a broken
+ * or obviously invalid for production — instead of shipping a broken
  * binary that crashes at user runtime in lib/supabase.ts.
  *
  * In `development` it only warns, so local `expo start` keeps working even
@@ -15,7 +15,7 @@
 /* eslint-disable no-console */
 
 const APP_ENV = process.env.APP_ENV || "development";
-const isStrict = APP_ENV === "staging" || APP_ENV === "production";
+const isStrict = APP_ENV === "production";
 
 const RED = "\x1b[31m";
 const YELLOW = "\x1b[33m";

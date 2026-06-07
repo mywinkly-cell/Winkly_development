@@ -12,10 +12,12 @@ import { Text, Image, TouchableOpacity, ScrollView, Animated, type ViewStyle } f
 import { SafeScreenView } from "@/components/SafeScreenView";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { getTermsAndCookiesAccepted } from "@/lib/legalFlags";
 
 export default function GetStarted() {
+  const { t } = useTranslation();
   const router = useRouter();
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -49,7 +51,7 @@ export default function GetStarted() {
       />
 
       <Text style={{ ...Typography.h1, color: Colors.primaryViolet, textAlign: "center", marginBottom: 12, fontFamily: FontFamily.headingBold }}>
-        Welcome to Winkly 💫
+        {t("onboarding.getStarted.title")}
       </Text>
 
       <Text
@@ -60,35 +62,32 @@ export default function GetStarted() {
           marginBottom: 32,
         }}
       >
-        Every story starts with a wink 😉  
-        Choose how you’d like to begin your journey.
+        {t("onboarding.getStarted.subtitle")}
       </Text>
 
-      {/* Personal Account Option — Winkly violet frame like Business */}
       <TouchableOpacity
         onPress={() => { Haptics.selectionAsync(); router.push("/(auth)/signup?accountType=personal"); }}
         style={[cardButton, { backgroundColor: "#F5F1FF", borderColor: Colors.primaryViolet }]}
         activeOpacity={0.9}
       >
-        <Text style={[cardTitle, { color: Colors.primaryViolet }]}>✨ Personal Account</Text>
-        <Text style={[cardText, { color: Colors.textPrimary }]}>Romance, friends, lifestyle & events.</Text>
-        <Text style={[cardText, { color: Colors.textPrimary }]}>Build meaningful connections and plan real-life meetups.</Text>
+        <Text style={[cardTitle, { color: Colors.primaryViolet }]}>{t("onboarding.getStarted.personalTitle")}</Text>
+        <Text style={[cardText, { color: Colors.textPrimary }]}>{t("onboarding.getStarted.personalLine1")}</Text>
+        <Text style={[cardText, { color: Colors.textPrimary }]}>{t("onboarding.getStarted.personalLine2")}</Text>
       </TouchableOpacity>
 
-      {/* Business Account Option */}
       <TouchableOpacity
         onPress={() => { Haptics.selectionAsync(); router.push("/(auth)/signup?accountType=business"); }}
         style={[cardButton, { backgroundColor: "#F5F1FF", borderColor: Colors.primaryViolet }]}
         activeOpacity={0.9}
       >
-        <Text style={[cardTitle, { color: Colors.primaryViolet }]}>💼 Business Account</Text>
-        <Text style={[cardText, { color: Colors.textPrimary }]}>Professional connections, networking & opportunities.</Text>
-        <Text style={[cardText, { color: Colors.textPrimary }]}>Promote your work, organize events, and connect with partners or clients.</Text>
+        <Text style={[cardTitle, { color: Colors.primaryViolet }]}>{t("onboarding.getStarted.businessTitle")}</Text>
+        <Text style={[cardText, { color: Colors.textPrimary }]}>{t("onboarding.getStarted.businessLine1")}</Text>
+        <Text style={[cardText, { color: Colors.textPrimary }]}>{t("onboarding.getStarted.businessLine2")}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => { Haptics.selectionAsync(); router.push("/(auth)/signin"); }} style={{ marginTop: 20 }}>
         <Text style={{ ...Typography.body, color: Colors.primaryViolet, fontWeight: "600" }}>
-          Already have an account? Sign in
+          {t("auth.hasAccount")} {t("auth.signin")}
         </Text>
       </TouchableOpacity>
 
@@ -100,7 +99,7 @@ export default function GetStarted() {
           textAlign: "center",
         }}
       >
-        You can always switch account type in the settings.
+        {t("onboarding.getStarted.switchHint")}
       </Text>
       </Animated.View>
     </ScrollView>
@@ -108,9 +107,6 @@ export default function GetStarted() {
   );
 }
 
-// ────────────────────────────────────────────────
-// Styles
-// ────────────────────────────────────────────────
 const cardButton: ViewStyle = {
   width: "100%",
   maxWidth: 360,

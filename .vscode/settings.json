@@ -1,4 +1,5 @@
 {
+  "deno.enable": false,
   "deno.enablePaths": [
     "supabase/functions"
   ],
@@ -18,7 +19,12 @@
     "http",
     "net"
   ],
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
   "[typescript]": {
-    "editor.defaultFormatter": "denoland.vscode-deno"
+    "editor.defaultFormatter": "vscode.typescript-language-features"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features"
   }
 }
