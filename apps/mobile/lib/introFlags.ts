@@ -7,12 +7,16 @@
 // - "How Winkly works" (more detailed documentation)
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { Mode } from "@/types";
 
 const KEYS = {
   INTRO_SEEN: "winkly_intro_seen",
   WINKLY_WORLD_SEEN: "winkly_world_seen",
   WINKLY_WORLD_DONT_SHOW: "winkly_world_dont_show",
+  ONBOARDING_SUBPROFILE_SKIPPED: "winkly_onboarding_subprofile_skipped",
 } as const;
+
+export type SkippedOnboardingMode = Exclude<Mode, "events">;
 
 export async function getIntroSeen(): Promise<boolean> {
   try {
@@ -81,4 +85,31 @@ export async function shouldSkipWinklyWorld(): Promise<boolean> {
     getWinklyWorldDontShow(),
   ]);
   return seen || dontShow;
+}
+
+/** Mode the user chose on onboarding step 4 but skipped completing. Cleared when that sub-profile hits 100%. */
+export async function getOnboardingSubProfileSkipped(): Promise<SkippedOnboardingMode | null> {
+  try {
+    const v = await AsyncStorage.getItem(KEYS.ONBOARDING_SUBPROFILE_SKIPPED);
+    if (v === "romance" || v === "friends" || v === "business") return v;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setOnboardingSubProfileSkipped(mode: SkippedOnboardingMode): Promise<void> {
+  try {
+    await AsyncStorage.setItem(KEYS.ONBOARDING_SUBPROFILE_SKIPPED, mode);
+  } catch {
+    // ignore
+  }
+}
+
+export async function clearOnboardingSubProfileSkipped(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(KEYS.ONBOARDING_SUBPROFILE_SKIPPED);
+  } catch {
+    // ignore
+  }
 }

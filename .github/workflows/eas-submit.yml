@@ -1,6 +1,6 @@
 name: EAS Build & Submit
 
-# WinklyApp_3 only — preview (internal QA), NOT store production.
+# Winkly_development only — preview (internal QA), NOT store production.
 # Store builds: eas build --profile production from winkly-production/main (see docs/BRANCHING.md).
 # Requires GitHub secrets: EXPO_TOKEN, GOOGLE_SERVICE_ACCOUNT_JSON (see docs/EAS_CI.md).
 on:

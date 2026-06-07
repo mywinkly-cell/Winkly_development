@@ -49,7 +49,7 @@ export default function Notifications() {
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator />
+            <ActivityIndicator size="large" color={Colors.primaryViolet} />
             <Text style={{ marginTop: 8, color: Colors.mutedText }}>Loading…</Text>
           </View>
         ) : items.length === 0 ? (

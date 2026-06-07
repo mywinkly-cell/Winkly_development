@@ -21,7 +21,7 @@ export default function GetStartedPersonal() {
     <SafeScreenView style={[styles.screen, { backgroundColor: Colors.backgroundMuted }]}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40, padding: 24 }} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={[Typography.h1, styles.title, { fontFamily: FontFamily.heading }]}>Personal on Winkly</Text>
+          <Text style={[Typography.h1, styles.title, { fontFamily: FontFamily.headingBold }]}>Personal on Winkly</Text>
           <Text style={styles.subtitle}>
             Find love, friendships, and opportunities — all in one place.
           </Text>

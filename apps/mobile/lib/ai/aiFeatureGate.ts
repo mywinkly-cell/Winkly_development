@@ -11,6 +11,7 @@ export type AIFeature =
   | "event_suggestions"   // better event suggestions (Super+)
   | "planning_ideas"     // activity/place ideas from interests, location, wishlist (Super+)
   | "chat_opener"        // first message / icebreaker suggestion (Super+)
+  | "match_bridge"       // AI date idea for a new romance match (Premium only)
   | "concierge";         // full concierge: weather, reschedule, trip planning (Premium only)
 
 const SUPER_FEATURES: AIFeature[] = [
@@ -20,7 +21,7 @@ const SUPER_FEATURES: AIFeature[] = [
   "chat_opener",
 ];
 
-const PREMIUM_ONLY_FEATURES: AIFeature[] = ["concierge"];
+const PREMIUM_ONLY_FEATURES: AIFeature[] = ["concierge", "match_bridge"];
 
 /**
  * Whether the given tier has access to the given AI feature.

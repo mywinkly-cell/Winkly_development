@@ -4,6 +4,14 @@ import { MIN_CORE_PHOTOS } from "@/lib/profile/validation";
 
 export const ONBOARDING_STEP_COUNT = 4;
 
+/** Editorial step labels shown in the onboarding wizard header. */
+export const ONBOARDING_STEP_LABELS = [
+  "The basics",
+  "Your photos",
+  "What you enjoy",
+  "Your modes",
+] as const;
+
 export type OnboardingStep = 1 | 2 | 3 | 4;
 
 export type PrimaryOnboardingMode = "romance" | "friends" | "business";

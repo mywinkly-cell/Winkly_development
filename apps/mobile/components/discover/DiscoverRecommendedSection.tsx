@@ -15,7 +15,7 @@ import {
   Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 import { DiscoverActionSheet } from "./DiscoverActionSheet";
 
@@ -92,7 +92,9 @@ export function DiscoverRecommendedSection({
   return (
     <>
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Recommended for You by Winkly AI</Text>
+        <Text style={[styles.sectionTitle, { color: primaryColor }]}>
+          Recommended for You by Winkly AI
+        </Text>
         <Text style={styles.counter}>
           {totalPerDay} recommendations today • {remainingToday} remaining
         </Text>
@@ -178,18 +180,18 @@ export function DiscoverRecommendedSection({
 const styles = StyleSheet.create({
   section: { marginBottom: 24, flex: 1 },
   sectionTitle: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
+    ...Typography.sectionTitle,
+    fontFamily: FontFamily.headingBold,
     marginBottom: 4,
-    paddingHorizontal: 20,
+    paddingHorizontal: Layout.screenPadding,
   },
   counter: {
     ...Typography.caption,
     color: Colors.gray600,
     marginBottom: 16,
-    paddingHorizontal: 20,
+    paddingHorizontal: Layout.screenPadding,
   },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 24, gap: 16 },
+  scrollContent: { paddingHorizontal: Layout.screenPadding, paddingBottom: 24, gap: 16 },
   card: {
     width: CARD_WIDTH,
     borderRadius: Layout.radii.card,

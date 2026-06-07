@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   title: {
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
     fontSize: 26,
     lineHeight: 34,
     color: Colors.textPrimary,
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
     ...Shadow.card,
   },
   cardTitle: {
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
     fontSize: 18,
     color: Colors.textPrimary,
     marginBottom: 16,
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   ctaText: {
     ...Typography.button,
     color: Colors.accentYellow,
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
   },
   dontShowRow: {
     flexDirection: "row",

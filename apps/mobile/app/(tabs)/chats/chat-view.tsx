@@ -23,8 +23,11 @@ import {
 } from "react-native";
 import { Avatar } from "@/components/ui/Avatar";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { SafeScreenView } from "@/components/SafeScreenView";
+import { ChatAttachmentSheet } from "@/components/chats/ChatAttachmentSheet";
 import { ChatComposer } from "@/components/chats/ChatComposer";
+import { keyboardAvoidingProps } from "@/lib/ui/keyboardAvoiding";
 import { RomanceChatInviteBanner } from "@/components/chats/RomanceChatInviteBanner";
 import { Colors } from "@/constants/tokens";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -74,6 +77,9 @@ import { getExperienceSuggestionForChat } from "@/lib/ai/chatExperienceSuggestio
 import type { ChatExperienceSuggestion } from "@/lib/ai/chatExperienceSuggestion";
 import { ChatExperienceSuggestionCard } from "@/components/chats/ChatExperienceSuggestionCard";
 import { postMatchBridgeCtaMessage } from "@/lib/ai/matchBridgeClient";
+import { MatchContextBar } from "@/components/chats/MatchContextBar";
+import { loadRomanceMatchContext, type RomanceMatchContext } from "@/lib/chats/matchContext";
+import { requestDateSafetyPrompt } from "@/lib/safety/dateCheckinPrompt";
 import {
   postMatchAgentCtaMessage,
   recordMatchAgentApproval,
@@ -109,6 +115,7 @@ type ConversationRow = {
   dm_source: string | null;
   dm_initiator: string | null;
   romance_invite_status: string | null;
+  created_at?: string | null;
 };
 
 type Props = {
@@ -218,6 +225,7 @@ export default function ChatView({
   const [strategicLoading, setStrategicLoading] = useState(false);
   const [strategicSelectedTopic, setStrategicSelectedTopic] = useState<StrategicHostTopic | null>(null);
   const [strategicPlanOptions, setStrategicPlanOptions] = useState<PlannerThemePlanOption[] | null>(null);
+  const [matchContext, setMatchContext] = useState<RomanceMatchContext | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
   const inputRef = useRef<TextInput>(null);
 
@@ -360,6 +368,34 @@ export default function ChatView({
   const showDateIdeas =
     isRomanceDm && !dateIdeasDismissed && !hasProposedDate && messages.length <= 12 && dateIdeas.length > 0;
 
+  const hasConversationMessage = useMemo(
+    () =>
+      messages.some(
+        (m) =>
+          !m.pending &&
+          !m.failed &&
+          m.message_type !== "cta" &&
+          m.message_type !== "system" &&
+          m.message_type !== "icebreaker"
+      ),
+    [messages]
+  );
+
+  const showMatchContextBar = useMemo(() => {
+    if (!isRomanceDm || conversation?.dm_source !== "match") return false;
+    if (hasConversationMessage) return false;
+    if (conversation?.created_at) {
+      const ageMs = Date.now() - new Date(conversation.created_at).getTime();
+      if (ageMs > 30 * 60 * 1000) return false;
+    }
+    return matchContext != null;
+  }, [isRomanceDm, conversation?.dm_source, conversation?.created_at, hasConversationMessage, matchContext]);
+
+  const meUser = useMemo(
+    () => (meId ? participants.find((p) => p.id === meId) ?? null : null),
+    [participants, meId]
+  );
+
   useEffect(() => {
     if (!isRomanceDm || !meId || !otherUser) {
       setDateIdeas([]);
@@ -377,6 +413,20 @@ export default function ChatView({
       cancelled = true;
     };
   }, [isRomanceDm, meId, otherUser?.id]);
+
+  useEffect(() => {
+    if (!isRomanceDm || !meId || !otherUser?.id || conversation?.dm_source !== "match") {
+      setMatchContext(null);
+      return;
+    }
+    let cancelled = false;
+    loadRomanceMatchContext(meId, otherUser.id).then((ctx) => {
+      if (!cancelled) setMatchContext(ctx);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isRomanceDm, meId, otherUser?.id, conversation?.dm_source]);
 
   const onPickDateIdea = useCallback((idea: DateIdea) => {
     setInviteInitialActivity(idea.activity);
@@ -759,7 +809,7 @@ export default function ChatView({
 
     const { data: conv } = await supabase
       .from("conversations")
-      .select("id,type,mode,name,related_event_id,related_group_id,dm_source,dm_initiator,romance_invite_status")
+      .select("id,type,mode,name,related_event_id,related_group_id,dm_source,dm_initiator,romance_invite_status,created_at")
       .eq("id", convId)
       .single();
     setConversation(conv as ConversationRow);
@@ -883,6 +933,7 @@ export default function ChatView({
       setReplyTo(null);
       setError(null);
       setSending(true);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       try {
         const inserted = await sendMessage(convId, meId, content, attachments, {
@@ -955,37 +1006,36 @@ export default function ChatView({
   }, [meId, handleSend, replyTo]);
 
   const onSendVoice = useCallback(
-    async (uri: string, _durationMs: number) => {
+    async (uri: string, durationMs: number) => {
       if (!meId || !convId || sending) return;
       const hadMineBeforeSend = messages.some((m) => m.sender_id === meId);
       const clientId = newClientId();
-      setSending(true);
+      const replyToId = replyTo?.id ?? null;
       setError(null);
       addOptimisticMessage({
         clientId,
         senderId: meId,
         content: "Voice message",
         messageType: "audio",
-        replyToId: replyTo?.id ?? null,
+        attachments: [{ type: "audio", url: uri, name: String(durationMs) }],
+        replyToId,
       });
+      setReplyTo(null);
       try {
         const att = await uploadChatVoiceFromUri(meId, uri);
         if (!att) {
-          removeOptimisticMessage(clientId);
+          markOptimisticFailed(clientId);
           return;
         }
         const inserted = await sendMessage(convId, meId, " ", [att], {
-          replyToId: replyTo?.id ?? null,
+          replyToId,
           clientId,
         });
         mergeIncomingMessage(inserted);
         void recordDmFirstOutreachIfNeeded(hadMineBeforeSend);
-        setReplyTo(null);
       } catch (e: unknown) {
         markOptimisticFailed(clientId);
         setError(e instanceof Error ? e.message : "Voice send failed");
-      } finally {
-        setSending(false);
       }
     },
     [
@@ -1516,9 +1566,16 @@ export default function ChatView({
                             </Pressable>
                             <Pressable
                               onPress={() => {
-                                acceptPlannerInvite(p.planner_invitation_id).then(() => {
+                                acceptPlannerInvite(p.planner_invitation_id).then((result) => {
                                   setInvitationStatusMap((prev) => ({ ...prev, [p.planner_invitation_id]: "accepted" }));
                                   refetch();
+                                  if (result.source_mode === "romance") {
+                                    void requestDateSafetyPrompt({
+                                      plannerItemId: result.planner_item_id,
+                                      partnerUserId: result.partner_user_id,
+                                      scheduledAt: result.starts_at,
+                                    });
+                                  }
                                 });
                               }}
                               style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: accentColor, borderRadius: 10 }}
@@ -1601,6 +1658,12 @@ export default function ChatView({
                     audioUrl={item.attachments[0].url}
                     mine={!!mine}
                     accentColor={accentColor}
+                    pending={!!item.pending}
+                    durationMs={
+                      item.attachments[0].name
+                        ? Number(item.attachments[0].name) || undefined
+                        : undefined
+                    }
                   />
                 ) : (
                   <Text style={{ fontSize: 13, color: Colors.gray600 }}>Voice message unavailable</Text>
@@ -1636,14 +1699,16 @@ export default function ChatView({
                   {new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </Text>
                 {mine && item.pending ? (
-                  <Text style={{ fontSize: 11, fontWeight: "600", color: Colors.gray500 }}>Sending…</Text>
+                  <Text style={{ fontSize: 11, fontWeight: "600", color: Colors.gray500 }}>
+                    {item.message_type === "audio" ? "Sending…" : "Sending…"}
+                  </Text>
                 ) : mine && item.failed ? (
                   <Pressable onPress={() => handleRetrySend(item)} hitSlop={6}>
                     <Text style={{ fontSize: 11, fontWeight: "700", color: Colors.errorRed }}>
                       Not delivered · Tap to retry
                     </Text>
                   </Pressable>
-                ) : mine && item.message_type !== "cta" && item.message_type !== "system" ? (
+                ) : mine && item.message_type !== "cta" && item.message_type !== "system" && !item.pending ? (
                   <Text
                     style={{
                       fontSize: 11,
@@ -1735,7 +1800,7 @@ export default function ChatView({
   if (loading) {
     return (
       <SafeScreenView style={{ flex: 1, padding: 16, justifyContent: "center" }}>
-        <ActivityIndicator />
+        <ActivityIndicator size="large" color={accentColor} />
         <Text style={{ textAlign: "center", marginTop: 8 }}>Loading chat…</Text>
       </SafeScreenView>
     );
@@ -1844,6 +1909,17 @@ export default function ChatView({
           <Ionicons name="ellipsis-vertical" size={24} color={Colors.textPrimary} />
         </Pressable>
       </View>
+
+      {showMatchContextBar && matchContext && otherUser ? (
+        <MatchContextBar
+          myPhotoUrl={peerPhotoUrl(meUser, "romance")}
+          myInitials={nameInitials(formatName(meUser, "You"))}
+          partnerPhotoUrl={peerAvatarUri}
+          partnerInitials={nameInitials(peerDisplayName)}
+          sharedInterestCount={matchContext.sharedInterestCount}
+          distanceLabel={matchContext.distanceLabel}
+        />
+      ) : null}
 
       {staleNudgeVisible && isDm && (conversationMode === "business" || conversationMode === "friends") ? (
         <View
@@ -2139,11 +2215,7 @@ export default function ChatView({
         </Pressable>
       </Modal>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} {...keyboardAvoidingProps(90)}>
         {isRomanceInviteRecipient ? (
           <RomanceChatInviteBanner
             conversationId={convId}
@@ -2226,97 +2298,95 @@ export default function ChatView({
           inputRef={inputRef}
         />
 
-        <Modal visible={showAttachMenu && showRomanceInviteComposer} transparent animationType="fade" onRequestClose={() => setShowAttachMenu(false)}>
-            <View style={styles.attachBackdrop}>
-              <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowAttachMenu(false)} />
-              <View style={styles.attachSheet}>
-                <Text style={styles.attachSheetTitle}>Add to chat</Text>
-                <View style={styles.attachGrid}>
-                  <Pressable
-                    style={styles.attachItem}
-                    onPress={() => {
-                      setShowAttachMenu(false);
-                      void onSendImages();
-                    }}
-                  >
-                    <Ionicons name="image-outline" size={26} color={Colors.primaryViolet} />
-                    <Text style={styles.attachLabel}>Photo</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.attachItem}
-                    onPress={() => {
-                      setShowAttachMenu(false);
-                      setShowGifSheet(true);
-                    }}
-                  >
-                    <Ionicons name="happy-outline" size={26} color={Colors.primaryViolet} />
-                    <Text style={styles.attachLabel}>GIF</Text>
-                  </Pressable>
-                  {isDm && otherUser ? (
-                    <Pressable
-                      style={styles.attachItem}
-                      onPress={() => {
-                        setShowAttachMenu(false);
-                        setInviteInitialActivity(undefined);
-                        setShowInviteModal(true);
-                      }}
-                    >
-                      <Ionicons name="calendar-outline" size={26} color={Colors.primaryViolet} />
-                      <Text style={styles.attachLabel}>Plan</Text>
-                    </Pressable>
-                  ) : null}
-                  {isDm && otherUser ? (
-                    <Pressable
-                      style={styles.attachItem}
-                      onPress={() => {
-                        setShowAttachMenu(false);
-                        void onVideoCall();
-                      }}
-                    >
-                      <Ionicons name="videocam-outline" size={26} color={Colors.primaryViolet} />
-                      <Text style={styles.attachLabel}>Video</Text>
-                    </Pressable>
-                  ) : null}
-                  {isDm && otherUser ? (
-                    <Pressable
-                      style={styles.attachItem}
-                      onPress={() => {
-                        setShowAttachMenu(false);
-                        void onSendIcebreaker();
-                      }}
-                    >
-                      <Ionicons name="game-controller-outline" size={26} color={Colors.primaryViolet} />
-                      <Text style={styles.attachLabel}>Icebreaker</Text>
-                    </Pressable>
-                  ) : null}
-                  {showMatchAgentButton ? (
-                    <Pressable
-                      style={styles.attachItem}
-                      onPress={() => {
-                        setShowAttachMenu(false);
-                        void onRunMatchAgent();
-                      }}
-                    >
-                      <SparklesIcon size={26} color={Colors.primaryViolet} />
-                      <Text style={styles.attachLabel}>Match AI</Text>
-                    </Pressable>
-                  ) : null}
-                  {showChatExperienceCard ? (
-                    <Pressable
-                      style={styles.attachItem}
-                      onPress={() => {
-                        setShowAttachMenu(false);
-                        openStrategicHost();
-                      }}
-                    >
-                      <Ionicons name="star-outline" size={26} color={Colors.primaryViolet} />
-                      <Text style={styles.attachLabel}>Topics</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
-            </View>
-          </Modal>
+        <ChatAttachmentSheet
+          visible={showAttachMenu && showRomanceInviteComposer}
+          onClose={() => setShowAttachMenu(false)}
+        >
+          <Text style={styles.attachSheetTitle}>Add to chat</Text>
+          <View style={styles.attachGrid}>
+            <Pressable
+              style={styles.attachItem}
+              onPress={() => {
+                setShowAttachMenu(false);
+                void onSendImages();
+              }}
+            >
+              <Ionicons name="image-outline" size={26} color={Colors.primaryViolet} />
+              <Text style={styles.attachLabel}>Photo</Text>
+            </Pressable>
+            <Pressable
+              style={styles.attachItem}
+              onPress={() => {
+                setShowAttachMenu(false);
+                setShowGifSheet(true);
+              }}
+            >
+              <Ionicons name="happy-outline" size={26} color={Colors.primaryViolet} />
+              <Text style={styles.attachLabel}>GIF</Text>
+            </Pressable>
+            {isDm && otherUser ? (
+              <Pressable
+                style={styles.attachItem}
+                onPress={() => {
+                  setShowAttachMenu(false);
+                  setInviteInitialActivity(undefined);
+                  setShowInviteModal(true);
+                }}
+              >
+                <Ionicons name="calendar-outline" size={26} color={Colors.primaryViolet} />
+                <Text style={styles.attachLabel}>Plan</Text>
+              </Pressable>
+            ) : null}
+            {isDm && otherUser ? (
+              <Pressable
+                style={styles.attachItem}
+                onPress={() => {
+                  setShowAttachMenu(false);
+                  void onVideoCall();
+                }}
+              >
+                <Ionicons name="videocam-outline" size={26} color={Colors.primaryViolet} />
+                <Text style={styles.attachLabel}>Video</Text>
+              </Pressable>
+            ) : null}
+            {isDm && otherUser ? (
+              <Pressable
+                style={styles.attachItem}
+                onPress={() => {
+                  setShowAttachMenu(false);
+                  void onSendIcebreaker();
+                }}
+              >
+                <Ionicons name="game-controller-outline" size={26} color={Colors.primaryViolet} />
+                <Text style={styles.attachLabel}>Icebreaker</Text>
+              </Pressable>
+            ) : null}
+            {showMatchAgentButton ? (
+              <Pressable
+                style={styles.attachItem}
+                onPress={() => {
+                  setShowAttachMenu(false);
+                  void onRunMatchAgent();
+                }}
+              >
+                <SparklesIcon size={26} color={Colors.primaryViolet} />
+                <Text style={styles.attachLabel}>Match AI</Text>
+              </Pressable>
+            ) : null}
+            {showChatExperienceCard ? (
+              <Pressable
+                style={styles.attachItem}
+                onPress={() => {
+                  setShowAttachMenu(false);
+                  openStrategicHost();
+                }}
+              >
+                <Ionicons name="star-outline" size={26} color={Colors.primaryViolet} />
+                <Text style={styles.attachLabel}>Topics</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </ChatAttachmentSheet>
         </>
         ) : isPendingRomanceInvite && !isRomanceInviteRecipient ? (
           <View style={{ padding: 16, alignItems: "center" }}>
@@ -2337,19 +2407,6 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     fontSize: 15,
     color: Colors.gray600,
-  },
-  attachBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    justifyContent: "flex-end",
-  },
-  attachSheet: {
-    backgroundColor: Colors.backgroundLight,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 28,
   },
   attachSheetTitle: {
     fontWeight: "800",

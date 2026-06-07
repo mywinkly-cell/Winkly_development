@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const REFS = {
-  development: "gwgjdpqskusuejlwrsnd", // WinklyApp — WinklyApp_3 cloud dev
+  development: "gwgjdpqskusuejlwrsnd", // Winkly_development cloud dev
   production: "orjccytcmklzcfjgqwwj", // winkly-production
 };
 

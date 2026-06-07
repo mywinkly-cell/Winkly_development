@@ -1,10 +1,9 @@
 // ────────────────────────────────────────────────
 // MatchCelebration — the emotional "It's a match!" moment.
-// Full-screen overlay shown when two users like each other.
-// Animated entrance + floating hearts; two overlapping avatars.
+// Reanimated spring avatar reveal + particle burst + staggered CTAs.
 // ────────────────────────────────────────────────
 
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect } from "react";
 import {
   View,
   Text,
@@ -12,80 +11,97 @@ import {
   Pressable,
   StyleSheet,
   Modal,
-  Animated,
-  Easing,
   Dimensions,
 } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { Colors, Typography, FontFamily, Layout } from "@/constants/tokens";
+import { Colors, Typography, FontFamily } from "@/constants/tokens";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const AVATAR_SIZE = Math.min(140, SCREEN_WIDTH * 0.36);
-const HEART_COUNT = 14;
+const SPRING_AVATAR = { damping: 14, stiffness: 180, mass: 0.85 };
+const SPRING_BADGE = { damping: 12, stiffness: 220, mass: 0.7 };
+const CTA_DELAY_MS = 520;
 
 export type MatchCelebrationProps = {
   visible: boolean;
-  /** Current user's photo (left avatar). */
   selfPhotoUrl?: string | null;
-  /** Matched user's photo (right avatar). */
   otherPhotoUrl?: string | null;
-  /** Matched user's first name, used in the subtitle. */
   otherName: string;
-  /** Primary CTA — open the conversation. */
   onSendMessage: () => void;
-  /** Secondary CTA — dismiss and continue swiping. */
   onKeepSwiping: () => void;
 };
 
 const FALLBACK_AVATAR = "https://i.pravatar.cc/300?u=winkly-match";
 
-function Heart({ delay, startX }: { delay: number; startX: number }) {
-  const progress = useRef(new Animated.Value(0)).current;
+const BURST_PARTICLES = Array.from({ length: 18 }).map((_, i) => ({
+  key: i,
+  angle: (i / 18) * Math.PI * 2 + (i % 2 ? 0.12 : -0.08),
+  distance: 72 + (i % 5) * 22,
+  size: 10 + (i % 4) * 4,
+  delay: (i % 6) * 35,
+}));
+
+function HeartBurstParticle({
+  angle,
+  distance,
+  size,
+  delay,
+  active,
+}: {
+  angle: number;
+  distance: number;
+  size: number;
+  delay: number;
+  active: boolean;
+}) {
+  const progress = useSharedValue(0);
 
   useEffect(() => {
-    const anim = Animated.loop(
-      Animated.timing(progress, {
-        toValue: 1,
-        duration: 3200,
-        delay,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
+    if (!active) {
+      progress.value = 0;
+      return;
+    }
+    progress.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration: 900, easing: Easing.out(Easing.cubic) }),
+          withTiming(0, { duration: 0 }),
+        ),
+        -1,
+        false,
+      ),
     );
-    anim.start();
-    return () => anim.stop();
-  }, [progress, delay]);
+  }, [active, delay, progress]);
 
-  const translateY = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [120, -SCREEN_WIDTH],
-  });
-  const opacity = progress.interpolate({
-    inputRange: [0, 0.1, 0.8, 1],
-    outputRange: [0, 0.9, 0.6, 0],
-  });
-  const scale = progress.interpolate({
-    inputRange: [0, 0.2, 1],
-    outputRange: [0.4, 1, 0.7],
-  });
-  const translateX = progress.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0, (startX % 2 === 0 ? 1 : -1) * 24, 0],
+  const style = useAnimatedStyle(() => {
+    const p = progress.value;
+    const radius = distance * p;
+    return {
+      opacity: p > 0 ? (1 - p) * 0.95 : 0,
+      transform: [
+        { translateX: Math.cos(angle) * radius },
+        { translateY: Math.sin(angle) * radius - p * 28 },
+        { scale: 0.35 + p * 0.85 },
+        { rotate: `${p * 40}deg` },
+      ],
+    };
   });
 
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={{
-        position: "absolute",
-        left: startX,
-        bottom: 0,
-        opacity,
-        transform: [{ translateY }, { translateX }, { scale }],
-      }}
-    >
-      <Ionicons name="heart" size={18 + (startX % 16)} color={Colors.romance.primary} />
+    <Animated.View pointerEvents="none" style={[styles.particle, style]}>
+      <Ionicons name="heart" size={size} color={Colors.romance.primary} />
     </Animated.View>
   );
 }
@@ -98,75 +114,119 @@ export function MatchCelebration({
   onSendMessage,
   onKeepSwiping,
 }: MatchCelebrationProps) {
-  const cardScale = useRef(new Animated.Value(0.6)).current;
-  const cardOpacity = useRef(new Animated.Value(0)).current;
-  const leftAvatar = useRef(new Animated.Value(0)).current;
-  const rightAvatar = useRef(new Animated.Value(0)).current;
-
-  const hearts = useMemo(
-    () =>
-      Array.from({ length: HEART_COUNT }).map((_, i) => ({
-        key: i,
-        delay: (i * 220) % 3000,
-        startX: 12 + ((i * 47) % Math.max(40, SCREEN_WIDTH - 40)),
-      })),
-    [],
-  );
+  const cardOpacity = useSharedValue(0);
+  const cardScale = useSharedValue(0.88);
+  const leftScale = useSharedValue(0.6);
+  const rightScale = useSharedValue(0.6);
+  const leftTranslate = useSharedValue(-48);
+  const rightTranslate = useSharedValue(48);
+  const badgeScale = useSharedValue(0);
+  const ctaOpacity = useSharedValue(0);
+  const ctaTranslateY = useSharedValue(18);
 
   useEffect(() => {
-    if (visible) {
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      cardScale.setValue(0.6);
-      cardOpacity.setValue(0);
-      leftAvatar.setValue(0);
-      rightAvatar.setValue(0);
-      Animated.parallel([
-        Animated.spring(cardScale, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
-        Animated.timing(cardOpacity, { toValue: 1, duration: 260, useNativeDriver: true }),
-        Animated.spring(leftAvatar, { toValue: 1, friction: 6, delay: 120, useNativeDriver: true }),
-        Animated.spring(rightAvatar, { toValue: 1, friction: 6, delay: 220, useNativeDriver: true }),
-      ]).start();
+    if (!visible) {
+      cardOpacity.value = 0;
+      cardScale.value = 0.88;
+      leftScale.value = 0.6;
+      rightScale.value = 0.6;
+      leftTranslate.value = -48;
+      rightTranslate.value = 48;
+      badgeScale.value = 0;
+      ctaOpacity.value = 0;
+      ctaTranslateY.value = 18;
+      return;
     }
-  }, [visible, cardScale, cardOpacity, leftAvatar, rightAvatar]);
 
-  const leftTranslate = leftAvatar.interpolate({ inputRange: [0, 1], outputRange: [-40, 0] });
-  const rightTranslate = rightAvatar.interpolate({ inputRange: [0, 1], outputRange: [40, 0] });
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    cardOpacity.value = withTiming(1, { duration: 220 });
+    cardScale.value = withSpring(1, { damping: 16, stiffness: 160 });
+
+    leftScale.value = withDelay(
+      80,
+      withSequence(withSpring(1.05, SPRING_AVATAR), withSpring(1, SPRING_AVATAR)),
+    );
+    rightScale.value = withDelay(
+      160,
+      withSequence(withSpring(1.05, SPRING_AVATAR), withSpring(1, SPRING_AVATAR)),
+    );
+    leftTranslate.value = withDelay(80, withSpring(0, SPRING_AVATAR));
+    rightTranslate.value = withDelay(160, withSpring(0, SPRING_AVATAR));
+    badgeScale.value = withDelay(
+      240,
+      withSequence(withSpring(1.18, SPRING_BADGE), withSpring(1, SPRING_BADGE)),
+    );
+
+    ctaOpacity.value = withDelay(CTA_DELAY_MS, withTiming(1, { duration: 280 }));
+    ctaTranslateY.value = withDelay(CTA_DELAY_MS, withSpring(0, { damping: 18, stiffness: 190 }));
+  }, [
+    visible,
+    badgeScale,
+    cardOpacity,
+    cardScale,
+    ctaOpacity,
+    ctaTranslateY,
+    leftScale,
+    leftTranslate,
+    rightScale,
+    rightTranslate,
+  ]);
+
+  const cardStyle = useAnimatedStyle(() => ({
+    opacity: cardOpacity.value,
+    transform: [{ scale: cardScale.value }],
+  }));
+
+  const leftAvatarStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: leftTranslate.value }, { scale: leftScale.value }],
+  }));
+
+  const rightAvatarStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: rightTranslate.value }, { scale: rightScale.value }],
+  }));
+
+  const badgeStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: badgeScale.value }],
+  }));
+
+  const ctaStyle = useAnimatedStyle(() => ({
+    opacity: ctaOpacity.value,
+    transform: [{ translateY: ctaTranslateY.value }],
+  }));
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onKeepSwiping}>
       <View style={styles.backdrop}>
-        <View style={styles.heartLayer} pointerEvents="none">
-          {hearts.map((h) => (
-            <Heart key={h.key} delay={h.delay} startX={h.startX} />
+        <View style={styles.burstLayer} pointerEvents="none">
+          {BURST_PARTICLES.map((p) => (
+            <HeartBurstParticle
+              key={p.key}
+              angle={p.angle}
+              distance={p.distance}
+              size={p.size}
+              delay={p.delay}
+              active={visible}
+            />
           ))}
         </View>
 
-        <Animated.View
-          style={[styles.card, { opacity: cardOpacity, transform: [{ scale: cardScale }] }]}
-        >
+        <Animated.View style={[styles.card, cardStyle]}>
           <Text style={styles.title}>It&apos;s a match!</Text>
-          <Text style={styles.subtitle}>
-            You and {otherName || "someone"} liked each other.
-          </Text>
+          <Text style={styles.subtitle}>You and {otherName || "someone"} liked each other.</Text>
 
           <View style={styles.avatarRow}>
-            <Animated.View style={[styles.avatarWrap, { transform: [{ translateX: leftTranslate }] }]}>
+            <Animated.View style={[styles.avatarWrap, leftAvatarStyle]}>
               <Image
                 source={{ uri: selfPhotoUrl || FALLBACK_AVATAR }}
                 style={styles.avatar}
                 resizeMode="cover"
               />
             </Animated.View>
-            <View style={styles.heartBadge}>
+            <Animated.View style={[styles.heartBadge, badgeStyle]}>
               <Ionicons name="heart" size={26} color={Colors.white} />
-            </View>
-            <Animated.View
-              style={[
-                styles.avatarWrap,
-                styles.avatarWrapRight,
-                { transform: [{ translateX: rightTranslate }] },
-              ]}
-            >
+            </Animated.View>
+            <Animated.View style={[styles.avatarWrap, styles.avatarWrapRight, rightAvatarStyle]}>
               <Image
                 source={{ uri: otherPhotoUrl || FALLBACK_AVATAR }}
                 style={styles.avatar}
@@ -175,21 +235,23 @@ export function MatchCelebration({
             </Animated.View>
           </View>
 
-          <Pressable
-            style={styles.primaryBtn}
-            onPress={onSendMessage}
-            accessibilityLabel="Send a message"
-          >
-            <Ionicons name="chatbubble-ellipses" size={20} color={Colors.white} />
-            <Text style={styles.primaryBtnText}>Send a message</Text>
-          </Pressable>
-          <Pressable
-            style={styles.secondaryBtn}
-            onPress={onKeepSwiping}
-            accessibilityLabel="Keep swiping"
-          >
-            <Text style={styles.secondaryBtnText}>Keep swiping</Text>
-          </Pressable>
+          <Animated.View style={[styles.ctaBlock, ctaStyle]}>
+            <Pressable
+              style={styles.primaryBtn}
+              onPress={onSendMessage}
+              accessibilityLabel="Send a message"
+            >
+              <Ionicons name="chatbubble-ellipses" size={20} color={Colors.white} />
+              <Text style={styles.primaryBtnText}>Send a message</Text>
+            </Pressable>
+            <Pressable
+              style={styles.secondaryBtn}
+              onPress={onKeepSwiping}
+              accessibilityLabel="Keep swiping"
+            >
+              <Text style={styles.secondaryBtnText}>Keep swiping</Text>
+            </Pressable>
+          </Animated.View>
         </Animated.View>
       </View>
     </Modal>
@@ -204,8 +266,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
   },
-  heartLayer: {
+  burstLayer: {
     ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  particle: {
+    position: "absolute",
   },
   card: {
     width: "100%",
@@ -274,6 +341,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 8,
+  },
+  ctaBlock: {
+    width: "100%",
   },
   primaryBtn: {
     flexDirection: "row",

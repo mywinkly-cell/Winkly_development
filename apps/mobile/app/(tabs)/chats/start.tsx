@@ -246,7 +246,7 @@ export default function StartChat() {
 
         {loading ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator />
+            <ActivityIndicator size="large" color={Colors.primaryViolet} />
             <Text style={styles.loadingText}>Loading…</Text>
           </View>
         ) : (

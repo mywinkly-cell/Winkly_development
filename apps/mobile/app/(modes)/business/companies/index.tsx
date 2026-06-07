@@ -274,7 +274,7 @@ export default function BusinessCompaniesIndex() {
 
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator />
+            <ActivityIndicator size="large" color={Colors.business.primary} />
             <Text style={{ marginTop: 10, color: Colors.mutedText }}>Loading companies…</Text>
           </View>
         ) : filtered.length === 0 ? (
@@ -336,7 +336,7 @@ export default function BusinessCompaniesIndex() {
 
             {loadingMore && (
               <View style={[styles.center, { paddingVertical: 12 }]}>
-                <ActivityIndicator />
+                <ActivityIndicator size="large" color={Colors.business.primary} />
               </View>
             )}
           </View>

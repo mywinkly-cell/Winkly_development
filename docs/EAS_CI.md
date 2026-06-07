@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-06-06
 
-This doc covers Expo Application Services (EAS) profiles, credential storage, and how builds relate to the **two-repo** workflow (`WinklyApp_3` vs `winkly-production`). See **docs/BRANCHING.md**.
+This doc covers Expo Application Services (EAS) profiles, credential storage, and how builds relate to the **two-repo** workflow (`Winkly_development` vs `winkly-production`). See **docs/BRANCHING.md**.
 
 ---
 
@@ -10,11 +10,11 @@ This doc covers Expo Application Services (EAS) profiles, credential storage, an
 
 | Build type | Git checkout | EAS profile | Purpose |
 | ---------- | ------------ | ----------- | ------- |
-| **Dev client** | `WinklyApp_3` (any branch) | `development` | Local dev with `expo-dev-client` |
-| **Internal QA** | `WinklyApp_3` `main` or `develop` | `preview` | TestFlight + Play internal — pre-promotion smoke tests |
+| **Dev client** | `Winkly_development` (any branch) | `development` | Local dev with `expo-dev-client` |
+| **Internal QA** | `Winkly_development` `main` or `develop` | `preview` | TestFlight + Play internal — pre-promotion smoke tests |
 | **Store release** | **`winkly-production` `main` only** | `production` | Google Play AAB / App Store — shipped binaries |
 
-**Rule:** `eas build --profile production` must run from a checkout of [**winkly-production**](https://github.com/mywinkly-cell/winkly-production) **`main`**, not from `WinklyApp_3`. That guarantees what ships is always the clean production snapshot.
+**Rule:** `eas build --profile production` must run from a checkout of [**winkly-production**](https://github.com/mywinkly-cell/winkly-production) **`main`**, not from `Winkly_development`. That guarantees what ships is always the clean production snapshot.
 
 ---
 
@@ -58,7 +58,7 @@ Set in [Expo dashboard](https://expo.dev) → Project → **Environment variable
 
 ## 4. Manual builds
 
-### From WinklyApp_3 (development / preview only)
+### From Winkly_development (development / preview only)
 
 ```bash
 cd apps/mobile
@@ -85,7 +85,7 @@ eas submit --platform ios --latest --profile production
 eas submit --platform android --latest --profile production
 ```
 
-Preview submit (internal track) — typically from `WinklyApp_3` after a preview build:
+Preview submit (internal track) — typically from `Winkly_development` after a preview build:
 
 ```bash
 eas submit --platform ios --latest --profile preview      # TestFlight internal
@@ -94,7 +94,7 @@ eas submit --platform android --latest --profile preview  # Play internal track
 
 ---
 
-## 5. GitHub Actions — CI (`WinklyApp_3` only)
+## 5. GitHub Actions — CI (`Winkly_development` only)
 
 `.github/workflows/ci.yml` runs three jobs on every pull request and on pushes to `main` / `develop`:
 
@@ -104,7 +104,7 @@ eas submit --platform android --latest --profile preview  # Play internal track
 
 ### Block merge on failure
 
-In **WinklyApp_3** **Settings → Branches**, require these status checks on `main` and `develop`:
+In **Winkly_development** **Settings → Branches**, require these status checks on `main` and `develop`:
 
 - `Lint`
 - `Typecheck`
@@ -114,9 +114,9 @@ See `docs/BRANCHING.md` for the full protection checklist.
 
 ---
 
-## 6. GitHub Actions — preview submit (`WinklyApp_3` only)
+## 6. GitHub Actions — preview submit (`Winkly_development` only)
 
-`.github/workflows/eas-submit.yml` triggers on every push to **`WinklyApp_3` `main`**:
+`.github/workflows/eas-submit.yml` triggers on every push to **`Winkly_development` `main`**:
 
 1. Installs dependencies
 2. Authenticates with EAS (`EXPO_TOKEN`)
@@ -125,7 +125,7 @@ See `docs/BRANCHING.md` for the full protection checklist.
 
 This uploads to **TestFlight** (iOS internal) and the **Google Play internal track** (Android) for **pre-promotion QA**. It does **not** replace the production store build from `winkly-production`.
 
-### Required GitHub secrets (`WinklyApp_3`)
+### Required GitHub secrets (`Winkly_development`)
 
 | Secret | How to obtain |
 | ------ | ------------- |
@@ -153,9 +153,9 @@ Comment out the workflow trigger or add `if: false` on the build step while sett
 
 | Goal | Where | Command |
 | ---- | ----- | ------- |
-| Reproduce CI locally | `WinklyApp_3` | `npm run ci` |
-| Dev client build | `WinklyApp_3` | `eas build --profile development --platform android` |
-| Internal QA build | `WinklyApp_3` | `eas build --profile preview --platform all` |
+| Reproduce CI locally | `Winkly_development` | `npm run ci` |
+| Dev client build | `Winkly_development` | `eas build --profile development --platform android` |
+| Internal QA build | `Winkly_development` | `eas build --profile preview --platform all` |
 | **Production AAB** | **`winkly-production/main`** | `eas build --profile production --platform android` |
-| Submit last preview build | `WinklyApp_3` | `eas submit --platform all --latest --profile preview` |
+| Submit last preview build | `Winkly_development` | `eas submit --platform all --latest --profile preview` |
 | Submit store release | `winkly-production` | `eas submit --platform all --latest --profile production` |

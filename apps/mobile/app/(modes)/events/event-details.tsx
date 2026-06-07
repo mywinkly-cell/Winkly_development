@@ -378,7 +378,7 @@ export default function EventDetails() {
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator />
+            <ActivityIndicator size="large" color={Colors.events.primary} />
             <Text style={{ marginTop: 10, color: Colors.mutedText }}>Loading event…</Text>
           </View>
         ) : !event ? (
@@ -495,7 +495,7 @@ export default function EventDetails() {
                     activeOpacity={0.9}
                   >
                     {statusLoading && status === "going" ? (
-                      <ActivityIndicator />
+                      <ActivityIndicator size="large" color={Colors.events.primary} />
                     ) : (
                       <Text style={{ color: Colors.onPrimary, fontWeight: "900" }}>
                         {status === "going" ? "Going ✓" : "Join"}
@@ -517,7 +517,7 @@ export default function EventDetails() {
                     activeOpacity={0.9}
                   >
                     {statusLoading && status === "interested" ? (
-                      <ActivityIndicator />
+                      <ActivityIndicator size="large" color={Colors.events.primary} />
                     ) : (
                       <Text style={{ color: Colors.text, fontWeight: "900" }}>
                         {status === "interested" ? "Following ✓" : "Follow"}
@@ -571,7 +571,7 @@ export default function EventDetails() {
                     activeOpacity={0.9}
                   >
                     {statusLoading && status === null ? (
-                      <ActivityIndicator />
+                      <ActivityIndicator size="large" color={Colors.events.primary} />
                     ) : (
                       <Text style={{ color: Colors.mutedText, fontWeight: "900" }}>Leave</Text>
                     )}
@@ -593,7 +593,7 @@ export default function EventDetails() {
                     activeOpacity={0.9}
                   >
                     {savingPlanner ? (
-                      <ActivityIndicator />
+                      <ActivityIndicator size="large" color={Colors.events.primary} />
                     ) : (
                       <Text style={{ color: Colors.text, fontWeight: "900" }}>Save to Planner</Text>
                     )}

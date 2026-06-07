@@ -64,11 +64,17 @@ const FEATURE_UPSELL_MESSAGES: Record<
       message:
         "Get a suggested first message to break the ice. Upgrade to Super or Premium.",
     },
+  match_bridge:
+    {
+      title: "AI Match Bridge",
+      message:
+        "See the AI date idea Winkly created for you and your match — based on your shared interests. Upgrade to Premium to unlock it.",
+    },
   concierge:
     {
-      title: "Full Winkly concierge",
+      title: "Winkly AI concierge",
       message:
-        "Weather checks, reschedule suggestions, trip planning, and full coordination. Upgrade to Premium for the complete experience.",
+        "Get a full 5-star date plan with weather check, venues, and backup options. Upgrade to Premium for the complete experience.",
     },
 };
 

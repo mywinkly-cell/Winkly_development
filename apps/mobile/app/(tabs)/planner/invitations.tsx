@@ -25,6 +25,7 @@ import {
   reschedulePlannerInvite,
 } from "@/lib/plannerInvitations";
 import type { PlannerInvitationWithItem } from "@/lib/plannerInvitations";
+import { requestDateSafetyPrompt } from "@/lib/safety/dateCheckinPrompt";
 
 const SOURCE_LABEL: Record<string, string> = {
   romance: "Date",
@@ -59,7 +60,14 @@ export default function PlannerInvitations() {
     async (invitationId: string) => {
       setActingId(invitationId);
       try {
-        await acceptPlannerInvite(invitationId);
+        const result = await acceptPlannerInvite(invitationId);
+        if (result.source_mode === "romance") {
+          void requestDateSafetyPrompt({
+            plannerItemId: result.planner_item_id,
+            partnerUserId: result.partner_user_id,
+            scheduledAt: result.starts_at,
+          });
+        }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         await load();
       } catch (e) {
@@ -143,7 +151,7 @@ export default function PlannerInvitations() {
         </View>
 
         {loading ? (
-          <ActivityIndicator style={{ marginVertical: 24 }} />
+          <ActivityIndicator size="large" color={Colors.primaryViolet} style={{ marginVertical: 24 }} />
         ) : pendingFirst.length === 0 ? (
           <Text style={styles.empty}>No invitations yet.</Text>
         ) : (

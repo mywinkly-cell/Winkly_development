@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
 import { DiscoverActionSheet } from "./DiscoverActionSheet";
 
 export type PeopleWhoLikedYouItem = {
@@ -78,7 +78,7 @@ export function DiscoverPeopleWhoLikedYou({
   return (
     <>
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{sectionTitle}</Text>
+        <Text style={[styles.sectionTitle, { color: primaryColor }]}>{sectionTitle}</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -150,15 +150,15 @@ export function DiscoverPeopleWhoLikedYou({
 const styles = StyleSheet.create({
   section: { marginBottom: 24 },
   sectionTitle: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
+    ...Typography.sectionTitle,
+    fontFamily: FontFamily.headingBold,
     marginBottom: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: Layout.screenPadding,
   },
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: Layout.screenPadding,
     gap: 12,
-    paddingRight: 20,
+    paddingRight: Layout.screenPadding,
   },
   card: {
     width: CARD_WIDTH,

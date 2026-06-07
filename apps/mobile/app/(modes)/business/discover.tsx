@@ -21,6 +21,8 @@ import {
 import { getBlockedUserIdSet } from "@/lib/access/blocks";
 import { getProfilesForMode } from "@/lib/access/profiles";
 import { BusinessBottomNav } from "@/components/layout/BusinessBottomNav";
+import { BusinessDiscoverListCard } from "@/components/business/BusinessDiscoverListCard";
+import { mapProfilesBusinessRow, type BusinessPersonItem } from "@/lib/business/homeFeed";
 
 type ResultType = "person" | "company" | "service";
 
@@ -31,6 +33,8 @@ type DiscoverResult = {
   subtitle?: string;
   meta?: string;
   avatar_url?: string | null;
+  industry?: string | null;
+  person?: BusinessPersonItem;
 };
 
 const PAGE_SIZE = 20;
@@ -118,7 +122,7 @@ export default function BusinessDiscover() {
         if (personRows.length === 0) {
           const { data, error } = await supabase
             .from("business_profiles")
-            .select("id, display_name, role_title, city, company_name, main_photo_url, avatar_url, created_at")
+            .select("id, display_name, role_title, city, company_name, main_photo_url, avatar_url, logo_uri, industry, networking_goals, skills, created_at")
             .order("created_at", { ascending: false })
             .range(from, to);
           if (!error && data) personRows = data as Record<string, unknown>[];
@@ -126,27 +130,16 @@ export default function BusinessDiscover() {
         for (const row of personRows) {
           const id = String(row.id ?? "");
           if (!id || blocked.has(id)) continue;
-          const title =
-            (row.business_name as string) ??
-            (row.display_name as string) ??
-            "Professional";
-          const subtitle = [row.role_title, row.company_name, row.area]
-            .filter(Boolean)
-            .join(" · ");
-          const meta = (row.location as string) ?? (row.city as string) ?? undefined;
-          const avatar_url =
-            (row.logo_uri as string) ??
-            (row.main_photo_url as string) ??
-            (row.avatar_url as string) ??
-            null;
-
+          const person = mapProfilesBusinessRow(row);
           batches.push({
             id,
             type: "person",
-            title,
-            subtitle: subtitle || undefined,
-            meta,
-            avatar_url,
+            title: person.name,
+            subtitle: person.subtitle,
+            meta: person.meta,
+            avatar_url: person.photoUrl,
+            industry: (row.industry as string) ?? person.intentGoal ?? null,
+            person,
           });
         }
       }
@@ -348,7 +341,7 @@ export default function BusinessDiscover() {
       >
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator />
+            <ActivityIndicator size="large" color={Colors.business.primary} />
             <Text style={{ marginTop: 10, color: Colors.mutedText }}>Loading discover feed…</Text>
           </View>
         ) : filtered.length === 0 ? (
@@ -378,7 +371,15 @@ export default function BusinessDiscover() {
           </View>
         ) : (
           <View style={{ gap: 12 }}>
-            {filtered.map((r) => (
+            {filtered.map((r) =>
+              r.type === "person" && r.person ? (
+                <BusinessDiscoverListCard
+                  key={`${r.type}:${r.id}`}
+                  person={r.person}
+                  industry={r.industry}
+                  onPress={() => openResult(r)}
+                />
+              ) : (
               <TouchableOpacity
                 key={`${r.type}:${r.id}`}
                 onPress={() => openResult(r)}
@@ -412,11 +413,12 @@ export default function BusinessDiscover() {
                   </View>
                 </View>
               </TouchableOpacity>
-            ))}
+              )
+            )}
 
             {loadingMore && (
               <View style={[styles.center, { paddingVertical: 12 }]}>
-                <ActivityIndicator />
+                <ActivityIndicator size="large" color={Colors.business.primary} />
               </View>
             )}
           </View>

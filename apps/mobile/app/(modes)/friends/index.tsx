@@ -46,7 +46,7 @@ const CARD_HEIGHT = Math.min(SCREEN_WIDTH * 0.9 * (4 / 3), SCREEN_HEIGHT * 0.52)
 const SWIPE_THRESHOLD = 80;
 const ACTION_BUTTON_SIZE = 64;
 const ACTION_ICON_SIZE = 35;
-const CARD_RADIUS = 24;
+const CARD_RADIUS = Layout.radii.card;
 const STACK_OFFSET = 8;
 const STACK_SCALE = 0.96;
 const SUPER_LIKE_PER_DAY = 10;
@@ -319,7 +319,7 @@ export default function FriendsHome() {
     if (transitioning) return;
     const profileId = currentProfile?.id;
     setTransitioning(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     const toValue =
       direction === "left"
@@ -609,7 +609,7 @@ const styles = StyleSheet.create({
   requestsBannerText: {
     flex: 1,
     ...Typography.button,
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
     color: Colors.textPrimary,
   },
   container: {

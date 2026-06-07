@@ -1,7 +1,7 @@
 // apps/mobile/app/(auth)/signup.tsx
 // Winkly Sign-up — Premium, modern, professional (SDK 54)
 
-import React, { useMemo, useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -66,14 +66,6 @@ export default function Signup() {
     });
   }, [router]);
 
-  const oauthReady = useMemo(() => {
-    const googleAndroid = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
-    const googleIos = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
-    const facebook = process.env.EXPO_PUBLIC_FACEBOOK_APP_ID;
-    const googleReady = Platform.OS === "android" ? !!googleAndroid : Platform.OS === "ios" ? !!googleIos : false;
-    return { googleReady, facebookReady: !!facebook, appleReady: Platform.OS === "ios" };
-  }, []);
-
   const onSignup = async () => {
     const validation = validateSignupInput({ email, password, isAdult });
     if (!validation.ok) {
@@ -114,10 +106,6 @@ export default function Signup() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleOAuth = (type: string) => {
-    Alert.alert("Coming soon", `${type} sign-up will be enabled after OAuth setup.`);
   };
 
   return (
@@ -211,32 +199,9 @@ export default function Signup() {
                 )}
               </TouchableOpacity>
 
-              <View style={styles.dividerRow}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or continue with</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <View style={styles.oauthStack}>
-                {oauthReady.googleReady && (
-                  <TouchableOpacity onPress={() => handleOAuth("Google")} activeOpacity={0.85} style={styles.oauthBtnFull}>
-                    <Image source={require("../../assets/icons/google.png")} style={styles.oauthIcon} />
-                    <Text style={styles.oauthLabel}>Continue with Google</Text>
-                  </TouchableOpacity>
-                )}
-                {oauthReady.facebookReady && (
-                  <TouchableOpacity onPress={() => handleOAuth("Facebook")} activeOpacity={0.85} style={styles.oauthBtnFull}>
-                    <Image source={require("../../assets/icons/facebook.png")} style={styles.oauthIcon} />
-                    <Text style={styles.oauthLabel}>Continue with Facebook</Text>
-                  </TouchableOpacity>
-                )}
-                {Platform.OS === "ios" && (
-                  <TouchableOpacity onPress={() => handleOAuth("Apple")} activeOpacity={0.85} style={styles.oauthBtnFull}>
-                    <Image source={require("../../assets/icons/apple.png")} style={styles.oauthIcon} />
-                    <Text style={styles.oauthLabel}>Continue with Apple</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+              <Text style={styles.oauthComingSoonNote}>
+                Social sign-in coming soon — use email for now.
+              </Text>
 
               <Text style={styles.legal}>
                 By continuing, you agree to Winkly&apos;s <Text style={styles.link}>Terms</Text> & <Text style={styles.link}>Privacy Policy</Text>.
@@ -272,7 +237,7 @@ const styles = StyleSheet.create({
     ...Shadow.card,
   },
 
-  title: { fontFamily: FontFamily.heading, fontSize: 24, lineHeight: 32, color: Colors.textPrimary, marginBottom: 8 },
+  title: { fontFamily: FontFamily.headingBold, fontSize: 24, lineHeight: 32, color: Colors.textPrimary, marginBottom: 8 },
   subtitle: { ...Typography.body, color: Colors.textSecondary, marginBottom: 24 },
 
   label: { ...Typography.caption, color: Colors.textSecondary, marginBottom: 8 },
@@ -290,7 +255,7 @@ const styles = StyleSheet.create({
   },
   accountTypeActive: { borderColor: Colors.primaryViolet, backgroundColor: Colors.backgroundMuted },
   accountTypeText: { ...Typography.button, color: Colors.textSecondary },
-  accountTypeTextActive: { color: Colors.primaryViolet, fontFamily: FontFamily.heading },
+  accountTypeTextActive: { color: Colors.primaryViolet, fontFamily: FontFamily.headingBold },
 
   input: {
     borderWidth: 2,
@@ -335,27 +300,16 @@ const styles = StyleSheet.create({
     ...Shadow.button,
   },
   primaryBtnDisabled: { opacity: 0.7 },
-  primaryText: { ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.heading },
+  primaryText: { ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.headingBold },
 
-  dividerRow: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.gray200 },
-  dividerText: { ...Typography.caption, color: Colors.gray600, marginHorizontal: 12 },
-
-  oauthStack: { gap: 12 },
-  oauthBtnFull: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: Layout.radii.control,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    backgroundColor: Colors.white,
-    minHeight: Layout.touchTargetMin,
+  oauthComingSoonNote: {
+    ...Typography.caption,
+    color: Colors.gray600,
+    textAlign: "center",
+    marginTop: 8,
+    marginBottom: 4,
+    lineHeight: 20,
   },
-  oauthIcon: { width: 20, height: 20, marginRight: 12 },
-  oauthLabel: { ...Typography.button, color: Colors.textPrimary },
 
   legal: { ...Typography.caption, color: Colors.gray500, textAlign: "center", marginTop: 16, lineHeight: 20 },
   link: { color: Colors.primaryViolet, fontWeight: "600" },

@@ -230,7 +230,7 @@ export default function EventsDiscover() {
       >
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator />
+            <ActivityIndicator size="large" color={Colors.events.primary} />
             <Text style={{ marginTop: 10, color: Colors.mutedText }}>Loading events…</Text>
           </View>
         ) : filtered.length === 0 ? (
@@ -289,7 +289,7 @@ export default function EventsDiscover() {
 
             {loadingMore && (
               <View style={[styles.center, { paddingVertical: 12 }]}>
-                <ActivityIndicator />
+                <ActivityIndicator size="large" color={Colors.events.primary} />
               </View>
             )}
           </View>

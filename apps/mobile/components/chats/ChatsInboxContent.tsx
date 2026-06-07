@@ -4,7 +4,7 @@
 // ────────────────────────────────────────────────
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
+import { View, Text, FlatList, ActivityIndicator, TouchableOpacity, ScrollView, StyleSheet, RefreshControl } from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
@@ -57,6 +57,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
 
   const [activeTab, setActiveTab] = useState<"all" | AppMode>(initialTab);
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState<Conversation[]>([]);
   const [, setError] = useState<string | null>(null);
 
@@ -94,8 +95,9 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
     })();
   }, [meId, i18n?.language]);
 
-  const loadConversationsAndMeta = useCallback(async () => {
-    setLoading(true);
+  const loadConversationsAndMeta = useCallback(async (options?: { refresh?: boolean }) => {
+    const isRefresh = options?.refresh === true;
+    if (!isRefresh) setLoading(true);
     setError(null);
 
     try {
@@ -115,7 +117,8 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
       setMemberSettingsByConv({});
       setUnreadByConv({});
     } finally {
-      setLoading(false);
+      if (!isRefresh) setLoading(false);
+      if (isRefresh) setRefreshing(false);
     }
   }, [activeTab]);
 
@@ -277,6 +280,14 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
     loadBusinessConnections();
   }, [loadConversationsAndMeta, loadRomanceMatches, loadFriendsConnections, loadBusinessConnections]);
 
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void loadConversationsAndMeta({ refresh: true });
+    void loadRomanceMatches();
+    void loadFriendsConnections();
+    void loadBusinessConnections();
+  }, [loadConversationsAndMeta, loadRomanceMatches, loadFriendsConnections, loadBusinessConnections]);
+
   useEffect(() => {
     return subscribeChatsHubUpdates(() => {
       void loadConversationsAndMeta();
@@ -318,10 +329,13 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
     [items, lastMessageByConv, memberSettingsByConv]
   );
 
+  const spinnerColor =
+    sourceMode === "all" ? Colors.primaryViolet : Colors[sourceMode].primary;
+
   if (loading) {
     return (
       <View style={{ flex: 1, padding: 16, justifyContent: "center" }}>
-        <ActivityIndicator />
+        <ActivityIndicator size="large" color={spinnerColor} />
         <Text style={{ textAlign: "center", marginTop: 8 }}>Loading chats…</Text>
       </View>
     );
@@ -387,8 +401,17 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
       <View style={styles.contentArea}>
       <FlatList
         style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 0 }}
         data={sortedItems}
         keyExtractor={(c) => c.id}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={tabs.find((t) => t.key === activeTab)?.accent ?? Colors.primaryViolet}
+          />
+        }
+        keyboardShouldPersistTaps="handled"
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         renderItem={({ item }) => {
           const last = lastMessageByConv[item.id];
@@ -403,7 +426,8 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
               timestamp={formatChatInboxTimestamp(ts)}
               unreadCount={unreadByConv[item.id] ?? 0}
               isPinned={settings?.pinned ?? false}
-              showModeContext={activeTab === "all"}
+              showModeContext
+              mutedModeContext={activeTab === "all"}
               isPendingRomanceInvite={
                 item.type === "dm" &&
                 item.mode === "romance" &&
@@ -493,7 +517,8 @@ const styles = StyleSheet.create({
   },
   contentArea: {
     flex: 1,
-    padding: Layout.screenPadding,
+    paddingHorizontal: Layout.screenPadding,
+    paddingTop: Layout.screenPadding,
   },
   tab: {
     paddingVertical: 10,

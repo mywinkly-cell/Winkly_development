@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     paddingHorizontal: 24,
-    borderRadius: 24,
+    borderRadius: Layout.radii.card,
     minHeight: 48,
     minWidth: 240,
     marginBottom: Layout.spacing.xl,

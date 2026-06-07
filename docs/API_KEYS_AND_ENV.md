@@ -19,7 +19,7 @@ This doc lists every API key and env var used by Winkly, where they are used, an
 
 All mobile env vars are prefixed with `EXPO_PUBLIC_` so they are available at build time. Copy `apps/mobile/.env.example` to `apps/mobile/.env` and fill in values.
 
-> **Environments:** Local (`supabase start`), cloud **development** (`gwgjdpqskusuejlwrsnd` / WinklyApp_3), cloud **production** (`orjccytcmklzcfjgqwwj`). Templates: `.env.development`, `.env.cloud-development`, `.env.production`. Migrations authored only in WinklyApp_3. Full guide: **docs/ENVIRONMENTS.md**, **supabase/PROJECTS.md**.
+> **Environments:** Local (`supabase start`), cloud **development** (`gwgjdpqskusuejlwrsnd` / Winkly_development), cloud **production** (`orjccytcmklzcfjgqwwj`). Templates: `.env.development`, `.env.cloud-development`, `.env.production`. Migrations authored only in Winkly_development. Full guide: **docs/ENVIRONMENTS.md**, **supabase/PROJECTS.md**.
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
@@ -108,7 +108,7 @@ Run the commands **on your machine** in PowerShell or Command Prompt. When you t
    npx supabase functions deploy notify-fanout
    ```
 
-### 3.1 Development checklist (`gwgjdpqskusuejlwrsnd` — WinklyApp)
+### 3.1 Development checklist (`gwgjdpqskusuejlwrsnd` — Winkly_development)
 
 Push migrations here **before** production. Audit secrets:
 
@@ -148,7 +148,7 @@ ON CONFLICT (id) DO UPDATE
       secret = EXCLUDED.secret;
 ```
 
-Remove any misnamed secrets (e.g. `WinklyApp`) from Dashboard → Edge Functions → Secrets.
+Remove any misnamed legacy secrets (e.g. old `WinklyApp` label) from Dashboard → Edge Functions → Secrets.
 
 ---
 

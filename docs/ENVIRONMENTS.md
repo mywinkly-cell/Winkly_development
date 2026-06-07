@@ -6,15 +6,15 @@
 
 | Repo | Supabase | Project ref | Role |
 | ---- | -------- | ----------- | ---- |
-| [**WinklyApp_3**](https://github.com/mywinkly-cell/WinklyApp_3) (public) | **WinklyApp** (development) | `gwgjdpqskusuejlwrsnd` | Author migrations & Edge Functions; push here first |
+| [**Winkly_development**](https://github.com/mywinkly-cell/Winkly_development) (public) | **Winkly_development** | `gwgjdpqskusuejlwrsnd` | Author migrations & Edge Functions; push here first |
 | [**winkly-production**](https://github.com/mywinkly-cell/winkly-production) (private) | **winkly-production** | `orjccytcmklzcfjgqwwj` | Production snapshot + store builds; receive mirrored `supabase/` on promote |
 
-See **docs/BRANCHING.md** for code promote (`WinklyApp_3/main` → `winkly-production/main`). See **supabase/PROJECTS.md** for migration rules.
+See **docs/BRANCHING.md** for code promote (`Winkly_development/main` → `winkly-production/main`). See **supabase/PROJECTS.md** for migration rules.
 
 | Environment | Backend | Mobile env file | EAS profile | Purpose |
 | ----------- | ------- | --------------- | ----------- | ------- |
 | **local** | `supabase start` | `.env.development` | `development` | Fast iteration; disposable data |
-| **cloud dev** | WinklyApp `gwgjdpqskusuejlwrsnd` | `.env.cloud-development` (optional) | — | Shared team QA after local verify |
+| **cloud dev** | Winkly_development `gwgjdpqskusuejlwrsnd` | `.env.cloud-development` (optional) | — | Shared team QA after local verify |
 | **production** | winkly-production `orjccytcmklzcfjgqwwj` | `.env.production` | `preview` / `production` | Ship target; never experiment here |
 
 ---
@@ -28,7 +28,7 @@ cp apps/mobile/.env.production.example        apps/mobile/.env.production
 ```
 
 - **Local:** `supabase start` → copy API URL + anon key into `.env.development`.
-- **Cloud dev:** [WinklyApp dashboard](https://supabase.com/dashboard/project/gwgjdpqskusuejlwrsnd) → Settings → API → `.env.cloud-development`.
+- **Cloud dev:** [Winkly_development dashboard](https://supabase.com/dashboard/project/gwgjdpqskusuejlwrsnd) → Settings → API → `.env.cloud-development`.
 - **Production:** [winkly-production dashboard](https://supabase.com/dashboard/project/orjccytcmklzcfjgqwwj) → `.env.production` or EAS secrets only.
 
 ---
@@ -46,19 +46,19 @@ For **cloud dev**, copy manually: `cp apps/mobile/.env.cloud-development apps/mo
 
 ## 3. Migrations — one direction only
 
-**Author in `WinklyApp_3` only.** Never create migrations in `winkly-production`.
+**Author in `Winkly_development` only.** Never create migrations in `winkly-production`.
 
 ```bash
 # 1) Local verify
 supabase db reset
 
-# 2) Cloud development (WinklyApp)
+# 2) Cloud development (Winkly_development)
 npm run supabase:push:development:dry-run   # inspect first
 npm run supabase:push:development
 
 # 3) QA app against gwgjdpqskusuejlwrsnd if needed
 
-# 4) Promote WinklyApp_3/main → winkly-production/main (mirrors supabase/)
+# 4) Promote Winkly_development/main → winkly-production/main (mirrors supabase/)
 
 # 5) Cloud production — dry-run before apply
 npm run supabase:push:production:dry-run
@@ -73,15 +73,15 @@ Edge Functions: deploy to **development** ref first, then **production** after Q
 
 | Profile | Repo | Supabase backend |
 | ------- | ---- | ---------------- |
-| `development` | `WinklyApp_3` | Local (dev client) |
-| `preview` | `WinklyApp_3` | Production cloud (`orjccytcmklzcfjgqwwj`) for device QA |
+| `development` | `Winkly_development` | Local (dev client) |
+| `preview` | `Winkly_development` | Production cloud (`orjccytcmklzcfjgqwwj`) for device QA |
 | `production` | **`winkly-production` only** | `orjccytcmklzcfjgqwwj` |
 
 ---
 
 ## 5. Golden rules
 
-- Migrations flow: **WinklyApp_3 → local → `gwgjdpqskusuejlwrsnd` → promote → `orjccytcmklzcfjgqwwj`** — never skip dev cloud, never author in the private repo.
+- Migrations flow: **Winkly_development → local → `gwgjdpqskusuejlwrsnd` → promote → `orjccytcmklzcfjgqwwj`** — never skip dev cloud, never author in the private repo.
 - Always `supabase:push:production:dry-run` before a prod push.
 - Keep real `.env.*` off git (only `*.example` tracked).
 - Separate PostHog/analytics keys per environment.

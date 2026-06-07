@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
     ...Shadow.card,
   },
   title: {
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
     fontSize: 22,
     lineHeight: 30,
     color: Colors.textPrimary,
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     marginBottom: 20,
   },
-  resendTitle: { fontFamily: FontFamily.heading, fontSize: 16, color: Colors.textPrimary, marginBottom: 12 },
+  resendTitle: { fontFamily: FontFamily.headingBold, fontSize: 16, color: Colors.textPrimary, marginBottom: 12 },
   input: {
     borderWidth: 2,
     borderColor: Colors.gray200,
@@ -235,14 +235,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     ...Shadow.button,
   },
-  resendBtnText: { ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.heading },
+  resendBtnText: { ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.headingBold },
   devSection: {
     borderTopWidth: 1,
     borderTopColor: Colors.gray200,
     paddingTop: 20,
     marginBottom: 20,
   },
-  devTitle: { fontFamily: FontFamily.heading, fontSize: 14, color: Colors.gray600, marginBottom: 8 },
+  devTitle: { fontFamily: FontFamily.headingBold, fontSize: 14, color: Colors.gray600, marginBottom: 8 },
   devHint: { ...Typography.caption, color: Colors.gray500, marginBottom: 12 },
   pasteInput: {
     borderWidth: 2,
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: "center",
   },
-  pasteBtnText: { ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.heading },
+  pasteBtnText: { ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.headingBold },
   linkBtn: { alignItems: "center", paddingVertical: 12, minHeight: 44, justifyContent: "center" },
   linkText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
 });

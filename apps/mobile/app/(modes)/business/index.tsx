@@ -19,6 +19,7 @@ import { ModeHeader } from "@/components/layout/ModeHeader";
 import { BusinessBottomNav } from "@/components/layout/BusinessBottomNav";
 import { BusinessProfileCard } from "@/components/business/BusinessProfileCard";
 import { BusinessFilterSheet } from "@/components/business/BusinessFilterSheet";
+import { BusinessHomeEmptyState } from "@/components/business/BusinessHomeEmptyState";
 import { PendingInvitesSheet } from "@/components/business/PendingInvitesSheet";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { supabase } from "@/lib/supabase";
@@ -168,6 +169,13 @@ export default function BusinessHome() {
     void load();
   };
 
+  const showHomeEmptyState =
+    !loading &&
+    !search.hasActiveFilter &&
+    suggested.length === 0 &&
+    lastSearchPeople.length === 0 &&
+    nearby.length === 0;
+
   return (
     <View style={styles.screen}>
       <ModeHeader
@@ -216,6 +224,8 @@ export default function BusinessHome() {
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={primary} />
         </View>
+      ) : showHomeEmptyState ? (
+        <BusinessHomeEmptyState onEditProfile={() => router.push("/profile/edit-business")} />
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}

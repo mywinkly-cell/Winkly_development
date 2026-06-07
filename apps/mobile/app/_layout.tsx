@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { getAnalyticsConsent } from "@/lib/analyticsConsent";
 import { View, ActivityIndicator, LogBox } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { Stack, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -17,6 +18,7 @@ import {
 } from "@expo-google-fonts/poppins";
 import * as SplashScreen from "expo-splash-screen";
 import { PostHogProvider } from "posthog-react-native";
+import { DateSafetyPromptHost } from "@/components/safety/DateSafetyPromptHost";
 import { AuthProvider, ModeContextProvider, NetworkProvider, ThemeProvider } from "@/providers";
 import { LastActivitySync } from "@/components/LastActivitySync";
 import { RouteGuard } from "@/components/RouteGuard";
@@ -115,6 +117,7 @@ function RootLayout() {
         <LastActivitySync />
         <ModeContextProvider>
           <ThemeProvider>
+            <DateSafetyPromptHost />
             {posthogEnabled ? <PostHogIdentitySync /> : null}
             <RouteGuard>
               {posthogEnabled ? <PostHogScreenTracker /> : null}
@@ -158,17 +161,19 @@ function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-          {posthogEnabled ? (
-            <PostHogProvider apiKey={POSTHOG_API_KEY} options={posthogOptions}>
-              {content}
-            </PostHogProvider>
-          ) : (
-            content
-          )}
-        </View>
-      </SafeAreaProvider>
+      <BottomSheetModalProvider>
+        <SafeAreaProvider>
+          <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+            {posthogEnabled ? (
+              <PostHogProvider apiKey={POSTHOG_API_KEY} options={posthogOptions}>
+                {content}
+              </PostHogProvider>
+            ) : (
+              content
+            )}
+          </View>
+        </SafeAreaProvider>
+      </BottomSheetModalProvider>
     </GestureHandlerRootView>
   );
 }

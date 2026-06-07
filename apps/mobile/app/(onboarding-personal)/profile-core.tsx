@@ -37,7 +37,8 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { Routes } from "@/constants/routes";
-import { trackOnboardingCompleted } from "@/lib/analytics/events";
+import { trackOnboardingCompleted, trackOnboardingSubProfileSkipped } from "@/lib/analytics/events";
+import { setOnboardingSubProfileSkipped } from "@/lib/introFlags";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { searchCities, type CityCountry } from "@/lib/location/citySearch";
 import {
@@ -51,7 +52,9 @@ import {
   LOOKING_FOR_OPTIONS,
   ACTIVITY_PREFERENCE_OPTIONS,
   ACTIVITY_PREFERENCES_MAX,
+  POPULAR_ACTIVITY_PREFERENCE_KEYS,
 } from "@/constants/profileOptions";
+import { ActivityPreferenceCard } from "@/components/onboarding/ActivityPreferenceCard";
 import { RomanceSubProfile } from "@/components/onboarding/RomanceSubProfile";
 import { FriendsSubProfile } from "@/components/onboarding/FriendsSubProfile";
 import { BusinessSubProfile } from "@/components/onboarding/BusinessSubProfile";
@@ -73,6 +76,7 @@ import {
   MIN_PHOTO_DIMENSION,
   validateProfileCoreSubmit,
 } from "@/lib/profile/validation";
+import { keyboardAvoidingProps, PROFILE_HEADER_KEYBOARD_OFFSET } from "@/lib/ui/keyboardAvoiding";
 
 const EDUCATION_OPTIONS = [
   "High school graduate",
@@ -230,6 +234,8 @@ export default function ProfileCore() {
 
   const [saving, setSaving] = useState(false);
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(1);
+  const activityGridShake = useRef(new Animated.Value(0)).current;
+  const didPreselectActivities = useRef(false);
   const [selectedPrimaryMode, setSelectedPrimaryMode] = useState<PrimaryOnboardingMode>("romance");
   const [cropModalVisible, setCropModalVisible] = useState(false);
   const [pendingCrop, setPendingCrop] = useState<{ uri: string; type: "core" | "romance" | "friends" | "business"; index: number } | null>(null);
@@ -969,16 +975,36 @@ export default function ProfileCore() {
   };
 
   const toggleActivityPreference = (key: string) => {
-    Haptics.selectionAsync();
     setActivityPreferences((prev) => {
-      if (prev.includes(key)) return prev.filter((x) => x !== key);
+      if (prev.includes(key)) {
+        Haptics.selectionAsync();
+        return prev.filter((x) => x !== key);
+      }
       if (prev.length >= ACTIVITY_PREFERENCES_MAX) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Animated.sequence([
+          Animated.timing(activityGridShake, { toValue: 8, duration: 45, useNativeDriver: true }),
+          Animated.timing(activityGridShake, { toValue: -8, duration: 45, useNativeDriver: true }),
+          Animated.timing(activityGridShake, { toValue: 6, duration: 40, useNativeDriver: true }),
+          Animated.timing(activityGridShake, { toValue: -6, duration: 40, useNativeDriver: true }),
+          Animated.timing(activityGridShake, { toValue: 0, duration: 35, useNativeDriver: true }),
+        ]).start();
         return prev;
       }
+      Haptics.selectionAsync();
       return [...prev, key];
     });
   };
+
+  useEffect(() => {
+    if (isEditFlow || currentStep !== 3 || didPreselectActivities.current) return;
+    if (activityPreferences.length > 0) {
+      didPreselectActivities.current = true;
+      return;
+    }
+    didPreselectActivities.current = true;
+    setActivityPreferences([...POPULAR_ACTIVITY_PREFERENCE_KEYS]);
+  }, [activityPreferences.length, currentStep, isEditFlow]);
 
   const MAX_VIDEO_SEC = 10;
   const pickVideo = async (type: "romance" | "friends" | "business") => {
@@ -1243,6 +1269,87 @@ export default function ProfileCore() {
     await handleContinue();
   };
 
+  const handleSkipSubProfile = async () => {
+    for (const step of [1, 2, 3] as const) {
+      const stepValidation = validateOnboardingStep(step, {
+        firstName,
+        lastName,
+        birthday,
+        city,
+        corePhotoCount: corePhotos.length,
+        gender,
+        lookingFor,
+        selectedMode: selectedPrimaryMode,
+      });
+      if (!stepValidation.ok) {
+        Alert.alert(stepValidation.title, stepValidation.message);
+        return;
+      }
+    }
+
+    try {
+      setSaving(true);
+      const { data, error: userError } = await supabase.auth.getUser();
+      if (userError || !data?.user?.id) {
+        Alert.alert("Session expired", "Please sign in again to continue.", [
+          { text: "Go to Sign in", onPress: () => router.replace("/(auth)/signin") },
+        ]);
+        return;
+      }
+
+      const authUser = data.user;
+      const cityNorm = normalizeLocationDisplayString(city.trim(), appLanguage);
+      const uploadedCorePhotos = await uploadLocalPhotos(authUser.id, "core", corePhotos);
+      setCorePhotos(uploadedCorePhotos);
+
+      const payload: Record<string, unknown> = {
+        id: authUser.id,
+        first_name: firstName,
+        last_name: lastName,
+        gender: gender || null,
+        birthday: birthday ? toISODateOnly(birthday) : null,
+        city: cityNorm,
+        education: education || null,
+        occupation: occupation || null,
+        languages: languages.length ? languages : null,
+        instagram: instagram.trim() || null,
+        bio: bio.trim() || null,
+        looking_for: lookingFor.length ? lookingFor : null,
+        activity_preferences: activityPreferences.length ? activityPreferences : null,
+        core_photos: uploadedCorePhotos,
+        main_photo_url: uploadedCorePhotos[0] || null,
+      };
+
+      const { error: upsertErr } = await supabase.from("user_profiles").upsert(payload, { onConflict: "id" });
+      if (upsertErr) throw upsertErr;
+
+      await upsertOwnProfileCore(authUser.id, {
+        first_name: firstName.trim() || null,
+        last_name: lastName.trim() || null,
+        city: cityNorm,
+        bio: bio.trim() || null,
+        looking_for: lookingFor.length ? lookingFor : null,
+        activity_preferences: activityPreferences.length ? activityPreferences : null,
+      });
+
+      await AsyncStorage.removeItem("winkly_profile_draft");
+      await setOnboardingSubProfileSkipped(selectedPrimaryMode);
+      trackOnboardingSubProfileSkipped({
+        skipped_mode: selectedPrimaryMode,
+        onboarding_step: ONBOARDING_STEP_COUNT,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.push(Routes.modeSelection);
+    } catch (err: unknown) {
+      Alert.alert(
+        "Could not save",
+        err instanceof Error ? err.message : "Something went wrong. Please try again."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleHeaderBack = () => {
     Haptics.selectionAsync();
     if (!isEditFlow && currentStep > 1) {
@@ -1318,7 +1425,7 @@ export default function ProfileCore() {
   return (
     <SafeScreenView style={{ flex: 1, backgroundColor: Colors.backgroundMuted }}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        {...keyboardAvoidingProps(PROFILE_HEADER_KEYBOARD_OFFSET)}
         style={{ flex: 1 }}
       >
         {/* Header */}
@@ -1331,7 +1438,7 @@ export default function ProfileCore() {
             <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
           <View style={{ flex: 1, alignItems: "center" }}>
-            <Text style={{ ...Typography.h3, color: Colors.textPrimary, fontFamily: FontFamily.heading }}>Your Profile</Text>
+            <Text style={{ ...Typography.headerTitle, color: Colors.textPrimary, fontFamily: FontFamily.headingBold }}>Your Profile</Text>
           </View>
           <TouchableOpacity
             onPress={async () => {
@@ -1349,7 +1456,7 @@ export default function ProfileCore() {
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
+          contentContainerStyle={{ paddingHorizontal: Layout.screenPadding, paddingTop: Layout.screenPadding, paddingBottom: 100 }}
           keyboardShouldPersistTaps="handled"
         >
           <Animated.View style={{ opacity: fadeAnim }}>
@@ -1376,7 +1483,7 @@ export default function ProfileCore() {
 
             {(isEditFlow || currentStep === 1) && (
             <View style={[sectionCard, { marginBottom: 20 }]}>
-              <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 16, fontFamily: FontFamily.heading }}>
+              <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 16, fontFamily: FontFamily.headingBold }}>
                 {isEditFlow ? "About you 💫" : "Let's start with the basics ✨"}
               </Text>
 
@@ -1630,7 +1737,7 @@ export default function ProfileCore() {
 
             {!isEditFlow && currentStep === 2 && (
             <View style={[sectionCard, { marginBottom: 20 }]}>
-              <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 4, fontFamily: FontFamily.heading }}>Add your photos 📸</Text>
+              <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 4, fontFamily: FontFamily.headingBold }}>Add your photos 📸</Text>
               <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 12 }}>
                 Add {MIN_CORE_PHOTOS}–{MAX_CORE_PHOTOS} clear photos. Minimum {MIN_PHOTO_DIMENSION}px on the short side — we&apos;ll let you know if one is too small.
               </Text>
@@ -1681,48 +1788,44 @@ export default function ProfileCore() {
           {/* Section: What do you enjoy? (activity preferences — Winkly's differentiator) */}
           {(isEditFlow || currentStep === 3) && (
           <View style={[sectionCard, { marginBottom: 20 }]}>
-            <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 4, fontFamily: FontFamily.heading }}>What do you enjoy? 🎉</Text>
+            <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 4, fontFamily: FontFamily.headingBold }}>What do you enjoy? 🎉</Text>
             <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 16 }}>
               Pick the things you love doing — we&apos;ll use these to suggest date ideas you&apos;ll both enjoy. Choose up to {ACTIVITY_PREFERENCES_MAX}. ({activityPreferences.length}/{ACTIVITY_PREFERENCES_MAX})
             </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4 }}>
+            <Animated.View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                marginHorizontal: -4,
+                transform: [{ translateX: activityGridShake }],
+              }}
+            >
               {ACTIVITY_PREFERENCE_OPTIONS.map((opt) => {
                 const selected = activityPreferences.includes(opt.key);
                 const atMax = !selected && activityPreferences.length >= ACTIVITY_PREFERENCES_MAX;
+                const suggested = POPULAR_ACTIVITY_PREFERENCE_KEYS.includes(
+                  opt.key as (typeof POPULAR_ACTIVITY_PREFERENCE_KEYS)[number],
+                );
                 return (
-                  <TouchableOpacity
+                  <ActivityPreferenceCard
                     key={opt.key}
-                    onPress={() => toggleActivityPreference(opt.key)}
-                    activeOpacity={0.85}
+                    option={opt}
+                    selected={selected}
+                    suggested={suggested}
                     disabled={atMax}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      margin: 4,
-                      paddingVertical: 10,
-                      paddingHorizontal: 14,
-                      borderRadius: 22,
-                      borderWidth: 2,
-                      borderColor: selected ? Colors.primaryViolet : Colors.gray200,
-                      backgroundColor: selected ? Colors.primaryViolet + "15" : Colors.white,
-                      opacity: atMax ? 0.4 : 1,
-                    }}
-                  >
-                    <Text style={{ fontSize: 18, marginRight: 8 }}>{opt.emoji}</Text>
-                    <Text style={{ ...Typography.body, color: selected ? Colors.primaryViolet : Colors.textPrimary, fontWeight: selected ? "600" : "400" }}>
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
+                    onPress={() => toggleActivityPreference(opt.key)}
+                  />
                 );
               })}
-            </View>
+            </Animated.View>
           </View>
           )}
 
           {/* Section: More about you — edit flow only */}
           {isEditFlow && (
           <View style={[sectionCard, { marginBottom: 20 }]}>
-            <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 16, fontFamily: FontFamily.heading }}>More about you</Text>
+            <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 16, fontFamily: FontFamily.headingBold }}>More about you</Text>
 
         <Text style={label}>Education</Text>
         <ScrollView
@@ -1796,7 +1899,7 @@ export default function ProfileCore() {
           <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center", padding: 20 }} onPress={() => setLanguageModalVisible(false)}>
             <Pressable style={{ width: "100%", maxWidth: 400, maxHeight: "80%", backgroundColor: Colors.backgroundLight, borderRadius: Layout.radii.card, overflow: "hidden", shadowColor: Colors.softBlack, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 12 }} onPress={(e) => e.stopPropagation()}>
               <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.gray200 }}>
-                <Text style={{ ...Typography.h3, fontFamily: FontFamily.heading, color: Colors.textPrimary, marginBottom: 4 }}>Choose languages</Text>
+                <Text style={{ ...Typography.h3, fontFamily: FontFamily.headingBold, color: Colors.textSecondary, marginBottom: 4 }}>Choose languages</Text>
                 <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 8 }}>Your selections appear first in the list.</Text>
                 <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setLanguageModalVisible(false); }} style={{ position: "absolute", top: 16, right: 16, padding: 4 }} hitSlop={12}>
                   <Ionicons name="close" size={24} color={Colors.gray600} />
@@ -1822,7 +1925,7 @@ export default function ProfileCore() {
               </ScrollView>
               <View style={{ padding: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.gray200 }}>
                 <Pressable onPress={() => { Haptics.selectionAsync(); setLanguageModalVisible(false); }} style={{ backgroundColor: Colors.primaryViolet, paddingVertical: 14, borderRadius: Layout.radii.control, alignItems: "center" }}>
-                  <Text style={{ ...Typography.button, color: Colors.white, fontFamily: FontFamily.heading }}>Done</Text>
+                  <Text style={{ ...Typography.button, color: Colors.white, fontFamily: FontFamily.headingBold }}>Done</Text>
                 </Pressable>
               </View>
             </Pressable>
@@ -1851,7 +1954,7 @@ export default function ProfileCore() {
           {/* ─────── SUB-PROFILES ─────── */}
           {isEditFlow ? (
           <View style={[sectionCard, { marginBottom: 8 }]}>
-            <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 16, fontFamily: FontFamily.heading }}>Mode profiles</Text>
+            <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 16, fontFamily: FontFamily.headingBold }}>Mode profiles</Text>
         <RomanceSubProfile
           enabled={romanceEnabled}
           toggle={() => setRomanceEnabled(!romanceEnabled)}
@@ -1956,7 +2059,7 @@ export default function ProfileCore() {
           </View>
           ) : currentStep === 4 ? (
           <View style={[sectionCard, { marginBottom: 8 }]}>
-            <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 8, fontFamily: FontFamily.heading }}>
+            <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 8, fontFamily: FontFamily.headingBold }}>
               Set up your profile
             </Text>
             <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 16 }}>
@@ -2178,7 +2281,7 @@ export default function ProfileCore() {
             elevation: 5,
           }}
         >
-          <Text style={{ ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.heading }}>
+          <Text style={{ ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.headingBold }}>
             {saving
               ? "Saving..."
               : isEditFlow
@@ -2188,6 +2291,26 @@ export default function ProfileCore() {
                   : "Continue"}
           </Text>
         </TouchableOpacity>
+
+        {!isEditFlow && currentStep === ONBOARDING_STEP_COUNT ? (
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.selectionAsync();
+              void handleSkipSubProfile();
+            }}
+            disabled={saving}
+            style={{
+              paddingVertical: 14,
+              alignItems: "center",
+              marginTop: 12,
+              opacity: saving ? 0.6 : 1,
+            }}
+          >
+            <Text style={{ ...Typography.button, color: Colors.gray600, fontWeight: "600" }}>
+              Skip for now
+            </Text>
+          </TouchableOpacity>
+        ) : null}
           </Animated.View>
         </ScrollView>
 

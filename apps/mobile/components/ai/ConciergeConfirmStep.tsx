@@ -21,6 +21,7 @@ import { callWinklyPlan, type ConciergeContext, type ExperienceOption, type Wink
 import type { PlannerThemePlanOption, PlannerTripDay } from "@/lib/ai/strategicHost";
 import type { Mode } from "@/types";
 import { createPlannerItemForSelf, createPlannerInvite } from "@/lib/plannerInvitations";
+import { requestDateSafetyPrompt } from "@/lib/safety/dateCheckinPrompt";
 import { createDirectChat, sendMessage } from "@/lib/chats";
 import { getPlannerItems } from "@/lib/access/planner";
 import { supabase } from "@/lib/supabase";
@@ -372,7 +373,14 @@ export function ConciergeConfirmStep({
           });
         }
       } else {
-        await createPlannerItemForSelf(meId, payload);
+        const itemId = await createPlannerItemForSelf(meId, payload);
+        if (mode === "romance") {
+          void requestDateSafetyPrompt({
+            plannerItemId: itemId,
+            partnerUserId: partner?.id ?? null,
+            scheduledAt: starts_at,
+          });
+        }
       }
       onDone();
     } catch (e) {

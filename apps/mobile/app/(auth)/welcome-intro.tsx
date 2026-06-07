@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   },
   content: { flex: 1 },
   title: {
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
     fontSize: 28,
     lineHeight: 36,
     color: Colors.textPrimary,
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   },
   sectionText: { flex: 1 },
   sectionTitle: {
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
     fontSize: 16,
     color: Colors.textPrimary,
     marginBottom: 4,
@@ -168,6 +168,6 @@ const styles = StyleSheet.create({
   ctaText: {
     ...Typography.button,
     color: Colors.accentYellow,
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
   },
 });

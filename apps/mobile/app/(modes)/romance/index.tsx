@@ -35,6 +35,7 @@ import { SuperLikeInviteModal } from "@/components/romance/SuperLikeInviteModal"
 import { blockUser, recordSwipe, reportUser } from "@/lib/matching/actions";
 import { buildRomanceSuperLikeIcebreaker } from "@/lib/matching/romanceIcebreaker";
 import { fetchRomanceSwipeDeckProfiles } from "@/lib/discover/romanceSwipeDeck";
+import { keyboardAvoidingProps } from "@/lib/ui/keyboardAvoiding";
 import { fetchRomanceLikesReceivedCount } from "@/lib/discover/likesReceivedCount";
 import { updateMyLocationOnAppOpen } from "@/lib/location/updateLocation";
 import {
@@ -50,7 +51,7 @@ const CARD_HEIGHT = Math.min(SCREEN_WIDTH * 0.9 * (4 / 3), SCREEN_HEIGHT * 0.52)
 const SWIPE_THRESHOLD = 80;
 const ACTION_BUTTON_SIZE = 64; // 10% bigger than 58
 const ACTION_ICON_SIZE = 35;  // 10% bigger than 32
-const CARD_RADIUS = 24;
+const CARD_RADIUS = Layout.radii.card;
 const INTENT_FREE_PER_DAY = 1;
 const INTENT_SUBSCRIBER_PER_DAY = 10;
 const STACK_OFFSET = 8;
@@ -291,6 +292,7 @@ export default function RomanceHome() {
 
   const celebrateMatch = (profile: Profile | undefined, chatId: string | null) => {
     if (!profile) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setMatchState({
       visible: true,
       otherName: profile.name,
@@ -442,7 +444,7 @@ export default function RomanceHome() {
     const swipedProfile = currentProfile;
     const profileId = swipedProfile?.id;
     setTransitioning(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     const toValue =
       direction === "left"
@@ -577,7 +579,7 @@ export default function RomanceHome() {
 
       {deckLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primaryViolet} />
+          <ActivityIndicator size="large" color={Colors.romance.primary} />
         </View>
       ) : !currentProfile ? (
         <SwipeDeckEmptyState
@@ -742,10 +744,7 @@ export default function RomanceHome() {
               style={styles.modalBackdrop}
               onPress={() => setIntentModalVisible(false)}
             >
-              <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : undefined}
-                style={styles.modalContentWrap}
-              >
+              <KeyboardAvoidingView {...keyboardAvoidingProps()} style={styles.modalContentWrap}>
                 <Pressable style={styles.intentModalCard} onPress={(e) => e.stopPropagation()}>
                   <Text style={styles.intentModalTitle}>Add a message? (optional)</Text>
                   <Text style={styles.intentModalHint}>
@@ -1011,7 +1010,7 @@ const styles = StyleSheet.create({
   },
   intentModalTitle: {
     ...Typography.h3,
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
     color: Colors.textPrimary,
     marginBottom: 8,
   },
@@ -1089,7 +1088,7 @@ const styles = StyleSheet.create({
   },
   intentModalBtnPrimaryText: {
     ...Typography.button,
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
     color: Colors.white,
   },
 });

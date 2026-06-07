@@ -302,7 +302,7 @@ export default function EventsHome() {
         </View>
 
         {loading ? (
-          <ActivityIndicator style={{ marginVertical: 24 }} />
+          <ActivityIndicator size="large" color={Colors.events.primary} style={{ marginVertical: 24 }} />
         ) : (
           <>
             {/* Winkly events strip */}
@@ -325,7 +325,7 @@ export default function EventsHome() {
             <View style={{ marginBottom: 24 }}>
               <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 12 }}>Nearby on Meetup &amp; Eventbrite</Text>
               {externalStatus === "loading" ? (
-                <ActivityIndicator style={{ marginVertical: 12, alignSelf: "flex-start" }} />
+                <ActivityIndicator size="small" color={Colors.events.primary} style={{ marginVertical: 12, alignSelf: "flex-start" }} />
               ) : filteredExternal.length > 0 ? (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }}>
                   {filteredExternal.map((item) => (
