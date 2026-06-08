@@ -103,6 +103,7 @@ module.exports = {
       bundleIdentifier: "com.winkly.app",
       infoPlist: {
         CFBundleDisplayName: "Winkly",
+        ITSAppUsesNonExemptEncryption: false,
         NSLocationWhenInUseUsageDescription:
           "Winkly uses your location to show nearby people and events.",
         NSCalendarsUsageDescription:

@@ -1,17 +1,37 @@
 // apps/mobile/app/account/payments.tsx
-// Winkly – Account: Payments (placeholder until Stripe/EAS)
+// Winkly – Account: Payment methods (reads billing status; store integration TBD)
 
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert, StyleSheet } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { getSubscriptionStatus, type SubscriptionStatus } from "@/lib/integrations/payments";
 
 export default function Payments() {
   const router = useRouter();
+  const [status, setStatus] = useState<SubscriptionStatus | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const notReady = () =>
-    Alert.alert("Not configured yet", "Payments will be enabled once we integrate Stripe / App Store / Play Billing.");
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const next = await getSubscriptionStatus();
+    setStatus(next);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const billingReady = status?.isBillingConfigured ?? false;
 
   return (
     <View style={styles.screen}>
@@ -27,25 +47,49 @@ export default function Payments() {
         <View style={styles.card}>
           <Text style={styles.title}>Payment methods</Text>
           <Text style={styles.subtitle}>
-            Add and manage your payment method for Premium & subscriptions. (Placeholder)
+            Add and manage your payment method for Premium and subscriptions.
           </Text>
 
-          <View style={styles.box}>
-            <Text style={styles.boxTitle}>No payment method added</Text>
-            <Text style={styles.boxText}>You’ll be able to add cards or in-app billing later.</Text>
-          </View>
+          {loading ? (
+            <ActivityIndicator color={Colors.primaryViolet} style={{ marginVertical: 12 }} />
+          ) : (
+            <>
+              <View style={styles.box}>
+                <Text style={styles.boxTitle}>No payment method added</Text>
+                <Text style={styles.boxText}>
+                  {billingReady
+                    ? "Add a card or use in-app billing from your device store."
+                    : "Payment methods will be available when billing goes live."}
+                </Text>
+              </View>
 
-          <TouchableOpacity onPress={notReady} style={styles.primaryBtn} activeOpacity={0.9}>
-            <Text style={styles.primaryText}>Add payment method</Text>
-          </TouchableOpacity>
+              {!billingReady ? (
+                <View style={styles.comingSoonBanner}>
+                  <Ionicons name="information-circle-outline" size={18} color={Colors.gray700} />
+                  <Text style={styles.comingSoonText}>
+                    Paid billing is coming soon. This screen is for preview — no charges yet.
+                  </Text>
+                </View>
+              ) : null}
 
-          <TouchableOpacity
-            onPress={() => router.push("/account/subscription")}
-            style={styles.secondaryBtn}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.secondaryText}>Manage subscription</Text>
-          </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {}}
+                style={[styles.primaryBtn, !billingReady && styles.primaryBtnDisabled]}
+                activeOpacity={0.9}
+                disabled={!billingReady}
+              >
+                <Text style={styles.primaryText}>Add payment method</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => router.push("/account/subscription")}
+                style={styles.secondaryBtn}
+                activeOpacity={0.9}
+              >
+                <Text style={styles.secondaryText}>Manage subscription</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -87,7 +131,19 @@ const styles = StyleSheet.create({
   boxTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 6 },
   boxText: { ...Typography.body, color: Colors.gray700 },
 
+  comingSoonBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: Colors.gray100,
+    borderRadius: Layout.radii.control,
+    padding: 12,
+    marginBottom: 12,
+  },
+  comingSoonText: { ...Typography.caption, color: Colors.gray700, flex: 1, lineHeight: 18 },
+
   primaryBtn: { backgroundColor: Colors.primaryViolet, borderRadius: Layout.radii.control, paddingVertical: 12, alignItems: "center", marginBottom: 10 },
+  primaryBtnDisabled: { opacity: 0.55 },
   primaryText: { ...Typography.button, color: Colors.accentYellow },
 
   secondaryBtn: { backgroundColor: Colors.gray100, borderRadius: Layout.radii.control, paddingVertical: 12, alignItems: "center", borderWidth: 1, borderColor: Colors.gray200 },

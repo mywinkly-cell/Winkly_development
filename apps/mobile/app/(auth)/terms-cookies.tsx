@@ -26,7 +26,14 @@ const COOKIES_URL = "https://winkly.app/privacy#cookies";
 export default function TermsCookiesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ next?: string }>();
-  const next = params.next === "signin" ? "/(auth)/signin" : params.next === "signup" ? "/(auth)/signup" : "/(onboarding-personal)/get-started";
+  const next =
+    params.next === "signin"
+      ? "/(auth)/signin"
+      : params.next === "signup"
+        ? "/(auth)/signup"
+        : params.next === "callback"
+          ? "/(auth)/callback"
+          : "/(onboarding-personal)/get-started";
 
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedCookies, setAcceptedCookies] = useState(false);

@@ -14,11 +14,11 @@ import {
 } from "@/lib/access/profiles";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import type { BusinessProfileType } from "@/types";
+import { BUSINESS_ORG_SUBTYPE_OPTIONS, normalizeBusinessType } from "@/lib/business/businessTypes";
 
 const BUSINESS_TYPE_OPTIONS: Array<{ value: BusinessProfileType; label: string }> = [
-  { value: "professional", label: "Individual professional" },
-  { value: "venue", label: "Venue" },
-  { value: "brand", label: "Brand / company" },
+  { value: "individual_professional", label: "Individual professional" },
+  ...BUSINESS_ORG_SUBTYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
 ];
 
 function toTagsArray(s: string): string[] {
@@ -55,7 +55,7 @@ export default function EditBusiness() {
         setCompany(profile?.business_name ?? "");
         setNetworkingGoal(profile?.bio ?? "");
         setSkills(fromTagsArray(profile?.tags ?? undefined));
-        setBusinessType((profile?.business_type as BusinessProfileType) ?? "brand");
+        setBusinessType(normalizeBusinessType(profile?.business_type));
         setRole("");
           } else {
         const profile = await getOwnProfileMode(user.id, "business");

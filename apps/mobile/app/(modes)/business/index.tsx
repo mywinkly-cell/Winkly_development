@@ -229,7 +229,7 @@ export default function BusinessHome() {
             </TouchableOpacity>
             {isBusinessAccount ? (
               <TouchableOpacity
-                onPress={() => router.push("/(modes)/business/analytics")}
+                onPress={() => router.push("/business/analytics")}
                 style={styles.insightsCta}
                 activeOpacity={0.85}
               >

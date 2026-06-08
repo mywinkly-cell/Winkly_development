@@ -1,6 +1,6 @@
 # EAS Build, Submit & GitHub Actions
 
-**Last updated:** 2026-06-06
+**Last updated:** 2026-06-08
 
 This doc covers Expo Application Services (EAS) profiles, credential storage, and how builds relate to the **two-repo** workflow (`Winkly_development` vs `winkly-production`). See **docs/BRANCHING.md**.
 
@@ -141,14 +141,24 @@ This uploads to **TestFlight** (iOS internal) and the **Google Play internal tra
 
 ### iOS (TestFlight)
 
-Apple credentials are managed in EAS (not GitHub). One-time setup:
+Apple credentials are managed in EAS (not GitHub). **One-time interactive setup** (cannot run inside CI):
+
+1. Create the app in [App Store Connect](https://appstoreconnect.apple.com) for bundle id `com.winkly.app` (if it does not exist yet).
+2. From a **local terminal** (not Cursor agent — prompts need stdin):
 
 ```bash
 cd apps/mobile
-eas credentials -p ios
+npm run eas:setup-ios-credentials
+# or: eas credentials:configure-build -p ios -e preview
 ```
 
-Ensure the App Store Connect app exists for bundle id `com.winkly.app`. EAS Submit uses stored credentials automatically.
+Log in with your Apple Developer account when prompted. EAS generates and stores the distribution certificate + provisioning profile on Expo servers.
+
+3. After App Store Connect shows the app, add its numeric **Apple ID** (`ascAppId`) to `eas.json` → `submit.preview.ios.ascAppId` so `--auto-submit` works in non-interactive CI.
+
+**Why `preview` uses two distributions:** Android stays `internal` (Play internal track + APK). iOS overrides to `store` because TestFlight requires an App Store build — `internal` on iOS means Ad Hoc only and fails in CI with *"no credentials suitable for internal distribution"*.
+
+`app.config.js` sets `ITSAppUsesNonExemptEncryption: false` (standard for apps that only use HTTPS).
 
 ### Disable auto-submit temporarily
 

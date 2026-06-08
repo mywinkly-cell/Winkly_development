@@ -134,7 +134,7 @@ export default function BusinessProfileView() {
         void recordBusinessAnalyticsEvent({
           businessId: userId,
           eventType: "profile_view",
-          viewerId,
+          metadata: { viewer_id: viewerId, source: "business_profile_view" },
         });
       }
     } finally {

@@ -1,9 +1,6 @@
 // ────────────────────────────────────────────────
 // Winkly Onboarding: Business Profile Setup
-// v7.0 – November 2025
-// © Winkly Technologies UG (haftungsbeschränkt)
-// Maintainer: Kateryna Shyshkalova
-// Purpose: Set up company/brand information during Business Account onboarding
+// v8.0 – Step 1: business type → Step 2: profile form
 // ────────────────────────────────────────────────
 
 import React, { useState } from "react";
@@ -27,21 +24,18 @@ import { Colors, Typography, Layout } from "@/constants/tokens";
 import { pickAndUploadLogo } from "@/lib/uploadLogo";
 import { trackOnboardingCompleted } from "@/lib/analytics/events";
 import type { BusinessProfileType } from "@/types";
-
-const BUSINESS_TYPE_OPTIONS: Array<{ value: BusinessProfileType; label: string; hint: string }> = [
-  { value: "professional", label: "Individual professional", hint: "Consultant, founder, freelancer" },
-  { value: "venue", label: "Venue", hint: "Restaurant, bar, studio, coworking space" },
-  { value: "brand", label: "Brand / company", hint: "Company or organization account" },
-];
+import {
+  BUSINESS_ORG_SUBTYPE_OPTIONS,
+  BUSINESS_TYPE_PRIMARY_OPTIONS,
+  type BusinessTypeStep,
+} from "@/lib/business/businessTypes";
 
 export default function ProfileBusiness() {
   const router = useRouter();
   const { edit } = useLocalSearchParams<{ edit?: string }>();
   const isEditFlow = edit === "1";
 
-  // ───────────────────────────────
-  // STATE
-  // ───────────────────────────────
+  const [step, setStep] = useState<BusinessTypeStep>(isEditFlow ? "profile" : "type");
   const [businessName, setBusinessName] = useState("");
   const [businessType, setBusinessType] = useState<BusinessProfileType>("brand");
   const [location, setLocation] = useState("");
@@ -56,39 +50,32 @@ export default function ProfileBusiness() {
   const [logoUri, setLogoUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // ───────────────────────────────
-  // IMAGE PICKER – Business Logo
-  // ───────────────────────────────
   const pickLogo = async () => {
-  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (status !== "granted") {
-    Alert.alert("Permission denied", "Media access is required to upload logo.");
-    return;
-  }
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission denied", "Media access is required to upload logo.");
+      return;
+    }
 
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    allowsEditing: true,
-    aspect: [1, 1],
-    quality: 0.9,
-  });
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.9,
+    });
 
-  if (!result.canceled && result.assets.length > 0) {
-    const localUri = result.assets[0].uri;
-    setLogoUri(localUri); // show preview immediately
+    if (!result.canceled && result.assets.length > 0) {
+      const localUri = result.assets[0].uri;
+      setLogoUri(localUri);
 
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) return;
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
 
-    const uploadedUrl = await pickAndUploadLogo(userData.user.id);
-    if (uploadedUrl) setLogoUri(uploadedUrl); // replace preview with permanent URL
-  }
-};
+      const uploadedUrl = await pickAndUploadLogo(userData.user.id);
+      if (uploadedUrl) setLogoUri(uploadedUrl);
+    }
+  };
 
-
-  // ───────────────────────────────
-  // TAGS HANDLER
-  // ───────────────────────────────
   const addTag = () => {
     if (!inputTag.trim() || tags.length >= 10) return;
     const clean = inputTag.trim();
@@ -98,9 +85,20 @@ export default function ProfileBusiness() {
 
   const removeTag = (tag: string) => setTags(tags.filter((t) => t !== tag));
 
-  // ───────────────────────────────
-  // SAVE PROFILE TO SUPABASE
-  // ───────────────────────────────
+  const handlePrimaryType = (key: "professional" | "organisation") => {
+    if (key === "professional") {
+      setBusinessType("individual_professional");
+      setStep("profile");
+    } else {
+      setStep("org_subtype");
+    }
+  };
+
+  const handleOrgSubtype = (value: BusinessProfileType) => {
+    setBusinessType(value);
+    setStep("profile");
+  };
+
   const handleContinue = async () => {
     if (!businessName || !area || !bio) {
       Alert.alert("Incomplete", "Please fill all required fields.");
@@ -148,39 +146,111 @@ export default function ProfileBusiness() {
       } else {
         router.replace("/(onboarding-personal)/winkly-world?variant=business");
       }
-    } catch (err: any) {
-      Alert.alert("Error", err.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Something went wrong.";
+      Alert.alert("Error", msg);
     } finally {
       setLoading(false);
     }
   };
 
-  // ───────────────────────────────
-  // UI
-  // ───────────────────────────────
+  if (step === "type") {
+    return (
+      <ScrollView
+        contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        style={{ flex: 1, backgroundColor: Colors.backgroundLight }}
+      >
+        <Text style={{ ...Typography.h2, color: Colors.textPrimary, marginBottom: 8 }}>
+          What best describes you?
+        </Text>
+        <Text style={{ ...Typography.body, color: Colors.gray600, marginBottom: 24 }}>
+          This shapes your Winkly experience — discovery, offers, and how others find you.
+        </Text>
+        {BUSINESS_TYPE_PRIMARY_OPTIONS.map((opt) => (
+          <TouchableOpacity
+            key={opt.key}
+            onPress={() => handlePrimaryType(opt.key)}
+            style={{
+              borderWidth: 1,
+              borderColor: Colors.gray300,
+              backgroundColor: "#FFF",
+              borderRadius: 16,
+              padding: 18,
+              marginBottom: 12,
+            }}
+            activeOpacity={0.9}
+          >
+            <Text style={{ fontWeight: "700", fontSize: 17, color: Colors.textPrimary }}>{opt.label}</Text>
+            <Text style={{ color: Colors.gray600, fontSize: 14, marginTop: 4 }}>{opt.hint}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    );
+  }
+
+  if (step === "org_subtype") {
+    return (
+      <ScrollView
+        contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        style={{ flex: 1, backgroundColor: Colors.backgroundLight }}
+      >
+        <TouchableOpacity onPress={() => setStep("type")} style={{ marginBottom: 16 }}>
+          <Text style={{ color: Colors.primaryViolet, fontWeight: "600" }}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={{ ...Typography.h2, color: Colors.textPrimary, marginBottom: 8 }}>
+          What kind of organisation?
+        </Text>
+        <Text style={{ ...Typography.body, color: Colors.gray600, marginBottom: 24 }}>
+          Pick the option that fits best — you can update this later.
+        </Text>
+        {BUSINESS_ORG_SUBTYPE_OPTIONS.map((opt) => (
+          <TouchableOpacity
+            key={opt.value}
+            onPress={() => handleOrgSubtype(opt.value)}
+            style={{
+              borderWidth: 1,
+              borderColor: Colors.gray300,
+              backgroundColor: "#FFF",
+              borderRadius: 16,
+              padding: 18,
+              marginBottom: 12,
+            }}
+            activeOpacity={0.9}
+          >
+            <Text style={{ fontWeight: "700", fontSize: 17, color: Colors.textPrimary }}>{opt.label}</Text>
+            <Text style={{ color: Colors.gray600, fontSize: 14, marginTop: 4 }}>{opt.hint}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={{ flex: 1, backgroundColor: Colors.backgroundLight }}
     >
       <ScrollView
-        contentContainerStyle={{
-          padding: 24,
-          paddingBottom: 100,
-        }}
+        contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       >
-        <Text
-          style={{
-            ...Typography.h2,
-            color: Colors.textPrimary,
-            marginBottom: 16,
-          }}
-        >
+        {!isEditFlow && (
+          <TouchableOpacity
+            onPress={() =>
+              setStep(businessType === "individual_professional" ? "type" : "org_subtype")
+            }
+            style={{ marginBottom: 12 }}
+          >
+            <Text style={{ color: Colors.primaryViolet, fontWeight: "600" }}>← Change profile type</Text>
+          </TouchableOpacity>
+        )}
+
+        <Text style={{ ...Typography.h2, color: Colors.textPrimary, marginBottom: 16 }}>
           Set up your Business Profile 💼
         </Text>
 
-        {/* Logo Picker */}
         <TouchableOpacity
           onPress={pickLogo}
           style={{
@@ -197,17 +267,15 @@ export default function ProfileBusiness() {
           }}
         >
           {logoUri ? (
-            <Image
-              source={{ uri: logoUri }}
-              style={{ width: 120, height: 120, borderRadius: 60 }}
-            />
+            <Image source={{ uri: logoUri }} style={{ width: 120, height: 120, borderRadius: 60 }} />
           ) : (
             <Text style={{ color: Colors.gray500, fontSize: 32 }}>＋</Text>
           )}
         </TouchableOpacity>
 
-        {/* Business Name (required) */}
-        <Text style={[label, { marginBottom: 6 }]}>Business / Brand Name <Text style={{ color: Colors.errorRed, fontWeight: "700" }}>*</Text></Text>
+        <Text style={[label, { marginBottom: 6 }]}>
+          Business / Brand Name <Text style={{ color: Colors.errorRed, fontWeight: "700" }}>*</Text>
+        </Text>
         <TextInput
           placeholder="Business / Brand Name"
           value={businessName}
@@ -215,31 +283,7 @@ export default function ProfileBusiness() {
           style={inputStyle}
         />
 
-        <Text style={[label, { marginBottom: 6 }]}>Profile type</Text>
-        {BUSINESS_TYPE_OPTIONS.map((opt) => {
-          const selected = businessType === opt.value;
-          return (
-            <TouchableOpacity
-              key={opt.value}
-              onPress={() => setBusinessType(opt.value)}
-              style={{
-                borderWidth: 1,
-                borderColor: selected ? Colors.primaryViolet : Colors.gray300,
-                backgroundColor: selected ? "#F5F1FF" : "#FFF",
-                borderRadius: 12,
-                padding: 12,
-                marginBottom: 8,
-              }}
-              activeOpacity={0.9}
-            >
-              <Text style={{ fontWeight: "700", color: Colors.textPrimary }}>{opt.label}</Text>
-              <Text style={{ color: Colors.gray600, fontSize: 13, marginTop: 2 }}>{opt.hint}</Text>
-            </TouchableOpacity>
-          );
-        })}
-
-        {/* Location */}
-        <Text style={label}>Location</Text>
+        <Text style={[label, { marginBottom: 6 }]}>Location</Text>
         <TextInput
           placeholder="City, Country"
           value={location}
@@ -247,8 +291,9 @@ export default function ProfileBusiness() {
           style={inputStyle}
         />
 
-        {/* Area of Business (required) */}
-        <Text style={[label, { marginBottom: 6 }]}>Area of Business <Text style={{ color: Colors.errorRed, fontWeight: "700" }}>*</Text></Text>
+        <Text style={[label, { marginBottom: 6 }]}>
+          Area of Business <Text style={{ color: Colors.errorRed, fontWeight: "700" }}>*</Text>
+        </Text>
         <TextInput
           placeholder="e.g. Marketing, Tech, Wellness"
           value={area}
@@ -256,8 +301,9 @@ export default function ProfileBusiness() {
           style={inputStyle}
         />
 
-        {/* Bio (required) */}
-        <Text style={[label, { marginBottom: 6 }]}>About your business <Text style={{ color: Colors.errorRed, fontWeight: "700" }}>*</Text></Text>
+        <Text style={[label, { marginBottom: 6 }]}>
+          About your business <Text style={{ color: Colors.errorRed, fontWeight: "700" }}>*</Text>
+        </Text>
         <TextInput
           placeholder="Describe your business..."
           value={bio}
@@ -266,7 +312,6 @@ export default function ProfileBusiness() {
           style={[inputStyle, { height: 100, textAlignVertical: "top" }]}
         />
 
-        {/* Tags */}
         <Text style={label}>Tags (up to 10)</Text>
         <View style={{ flexDirection: "row", marginBottom: 12 }}>
           <TextInput
@@ -309,34 +354,12 @@ export default function ProfileBusiness() {
           ))}
         </View>
 
-        {/* Links */}
         <Text style={label}>Website & Socials</Text>
-        <TextInput
-          placeholder="Website"
-          value={website}
-          onChangeText={setWebsite}
-          style={inputStyle}
-        />
-        <TextInput
-          placeholder="Instagram"
-          value={instagram}
-          onChangeText={setInstagram}
-          style={inputStyle}
-        />
-        <TextInput
-          placeholder="Facebook"
-          value={facebook}
-          onChangeText={setFacebook}
-          style={inputStyle}
-        />
-        <TextInput
-          placeholder="LinkedIn"
-          value={linkedin}
-          onChangeText={setLinkedin}
-          style={inputStyle}
-        />
+        <TextInput placeholder="Website" value={website} onChangeText={setWebsite} style={inputStyle} />
+        <TextInput placeholder="Instagram" value={instagram} onChangeText={setInstagram} style={inputStyle} />
+        <TextInput placeholder="Facebook" value={facebook} onChangeText={setFacebook} style={inputStyle} />
+        <TextInput placeholder="LinkedIn" value={linkedin} onChangeText={setLinkedin} style={inputStyle} />
 
-        {/* Continue Button */}
         <TouchableOpacity
           onPress={handleContinue}
           disabled={loading}
@@ -358,9 +381,6 @@ export default function ProfileBusiness() {
   );
 }
 
-// ───────────────────────────────
-// Shared styles
-// ───────────────────────────────
 const inputStyle = {
   borderWidth: 1,
   borderColor: Colors.gray400,

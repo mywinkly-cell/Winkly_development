@@ -4,7 +4,11 @@
 export type AccountType = "personal" | "business";
 
 /** Business account profile classification (profiles_business.business_type). */
-export type BusinessProfileType = "professional" | "venue" | "brand";
+export type BusinessProfileType =
+  | "individual_professional"
+  | "venue"
+  | "event_host"
+  | "brand";
 
 export type Mode = "romance" | "friends" | "business" | "events";
 

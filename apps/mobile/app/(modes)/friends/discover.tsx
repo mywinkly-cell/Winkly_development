@@ -1,10 +1,8 @@
-// Friends Discover: People Who Want to Connect (Section 1) + Recommended for You by Winkly AI (Section 2).
-// Mode colors and copy; analytics; block/report; connect → Chats.
+// Friends Discover — five horizontal categories (scroll vertically between rows).
 
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
-  Text,
   ActivityIndicator,
   Alert,
   ScrollView,
@@ -16,31 +14,15 @@ import { usePostHog } from "posthog-react-native";
 
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { FriendsBottomNav } from "@/components/layout/FriendsBottomNav";
-import { Colors, Typography } from "@/constants/tokens";
+import { Colors } from "@/constants/tokens";
 import { supabase } from "@/lib/supabase";
-import {
-  computeFriendsCompatibility,
-  buildFriendsMatchTags,
-  type FriendsProfile,
-} from "@/lib/ai/friendsInsights";
-import {
-  getFriendsFilters,
-  applyFriendsFiltersToFeed,
-  getFriendsAiMatchingEnabled,
-} from "@/lib/filters/friendsFiltersStorage";
+import { type FriendsProfile } from "@/lib/ai/friendsInsights";
 import { friendsFollowProfile } from "@/lib/access/connections";
-import { combinedMatchScore, fetchBehaviorAffinityMap } from "@/lib/matching/behaviorAffinities";
 import { blockUser, reportUser } from "@/lib/chats";
 import { useModeContext } from "@/providers";
 import { getBlockedUserIdSet } from "@/lib/access/blocks";
-import {
-  DiscoverPeopleWhoLikedYou,
-  type PeopleWhoLikedYouItem,
-} from "@/components/discover/DiscoverPeopleWhoLikedYou";
-import {
-  DiscoverRecommendedSection,
-  type RecommendedItem,
-} from "@/components/discover/DiscoverRecommendedSection";
+import { DiscoverHorizontalSection } from "@/components/discover/DiscoverHorizontalSection";
+import { DiscoverBusinessOffersSection } from "@/components/business/DiscoverBusinessOffersSection";
 import {
   discoverOpen,
   likedYouLikeBack,
@@ -52,17 +34,24 @@ import {
 import {
   getRecommendationLikesSentToday,
   incrementRecommendationLikeSentToday,
-  DISCOVER_LIMITS,
 } from "@/lib/discover/storage";
+import { meetupGoalsFromMeta } from "@/lib/discover/metaGoals";
+import {
+  friendsRowToItem,
+  loadFriendsNearby,
+  loadFriendsRecommended,
+  loadFriendsSameGoals,
+  loadFriendsSameInterests,
+} from "@/lib/discover/friendsDiscoverSections";
+import type { DiscoverProfileItem } from "@/lib/discover/types";
 
 type FriendProfileRow = {
   id: string;
   user_id?: string;
   display_name: string;
-  city?: string | null;
-  interests?: string[] | null;
+  age?: number | null;
   vibe_tags?: string[] | null;
-  about_short?: string | null;
+  interests?: string[] | null;
   main_photo_url?: string | null;
   avatar_url?: string | null;
 };
@@ -74,16 +63,18 @@ export default function FriendsDiscover() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selfProfile, setSelfProfile] = useState<FriendsProfile | null>(null);
-  const [peopleWhoWantToConnect, setPeopleWhoWantToConnect] = useState<PeopleWhoLikedYouItem[]>([]);
-  const [recommendations, setRecommendations] = useState<RecommendedItem[]>([]);
+  const [wantToConnect, setWantToConnect] = useState<DiscoverProfileItem[]>([]);
+  const [recommended, setRecommended] = useState<DiscoverProfileItem[]>([]);
+  const [sameInterests, setSameInterests] = useState<DiscoverProfileItem[]>([]);
+  const [sameGoals, setSameGoals] = useState<DiscoverProfileItem[]>([]);
+  const [nearby, setNearby] = useState<DiscoverProfileItem[]>([]);
   const [likesUsedToday, setLikesUsedToday] = useState(0);
 
   const subscriptionTier = context.subscription_tier ?? "free";
   const canViewFull = ["super", "premium", "enterprise"].includes(subscriptionTier);
   const canLikeUnlimited = canViewFull;
 
-  const loadPeopleWhoWantToConnect = useCallback(async (userId: string) => {
+  const loadWantToConnect = useCallback(async (userId: string): Promise<DiscoverProfileItem[]> => {
     const { data: followMe } = await supabase
       .from("follows")
       .select("follower_id")
@@ -96,116 +87,16 @@ export default function FriendsDiscover() {
       .select("followee_id")
       .eq("follower_id", userId);
     const iFollowIds = new Set((iFollow ?? []).map((r: { followee_id: string }) => r.followee_id));
-    const wantToConnectIds = followerIds.filter((id: string) => !iFollowIds.has(id));
-    if (wantToConnectIds.length === 0) return [];
+    const wantIds = followerIds.filter((id: string) => !iFollowIds.has(id));
+    if (wantIds.length === 0) return [];
 
     const { data: fp } = await supabase
       .from("friend_profiles")
-      .select("id,user_id,display_name,city,vibe_tags,about_short,interests,main_photo_url,avatar_url")
-      .in("user_id", wantToConnectIds);
+      .select("id,user_id,display_name,age,vibe_tags,interests,main_photo_url,avatar_url")
+      .in("user_id", wantIds);
 
-    const rows = (fp ?? []) as FriendProfileRow[];
-    return rows.map((r) => ({
-      id: r.user_id ?? r.id,
-      name: r.display_name ?? "Someone",
-      age: null,
-      tag: (r.vibe_tags?.[0] ?? r.interests?.[0]) ?? null,
-      distance: null,
-      photoUrl: r.main_photo_url ?? r.avatar_url ?? null,
-    })) as PeopleWhoLikedYouItem[];
+    return ((fp ?? []) as FriendProfileRow[]).map((r) => friendsRowToItem(r));
   }, []);
-
-  const loadRecommendations = useCallback(
-    async (userId: string, self: FriendsProfile | null): Promise<RecommendedItem[]> => {
-      const { data: feedData, error: rpcErr } = await supabase.rpc("friends_discover_feed", {
-        current_user_id: userId,
-        p_limit: 80,
-      });
-
-      let rows: FriendProfileRow[] = [];
-      if (!rpcErr && Array.isArray(feedData) && feedData.length > 0) {
-        rows = feedData as FriendProfileRow[];
-      } else {
-        const { data: iFollow } = await supabase
-          .from("follows")
-          .select("followee_id")
-          .eq("follower_id", userId);
-        const iFollowIds = new Set((iFollow ?? []).map((r: { followee_id: string }) => r.followee_id));
-
-        const { data: fpData } = await supabase
-          .from("friend_profiles")
-          .select("id,user_id,display_name,city,vibe_tags,about_short,interests,main_photo_url,avatar_url")
-          .order("created_at", { ascending: false })
-          .limit(50);
-
-        rows = (fpData ?? []).filter(
-          (r: { user_id?: string; id: string }) => (r.user_id ?? r.id) !== userId,
-        ) as FriendProfileRow[];
-        rows = rows.filter((r) => !iFollowIds.has(r.user_id ?? r.id));
-      }
-
-      const scored = rows.map((r) => {
-        const other: FriendsProfile = {
-          id: r.user_id ?? r.id,
-          display_name: r.display_name,
-          city: r.city ?? undefined,
-          interests: r.interests ?? [],
-          vibe_tags: r.vibe_tags ?? [],
-          about: r.about_short ?? undefined,
-        };
-        const compatibility = computeFriendsCompatibility({ self: self ?? undefined, other });
-        return { ...r, compatibility };
-      });
-
-      const filters = await getFriendsFilters();
-      const filtered = applyFriendsFiltersToFeed(scored, filters);
-
-      const aiFriends = await getFriendsAiMatchingEnabled();
-      if (aiFriends) {
-        const ids = filtered.map((r) => r.user_id ?? r.id).filter(Boolean) as string[];
-        const affMap = await fetchBehaviorAffinityMap(userId, ids, "friends");
-        filtered.sort((a, b) => {
-          const ca = (a as { compatibility?: number }).compatibility ?? 0;
-          const cb = (b as { compatibility?: number }).compatibility ?? 0;
-          const sa = combinedMatchScore(ca, affMap.get(a.user_id ?? "") ?? 0.5);
-          const sb = combinedMatchScore(cb, affMap.get(b.user_id ?? "") ?? 0.5);
-          return sb - sa;
-        });
-      } else {
-        filtered.sort(
-          (a, b) =>
-            ((b as { compatibility?: number }).compatibility ?? 0) -
-            ((a as { compatibility?: number }).compatibility ?? 0),
-        );
-      }
-
-      const take = DISCOVER_LIMITS.recommendationsPerDay;
-      return filtered.slice(0, take).map((r) => {
-        const other: FriendsProfile = {
-          id: r.user_id ?? r.id,
-          display_name: r.display_name,
-          city: r.city ?? undefined,
-          interests: r.interests ?? [],
-          vibe_tags: r.vibe_tags ?? [],
-          about: r.about_short ?? undefined,
-        };
-        const tags = buildFriendsMatchTags({ self: self ?? undefined, other });
-        const photo = r.main_photo_url ?? r.avatar_url ?? null;
-        return {
-          id: r.user_id ?? r.id,
-          name: r.display_name ?? "Someone",
-          age: null,
-          location: r.city ?? null,
-          compatibility: (r as { compatibility?: number }).compatibility ?? null,
-          sharedInterests: [...(r.interests ?? []).slice(0, 2), ...(r.vibe_tags ?? []).slice(0, 1)].slice(0, 3),
-          lifestyleTag: tags[0] ?? null,
-          goalSnippet: r.about_short ? r.about_short.slice(0, 80) + (r.about_short.length > 80 ? "…" : "") : null,
-          photoUrl: photo ?? null,
-        } as RecommendedItem;
-      });
-    },
-    []
-  );
 
   const loadData = useCallback(async () => {
     try {
@@ -215,30 +106,45 @@ export default function FriendsDiscover() {
       const uid = userData.user.id;
       const blocked = await getBlockedUserIdSet(uid);
 
-      const { data: me } = await supabase
-        .from("profiles_mode")
-        .select("interests, meta")
-        .eq("user_id", uid)
-        .eq("mode", "friends")
-        .maybeSingle();
+      const [{ data: me }, { data: core }] = await Promise.all([
+        supabase
+          .from("profiles_mode")
+          .select("interests, meta")
+          .eq("user_id", uid)
+          .eq("mode", "friends")
+          .maybeSingle(),
+        supabase.from("user_profiles").select("city").eq("id", uid).maybeSingle(),
+      ]);
 
       const self: FriendsProfile | null = me
         ? {
             id: uid,
             interests: (me.interests as string[]) ?? [],
             vibe_tags: (me.meta as { vibe_tags?: string[] })?.vibe_tags,
-            city: (me.meta as { city?: string })?.city,
+            city: (me.meta as { city?: string })?.city ?? (core as { city?: string } | null)?.city,
           }
         : null;
-      setSelfProfile(self);
 
-      const [wantToConnectList, recList] = await Promise.all([
-        loadPeopleWhoWantToConnect(uid),
-        loadRecommendations(uid, self),
+      const selfInterests = (me?.interests as string[]) ?? [];
+      const selfGoals = meetupGoalsFromMeta(me?.meta);
+      const selfCity =
+        (me?.meta as { city?: string })?.city ?? (core as { city?: string } | null)?.city ?? null;
+
+      const [wantList, recList, interestsList, goalsList, nearbyList] = await Promise.all([
+        loadWantToConnect(uid),
+        loadFriendsRecommended(uid, self),
+        loadFriendsSameInterests(uid, self, selfInterests),
+        loadFriendsSameGoals(uid, self, selfGoals),
+        loadFriendsNearby(uid, self, selfCity),
       ]);
 
-      setPeopleWhoWantToConnect(wantToConnectList.filter((p) => !blocked.has(p.id)));
-      setRecommendations(recList.filter((r) => !blocked.has(r.id)));
+      const filterBlocked = (list: DiscoverProfileItem[]) => list.filter((p) => !blocked.has(p.id));
+
+      setWantToConnect(filterBlocked(wantList));
+      setRecommended(filterBlocked(recList));
+      setSameInterests(filterBlocked(interestsList));
+      setSameGoals(filterBlocked(goalsList));
+      setNearby(filterBlocked(nearbyList));
 
       const used = await getRecommendationLikesSentToday("friends");
       setLikesUsedToday(used);
@@ -249,7 +155,7 @@ export default function FriendsDiscover() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loadPeopleWhoWantToConnect, loadRecommendations]);
+  }, [loadWantToConnect]);
 
   useEffect(() => {
     setLoading(true);
@@ -260,7 +166,7 @@ export default function FriendsDiscover() {
     useCallback(() => {
       discoverOpen(posthog ?? null, "friends");
       loadData();
-    }, [loadData, posthog])
+    }, [loadData, posthog]),
   );
 
   const onRefresh = () => {
@@ -268,22 +174,29 @@ export default function FriendsDiscover() {
     loadData();
   };
 
-  const handleConnectBack = async (item: PeopleWhoLikedYouItem) => {
+  const removeFromAll = (id: string) => {
+    const drop = (prev: DiscoverProfileItem[]) => prev.filter((p) => p.id !== id);
+    setWantToConnect(drop);
+    setRecommended(drop);
+    setSameInterests(drop);
+    setSameGoals(drop);
+    setNearby(drop);
+  };
+
+  const handleConnectBack = async (item: DiscoverProfileItem) => {
     try {
       const res = await friendsFollowProfile(item.id);
       likedYouLikeBack(posthog ?? null, "friends", item.id);
-      setPeopleWhoWantToConnect((prev) => prev.filter((p) => p.id !== item.id));
+      removeFromAll(item.id);
       if (res.is_connection && res.chat_id) {
-        router.push(
-          chatRoutes.conversation("friends", res.chat_id) as Parameters<typeof router.push>[0]
-        );
+        router.push(chatRoutes.conversation("friends", res.chat_id) as Parameters<typeof router.push>[0]);
       }
     } catch (e) {
       Alert.alert("Error", (e as Error).message ?? "Could not connect.");
     }
   };
 
-  const handleRecommendationLike = async (item: RecommendedItem) => {
+  const handleRecommendationLike = async (item: DiscoverProfileItem) => {
     if (!canLikeUnlimited && likesUsedToday >= 1) {
       recommendationLimitReached(posthog ?? null, "friends");
       return;
@@ -293,34 +206,42 @@ export default function FriendsDiscover() {
       await incrementRecommendationLikeSentToday("friends");
       setLikesUsedToday((c) => c + 1);
       recommendationLike(posthog ?? null, "friends", item.id);
-      setRecommendations((prev) => prev.filter((p) => p.id !== item.id));
+      removeFromAll(item.id);
       if (res.is_connection && res.chat_id) {
-        router.push(
-          chatRoutes.conversation("friends", res.chat_id) as Parameters<typeof router.push>[0]
-        );
+        router.push(chatRoutes.conversation("friends", res.chat_id) as Parameters<typeof router.push>[0]);
       }
     } catch (e) {
       Alert.alert("Error", (e as Error).message ?? "Could not send like.");
     }
   };
 
-  const handleBlock = async (item: { id: string }) => {
+  const handleCategoryConnect = async (item: DiscoverProfileItem) => {
+    try {
+      const res = await friendsFollowProfile(item.id);
+      removeFromAll(item.id);
+      if (res.is_connection && res.chat_id) {
+        router.push(chatRoutes.conversation("friends", res.chat_id) as Parameters<typeof router.push>[0]);
+      }
+    } catch (e) {
+      Alert.alert("Error", (e as Error).message ?? "Could not connect.");
+    }
+  };
+
+  const handleBlock = async (item: DiscoverProfileItem) => {
     try {
       await blockUser(item.id);
       discoverProfileBlock(posthog ?? null, "friends", item.id);
-      setPeopleWhoWantToConnect((prev) => prev.filter((p) => p.id !== item.id));
-      setRecommendations((prev) => prev.filter((p) => p.id !== item.id));
+      removeFromAll(item.id);
     } catch (e) {
       Alert.alert("Error", (e as Error).message ?? "Could not block.");
     }
   };
 
-  const handleReport = async (item: { id: string }) => {
+  const handleReport = async (item: DiscoverProfileItem) => {
     try {
       await reportUser(item.id, "other", "Reported from Discover");
       discoverProfileReport(posthog ?? null, "friends", item.id);
-      setPeopleWhoWantToConnect((prev) => prev.filter((p) => p.id !== item.id));
-      setRecommendations((prev) => prev.filter((p) => p.id !== item.id));
+      removeFromAll(item.id);
       Alert.alert("Report sent", "Thanks for helping keep Winkly safe.");
     } catch (e) {
       Alert.alert("Error", (e as Error).message ?? "Could not report.");
@@ -328,6 +249,8 @@ export default function FriendsDiscover() {
   };
 
   const primaryColor = Colors.friends.primary;
+  const openProfile = (item: DiscoverProfileItem) =>
+    router.push(`/(modes)/friends/profile-view?user_id=${item.id}`);
 
   if (loading) {
     return (
@@ -350,41 +273,76 @@ export default function FriendsDiscover() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={primaryColor} />
         }
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingTop: 8, paddingBottom: 32 }}
       >
-        <DiscoverPeopleWhoLikedYou
+        <DiscoverBusinessOffersSection source="friends_discover" />
+
+        <DiscoverHorizontalSection
           mode="friends"
-          items={peopleWhoWantToConnect}
-          canViewFull={canViewFull}
+          title={`Want to connect (${wantToConnect.length})`}
+          items={wantToConnect}
           primaryColor={primaryColor}
-          sectionTitle="People Who Want to Connect"
-          onLikeBack={handleConnectBack}
-          onViewProfile={(item) => router.push(`/(modes)/friends/profile-view?user_id=${item.id}`)}
+          variant="liked_you"
+          canViewFull={canViewFull}
+          onPrimary={handleConnectBack}
+          onViewProfile={openProfile}
           onBlock={handleBlock}
           onReport={handleReport}
         />
 
-        <DiscoverRecommendedSection
+        <DiscoverHorizontalSection
           mode="friends"
-          items={recommendations}
-          remainingToday={recommendations.length}
-          totalPerDay={DISCOVER_LIMITS.recommendationsPerDay}
+          title="Recommended by Winkly"
+          items={recommended}
           primaryColor={primaryColor}
+          variant="recommended"
+          canViewFull={canViewFull}
           canLikeUnlimited={canLikeUnlimited}
           likesUsedToday={likesUsedToday}
-          onSendLike={handleRecommendationLike}
-          onViewProfile={(item) => router.push(`/(modes)/friends/profile-view?user_id=${item.id}`)}
+          onPrimary={handleRecommendationLike}
+          onViewProfile={openProfile}
           onBlock={handleBlock}
           onReport={handleReport}
         />
 
-        {peopleWhoWantToConnect.length === 0 && recommendations.length === 0 && (
-          <View style={{ paddingHorizontal: 20, paddingVertical: 32, alignItems: "center" }}>
-            <Text style={{ ...Typography.body, color: Colors.gray700, textAlign: "center", lineHeight: 22 }}>
-              Nothing new here yet. Keep exploring on Home — we will surface more friend fits when they are ready.
-            </Text>
-          </View>
-        )}
+        <DiscoverHorizontalSection
+          mode="friends"
+          title="Same Interests"
+          items={sameInterests}
+          primaryColor={primaryColor}
+          variant="category"
+          canViewFull
+          onPrimary={handleCategoryConnect}
+          onViewProfile={openProfile}
+          onBlock={handleBlock}
+          onReport={handleReport}
+        />
+
+        <DiscoverHorizontalSection
+          mode="friends"
+          title="Same meetup goals"
+          items={sameGoals}
+          primaryColor={primaryColor}
+          variant="category"
+          canViewFull
+          onPrimary={handleCategoryConnect}
+          onViewProfile={openProfile}
+          onBlock={handleBlock}
+          onReport={handleReport}
+        />
+
+        <DiscoverHorizontalSection
+          mode="friends"
+          title="New people nearby"
+          items={nearby}
+          primaryColor={primaryColor}
+          variant="category"
+          canViewFull
+          onPrimary={handleCategoryConnect}
+          onViewProfile={openProfile}
+          onBlock={handleBlock}
+          onReport={handleReport}
+        />
       </ScrollView>
 
       <FriendsBottomNav />

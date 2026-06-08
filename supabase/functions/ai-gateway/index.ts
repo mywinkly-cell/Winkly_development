@@ -474,10 +474,21 @@ function ageFromBirthday(birthday: string | null | undefined): number | null {
 }
 
 /** Fetch core identity (prefer profiles_core, fallback user_profiles). */
-async function getCoreProfile(supabase: ReturnType<typeof createClient>, userId: string): Promise<{ first_name?: string; gender?: string; birthday?: string; city?: string } | null> {
-  const { data: core } = await supabase.from("profiles_core").select("first_name, gender, birthday, city").eq("id", userId).maybeSingle();
+async function getCoreProfile(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<{ first_name?: string; gender?: string; birthday?: string; city?: string; activity_preferences?: string[] } | null> {
+  const { data: core } = await supabase
+    .from("profiles_core")
+    .select("first_name, gender, birthday, city, activity_preferences")
+    .eq("id", userId)
+    .maybeSingle();
   if (core) return core;
-  const { data: up } = await supabase.from("user_profiles").select("first_name, gender, birthday, city").eq("id", userId).maybeSingle();
+  const { data: up } = await supabase
+    .from("user_profiles")
+    .select("first_name, gender, birthday, city, activity_preferences")
+    .eq("id", userId)
+    .maybeSingle();
   return up ?? null;
 }
 
@@ -542,6 +553,9 @@ async function getConciergeProfileContext(
     gender: corePrimary?.gender ?? undefined,
     mode,
     city: corePrimary?.city ?? undefined,
+    activity_preferences: Array.isArray(corePrimary?.activity_preferences)
+      ? corePrimary.activity_preferences
+      : undefined,
     ...summarizeModeProfile(modePrimary?.data ?? null, mode),
   };
   if (partnerUserId && partnerUserId !== primaryUserId) {
@@ -555,6 +569,9 @@ async function getConciergeProfileContext(
       gender: corePartner?.gender ?? undefined,
       mode,
       city: corePartner?.city ?? undefined,
+      activity_preferences: Array.isArray(corePartner?.activity_preferences)
+        ? corePartner.activity_preferences
+        : undefined,
       ...summarizeModeProfile(modePartner?.data ?? null, mode),
     };
     return { primary, partner };
@@ -1025,6 +1042,153 @@ async function prefetchMatchingBusinessSupply(
   return { services: topSvc, profiles: topProf };
 }
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function tagsOverlapPair(
+  offerTags: string[],
+  primaryPrefs: string[],
+  partnerPrefs: string[],
+): boolean {
+  const pair = new Set([...primaryPrefs, ...partnerPrefs].map((t) => t.trim().toLowerCase()));
+  if (!pair.size || !offerTags.length) return false;
+  return offerTags.some((t) => pair.has(String(t).trim().toLowerCase()));
+}
+
+function offerInDateWindow(
+  row: Record<string, unknown>,
+  dateFrom?: string,
+  dateTo?: string,
+): boolean {
+  const now = Date.now();
+  const vf = row.valid_from ? new Date(String(row.valid_from)).getTime() : null;
+  const vt = row.valid_to ? new Date(String(row.valid_to)).getTime() : null;
+  if (vf != null && !isNaN(vf) && vf > now) return false;
+  if (vt != null && !isNaN(vt) && vt < now) return false;
+  if (dateFrom) {
+    const df = new Date(dateFrom.includes("T") ? dateFrom : `${dateFrom}T00:00:00.000Z`).getTime();
+    if (vt != null && !isNaN(vt) && vt < df) return false;
+  }
+  if (dateTo) {
+    const dt = new Date(dateTo.includes("T") ? dateTo : `${dateTo}T23:59:59.999Z`).getTime();
+    if (vf != null && !isNaN(vf) && vf > dt) return false;
+  }
+  return true;
+}
+
+/**
+ * HARD RULE: inject sponsored offers only when ≥1 category_tag overlaps pair activity_preferences
+ * AND user is within radius_km. No match → empty array (never inject irrelevant ads).
+ */
+async function prefetchRelevantBusinessOffers(
+  supabase: ReturnType<typeof createClient>,
+  input: {
+    primaryUserId: string;
+    partnerUserId?: string | null;
+    lat?: number | null;
+    lng?: number | null;
+    city: string;
+    dateFrom?: string;
+    dateTo?: string;
+  },
+): Promise<unknown[]> {
+  const [corePrimary, corePartner, offersRes] = await Promise.all([
+    getCoreProfile(supabase, input.primaryUserId),
+    input.partnerUserId && input.partnerUserId !== input.primaryUserId
+      ? getCoreProfile(supabase, input.partnerUserId)
+      : Promise.resolve(null),
+    supabase
+      .from("business_offers")
+      .select(
+        "id, business_id, title, description, image_url, booking_url, category_tags, city, valid_from, valid_to, radius_km, budget_cents, is_active",
+      )
+      .eq("is_active", true)
+      .limit(120),
+  ]);
+
+  if (offersRes.error) {
+    console.warn("[ai-gateway] business_offers:", offersRes.error.message);
+    return [];
+  }
+
+  const primaryPrefs = coerceStringArray(corePrimary?.activity_preferences);
+  const partnerPrefs = coerceStringArray(corePartner?.activity_preferences);
+  if (!primaryPrefs.length && !partnerPrefs.length) return [];
+
+  let userLat = typeof input.lat === "number" && !isNaN(input.lat) ? input.lat : null;
+  let userLng = typeof input.lng === "number" && !isNaN(input.lng) ? input.lng : null;
+  if ((userLat == null || userLng == null) && input.city.trim()) {
+    const geo = await geocodeCity(input.city.trim());
+    if (geo) {
+      userLat = geo.lat;
+      userLng = geo.lng;
+    }
+  }
+  if (userLat == null || userLng == null) return [];
+
+  const rows = (offersRes.data ?? []) as Record<string, unknown>[];
+  const businessIds = Array.from(new Set(rows.map((r) => String(r.business_id)).filter(Boolean)));
+  const profRes = businessIds.length
+    ? await supabase
+      .from("profiles_business")
+      .select("id, location, business_name")
+      .in("id", businessIds)
+    : { data: [] as Record<string, unknown>[] };
+  const locByBiz = new Map<string, string>();
+  for (const p of (profRes.data ?? []) as Record<string, unknown>[]) {
+    locByBiz.set(String(p.id), String(p.location ?? p.city ?? ""));
+  }
+
+  const geoCache = new Map<string, { lat: number; lng: number } | null>();
+  const resolveOfferCoords = async (row: Record<string, unknown>): Promise<{ lat: number; lng: number } | null> => {
+    const cityKey = String(row.city ?? locByBiz.get(String(row.business_id)) ?? input.city).trim();
+    if (!cityKey) return null;
+    if (!geoCache.has(cityKey)) geoCache.set(cityKey, await geocodeCity(cityKey));
+    return geoCache.get(cityKey) ?? null;
+  };
+
+  const matched: Array<{ row: Record<string, unknown>; score: number }> = [];
+
+  for (const row of rows) {
+    if (!offerInDateWindow(row, input.dateFrom, input.dateTo)) continue;
+
+    const tags = coerceStringArray(row.category_tags);
+    if (!tagsOverlapPair(tags, primaryPrefs, partnerPrefs)) continue;
+
+    const radiusKm = typeof row.radius_km === "number" ? row.radius_km : null;
+    if (radiusKm == null || radiusKm <= 0) continue;
+
+    const coords = await resolveOfferCoords(row);
+    if (!coords) continue;
+
+    const dist = haversineKm(userLat, userLng, coords.lat, coords.lng);
+    if (dist > radiusKm) continue;
+
+    const budget = typeof row.budget_cents === "number" ? row.budget_cents : 0;
+    matched.push({ row, score: budget + Math.max(0, 40 - dist) });
+  }
+
+  matched.sort((a, b) => b.score - a.score);
+  return matched.slice(0, 3).map(({ row }) => ({
+    id: row.id,
+    business_id: row.business_id,
+    title: row.title,
+    description: row.description,
+    image_url: row.image_url,
+    booking_url: row.booking_url,
+    category_tags: row.category_tags,
+    source: "winkly_business_offer",
+  }));
+}
+
 /** Google Places Text Search (optional) + OSM Nominatim fallback — real-world venue hints for the model. */
 async function fetchExternalVenueHints(input: {
   activityHint: string;
@@ -1285,7 +1449,7 @@ Reasoning priority (apply in order):
 1. Safety / Hard constraints: Allergies, dietary, mobility — non-negotiable. If any conflict, exclude (score S=0).
 2. Contextual logic: Weather, time of day, mode — the "reality" filter. Use get_weather for outdoor plans; use get_planner_items to avoid double-booking.
 3. DNA alignment: Interests, lifestyle, values, age, gender — the "delight" filter. Use PRIMARY_USER and PARTNER_USER profile data.
-4. Internal supply (priority order): (a) WINKLY_EVENTS_CANDIDATES — public events (keyword + pg_trgm-ranked from DB) for the user's dates/city/activity; if one fits USER_REQUEST, prefer it as options[0] with source "winkly_event" and real winkly_event_id. (b) WINKLY_BUSINESS_CANDIDATES — { services, profiles } from business_services and profiles_business; use for mode business or when a service/venue on Winkly matches; set source "winkly_business_service" or "winkly_business_profile" and include the id field from the row. (c) EXTERNAL_PLACE_HINTS — optional real-world POIs from Google Places (if configured) or OpenStreetMap Nominatim; use for logistics/names only, not as confirmed bookings; cite as external hints in logic_bridge or logistics. You may still call get_winkly_events. Do not fabricate URLs; use website from Winkly rows when present.
+4. Internal supply (priority order): (a) WINKLY_EVENTS_CANDIDATES — public events (keyword + pg_trgm-ranked from DB) for the user's dates/city/activity; if one fits USER_REQUEST, prefer it as options[0] with source "winkly_event" and real winkly_event_id. (b) WINKLY_SPONSORED_OFFERS — pre-filtered sponsored business_offers (already relevance-gated: category overlap + radius). Use at most one when it genuinely fits; set source "winkly_business_offer", include offer id, and booking_url when present — never force an irrelevant ad. (c) WINKLY_BUSINESS_CANDIDATES — { services, profiles } from business_services and profiles_business; use for mode business or when a service/venue on Winkly matches; set source "winkly_business_service" or "winkly_business_profile" and include the id field from the row. (d) EXTERNAL_PLACE_HINTS — optional real-world POIs from Google Places (if configured) or OpenStreetMap Nominatim; use for logistics/names only, not as confirmed bookings; cite as external hints in logic_bridge or logistics. You may still call get_winkly_events. Do not fabricate URLs; use website/booking_url from Winkly rows when present.
 
 Heuristic scoring (think in these terms when ranking options): S = (w1·C) + (w2·V) + (w3·L). C = Compatibility (dietary/allergy); V = Vibe match (venue fits mode + DNA); L = Logistics (distance, transport). Romance: V weighted high (~0.7). Business: L and noise ~0.8. If C fails, S=0.
 
@@ -3611,7 +3775,10 @@ serve(async (req) => {
       const pfSlots = Array.isArray(scrubbedSafeContext.primary_free_slots) ? scrubbedSafeContext.primary_free_slots : [];
       const partnerSlots = Array.isArray(scrubbedSafeContext.partner_free_slots) ? scrubbedSafeContext.partner_free_slots : [];
 
-      const [preEvents, businessSupply, placeHints] = await Promise.all([
+      const mbLat = typeof scrubbedSafeContext.latitude === "number" ? scrubbedSafeContext.latitude : null;
+      const mbLng = typeof scrubbedSafeContext.longitude === "number" ? scrubbedSafeContext.longitude : null;
+
+      const [preEvents, businessSupply, sponsoredOffers, placeHints] = await Promise.all([
         prefetchMatchingWinklyEvents(supabase, {
           mode: "romance",
           city,
@@ -3626,6 +3793,15 @@ serve(async (req) => {
           activityHint: "coffee café brunch",
           planRequest: "coffee date",
           mode: "romance",
+        }),
+        prefetchRelevantBusinessOffers(supabase, {
+          primaryUserId: user.id,
+          partnerUserId,
+          lat: mbLat,
+          lng: mbLng,
+          city,
+          dateFrom,
+          dateTo,
         }),
         fetchExternalVenueHints({
           activityHint: "specialty coffee café",
@@ -3643,6 +3819,7 @@ serve(async (req) => {
         PRIMARY_DEVICE_FREE_SLOTS: pfSlots,
         PARTNER_DEVICE_FREE_SLOTS: partnerSlots,
         WINKLY_EVENTS_CANDIDATES: preEvents,
+        WINKLY_SPONSORED_OFFERS: sponsoredOffers,
         WINKLY_BUSINESS_CANDIDATES: businessSupply,
         EXTERNAL_PLACE_HINTS: placeHints,
       };
@@ -3746,30 +3923,46 @@ serve(async (req) => {
         time: scrubbedSafeContext.date_from ?? "not specified",
       };
       const countryStr = typeof scrubbedSafeContext.country === "string" ? scrubbedSafeContext.country : undefined;
-      const [preEvents, businessSupply, placeHints] = await Promise.all([
+      const planCity = String(scrubbedSafeContext.city ?? "").trim();
+      const planLat = typeof scrubbedSafeContext.latitude === "number" ? scrubbedSafeContext.latitude : null;
+      const planLng = typeof scrubbedSafeContext.longitude === "number" ? scrubbedSafeContext.longitude : null;
+      const planDateFrom = typeof scrubbedSafeContext.date_from === "string" ? scrubbedSafeContext.date_from : undefined;
+      const planDateTo = typeof scrubbedSafeContext.date_to === "string" ? scrubbedSafeContext.date_to : undefined;
+
+      const [preEvents, businessSupply, sponsoredOffers, placeHints] = await Promise.all([
         prefetchMatchingWinklyEvents(supabase, {
           mode,
-          city: String(scrubbedSafeContext.city ?? "").trim(),
+          city: planCity,
           country: countryStr,
-          dateFrom: typeof scrubbedSafeContext.date_from === "string" ? scrubbedSafeContext.date_from : undefined,
-          dateTo: typeof scrubbedSafeContext.date_to === "string" ? scrubbedSafeContext.date_to : undefined,
+          dateFrom: planDateFrom,
+          dateTo: planDateTo,
           activityHint: String(scrubbedSafeContext.activity_hint ?? ""),
           planRequest: String(scrubbedSafeContext.plan_request_text ?? scrubbedSafeContext.user_prompt ?? ""),
         }),
         prefetchMatchingBusinessSupply(supabase, {
-          city: String(scrubbedSafeContext.city ?? "").trim(),
+          city: planCity,
           activityHint: String(scrubbedSafeContext.activity_hint ?? ""),
           planRequest: String(scrubbedSafeContext.plan_request_text ?? scrubbedSafeContext.user_prompt ?? ""),
           mode,
         }),
+        prefetchRelevantBusinessOffers(supabase, {
+          primaryUserId: user.id,
+          partnerUserId: partnerUserIdEarly,
+          lat: planLat,
+          lng: planLng,
+          city: planCity,
+          dateFrom: planDateFrom,
+          dateTo: planDateTo,
+        }),
         fetchExternalVenueHints({
           activityHint: String(scrubbedSafeContext.activity_hint ?? ""),
           planRequest: String(scrubbedSafeContext.plan_request_text ?? scrubbedSafeContext.user_prompt ?? ""),
-          city: String(scrubbedSafeContext.city ?? "").trim(),
+          city: planCity,
           country: countryStr,
         }),
       ]);
       contextForLlm.WINKLY_EVENTS_CANDIDATES = preEvents;
+      contextForLlm.WINKLY_SPONSORED_OFFERS = sponsoredOffers;
       contextForLlm.WINKLY_BUSINESS_CANDIDATES = businessSupply;
       contextForLlm.EXTERNAL_PLACE_HINTS = placeHints;
       // Conflict resolution: when planning with a partner, inject their planner so you only propose times that don't conflict

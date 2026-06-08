@@ -1,6 +1,7 @@
 /**
  * Discover — daily recommendation and like limits (Free tier).
- * 5 recommendations per day; Free = 1 like per day from Recommended section.
+ * 4 new profiles per curated category per day; Free = 1 like per day from Recommended section.
+ * Liked-you / Recommended: first 3 cards visible to Free; rest blurred until Super/Premium.
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -17,7 +18,8 @@ function likesKey(mode: "romance" | "friends"): string {
   return `${PREFIX}${mode}_rec_likes_${today}`;
 }
 
-const RECOMMENDATIONS_PER_DAY = 5;
+const CATEGORY_PER_DAY = 4;
+const FREE_VISIBLE_BEFORE_BLUR = 3;
 const FREE_LIKES_PER_DAY_RECOMMENDATIONS = 1;
 
 /** Number of recommendation slots consumed today (shown cards). Reset at midnight. */
@@ -28,17 +30,17 @@ export async function getRecommendationsConsumedToday(
   const raw = await AsyncStorage.getItem(key);
   if (!raw) return 0;
   const data = JSON.parse(raw) as { count?: number };
-  return Math.min(RECOMMENDATIONS_PER_DAY, data?.count ?? 0);
+  return Math.min(CATEGORY_PER_DAY, data?.count ?? 0);
 }
 
-/** Record that we showed one more recommendation today (max 5). */
+/** Record that we showed one more recommendation today (max 4). */
 export async function incrementRecommendationsShownToday(
   mode: "romance" | "friends"
 ): Promise<number> {
   const key = todayKey(mode);
   const raw = await AsyncStorage.getItem(key);
   const data = raw ? (JSON.parse(raw) as { count?: number }) : {};
-  const count = Math.min(RECOMMENDATIONS_PER_DAY, (data.count ?? 0) + 1);
+  const count = Math.min(CATEGORY_PER_DAY, (data.count ?? 0) + 1);
   await AsyncStorage.setItem(key, JSON.stringify({ count, date: new Date().toISOString().slice(0, 10) }));
   return count;
 }
@@ -67,6 +69,9 @@ export async function incrementRecommendationLikeSentToday(
 }
 
 export const DISCOVER_LIMITS = {
-  recommendationsPerDay: RECOMMENDATIONS_PER_DAY,
+  categoryPerDay: CATEGORY_PER_DAY,
+  /** @deprecated use categoryPerDay */
+  recommendationsPerDay: CATEGORY_PER_DAY,
+  freeVisibleBeforeBlur: FREE_VISIBLE_BEFORE_BLUR,
   freeLikesPerDayFromRecommendations: FREE_LIKES_PER_DAY_RECOMMENDATIONS,
 } as const;
