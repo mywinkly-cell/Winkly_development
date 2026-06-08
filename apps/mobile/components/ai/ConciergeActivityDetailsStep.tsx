@@ -204,6 +204,10 @@ export function ConciergeActivityDetailsStep({
   const [exactTime, setExactTime] = useState<Date>(() => {
     const d = new Date();
     d.setHours(18, 0, 0, 0);
+    const hm = initialDetails.exactTimeHm;
+    if (typeof hm === "string" && /^\d{2}:\d{2}$/.test(hm)) {
+      d.setHours(parseInt(hm.slice(0, 2), 10), parseInt(hm.slice(3, 5), 10), 0, 0);
+    }
     return d;
   });
   const [showExactTimePicker, setShowExactTimePicker] = useState(false);
@@ -707,24 +711,33 @@ export function ConciergeActivityDetailsStep({
           ) : null}
           {locationHint ? <Text style={styles.inlineHint}>{locationHint}</Text> : null}
         </View>
-
-        {cityPart ? (
-          <View style={styles.weatherRow}>
-            {weatherLoading ? (
-              <ActivityIndicator size="small" color={Colors.primaryViolet} />
-            ) : weatherSnapshot ? (
-              <>
-                <Ionicons name="partly-sunny-outline" size={18} color={Colors.gray600} />
-                <Text style={styles.weatherText}>
-                  {singleDay
-                    ? `${dateStr}: ${weatherSnapshot.summary ?? ""}${weatherSnapshot.temp_min != null && weatherSnapshot.temp_max != null ? ` · ${weatherSnapshot.temp_min}–${weatherSnapshot.temp_max}°C` : ""}`
-                    : `${weatherSnapshot.period_summary ?? ""}${weatherSnapshot.avg_temp_min != null && weatherSnapshot.avg_temp_max != null ? ` · Avg ${weatherSnapshot.avg_temp_min}–${weatherSnapshot.avg_temp_max}°C` : ""}`}
-                </Text>
-              </>
-            ) : null}
-          </View>
-        ) : null}
       </View>
+
+      {cityPart ? (
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Weather</Text>
+          </View>
+          <View style={styles.surfaceCard}>
+            <View style={styles.weatherRow}>
+              {weatherLoading ? (
+                <ActivityIndicator size="small" color={Colors.primaryViolet} />
+              ) : weatherSnapshot ? (
+                <>
+                  <Ionicons name="partly-sunny-outline" size={18} color={Colors.gray600} />
+                  <Text style={styles.weatherText}>
+                    {singleDay
+                      ? `${dateStr}: ${weatherSnapshot.summary ?? ""}${weatherSnapshot.temp_min != null && weatherSnapshot.temp_max != null ? ` · ${weatherSnapshot.temp_min}–${weatherSnapshot.temp_max}°C` : ""}`
+                      : `${weatherSnapshot.period_summary ?? ""}${weatherSnapshot.avg_temp_min != null && weatherSnapshot.avg_temp_max != null ? ` · Avg ${weatherSnapshot.avg_temp_min}–${weatherSnapshot.avg_temp_max}°C` : ""}`}
+                  </Text>
+                </>
+              ) : (
+                <Text style={styles.weatherText}>Weather unavailable for this location.</Text>
+              )}
+            </View>
+          </View>
+        </View>
+      ) : null}
 
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderRow}>
@@ -823,6 +836,23 @@ export function ConciergeActivityDetailsStep({
                 minimumDate={date}
               />
               <TouchableOpacity onPress={() => setShowDateEndPicker(false)} style={styles.pickerDone}>
+                <Text style={styles.pickerDoneText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Modal>
+      )}
+      {showExactTimePicker && (
+        <Modal visible transparent animationType="fade">
+          <Pressable style={styles.pickerOverlay} onPress={() => setShowExactTimePicker(false)}>
+            <View style={styles.pickerSheet}>
+              <DateTimePicker
+                value={exactTime}
+                mode="time"
+                display="spinner"
+                onChange={(_, d) => d && setExactTime(d)}
+              />
+              <TouchableOpacity onPress={() => setShowExactTimePicker(false)} style={styles.pickerDone}>
                 <Text style={styles.pickerDoneText}>Done</Text>
               </TouchableOpacity>
             </View>
@@ -1245,7 +1275,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 0,
   },
   weatherText: { ...Typography.caption, color: Colors.gray600, flex: 1 },
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },

@@ -96,7 +96,20 @@ export async function getPlannerThemePlans(params: {
     },
   });
   const err = (res as unknown as { error?: unknown })?.error;
-  if (typeof err === "string" && err.trim()) throw new Error(err);
+  if (typeof err === "string" && err.trim()) {
+    if (__DEV__) {
+      console.error("[planner_theme_plans] request failed", {
+        error: err,
+        mode: params.mode,
+        theme: params.theme,
+        city: params.city ?? params.fullContext?.city,
+        country: params.country ?? params.fullContext?.country,
+        dateTimeIso: params.dateTimeIso ?? params.fullContext?.date_from,
+        plan_request_chars: params.fullContext?.plan_request_text?.length ?? 0,
+      });
+    }
+    throw new Error(err);
+  }
   const raw = (res as unknown as { plan_options?: PlannerThemePlanOption[] }).plan_options;
   return Array.isArray(raw) ? raw : [];
 }
