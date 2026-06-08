@@ -524,7 +524,13 @@ export function ConciergePlanningFlow({
       if (genId !== genAttemptRef.current) return;
       setLoading(false);
       const msg = (e as Error).message ?? "Something went wrong.";
-      trace("generate:error", { message: msg });
+      trace("generate:error", {
+        message: msg,
+        stack: e instanceof Error ? e.stack : undefined,
+      });
+      if (__DEV__) {
+        console.error("[ConciergePlan] generate failed", e);
+      }
       setError(msg);
     }
   }, [trace, effectiveMode, buildContext, source_screen, source_planner_tab, activityKey, activityLabel, partnerId, details, appLanguage]);

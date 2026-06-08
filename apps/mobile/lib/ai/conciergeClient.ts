@@ -514,7 +514,19 @@ export async function callConcierge(params: {
     if (res.ok) {
       console.log(logPrefix, `← ${task} HTTP ${res.status}`, summary);
     } else {
-      console.warn(logPrefix, `← ${task} HTTP ${res.status}`, summary);
+      const detail =
+        typeof data?.detail === "string"
+          ? data.detail
+          : typeof data?.message === "string"
+            ? data.message
+            : undefined;
+      console.error(logPrefix, `✗ ${task} HTTP ${res.status}`, {
+        ...summary,
+        detail,
+        code: typeof data?.code === "string" ? data.code : undefined,
+        required_tier: typeof data?.required_tier === "string" ? data.required_tier : undefined,
+        body: data,
+      });
     }
   }
   if (!res.ok) {
@@ -522,9 +534,17 @@ export async function callConcierge(params: {
     const rateLimitMessage =
       "You're doing a lot of requests. Wait a moment and try again." +
       (retryAfter != null && retryAfter >= 60 ? " Try after 1 minute." : retryAfter != null && retryAfter > 0 ? ` Try again in ${retryAfter} seconds.` : "");
+    const baseError =
+      (typeof data?.error === "string" ? data.error : undefined) ??
+      (res.status === 429 ? rateLimitMessage : `Request failed: ${res.status}`);
+    const detail = typeof data?.detail === "string" ? data.detail.trim() : "";
+    const error =
+      __DEV__ && detail && baseError === "Internal error"
+        ? `${baseError}: ${detail}`
+        : baseError;
     return {
       message: "",
-      error: (typeof data?.error === "string" ? data.error : undefined) ?? (res.status === 429 ? rateLimitMessage : `Request failed: ${res.status}`),
+      error,
       error_code: res.status === 429 ? "rate_limit" : "unknown",
       retry_after: retryAfter,
     };

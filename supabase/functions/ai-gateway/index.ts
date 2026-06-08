@@ -3889,9 +3889,10 @@ serve(async (req) => {
       headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
     });
   } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
     console.error("ai-gateway error:", err);
     return new Response(
-      JSON.stringify({ error: "Internal error" }),
+      JSON.stringify({ error: "Internal error", detail }),
       { status: 500, headers: { "Content-Type": "application/json", ...Object.fromEntries(corsHeaders(req)) } }
     );
   }
