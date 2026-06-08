@@ -309,7 +309,9 @@ export default function FriendsHome() {
 
   const handleCardPress = () => {
     if (currentProfile) {
-      router.push(`/(modes)/friends/profile-view?user_id=${currentProfile.user_id ?? currentProfile.id}`);
+      router.push(
+        `/(modes)/friends/profile-view?user_id=${currentProfile.user_id ?? currentProfile.id}&source=home`
+      );
     }
   };
 

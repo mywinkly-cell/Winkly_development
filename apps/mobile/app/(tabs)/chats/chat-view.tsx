@@ -27,6 +27,7 @@ import * as Haptics from "expo-haptics";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { ChatAttachmentSheet } from "@/components/chats/ChatAttachmentSheet";
 import { ChatComposer } from "@/components/chats/ChatComposer";
+import { ChatConversationHeader } from "@/components/chats/ChatConversationHeader";
 import { keyboardAvoidingProps } from "@/lib/ui/keyboardAvoiding";
 import { RomanceChatInviteBanner } from "@/components/chats/RomanceChatInviteBanner";
 import { Colors } from "@/constants/tokens";
@@ -89,6 +90,7 @@ import { recordPairBehaviorSignal } from "@/lib/matching/behaviorSignals";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 import { chatRoutes, useModeHub } from "@/lib/navigation/modeHub";
+import { openPeerProfile } from "@/lib/chats/peerProfileNavigation";
 import {
   isConversationEligibleForStaleNudge,
   dismissStaleConciergeNudge,
@@ -198,6 +200,7 @@ export default function ChatView({
   const [error, setError] = useState<string | null>(null);
   const [messagesLoadError, setMessagesLoadError] = useState<string | null>(null);
   const [otherMemberId, setOtherMemberId] = useState<string | null>(partnerUserIdParam ?? null);
+  const [groupAvatarUrl, setGroupAvatarUrl] = useState<string | null>(null);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [readReceiptsOn, setReadReceiptsOn] = useState(true);
@@ -279,6 +282,24 @@ export default function ChatView({
     ? (conversation?.name?.trim() || "Group chat")
     : formatName(otherUser, partnerNameParam?.trim() || "Chat");
   const peerAvatarUri = peerPhotoUrl(otherUser, conversation?.mode, partnerPhotoUrlParam);
+  const groupParticipantAvatars = useMemo(() => {
+    if (!isGroup) return [];
+    return participants
+      .filter((p) => p.id !== meId)
+      .slice(0, 2)
+      .map((p) => ({
+        uri: peerPhotoUrl(p, conversation?.mode),
+        initials: nameInitials(formatName(p, "?")),
+      }));
+  }, [isGroup, participants, meId, conversation?.mode]);
+  const headerSubtitle =
+    typingUserIds.size > 0
+      ? "typing…"
+      : conversation
+        ? isGroup
+          ? `${conversation.mode} • group • ${participants.length} members`
+          : `${conversation.mode} • direct`
+        : "";
   const isRomance = conversation?.mode === "romance";
   const accentColor = isRomance ? Colors.romance.primary : Colors.primaryViolet;
   const conversationMode = (conversation?.mode ?? "romance") as Mode;
@@ -316,6 +337,17 @@ export default function ChatView({
     }
     router.replace(chatRoutes.index(chatHub) as Parameters<typeof router.replace>[0]);
   }, [router, chatHub]);
+
+  const handleHeaderPress = useCallback(() => {
+    if (isGroup) {
+      router.push(chatRoutes.conversationInfo(chatHub, convId) as Parameters<typeof router.push>[0]);
+      return;
+    }
+    const peerId = otherUser?.id ?? otherMemberId;
+    const mode = conversation?.mode;
+    if (!peerId || (mode !== "romance" && mode !== "friends" && mode !== "business")) return;
+    openPeerProfile(router, peerId, mode);
+  }, [isGroup, router, chatHub, convId, otherUser?.id, otherMemberId, conversation?.mode]);
 
   const recordDmFirstOutreachIfNeeded = useCallback(
     async (hadMineBeforeSend: boolean) => {
@@ -814,6 +846,19 @@ export default function ChatView({
       .single();
     setConversation(conv as ConversationRow);
     const convMode = (conv as ConversationRow | null)?.mode;
+    const convType = (conv as ConversationRow | null)?.type;
+    const relatedGroupId = (conv as ConversationRow | null)?.related_group_id ?? null;
+
+    if (convType === "group" && relatedGroupId) {
+      const { data: groupRow } = await supabase
+        .from("groups")
+        .select("avatar_url")
+        .eq("id", relatedGroupId)
+        .maybeSingle();
+      setGroupAvatarUrl((groupRow as { avatar_url?: string | null } | null)?.avatar_url ?? null);
+    } else {
+      setGroupAvatarUrl(null);
+    }
 
     const { data: cps } = await supabase
       .from("conversation_members")
@@ -1834,44 +1879,19 @@ export default function ChatView({
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </Pressable>
 
-        {isDm && (otherUser || otherMemberId) ? (
-          <Pressable
-            onPress={() => {
-              const peerId = otherUser?.id ?? otherMemberId;
-              if (!peerId || !conversation?.mode) return;
-              const mode = conversation.mode as "romance" | "friends" | "business";
-              if (mode === "romance") router.push(`/(modes)/romance/profile-view?id=${peerId}`);
-              else router.push(`/(modes)/${mode}/profile-view?user_id=${peerId}`);
-            }}
-            accessibilityLabel={`${peerDisplayName} profile`}
-          >
-            <Avatar uri={peerAvatarUri} initials={nameInitials(peerDisplayName)} size={40} />
-          </Pressable>
-        ) : null}
-
-        <Pressable
-          style={{ flex: 1, minWidth: 0 }}
-          onPress={() => {
-            if (isDm && otherUser && conversation?.mode) {
-              const mode = conversation.mode as "romance" | "friends" | "business";
-              if (mode === "romance") router.push(`/(modes)/romance/profile-view?id=${otherUser.id}`);
-              else router.push(`/(modes)/${mode}/profile-view?user_id=${otherUser.id}`);
-            }
-          }}
-        >
-          <Text style={{ fontWeight: "900", fontSize: 16 }} numberOfLines={1}>
-            {peerDisplayName}
-          </Text>
-          <Text style={{ opacity: 0.65, fontSize: 12 }} numberOfLines={1}>
-            {typingUserIds.size > 0
-              ? "typing…"
-              : conversation
-                ? isGroup
-                  ? `${conversation.mode} • group • ${participants.length} members`
-                  : `${conversation.mode} • direct`
-                : ""}
-          </Text>
-        </Pressable>
+        <ChatConversationHeader
+          isGroup={!!isGroup}
+          displayName={peerDisplayName}
+          subtitle={headerSubtitle}
+          peerAvatarUri={peerAvatarUri}
+          peerInitials={nameInitials(peerDisplayName)}
+          groupAvatarUri={groupAvatarUrl}
+          participantAvatars={groupParticipantAvatars}
+          onPress={handleHeaderPress}
+          accessibilityLabel={
+            isGroup ? `${peerDisplayName} group details` : `${peerDisplayName} profile`
+          }
+        />
 
         {isDm && otherUser ? (
           <Pressable
@@ -2012,10 +2032,24 @@ export default function ChatView({
             <Ionicons name={muted ? "notifications-off" : "notifications-outline"} size={20} color={Colors.textPrimary} />
             <Text style={{ marginLeft: 8 }}>{muted ? "Unmute chat" : "Mute chat"}</Text>
           </Pressable>
-          <Pressable onPress={handleBlock} style={{ padding: 12, flexDirection: "row", alignItems: "center" }}>
-            <Ionicons name="remove-circle-outline" size={20} color={Colors.errorRed} />
-            <Text style={{ marginLeft: 8, color: Colors.errorRed }}>Block user</Text>
-          </Pressable>
+          {isGroup ? (
+            <Pressable
+              onPress={() => {
+                setShowMenu(false);
+                router.push(chatRoutes.conversationInfo(chatHub, convId) as Parameters<typeof router.push>[0]);
+              }}
+              style={{ padding: 12, flexDirection: "row", alignItems: "center" }}
+            >
+              <Ionicons name="people-outline" size={20} color={Colors.textPrimary} />
+              <Text style={{ marginLeft: 8 }}>Group info</Text>
+            </Pressable>
+          ) : null}
+          {isDm && otherUser ? (
+            <Pressable onPress={handleBlock} style={{ padding: 12, flexDirection: "row", alignItems: "center" }}>
+              <Ionicons name="remove-circle-outline" size={20} color={Colors.errorRed} />
+              <Text style={{ marginLeft: 8, color: Colors.errorRed }}>Block user</Text>
+            </Pressable>
+          ) : null}
           <Pressable onPress={() => setShowMenu(false)} style={{ padding: 12 }}>
             <Text style={{ color: Colors.gray600 }}>Close</Text>
           </Pressable>

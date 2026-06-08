@@ -77,6 +77,15 @@ export const chatRoutes = {
       params: { conversationId, ...stripUndefined(params) },
     };
   },
+  conversationInfo(hub: ModeHub, conversationId: string): string | Href {
+    if (hub === "tabs") {
+      return `/chats/conversation-info?conversationId=${encodeURIComponent(conversationId)}`;
+    }
+    return {
+      pathname: `/(modes)/${hub}/chats/conversation-info` as const,
+      params: { conversationId },
+    };
+  },
 };
 
 export const plannerRoutes = {

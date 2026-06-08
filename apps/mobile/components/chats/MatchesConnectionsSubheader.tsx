@@ -20,7 +20,8 @@ import { appModeToHub, chatRoutes, type ModeHub } from "@/lib/navigation/modeHub
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
-import { createDirectChat, unmatchRomance, unfollowConnection, blockUser } from "@/lib/chats";
+import { createDirectChat, blockUser } from "@/lib/chats";
+import { confirmRemoveConnection, removeModeConnection } from "@/lib/access/removeConnection";
 import { formatDistance, getDefaultDistanceUnit } from "@/lib/distanceUnit";
 import { supabase } from "@/lib/supabase";
 import {
@@ -206,22 +207,22 @@ export function MatchesConnectionsSubheader({
   };
 
   const confirmUnmatch = (item: MatchConnectionItem) => {
-    Alert.alert(
-      "Unmatch",
-      "Remove this match? You won't see each other in Discover.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Unmatch", onPress: () => applyUnmatch(item) },
-      ]
-    );
+    const mode = isRomance ? "romance" : isFriends ? "friends" : "business";
+    confirmRemoveConnection({
+      mode,
+      firstName: getDisplayName(item),
+      onConfirm: () => applyUnmatch(item, mode),
+    });
   };
 
-  const applyUnmatch = async (item: MatchConnectionItem) => {
+  const applyUnmatch = async (
+    item: MatchConnectionItem,
+    mode: "romance" | "friends" | "business"
+  ) => {
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) return;
-      if (isRomance) await unmatchRomance(item.id);
-      else await unfollowConnection(item.id);
+      await removeModeConnection(item.id, mode);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onRefresh();
     } catch {
@@ -248,8 +249,8 @@ export function MatchesConnectionsSubheader({
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) return;
       await blockUser(item.id);
-      if (isRomance) await unmatchRomance(item.id);
-      else await unfollowConnection(item.id);
+      const mode = isRomance ? "romance" : isFriends ? "friends" : "business";
+      await removeModeConnection(item.id, mode);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onRefresh();
     } catch {

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -6,18 +6,41 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  Image,
-  Dimensions,
 } from "react-native";
-import * as Linking from "expo-linking";
+import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { chatRoutes } from "@/lib/navigation/modeHub";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { getProfileForMode } from "@/lib/access/profiles";
+import { friendsFollowProfile } from "@/lib/access/connections";
+import { getProfileConnectionStatus } from "@/lib/access/profileConnectionStatus";
+import { confirmRemoveConnection, removeModeConnection } from "@/lib/access/removeConnection";
+import { createDirectChat } from "@/lib/chats";
+import { recordSwipe, sendFriendsRequest } from "@/lib/matching/actions";
+import { InviteToPlanModal, type InviteFormValues } from "@/components/chats/InviteToPlanModal";
+import {
+  promptConnectBeforeInvite,
+  submitProfilePlannerInvite,
+} from "@/lib/profile/profilePlanInvite";
+import {
+  getOtherUserCoreFields,
+  mergePhotoUrls,
+  metaStringArray,
+  type OtherUserCoreFields,
+} from "@/lib/profile/otherUserCore";
+import {
+  ProfileChipList,
+  ProfileGeneralBlock,
+  ProfileInstagramLink,
+  ProfilePhotoGallery,
+  ProfileSection,
+} from "@/components/profile/OtherUserProfileSections";
+import { ProfileViewHeader } from "@/components/profile/ProfileViewHeader";
+import { ProfileSwipeActions } from "@/components/profile/ProfileSwipeActions";
+import { ProfileConnectionActions } from "@/components/profile/ProfileConnectionActions";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { Colors, Typography, Layout } from "@/constants/tokens";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 type FriendProfile = {
   id: string; // profile id
@@ -66,6 +89,12 @@ export default function FriendsProfileView() {
 
   const [profile, setProfile] = useState<FriendProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
+  const [chatId, setChatId] = useState<string | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [inviteVisible, setInviteVisible] = useState(false);
+  const [meId, setMeId] = useState<string | null>(null);
+  const [coreFields, setCoreFields] = useState<OtherUserCoreFields | null>(null);
 
   async function loadProfile() {
     try {
@@ -82,9 +111,19 @@ export default function FriendsProfileView() {
         setProfile(null);
         return;
       }
+      setMeId(viewerId);
 
-      const row = await getProfileForMode("friends", viewerId, userId);
+      const [row, core] = await Promise.all([
+        getProfileForMode("friends", viewerId, userId),
+        getOtherUserCoreFields(userId),
+      ]);
+      setCoreFields(core);
       setProfile(row ? (row as FriendProfile) : null);
+      if (row) {
+        const connection = await getProfileConnectionStatus("friends", viewerId, userId);
+        setIsConnected(connection.isConnected);
+        setChatId(connection.chatId);
+      }
     } finally {
       setLoading(false);
     }
@@ -95,38 +134,138 @@ export default function FriendsProfileView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
-  const onSendFriendRequest = async () => {
-    // Placeholder: wire to friend_requests table later
-    Alert.alert("Friends", "Friend request flow can be added next (friend_requests table + RLS).");
-  };
+  const targetUserId = profile?.user_id ?? profile?.id ?? userId;
 
-  const onMessage = async () => {
-    // Placeholder: wire to direct chat later
-    Alert.alert("Message", "Direct chat routing can be connected once conversations for Friends are wired.");
-  };
+  const photos = useMemo(() => {
+    if (!profile) return [] as string[];
+    const modePhotos = (profile.photos ?? []).filter((p): p is string => !!p);
+    const fallbacks = [profile.main_photo_url, profile.avatar_url].filter((p): p is string => !!p);
+    return mergePhotoUrls(modePhotos, fallbacks, coreFields?.core_photos ?? []);
+  }, [coreFields?.core_photos, profile]);
 
-  const onPlanHangout = () => {
-    router.push("/(modes)/friends/planner");
-  };
+  const meetupGoals = useMemo(
+    () => metaStringArray(profile?.meta ?? null, "meetup_goals"),
+    [profile?.meta]
+  );
+
+  const handlePass = useCallback(async () => {
+    if (!targetUserId || actionBusy) return;
+    setActionBusy(true);
+    try {
+      await recordSwipe({ mode: "friends", targetUserId, action: "pass" });
+      Haptics.selectionAsync();
+      router.back();
+    } catch {
+      Alert.alert("Error", "Could not save your choice. Please try again.");
+    } finally {
+      setActionBusy(false);
+    }
+  }, [actionBusy, router, targetUserId]);
+
+  const handleAddFriend = useCallback(async () => {
+    if (!targetUserId || actionBusy) return;
+    setActionBusy(true);
+    try {
+      const res = await friendsFollowProfile(targetUserId);
+      if (res.is_connection && res.chat_id) {
+        setIsConnected(true);
+        setChatId(res.chat_id);
+        router.push(chatRoutes.conversation("friends", res.chat_id) as Parameters<typeof router.push>[0]);
+      } else {
+        router.back();
+      }
+    } catch {
+      Alert.alert("Error", "Could not connect. Please try again.");
+    } finally {
+      setActionBusy(false);
+    }
+  }, [actionBusy, router, targetUserId]);
+
+  const handleSuperConnect = useCallback(async () => {
+    if (!targetUserId || actionBusy) return;
+    setActionBusy(true);
+    try {
+      await sendFriendsRequest({ targetUserId, kind: "super_connect" });
+      router.back();
+    } catch {
+      Alert.alert("Error", "Could not send Super Connect. Please try again.");
+    } finally {
+      setActionBusy(false);
+    }
+  }, [actionBusy, router, targetUserId]);
+
+  const handleChat = useCallback(async () => {
+    if (!targetUserId || actionBusy) return;
+    setActionBusy(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const meId = auth?.user?.id;
+      if (!meId) throw new Error("Not signed in");
+      const id = chatId ?? (await createDirectChat(targetUserId, "friends", "connection", meId));
+      setChatId(id);
+      router.push(chatRoutes.conversation("friends", id) as Parameters<typeof router.push>[0]);
+    } catch {
+      Alert.alert("Error", "Could not open chat.");
+    } finally {
+      setActionBusy(false);
+    }
+  }, [actionBusy, chatId, router, targetUserId]);
+
+  const handleRemoveConnection = useCallback(() => {
+    if (!profile || !targetUserId) return;
+    confirmRemoveConnection({
+      mode: "friends",
+      firstName: fullName(profile),
+      onConfirm: async () => {
+        setActionBusy(true);
+        try {
+          await removeModeConnection(targetUserId, "friends");
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          router.back();
+        } catch {
+          Alert.alert("Error", "Could not remove contact. Please try again.");
+        } finally {
+          setActionBusy(false);
+        }
+      },
+    });
+  }, [profile, router, targetUserId]);
+
+  const handlePlannerPress = useCallback(() => {
+    if (!targetUserId) return;
+    if (!isConnected) {
+      promptConnectBeforeInvite("friends");
+      return;
+    }
+    setInviteVisible(true);
+  }, [isConnected, targetUserId]);
+
+  const handleInviteSubmit = useCallback(
+    async (values: InviteFormValues) => {
+      if (!meId || !targetUserId) throw new Error("Missing user");
+      await submitProfilePlannerInvite({
+        meId,
+        targetUserId,
+        mode: "friends",
+        chatId,
+        isConnected,
+        values,
+      });
+      setInviteVisible(false);
+      Alert.alert("Invite sent", "Your meet-up invite was sent in chat.");
+    },
+    [chatId, isConnected, meId, targetUserId]
+  );
 
   return (
-    <View style={[styles.screen, { backgroundColor: Colors.background }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.backBtn, { backgroundColor: Colors.card, borderColor: Colors.border }]}
-          activeOpacity={0.9}
-        >
-          <Text style={{ color: Colors.text, fontWeight: "900" }}>‹</Text>
-        </TouchableOpacity>
+    <View style={[styles.screen, { backgroundColor: Colors.backgroundLight }]}>
+      <ProfileViewHeader
+        onBack={() => router.back()}
+        mode="friends"
+        onPlannerPress={handlePlannerPress}
+      />
 
-        <Text style={[styles.title, Typography.h2]}>Profile</Text>
-
-        <View style={{ width: 40 }} />
-      </View>
-
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color={Colors.friends.primary} />
@@ -149,131 +288,62 @@ export default function FriendsProfileView() {
           </View>
         ) : (
           <>
-            {/* Main photo (Friends sub-profile photo so you can decide before liking) */}
-            {(() => {
-              const photoList = (profile.photos ?? []).filter((p): p is string => !!p);
-              const mainPhoto = profile.main_photo_url ?? profile.avatar_url ?? photoList[0] ?? null;
-              return (
-                <View style={[styles.photoSection, { backgroundColor: Colors.gray200 }]}>
-                  {mainPhoto ? (
-                    <Image source={{ uri: mainPhoto }} style={styles.mainPhoto} resizeMode="cover" />
-                  ) : (
-                    <View style={styles.photoPlaceholder}>
-                      <Text style={{ fontSize: 40 }}>📷</Text>
-                    </View>
-                  )}
-                </View>
-              );
-            })()}
+            <ProfilePhotoGallery photos={photos} />
 
-            {/* Photo gallery (additional Friends sub-profile photos) */}
-            {(() => {
-              const photoList = (profile.photos ?? []).filter((p): p is string => !!p);
-              if (photoList.length <= 1) return null;
-              return (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.galleryScroll}
-                  contentContainerStyle={styles.galleryContent}
-                >
-                  {photoList.slice(1, 10).map((uri, idx) => (
-                    <View key={`${uri}-${idx}`} style={styles.galleryThumb}>
-                      <Image source={{ uri }} style={styles.galleryThumbImage} resizeMode="cover" />
-                    </View>
-                  ))}
-                </ScrollView>
-              );
-            })()}
-
-            {/* Top card */}
             <View style={[styles.profileCard, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
               <Text style={[styles.name, { color: Colors.text }]}>{fullName(profile)}</Text>
-
               <Text style={{ color: Colors.mutedText, marginTop: 6 }}>
                 {profile.city?.trim()
                   ? normalizeLocationDisplayString(profile.city, i18n?.language ?? "en")
-                  : "Location not specified"}{" "}
-                · Friends mode
+                  : "Location not specified"}
               </Text>
+            </View>
 
-              <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
-                <TouchableOpacity
-                  onPress={onSendFriendRequest}
-                  style={[styles.actionPrimary, { backgroundColor: Colors.friends.primary }]}
-                  activeOpacity={0.9}
-                >
-                  <Text style={{ color: Colors.onPrimary, fontWeight: "900" }}>Add friend</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={onMessage}
-                  style={[styles.actionSecondary, { backgroundColor: Colors.background, borderColor: Colors.border }]}
-                  activeOpacity={0.9}
-                >
-                  <Text style={{ color: Colors.text, fontWeight: "900" }}>Message</Text>
-                </TouchableOpacity>
+            {coreFields?.bio ||
+            coreFields?.education ||
+            (coreFields?.activity_preferences?.length ?? 0) > 0 ||
+            typeof profile.night_owl === "boolean" ? (
+              <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
+                <ProfileGeneralBlock
+                  coreBio={coreFields?.bio}
+                  education={coreFields?.education}
+                  activityPreferences={coreFields?.activity_preferences}
+                  nightOwl={profile.night_owl}
+                />
               </View>
+            ) : null}
 
-              <TouchableOpacity
-                onPress={onPlanHangout}
-                style={[
-                  styles.actionSecondary,
-                  { marginTop: 10, backgroundColor: Colors.background, borderColor: Colors.border },
-                ]}
-                activeOpacity={0.9}
-              >
-                <Text style={{ color: Colors.text, fontWeight: "900" }}>Plan a hangout</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* About */}
             <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-              <Text style={[styles.blockTitle, { color: Colors.text }]}>About</Text>
-              <Text style={{ color: Colors.text, lineHeight: 20 }}>
-                {profile.about?.trim() || "No bio yet."}
-              </Text>
+              <ProfileSection title="Friends">
+                <Text style={{ color: Colors.text, lineHeight: 20 }}>
+                  {profile.about?.trim() || "No friends bio yet."}
+                </Text>
+              </ProfileSection>
             </View>
 
-            {/* Vibes */}
-            <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-              <Text style={[styles.blockTitle, { color: Colors.text }]}>Vibes</Text>
+            {(profile.vibe_tags ?? []).length > 0 ? (
+              <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
+                <ProfileSection title="Vibes">
+                  <ProfileChipList items={(profile.vibe_tags ?? []).slice(0, 24)} />
+                </ProfileSection>
+              </View>
+            ) : null}
 
-              {(profile.vibe_tags ?? []).length ? (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
-                  {(profile.vibe_tags ?? []).slice(0, 24).map((s, idx) => (
-                    <View
-                      key={`${s}-${idx}`}
-                      style={[styles.chip, { backgroundColor: Colors.background, borderColor: Colors.border }]}
-                    >
-                      <Text style={{ color: Colors.text, fontWeight: "700" }}>{s}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={{ color: Colors.mutedText, marginTop: 8 }}>No vibes listed.</Text>
-              )}
-            </View>
+            {(profile.interests ?? []).length > 0 ? (
+              <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
+                <ProfileSection title="Interests">
+                  <ProfileChipList items={(profile.interests ?? []).slice(0, 24)} />
+                </ProfileSection>
+              </View>
+            ) : null}
 
-            {/* Interests */}
-            <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-              <Text style={[styles.blockTitle, { color: Colors.text }]}>Interests</Text>
-
-              {(profile.interests ?? []).length ? (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
-                  {(profile.interests ?? []).slice(0, 24).map((s, idx) => (
-                    <View
-                      key={`${s}-${idx}`}
-                      style={[styles.chip, { backgroundColor: Colors.background, borderColor: Colors.border }]}
-                    >
-                      <Text style={{ color: Colors.text, fontWeight: "700" }}>{s}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={{ color: Colors.mutedText, marginTop: 8 }}>No interests listed.</Text>
-              )}
-            </View>
+            {meetupGoals.length > 0 ? (
+              <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
+                <ProfileSection title="Meetup goals">
+                  <ProfileChipList items={meetupGoals} />
+                </ProfileSection>
+              </View>
+            ) : null}
 
             {/* Friends sub-profile details (lifestyle, meetup goals, etc.) */}
             {profile.meta && Object.keys(profile.meta).length > 0 && (
@@ -353,84 +423,58 @@ export default function FriendsProfileView() {
               </View>
             )}
 
-            {/* Links */}
-            <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-              <Text style={[styles.blockTitle, { color: Colors.text }]}>Links</Text>
-
-              <View style={{ marginTop: 10, gap: 10 }}>
-                <View style={[styles.linkRow, { backgroundColor: Colors.background, borderColor: Colors.border }]}>
-                  <Text style={{ color: Colors.mutedText, width: 90 }}>Instagram</Text>
-                  {profile.instagram?.trim() ? (
-                    <TouchableOpacity
-                      onPress={() => {
-                        const h = profile.instagram!.trim().replace(/^@/, "").replace(/.*instagram\.com\//, "").split("/")[0];
-                        if (h) Linking.openURL(`https://instagram.com/${h}`);
-                      }}
-                      style={{ flex: 1 }}
-                    >
-                      <Text style={{ color: Colors.primaryViolet, textDecorationLine: "underline" }} numberOfLines={1}>
-                        {profile.instagram.trim().startsWith("http") ? profile.instagram.trim() : `instagram.com/${profile.instagram.trim().replace(/^@/, "")}`}
-                      </Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <Text style={{ color: Colors.mutedText, flex: 1 }}>—</Text>
-                  )}
-                </View>
+            {profile.instagram?.trim() ? (
+              <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
+                <ProfileInstagramLink handle={profile.instagram} />
               </View>
-            </View>
+            ) : null}
+
+            {isConnected ? (
+              <View style={{ paddingHorizontal: Layout?.screenPadding ?? 16 }}>
+                <ProfileConnectionActions
+                  mode="friends"
+                  primaryColor={Colors.friends.primary}
+                  busy={actionBusy}
+                  hasChat={!!chatId}
+                  onChat={() => void handleChat()}
+                  onRemove={handleRemoveConnection}
+                />
+              </View>
+            ) : (
+              <ProfileSwipeActions
+                mode="friends"
+                primaryColor={Colors.friends.primary}
+                disabled={actionBusy}
+                onPass={() => void handlePass()}
+                onSuper={() => void handleSuperConnect()}
+                onLike={() => void handleAddFriend()}
+              />
+            )}
           </>
         )}
       </ScrollView>
+
+      {profile ? (
+        <InviteToPlanModal
+          visible={inviteVisible}
+          mode="friends"
+          partnerUserId={targetUserId}
+          partnerDisplayName={fullName(profile)}
+          onClose={() => setInviteVisible(false)}
+          onSubmit={handleInviteSubmit}
+        />
+      ) : null}
     </View>
   );
 }
 
 const styles: any = {
-  screen: { flex: 1, paddingTop: Layout?.screenTopPadding ?? 16 },
-  photoSection: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH * 1.1,
-    alignSelf: "center",
-  },
-  mainPhoto: { width: "100%", height: "100%" },
-  photoPlaceholder: {
-    width: "100%",
-    height: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  galleryScroll: { marginTop: 12 },
-  galleryContent: { paddingHorizontal: Layout?.screenPadding ?? 16, gap: 10, paddingBottom: 8 },
-  galleryThumb: {
-    width: 90,
-    height: 120,
-    borderRadius: 16,
-    overflow: "hidden",
-    backgroundColor: Colors.gray200,
-  },
-  galleryThumbImage: { width: "100%", height: "100%" },
+  screen: { flex: 1 },
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
-  header: {
-    paddingHorizontal: Layout?.screenPadding ?? 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingBottom: 12,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: { fontWeight: "900" },
-
   center: { paddingVertical: 40, alignItems: "center", justifyContent: "center" },
 
   empty: {
@@ -450,9 +494,6 @@ const styles: any = {
     marginTop: 8,
   },
   name: { fontSize: 20, fontWeight: "900" },
-
-  actionPrimary: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: "center" },
-  actionSecondary: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: "center", borderWidth: 1 },
 
   block: {
     marginHorizontal: Layout?.screenPadding ?? 16,

@@ -41,6 +41,8 @@ export const Routes = {
   chatsFilters: "/chats/filters" as const,
   chatsStart: "/chats/start" as const,
   chatById: (conversationId: string) => `/chats/${conversationId}` as const,
+  chatConversationInfo: (conversationId: string) =>
+    `/chats/conversation-info?conversationId=${encodeURIComponent(conversationId)}` as const,
 
   // Planner
   planner: "/planner" as const,

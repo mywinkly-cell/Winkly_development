@@ -1,10 +1,10 @@
 /**
  * Section 2: Recommended for You by Winkly AI.
  * Vertical stacked cards (up to 5/day). Daily counter, compatibility %, shared interests.
- * Tap opens detail sheet: Send Like, View Profile, Block, Report, Close.
+ * Tap opens full profile view.
  */
 
-import React, { useState } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -17,7 +17,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
-import { DiscoverActionSheet } from "./DiscoverActionSheet";
 
 export type RecommendedItem = {
   id: string;
@@ -41,12 +40,7 @@ type Props = {
   remainingToday: number;
   totalPerDay: number;
   primaryColor: string;
-  canLikeUnlimited: boolean;
-  likesUsedToday: number;
-  onSendLike: (item: RecommendedItem) => Promise<void>;
   onViewProfile: (item: RecommendedItem) => void;
-  onBlock: (item: RecommendedItem) => Promise<void>;
-  onReport: (item: RecommendedItem) => Promise<void>;
 };
 
 export function DiscoverRecommendedSection({
@@ -55,36 +49,11 @@ export function DiscoverRecommendedSection({
   remainingToday,
   totalPerDay,
   primaryColor,
-  canLikeUnlimited,
-  likesUsedToday,
-  onSendLike,
   onViewProfile,
-  onBlock,
-  onReport,
 }: Props) {
   const fmtLoc = useFormatLocationDisplay();
-  const [sheetVisible, setSheetVisible] = useState(false);
-  const [selected, setSelected] = useState<RecommendedItem | null>(null);
-  const [likeLoading, setLikeLoading] = useState(false);
-
-  const canLike = canLikeUnlimited || likesUsedToday < 1;
-
-  const openSheet = (item: RecommendedItem) => {
-    setSelected(item);
-    setSheetVisible(true);
-  };
-
-  const handlePrimary = async () => {
-    if (!selected) return;
-    if (!canLike) return;
-    setLikeLoading(true);
-    try {
-      await onSendLike(selected);
-      setSheetVisible(false);
-      setSelected(null);
-    } finally {
-      setLikeLoading(false);
-    }
+  const openProfile = (item: RecommendedItem) => {
+    onViewProfile(item);
   };
 
   if (items.length === 0) return null;
@@ -107,7 +76,7 @@ export function DiscoverRecommendedSection({
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.95}
-              onPress={() => openSheet(item)}
+              onPress={() => openProfile(item)}
               style={styles.card}
             >
               <View style={styles.cardPhotoWrap}>
@@ -155,24 +124,6 @@ export function DiscoverRecommendedSection({
         </ScrollView>
       </View>
 
-      <DiscoverActionSheet
-        visible={sheetVisible}
-        mode={mode}
-        variant="recommendation"
-        primaryColor={primaryColor}
-        primaryLoading={likeLoading}
-        primaryDisabled={!canLike}
-        primaryDisabledMessage={!canLike ? "1 free like per day from recommendations. Upgrade for unlimited." : undefined}
-        onClose={() => { setSheetVisible(false); setSelected(null); }}
-        onPrimary={handlePrimary}
-        onViewProfile={() => selected && onViewProfile(selected)}
-        onBlock={() => {
-          if (selected) void onBlock(selected);
-        }}
-        onReport={() => {
-          if (selected) void onReport(selected);
-        }}
-      />
     </>
   );
 }
