@@ -11,36 +11,55 @@
 //   • From Discover/Home/Matches you land here with ?id=USER_ID
 // ────────────────────────────────────────────────
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import {
   View,
   Text,
-  Image,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Dimensions,
   Alert,
 } from "react-native";
-import * as Linking from "expo-linking";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { chatRoutes, plannerRoutes } from "@/lib/navigation/modeHub";
+import { chatRoutes } from "@/lib/navigation/modeHub";
 import { useTranslation } from "react-i18next";
-import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
+import { ProfileViewHeader } from "@/components/profile/ProfileViewHeader";
+import { ProfileSwipeActions } from "@/components/profile/ProfileSwipeActions";
+import { ProfileConnectionActions } from "@/components/profile/ProfileConnectionActions";
 import { supabase } from "@/lib/supabase";
 import { getProfileForMode } from "@/lib/access/profiles";
+import { getProfileConnectionStatus } from "@/lib/access/profileConnectionStatus";
+import { confirmRemoveConnection, removeModeConnection } from "@/lib/access/removeConnection";
+import { createDirectChat, romanceLikeProfile } from "@/lib/chats";
+import { recordSwipe } from "@/lib/matching/actions";
+import { InviteToPlanModal, type InviteFormValues } from "@/components/chats/InviteToPlanModal";
+import {
+  promptConnectBeforeInvite,
+  submitProfilePlannerInvite,
+} from "@/lib/profile/profilePlanInvite";
+import {
+  getOtherUserCoreFields,
+  mergePhotoUrls,
+  metaStringArray,
+  type OtherUserCoreFields,
+} from "@/lib/profile/otherUserCore";
+import {
+  ProfileChipList,
+  ProfileGeneralBlock,
+  ProfileInstagramLink,
+  ProfilePhotoGallery,
+  ProfileSection,
+} from "@/components/profile/OtherUserProfileSections";
 import {
   computeCompatibilityScore,
   buildMatchTags,
   type RomanceProfile,
 } from "@/lib/ai/romanceInsights";
-
-const { width } = Dimensions.get("window");
 
 type ProfileRow = {
   id: string;
@@ -65,6 +84,9 @@ type ProfileRow = {
   core_photos?: (string | null)[];
   romance_photos?: (string | null)[];
   instagram?: string | null;
+  education?: string | null;
+  romance_meta?: Record<string, unknown> | null;
+  romance_interests?: string[] | null;
 };
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -80,6 +102,12 @@ export default function RomanceProfileView() {
   const [loading, setLoading] = useState(true);
   const [selfProfile, setSelfProfile] = useState<RomanceProfile | null>(null);
   const [targetProfile, setTargetProfile] = useState<ProfileRow | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [chatId, setChatId] = useState<string | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [inviteVisible, setInviteVisible] = useState(false);
+  const [meId, setMeId] = useState<string | null>(null);
+  const [coreFields, setCoreFields] = useState<OtherUserCoreFields | null>(null);
 
   // ────────────────────────────────────────────────
   // Load self + target profile from public_profile_view
@@ -97,12 +125,15 @@ export default function RomanceProfileView() {
         setLoading(false);
         return;
       }
+      setMeId(userData.user.id);
 
       // Self + target via mode-isolated access layer (public_profile_view)
-      const [me, other] = await Promise.all([
+      const [me, other, core] = await Promise.all([
         getProfileForMode("romance", userData.user.id, userData.user.id),
         getProfileForMode("romance", userData.user.id, id),
+        getOtherUserCoreFields(id),
       ]);
+      setCoreFields(core);
 
       if (me) {
         setSelfProfile({
@@ -120,6 +151,9 @@ export default function RomanceProfileView() {
 
       if (other) {
         setTargetProfile(other as ProfileRow);
+        const connection = await getProfileConnectionStatus("romance", userData.user.id, id);
+        setIsConnected(connection.isConnected);
+        setChatId(connection.chatId);
       }
     } catch (err) {
       console.warn("RomanceProfileView loadData error", err);
@@ -171,20 +205,26 @@ export default function RomanceProfileView() {
 
   const photos: string[] = useMemo(() => {
     if (!targetProfile) return [];
+    const romance = (targetProfile.romance_photos || []).filter((p): p is string => !!p);
+    const core = (targetProfile.core_photos || []).filter((p): p is string => !!p);
+    return mergePhotoUrls(romance, core, coreFields?.core_photos ?? []);
+  }, [coreFields?.core_photos, targetProfile]);
 
-    const romance = (targetProfile.romance_photos || []).filter(
-      (p): p is string => !!p
-    );
-    const core = (targetProfile.core_photos || []).filter(
-      (p): p is string => !!p
-    );
-
-    // Romance photos first, then core as fallback
-    const combined = [...romance, ...core];
-
-    // Avoid duplicates if same URLs appear in both
-    return Array.from(new Set(combined));
+  const romanceInterests = useMemo(() => {
+    if (!targetProfile) return [] as string[];
+    const fromMode = (targetProfile.romance_interests ?? []).filter(Boolean) as string[];
+    const fromCore = (targetProfile.interests ?? []).filter(Boolean) as string[];
+    return Array.from(new Set([...fromMode, ...fromCore]));
   }, [targetProfile]);
+
+  const relationshipGoals = useMemo(
+    () =>
+      metaStringArray(
+        targetProfile?.romance_meta ?? null,
+        "relationship_goals"
+      ).concat(metaStringArray(targetProfile?.romance_meta ?? null, "relationship_goal")),
+    [targetProfile?.romance_meta]
+  );
 
   // ────────────────────────────────────────────────
   // Handlers
@@ -193,22 +233,55 @@ export default function RomanceProfileView() {
     router.back();
   };
 
-  const onLike = async () => {
+  const handlePlannerPress = useCallback(() => {
     if (!targetProfile) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!isConnected) {
+      promptConnectBeforeInvite("romance");
+      return;
+    }
+    setInviteVisible(true);
+  }, [isConnected, targetProfile]);
 
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) return;
-
-      const { data, error } = await supabase.rpc("romance_like_profile", {
-        current_user_id: userData.user.id,
-        target_user_id: targetProfile.id,
+  const handleInviteSubmit = useCallback(
+    async (values: InviteFormValues) => {
+      if (!meId || !targetProfile) throw new Error("Missing user");
+      await submitProfilePlannerInvite({
+        meId,
+        targetUserId: targetProfile.id,
+        mode: "romance",
+        chatId,
+        isConnected,
+        values,
       });
-      if (error) throw error;
+      setInviteVisible(false);
+      Alert.alert("Invite sent", "Your date invite was sent in chat.");
+    },
+    [chatId, isConnected, meId, targetProfile]
+  );
 
-      const result = data as { liked: boolean; is_match?: boolean; chat_id?: string };
+  const handlePass = useCallback(async () => {
+    if (!targetProfile || actionBusy) return;
+    setActionBusy(true);
+    try {
+      await recordSwipe({ mode: "romance", targetUserId: targetProfile.id, action: "pass" });
+      Haptics.selectionAsync();
+      router.back();
+    } catch {
+      Alert.alert("Error", "Could not save your choice. Please try again.");
+    } finally {
+      setActionBusy(false);
+    }
+  }, [actionBusy, router, targetProfile]);
+
+  const handleLike = useCallback(async () => {
+    if (!targetProfile || actionBusy) return;
+    setActionBusy(true);
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const result = await romanceLikeProfile(targetProfile.id);
       if (result?.is_match && result?.chat_id) {
+        setIsConnected(true);
+        setChatId(result.chat_id);
         Alert.alert("It's a match! 💖", "You both liked each other. Start chatting?", [
           { text: "Later" },
           {
@@ -221,16 +294,72 @@ export default function RomanceProfileView() {
               ),
           },
         ]);
+      } else {
+        router.back();
       }
-    } catch (err) {
-      console.warn("Like from profile-view error", err);
+    } catch {
       Alert.alert("Error", "Could not send like. Please try again.");
+    } finally {
+      setActionBusy(false);
     }
-  };
+  }, [actionBusy, router, targetProfile]);
 
-  const onOpenPlanner = () => {
-    router.push(plannerRoutes.index("romance"));
-  };
+  const handleSuperLike = useCallback(async () => {
+    if (!targetProfile || actionBusy) return;
+    setActionBusy(true);
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const result = await romanceLikeProfile(targetProfile.id, { superLike: true });
+      if (result?.is_match && result?.chat_id) {
+        setIsConnected(true);
+        setChatId(result.chat_id);
+      } else {
+        router.back();
+      }
+    } catch {
+      Alert.alert("Error", "Could not send Super Like. Please try again.");
+    } finally {
+      setActionBusy(false);
+    }
+  }, [actionBusy, router, targetProfile]);
+
+  const handleChat = useCallback(async () => {
+    if (!targetProfile || actionBusy) return;
+    setActionBusy(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const meId = userData?.user?.id;
+      if (!meId) throw new Error("Not signed in");
+      const id =
+        chatId ?? (await createDirectChat(targetProfile.id, "romance", "match", meId));
+      setChatId(id);
+      router.push(chatRoutes.conversation("romance", id) as Parameters<typeof router.push>[0]);
+    } catch {
+      Alert.alert("Error", "Could not open chat.");
+    } finally {
+      setActionBusy(false);
+    }
+  }, [actionBusy, chatId, router, targetProfile]);
+
+  const handleRemoveConnection = useCallback(() => {
+    if (!targetProfile) return;
+    confirmRemoveConnection({
+      mode: "romance",
+      firstName: targetProfile.first_name,
+      onConfirm: async () => {
+        setActionBusy(true);
+        try {
+          await removeModeConnection(targetProfile.id, "romance");
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          router.back();
+        } catch {
+          Alert.alert("Error", "Could not unmatch. Please try again.");
+        } finally {
+          setActionBusy(false);
+        }
+      },
+    });
+  }, [router, targetProfile]);
 
   // ────────────────────────────────────────────────
   // Lifestyle chips helper
@@ -264,30 +393,27 @@ export default function RomanceProfileView() {
   // ────────────────────────────────────────────────
   if (loading) {
     return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: Colors.backgroundLight,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <ActivityIndicator size="large" color={Colors.primaryViolet} />
+      <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
+        <ProfileViewHeader onBack={onBack} mode="romance" onPlannerPress={() => promptConnectBeforeInvite("romance")} />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={Colors.primaryViolet} />
+        </View>
       </View>
     );
   }
 
   if (!targetProfile) {
     return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: Colors.backgroundLight,
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 24,
-        }}
-      >
+      <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
+        <ProfileViewHeader onBack={onBack} mode="romance" onPlannerPress={() => promptConnectBeforeInvite("romance")} />
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
         <Text style={{ ...Typography.body, color: Colors.gray700 }}>
           This profile is not available.
         </Text>
@@ -312,6 +438,7 @@ export default function RomanceProfileView() {
             Go back
           </Text>
         </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -321,127 +448,19 @@ export default function RomanceProfileView() {
       ? `${targetProfile.first_name} ${targetProfile.last_name}`
       : targetProfile.first_name;
 
-  const topPhoto = photos[0] || null;
-
   return (
     <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
-      {/* HEADER */}
-      <View
-        style={{
-          paddingHorizontal: 16,
-          paddingTop: 8,
-          paddingBottom: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        {/* LEFT: Back */}
-        <TouchableOpacity
-          onPress={onBack}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: Colors.gray100,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Ionicons
-            name="arrow-back"
-            size={24}
-            color={Colors.textPrimary}
-          />
-        </TouchableOpacity>
+      <ProfileViewHeader
+        onBack={onBack}
+        mode="romance"
+        onPlannerPress={handlePlannerPress}
+      />
 
-        {/* CENTER: Logo */}
-        <Image
-          source={require("../../../assets/icons/winkly-logo.png")}
-          resizeMode="contain"
-          style={{ width: 120, height: 40 }}
-        />
-
-        {/* RIGHT: Planner */}
-        <TouchableOpacity
-          onPress={onOpenPlanner}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: Colors.gray100,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Ionicons
-            name="calendar-outline"
-            size={26}
-            color={Colors.primaryViolet}
-          />
-        </TouchableOpacity>
-      </View>
-
-      {/* CONTENT */}
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingBottom: 120,
-        }}
+        contentContainerStyle={{ paddingBottom: 24 }}
       >
-        {/* MAIN PHOTO */}
-        <View
-          style={{
-            width,
-            height: width * 1.1,
-            backgroundColor: Colors.gray200,
-          }}
-        >
-          {topPhoto ? (
-            <Image
-              source={{ uri: topPhoto }}
-              style={{ width: "100%", height: "100%" }}
-            />
-          ) : (
-            <View
-              style={{
-                flex: 1,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ fontSize: 40 }}>📷</Text>
-            </View>
-          )}
-        </View>
-
-        {/* SECONDARY PHOTOS (if any) */}
-        {photos.length > 1 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ paddingHorizontal: 16, marginTop: 12 }}
-          >
-            {photos.slice(1).map((uri) => (
-              <View
-                key={uri}
-                style={{
-                  width: 90,
-                  height: 120,
-                  borderRadius: 16,
-                  overflow: "hidden",
-                  backgroundColor: Colors.gray200,
-                  marginRight: 10,
-                }}
-              >
-                <Image
-                  source={{ uri }}
-                  style={{ width: "100%", height: "100%" }}
-                />
-              </View>
-            ))}
-          </ScrollView>
-        )}
+        <ProfilePhotoGallery photos={photos} />
 
         {/* TEXT BLOCK */}
         <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
@@ -552,153 +571,41 @@ export default function RomanceProfileView() {
             </View>
           )}
 
-          {/* Bio */}
-          <View style={{ marginBottom: 16 }}>
-            <Text
-              style={{
-                ...Typography.h3,
-                color: Colors.textPrimary,
-                marginBottom: 4,
-              }}
-            >
-              About
-            </Text>
+          <ProfileGeneralBlock
+            coreBio={coreFields?.bio}
+            education={targetProfile.education ?? coreFields?.education}
+            languages={(targetProfile.languages ?? []).filter(Boolean) as string[]}
+            activityPreferences={coreFields?.activity_preferences}
+            nightOwl={targetProfile.night_owl}
+          />
+
+          <ProfileSection title="Romance">
             {targetProfile.bio_romance ? (
-              <Text
-                style={{
-                  ...Typography.body,
-                  color: Colors.gray800,
-                  lineHeight: 20,
-                }}
-              >
+              <Text style={{ ...Typography.body, color: Colors.gray800, lineHeight: 22 }}>
                 {targetProfile.bio_romance}
               </Text>
             ) : (
-              <Text
-                style={{
-                  ...Typography.caption,
-                  color: Colors.gray500,
-                }}
-              >
-                No bio yet. Sometimes the best stories start with a simple
-                “Hi” 😉
+              <Text style={{ ...Typography.caption, color: Colors.gray500 }}>
+                No romance bio yet.
               </Text>
             )}
-          </View>
+          </ProfileSection>
 
-          {/* Interests */}
-          {targetProfile.interests && targetProfile.interests.length > 0 && (
-            <View style={{ marginBottom: 16 }}>
-              <Text
-                style={{
-                  ...Typography.h3,
-                  color: Colors.textPrimary,
-                  marginBottom: 4,
-                }}
-              >
-                Interests
-              </Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  flexWrap: "wrap",
-                }}
-              >
-                {targetProfile.interests.map((interest) => (
-                  <View
-                    key={interest}
-                    style={{
-                      borderRadius: 999,
-                      backgroundColor: Colors.gray100,
-                      paddingVertical: 4,
-                      paddingHorizontal: 8,
-                      marginRight: 6,
-                      marginBottom: 6,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        ...Typography.caption,
-                        color: Colors.textPrimary,
-                      }}
-                    >
-                      {interest}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
+          {romanceInterests.length > 0 ? (
+            <ProfileSection title="Interests">
+              <ProfileChipList items={romanceInterests} />
+            </ProfileSection>
+          ) : null}
 
-          {/* Languages */}
-          {targetProfile.languages && targetProfile.languages.length > 0 && (
-            <View style={{ marginBottom: 16 }}>
-              <Text
-                style={{
-                  ...Typography.h3,
-                  color: Colors.textPrimary,
-                  marginBottom: 4,
-                }}
-              >
-                Languages
-              </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-                {targetProfile.languages.map((lang) => (
-                  <View
-                    key={lang}
-                    style={{
-                      borderRadius: 999,
-                      backgroundColor: Colors.gray100,
-                      paddingVertical: 4,
-                      paddingHorizontal: 8,
-                      marginRight: 6,
-                      marginBottom: 6,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        ...Typography.caption,
-                        color: Colors.textPrimary,
-                      }}
-                    >
-                      {lang}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
+          {relationshipGoals.length > 0 ? (
+            <ProfileSection title="Dating goals">
+              <ProfileChipList items={relationshipGoals} />
+            </ProfileSection>
+          ) : null}
 
-          {/* Instagram */}
-          {targetProfile.instagram?.trim() && (
-            <View style={{ marginBottom: 16 }}>
-              <Text
-                style={{
-                  ...Typography.h3,
-                  color: Colors.textPrimary,
-                  marginBottom: 4,
-                }}
-              >
-                Instagram
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  const h = targetProfile.instagram!.trim().replace(/^@/, "").replace(/.*instagram\.com\//, "").split("/")[0];
-                  if (h) Linking.openURL(`https://instagram.com/${h}`);
-                }}
-              >
-                <Text
-                  style={{
-                    ...Typography.body,
-                    color: Colors.primaryViolet,
-                    textDecorationLine: "underline",
-                  }}
-                >
-                  {targetProfile.instagram.trim().startsWith("http") ? targetProfile.instagram.trim() : `instagram.com/${targetProfile.instagram.trim().replace(/^@/, "")}`}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          {targetProfile.instagram?.trim() ? (
+            <ProfileInstagramLink handle={targetProfile.instagram} />
+          ) : null}
 
           {/* Lifestyle */}
           {lifestyleChips.length > 0 && (
@@ -739,45 +646,36 @@ export default function RomanceProfileView() {
             </View>
           )}
 
-          {/* LIKE BUTTON */}
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "center",
-              marginTop: 8,
-              marginBottom: 24,
-            }}
-          >
-            <TouchableOpacity
-              onPress={onLike}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingVertical: 12,
-                paddingHorizontal: 24,
-                borderRadius: Layout.radii.control,
-                backgroundColor: Colors.accentCoral,
-                shadowColor: "#000",
-                shadowOpacity: 0.18,
-                shadowRadius: 8,
-                elevation: 3,
-              }}
-            >
-              <Ionicons name="heart" size={22} color="#FFF" />
-              <Text
-                style={{
-                  ...Typography.body,
-                  color: "#FFF",
-                  marginLeft: 8,
-                  fontWeight: "600",
-                }}
-              >
-                Wink at {targetProfile.first_name}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          {isConnected ? (
+            <ProfileConnectionActions
+              mode="romance"
+              primaryColor={Colors.romance.primary}
+              busy={actionBusy}
+              hasChat={!!chatId}
+              onChat={() => void handleChat()}
+              onRemove={handleRemoveConnection}
+            />
+          ) : (
+            <ProfileSwipeActions
+              mode="romance"
+              primaryColor={Colors.romance.primary}
+              disabled={actionBusy}
+              onPass={() => void handlePass()}
+              onSuper={() => void handleSuperLike()}
+              onLike={() => void handleLike()}
+            />
+          )}
         </View>
       </ScrollView>
+
+      <InviteToPlanModal
+        visible={inviteVisible}
+        mode="romance"
+        partnerUserId={targetProfile.id}
+        partnerDisplayName={fullName}
+        onClose={() => setInviteVisible(false)}
+        onSubmit={handleInviteSubmit}
+      />
     </View>
   );
 }

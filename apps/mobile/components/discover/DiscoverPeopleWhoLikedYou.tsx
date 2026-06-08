@@ -1,9 +1,9 @@
 /**
  * Section 1: People Who Liked You (Romance) / People Who Want to Connect (Friends).
- * Horizontal scroll cards; blurred for Free tier. Tap opens action sheet.
+ * Horizontal scroll cards; blurred for Free tier. Tap opens full profile view.
  */
 
-import React, { useState } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -16,7 +16,6 @@ import {
 import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
-import { DiscoverActionSheet } from "./DiscoverActionSheet";
 
 export type PeopleWhoLikedYouItem = {
   id: string;
@@ -37,10 +36,7 @@ type Props = {
   canViewFull: boolean; // Super/Premium
   primaryColor: string;
   sectionTitle: string;
-  onLikeBack: (item: PeopleWhoLikedYouItem) => Promise<void>;
   onViewProfile: (item: PeopleWhoLikedYouItem) => void;
-  onBlock: (item: PeopleWhoLikedYouItem) => Promise<void>;
-  onReport: (item: PeopleWhoLikedYouItem) => Promise<void>;
 };
 
 export function DiscoverPeopleWhoLikedYou({
@@ -49,28 +45,10 @@ export function DiscoverPeopleWhoLikedYou({
   canViewFull,
   primaryColor,
   sectionTitle,
-  onLikeBack,
   onViewProfile,
-  onBlock,
-  onReport,
 }: Props) {
-  const [sheetVisible, setSheetVisible] = useState(false);
-  const [selected, setSelected] = useState<PeopleWhoLikedYouItem | null>(null);
-  const [likeLoading, setLikeLoading] = useState(false);
-
-  const openSheet = (item: PeopleWhoLikedYouItem) => {
-    setSelected(item);
-    setSheetVisible(true);
-  };
-
-  const handlePrimary = async () => {
-    if (!selected) return;
-    setLikeLoading(true);
-    try {
-      await onLikeBack(selected);
-    } finally {
-      setLikeLoading(false);
-    }
+  const openProfile = (item: PeopleWhoLikedYouItem) => {
+    onViewProfile(item);
   };
 
   if (items.length === 0) return null;
@@ -88,7 +66,7 @@ export function DiscoverPeopleWhoLikedYou({
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.9}
-              onPress={() => openSheet(item)}
+              onPress={() => openProfile(item)}
               style={styles.card}
             >
               <View style={[styles.cardPhotoWrap, !canViewFull && styles.cardPhotoBlur]}>
@@ -127,22 +105,6 @@ export function DiscoverPeopleWhoLikedYou({
         </ScrollView>
       </View>
 
-      <DiscoverActionSheet
-        visible={sheetVisible}
-        mode={mode}
-        variant="liked_you"
-        primaryColor={primaryColor}
-        primaryLoading={likeLoading}
-        onClose={() => { setSheetVisible(false); setSelected(null); }}
-        onPrimary={handlePrimary}
-        onViewProfile={() => selected && onViewProfile(selected)}
-        onBlock={() => {
-          if (selected) void onBlock(selected);
-        }}
-        onReport={() => {
-          if (selected) void onReport(selected);
-        }}
-      />
     </>
   );
 }

@@ -250,7 +250,7 @@ export default function FriendsDiscover() {
 
   const primaryColor = Colors.friends.primary;
   const openProfile = (item: DiscoverProfileItem) =>
-    router.push(`/(modes)/friends/profile-view?user_id=${item.id}`);
+    router.push(`/(modes)/friends/profile-view?user_id=${item.id}&source=discover`);
 
   if (loading) {
     return (
@@ -284,10 +284,7 @@ export default function FriendsDiscover() {
           primaryColor={primaryColor}
           variant="liked_you"
           canViewFull={canViewFull}
-          onPrimary={handleConnectBack}
           onViewProfile={openProfile}
-          onBlock={handleBlock}
-          onReport={handleReport}
         />
 
         <DiscoverHorizontalSection
@@ -297,12 +294,7 @@ export default function FriendsDiscover() {
           primaryColor={primaryColor}
           variant="recommended"
           canViewFull={canViewFull}
-          canLikeUnlimited={canLikeUnlimited}
-          likesUsedToday={likesUsedToday}
-          onPrimary={handleRecommendationLike}
           onViewProfile={openProfile}
-          onBlock={handleBlock}
-          onReport={handleReport}
         />
 
         <DiscoverHorizontalSection
@@ -312,10 +304,7 @@ export default function FriendsDiscover() {
           primaryColor={primaryColor}
           variant="category"
           canViewFull
-          onPrimary={handleCategoryConnect}
           onViewProfile={openProfile}
-          onBlock={handleBlock}
-          onReport={handleReport}
         />
 
         <DiscoverHorizontalSection
@@ -325,10 +314,7 @@ export default function FriendsDiscover() {
           primaryColor={primaryColor}
           variant="category"
           canViewFull
-          onPrimary={handleCategoryConnect}
           onViewProfile={openProfile}
-          onBlock={handleBlock}
-          onReport={handleReport}
         />
 
         <DiscoverHorizontalSection
@@ -338,10 +324,7 @@ export default function FriendsDiscover() {
           primaryColor={primaryColor}
           variant="category"
           canViewFull
-          onPrimary={handleCategoryConnect}
           onViewProfile={openProfile}
-          onBlock={handleBlock}
-          onReport={handleReport}
         />
       </ScrollView>
 

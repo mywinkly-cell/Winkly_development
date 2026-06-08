@@ -269,7 +269,7 @@ export default function RomanceDiscover() {
 
   const primaryColor = Colors.romance.primary;
   const openProfile = (item: DiscoverProfileItem) =>
-    router.push(`/(modes)/romance/profile-view?id=${item.id}`);
+    router.push(`/(modes)/romance/profile-view?id=${item.id}&source=discover`);
 
   if (loading) {
     return (
@@ -303,10 +303,7 @@ export default function RomanceDiscover() {
           primaryColor={primaryColor}
           variant="liked_you"
           canViewFull={canViewFull}
-          onPrimary={handleLikeBack}
           onViewProfile={openProfile}
-          onBlock={handleBlock}
-          onReport={handleReport}
         />
 
         <DiscoverHorizontalSection
@@ -316,12 +313,7 @@ export default function RomanceDiscover() {
           primaryColor={primaryColor}
           variant="recommended"
           canViewFull={canViewFull}
-          canLikeUnlimited={canLikeUnlimited}
-          likesUsedToday={likesUsedToday}
-          onPrimary={handleRecommendationLike}
           onViewProfile={openProfile}
-          onBlock={handleBlock}
-          onReport={handleReport}
         />
 
         <DiscoverHorizontalSection
@@ -331,10 +323,7 @@ export default function RomanceDiscover() {
           primaryColor={primaryColor}
           variant="category"
           canViewFull
-          onPrimary={handleCategoryLike}
           onViewProfile={openProfile}
-          onBlock={handleBlock}
-          onReport={handleReport}
         />
 
         <DiscoverHorizontalSection
@@ -344,10 +333,7 @@ export default function RomanceDiscover() {
           primaryColor={primaryColor}
           variant="category"
           canViewFull
-          onPrimary={handleCategoryLike}
           onViewProfile={openProfile}
-          onBlock={handleBlock}
-          onReport={handleReport}
         />
 
         <DiscoverHorizontalSection
@@ -357,10 +343,7 @@ export default function RomanceDiscover() {
           primaryColor={primaryColor}
           variant="category"
           canViewFull
-          onPrimary={handleCategoryLike}
           onViewProfile={openProfile}
-          onBlock={handleBlock}
-          onReport={handleReport}
         />
       </ScrollView>
 

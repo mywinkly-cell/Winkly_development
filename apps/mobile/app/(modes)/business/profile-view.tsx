@@ -8,17 +8,37 @@ import {
   Alert,
 } from "react-native";
 import * as Haptics from "expo-haptics";
-import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { chatRoutes } from "@/lib/navigation/modeHub";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { getProfileForMode } from "@/lib/access/profiles";
 import { getBusinessConnectionStatus } from "@/lib/access/businessConnections";
+import { getProfileConnectionStatus } from "@/lib/access/profileConnectionStatus";
+import { confirmRemoveConnection, removeModeConnection } from "@/lib/access/removeConnection";
 import { createDirectChat } from "@/lib/chats/api";
 import { InviteModal } from "@/components/business/InviteModal";
+import { ProfileViewHeader } from "@/components/profile/ProfileViewHeader";
+import { ProfileSwipeActions } from "@/components/profile/ProfileSwipeActions";
+import { ProfileConnectionActions } from "@/components/profile/ProfileConnectionActions";
 import { mapProfilesBusinessRow, type BusinessPersonItem } from "@/lib/business/homeFeed";
-import { openPlanTogetherCreateEvent } from "@/lib/social/planTogether";
+import { InviteToPlanModal, type InviteFormValues } from "@/components/chats/InviteToPlanModal";
+import {
+  promptConnectBeforeInvite,
+  submitProfilePlannerInvite,
+} from "@/lib/profile/profilePlanInvite";
+import {
+  getOtherUserCoreFields,
+  mergePhotoUrls,
+  type OtherUserCoreFields,
+} from "@/lib/profile/otherUserCore";
+import {
+  ProfileChipList,
+  ProfileGeneralBlock,
+  ProfileInstagramLink,
+  ProfilePhotoGallery,
+  ProfileSection,
+} from "@/components/profile/OtherUserProfileSections";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { recordBusinessAnalyticsEvent } from "@/lib/business/analyticsStore";
 import { Colors, Typography, Layout } from "@/constants/tokens";
@@ -67,8 +87,12 @@ export default function BusinessProfileView() {
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState<BusinessConnectionStatus>("none");
-  const [inviteVisible, setInviteVisible] = useState(false);
+  const [connectInviteVisible, setConnectInviteVisible] = useState(false);
+  const [planInviteVisible, setPlanInviteVisible] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
+  const [meId, setMeId] = useState<string | null>(null);
+  const [chatId, setChatId] = useState<string | null>(null);
+  const [coreFields, setCoreFields] = useState<OtherUserCoreFields | null>(null);
 
   async function loadProfile() {
     try {
@@ -85,8 +109,13 @@ export default function BusinessProfileView() {
         setProfile(null);
         return;
       }
+      setMeId(viewerId);
 
-      const row = await getProfileForMode("business", viewerId, userId);
+      const [row, core] = await Promise.all([
+        getProfileForMode("business", viewerId, userId),
+        getOtherUserCoreFields(userId),
+      ]);
+      setCoreFields(core);
       if (!row) {
         setProfile(null);
         return;
@@ -145,10 +174,19 @@ export default function BusinessProfileView() {
   const refreshConnectionStatus = useCallback(async () => {
     if (!userId) return;
     try {
+      const { data: auth } = await supabase.auth.getUser();
+      const viewerId = auth?.user?.id;
       const status = await getBusinessConnectionStatus(userId);
       setConnectionStatus(status);
+      if (viewerId && status === "accepted") {
+        const connection = await getProfileConnectionStatus("business", viewerId, userId);
+        setChatId(connection.chatId);
+      } else {
+        setChatId(null);
+      }
     } catch {
       setConnectionStatus("none");
+      setChatId(null);
     }
   }, [userId]);
 
@@ -175,11 +213,18 @@ export default function BusinessProfileView() {
     });
   }, [profile]);
 
-  const onConnect = () => {
-    if (connectionStatus === "accepted") {
-      void onMessage();
-      return;
-    }
+  const targetId = profile?.user_id ?? profile?.id ?? userId;
+  const isConnected = connectionStatus === "accepted";
+
+  const photos = useMemo(() => {
+    if (!profile) return [] as string[];
+    return mergePhotoUrls(
+      [profile.main_photo_url, profile.avatar_url].filter((p): p is string => !!p),
+      coreFields?.core_photos ?? []
+    );
+  }, [coreFields?.core_photos, profile]);
+
+  const openConnectFlow = useCallback(() => {
     if (connectionStatus === "pending_sent") {
       Alert.alert("Connect", "Your invite is pending — they will be notified.");
       return;
@@ -192,71 +237,82 @@ export default function BusinessProfileView() {
       Alert.alert("Connect", "You cannot connect with this person right now.");
       return;
     }
-    setInviteVisible(true);
-  };
+    setConnectInviteVisible(true);
+  }, [connectionStatus]);
 
-  const onMessage = async () => {
-    const targetId = profile?.user_id ?? profile?.id;
-    if (!targetId) return;
-    if (connectionStatus !== "accepted") {
-      Alert.alert("Message", "Connect first — accepted connections can chat.");
-      return;
-    }
+  const handleChat = useCallback(async () => {
+    if (!targetId || actionBusy) return;
+    setActionBusy(true);
     try {
-      setActionBusy(true);
       const { data: auth } = await supabase.auth.getUser();
       const meId = auth?.user?.id;
       if (!meId) throw new Error("Not signed in");
-      const chatId = await createDirectChat(targetId, "business", "connection", meId);
+      const id = chatId ?? (await createDirectChat(targetId, "business", "connection", meId));
+      setChatId(id);
       Haptics.selectionAsync();
-      router.push(
-        chatRoutes.conversation("business", chatId) as Parameters<typeof router.push>[0]
-      );
+      router.push(chatRoutes.conversation("business", id) as Parameters<typeof router.push>[0]);
     } catch (e) {
       Alert.alert("Message", e instanceof Error ? e.message : "Could not open chat.");
     } finally {
       setActionBusy(false);
     }
-  };
+  }, [actionBusy, chatId, router, targetId]);
 
-  const onPlanMeeting = () => {
-    if (!profile) return;
-    const targetId = profile.user_id ?? profile.id;
-    if (!targetId) return;
-    openPlanTogetherCreateEvent(router, {
-      partnerUserId: targetId,
-      partnerDisplayName: fullName(profile),
-      sourceMode: "business",
+  const handleRemoveConnection = useCallback(() => {
+    if (!profile || !targetId) return;
+    confirmRemoveConnection({
+      mode: "business",
+      firstName: fullName(profile),
+      onConfirm: async () => {
+        setActionBusy(true);
+        try {
+          await removeModeConnection(targetId, "business");
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          router.back();
+        } catch {
+          Alert.alert("Error", "Could not remove contact. Please try again.");
+        } finally {
+          setActionBusy(false);
+        }
+      },
     });
-  };
+  }, [profile, router, targetId]);
 
-  const connectLabel =
-    connectionStatus === "accepted"
-      ? "Connected"
-      : connectionStatus === "pending_sent"
-        ? "Invite sent"
-        : connectionStatus === "pending_received"
-          ? "Respond on Home"
-          : "Connect";
+  const handlePlannerPress = useCallback(() => {
+    if (!targetId) return;
+    if (!isConnected) {
+      promptConnectBeforeInvite("business");
+      return;
+    }
+    setPlanInviteVisible(true);
+  }, [isConnected, targetId]);
+
+  const handleInviteSubmit = useCallback(
+    async (values: InviteFormValues) => {
+      if (!meId || !targetId) throw new Error("Missing user");
+      await submitProfilePlannerInvite({
+        meId,
+        targetUserId: targetId,
+        mode: "business",
+        chatId,
+        isConnected,
+        values,
+      });
+      setPlanInviteVisible(false);
+      Alert.alert("Invite sent", "Your meeting suggestion was sent in chat.");
+    },
+    [chatId, isConnected, meId, targetId]
+  );
 
   return (
-    <View style={[styles.screen, { backgroundColor: Colors.background }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.backBtn, { backgroundColor: Colors.card, borderColor: Colors.border }]}
-          activeOpacity={0.9}
-        >
-          <Text style={{ color: Colors.text, fontWeight: "900" }}>‹</Text>
-        </TouchableOpacity>
+    <View style={[styles.screen, { backgroundColor: Colors.backgroundLight }]}>
+      <ProfileViewHeader
+        onBack={() => router.back()}
+        mode="business"
+        onPlannerPress={handlePlannerPress}
+      />
 
-        <Text style={[styles.title, Typography.h2]}>Profile</Text>
-
-        <View style={{ width: 40 }} />
-      </View>
-
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color={Colors.business.primary} />
@@ -279,93 +335,47 @@ export default function BusinessProfileView() {
           </View>
         ) : (
           <>
-            {/* Top card */}
+            <ProfilePhotoGallery photos={photos} />
+
             <View style={[styles.profileCard, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
               <Text style={[styles.name, { color: Colors.text }]}>{fullName(profile)}</Text>
-
               <Text style={{ color: Colors.mutedText, marginTop: 6 }}>
                 {[profile.role_title, profile.company_name].filter(Boolean).join(" · ") || "Business profile"}
               </Text>
-
               <Text style={{ color: Colors.mutedText, marginTop: 6 }}>
                 {profile.city?.trim()
                   ? normalizeLocationDisplayString(profile.city, i18n?.language ?? "en")
                   : "Location not specified"}
               </Text>
+            </View>
 
-              {/* Actions */}
-              <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
-                <TouchableOpacity
-                  onPress={onConnect}
-                  disabled={actionBusy || connectionStatus === "pending_sent"}
-                  style={[
-                    styles.actionPrimary,
-                    {
-                      backgroundColor: Colors.business?.primary ?? Colors.primaryViolet,
-                      opacity: connectionStatus === "pending_sent" ? 0.65 : 1,
-                    },
-                  ]}
-                  activeOpacity={0.9}
-                >
-                  <Text style={{ color: Colors.white, fontWeight: "900" }}>{connectLabel}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() => void onMessage()}
-                  disabled={actionBusy || connectionStatus !== "accepted"}
-                  style={[
-                    styles.actionSecondary,
-                    {
-                      backgroundColor: Colors.backgroundMuted,
-                      borderColor: Colors.gray200,
-                      opacity: connectionStatus !== "accepted" ? 0.55 : 1,
-                    },
-                  ]}
-                  activeOpacity={0.9}
-                >
-                  <Text style={{ color: Colors.textPrimary, fontWeight: "900" }}>Message</Text>
-                </TouchableOpacity>
+            {(coreFields?.bio ||
+              coreFields?.education ||
+              (coreFields?.activity_preferences?.length ?? 0) > 0) && (
+              <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
+                <ProfileGeneralBlock
+                  coreBio={coreFields?.bio}
+                  education={coreFields?.education}
+                  activityPreferences={coreFields?.activity_preferences}
+                />
               </View>
+            )}
 
-              <TouchableOpacity
-                onPress={onPlanMeeting}
-                style={[
-                  styles.actionSecondary,
-                  {
-                    marginTop: 10,
-                    backgroundColor: Colors.backgroundMuted,
-                    borderColor: Colors.gray200,
-                  },
-                ]}
-                activeOpacity={0.9}
-              >
-                <Text style={{ color: Colors.textPrimary, fontWeight: "900" }}>Plan together</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* About */}
             <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-              <Text style={[styles.blockTitle, { color: Colors.text }]}>About</Text>
-              <Text style={{ color: Colors.text, lineHeight: 20 }}>
-                {profile.bio?.trim() || "No bio yet."}
-              </Text>
+              <ProfileSection title="Business">
+                <Text style={{ color: Colors.text, lineHeight: 20 }}>
+                  {profile.bio?.trim() || "No business bio yet."}
+                </Text>
+              </ProfileSection>
             </View>
 
-            {/* Skills */}
-            <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-              <Text style={[styles.blockTitle, { color: Colors.text }]}>Skills</Text>
-              {profile.skills && profile.skills.length ? (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
-                  {profile.skills.slice(0, 24).map((s, idx) => (
-                    <View key={`${s}-${idx}`} style={[styles.skillChip, { backgroundColor: Colors.background, borderColor: Colors.border }]}>
-                      <Text style={{ color: Colors.text, fontWeight: "700" }}>{s}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={{ color: Colors.mutedText, marginTop: 8 }}>No skills listed.</Text>
-              )}
-            </View>
+            {profile.skills && profile.skills.length > 0 ? (
+              <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
+                <ProfileSection title="Skills">
+                  <ProfileChipList items={profile.skills.slice(0, 24)} />
+                </ProfileSection>
+              </View>
+            ) : null}
 
             {/* Links */}
             <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
@@ -386,39 +396,60 @@ export default function BusinessProfileView() {
                   </Text>
                 </View>
 
-                <View style={[styles.linkRow, { backgroundColor: Colors.background, borderColor: Colors.border }]}>
-                  <Text style={{ color: Colors.mutedText, width: 90 }}>Instagram</Text>
-                  {profile.instagram?.trim() ? (
-                    <TouchableOpacity
-                      onPress={() => {
-                        const h = profile.instagram!.trim().replace(/^@/, "").replace(/.*instagram\.com\//, "").split("/")[0];
-                        if (h) Linking.openURL(`https://instagram.com/${h}`);
-                      }}
-                      style={{ flex: 1 }}
-                    >
-                      <Text style={{ color: Colors.primaryViolet, textDecorationLine: "underline" }} numberOfLines={1}>
-                        {profile.instagram.trim().startsWith("http") ? profile.instagram.trim() : `instagram.com/${profile.instagram.trim().replace(/^@/, "")}`}
-                      </Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <Text style={{ color: Colors.mutedText, flex: 1 }}>—</Text>
-                  )}
-                </View>
+                {profile.instagram?.trim() ? (
+                  <View style={{ marginTop: 10 }}>
+                    <ProfileInstagramLink handle={profile.instagram} />
+                  </View>
+                ) : null}
               </View>
             </View>
+
+            {isConnected ? (
+              <View style={{ paddingHorizontal: Layout?.screenPadding ?? 16 }}>
+                <ProfileConnectionActions
+                  mode="business"
+                  primaryColor={Colors.business.primary}
+                  busy={actionBusy}
+                  hasChat={!!chatId}
+                  onChat={() => void handleChat()}
+                  onRemove={handleRemoveConnection}
+                />
+              </View>
+            ) : (
+              <ProfileSwipeActions
+                mode="business"
+                primaryColor={Colors.business.primary}
+                disabled={actionBusy || connectionStatus === "pending_sent"}
+                superDisabled={connectionStatus === "pending_sent"}
+                onPass={() => router.back()}
+                onSuper={openConnectFlow}
+                onLike={openConnectFlow}
+              />
+            )}
           </>
         )}
       </ScrollView>
 
       {inviteTarget ? (
         <InviteModal
-          visible={inviteVisible}
+          visible={connectInviteVisible}
           target={inviteTarget}
-          onClose={() => setInviteVisible(false)}
+          onClose={() => setConnectInviteVisible(false)}
           onSent={() => {
-            setInviteVisible(false);
+            setConnectInviteVisible(false);
             void refreshConnectionStatus();
           }}
+        />
+      ) : null}
+
+      {profile ? (
+        <InviteToPlanModal
+          visible={planInviteVisible}
+          mode="business"
+          partnerUserId={targetId}
+          partnerDisplayName={fullName(profile)}
+          onClose={() => setPlanInviteVisible(false)}
+          onSubmit={handleInviteSubmit}
         />
       ) : null}
     </View>
@@ -426,24 +457,7 @@ export default function BusinessProfileView() {
 }
 
 const styles: any = {
-  screen: { flex: 1, paddingTop: Layout?.screenTopPadding ?? 16 },
-  header: {
-    paddingHorizontal: Layout?.screenPadding ?? 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingBottom: 12,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: { fontWeight: "800" },
-
+  screen: { flex: 1 },
   center: { paddingVertical: 40, alignItems: "center", justifyContent: "center" },
 
   empty: {
@@ -463,9 +477,6 @@ const styles: any = {
     marginTop: 8,
   },
   name: { fontSize: 20, fontWeight: "900" },
-
-  actionPrimary: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: "center" },
-  actionSecondary: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: "center", borderWidth: 1 },
 
   block: {
     marginHorizontal: Layout?.screenPadding ?? 16,

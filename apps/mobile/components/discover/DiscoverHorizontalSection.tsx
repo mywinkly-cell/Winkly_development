@@ -16,7 +16,6 @@ import { BlurView } from "expo-blur";
 import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
 import { DISCOVER_LIMITS } from "@/lib/discover/storage";
 import type { DiscoverProfileItem } from "@/lib/discover/types";
-import { DiscoverActionSheet } from "./DiscoverActionSheet";
 import { DiscoverUpgradeModal } from "./DiscoverUpgradeModal";
 
 export type DiscoverSectionVariant = "liked_you" | "recommended" | "category";
@@ -29,12 +28,7 @@ type Props = {
   variant: DiscoverSectionVariant;
   canViewFull: boolean;
   emptyMessage?: string;
-  onPrimary: (item: DiscoverProfileItem) => Promise<void>;
   onViewProfile: (item: DiscoverProfileItem) => void;
-  onBlock: (item: DiscoverProfileItem) => Promise<void>;
-  onReport: (item: DiscoverProfileItem) => Promise<void>;
-  canLikeUnlimited?: boolean;
-  likesUsedToday?: number;
 };
 
 const CARD_WIDTH = 148;
@@ -56,44 +50,16 @@ export function DiscoverHorizontalSection({
   variant,
   canViewFull,
   emptyMessage = EMPTY_MESSAGE,
-  onPrimary,
   onViewProfile,
-  onBlock,
-  onReport,
-  canLikeUnlimited = true,
-  likesUsedToday = 0,
 }: Props) {
-  const [sheetVisible, setSheetVisible] = useState(false);
   const [upgradeVisible, setUpgradeVisible] = useState(false);
-  const [selected, setSelected] = useState<DiscoverProfileItem | null>(null);
-  const [actionLoading, setActionLoading] = useState(false);
-
-  const canLike = canLikeUnlimited || likesUsedToday < 1;
-  const sheetVariant =
-    variant === "liked_you" || (variant === "category" && mode === "friends")
-      ? "liked_you"
-      : "recommendation";
 
   const openCard = (item: DiscoverProfileItem, index: number) => {
     if (isBlurred(index, variant, canViewFull)) {
       setUpgradeVisible(true);
       return;
     }
-    setSelected(item);
-    setSheetVisible(true);
-  };
-
-  const handlePrimary = async () => {
-    if (!selected) return;
-    if (variant === "recommended" && !canLike) return;
-    setActionLoading(true);
-    try {
-      await onPrimary(selected);
-      setSheetVisible(false);
-      setSelected(null);
-    } finally {
-      setActionLoading(false);
-    }
+    onViewProfile(item);
   };
 
   return (
@@ -145,32 +111,6 @@ export function DiscoverHorizontalSection({
           </ScrollView>
         )}
       </View>
-
-      <DiscoverActionSheet
-        visible={sheetVisible}
-        mode={mode}
-        variant={sheetVariant}
-        primaryColor={primaryColor}
-        primaryLoading={actionLoading}
-        primaryDisabled={variant === "recommended" && !canLike}
-        primaryDisabledMessage={
-          variant === "recommended" && !canLike
-            ? "1 free like per day from recommendations. Upgrade for unlimited."
-            : undefined
-        }
-        onClose={() => {
-          setSheetVisible(false);
-          setSelected(null);
-        }}
-        onPrimary={handlePrimary}
-        onViewProfile={() => selected && onViewProfile(selected)}
-        onBlock={() => {
-          if (selected) void onBlock(selected);
-        }}
-        onReport={() => {
-          if (selected) void onReport(selected);
-        }}
-      />
 
       <DiscoverUpgradeModal
         visible={upgradeVisible}

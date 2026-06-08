@@ -424,17 +424,7 @@ export default function RomanceHome() {
 
   const handleCardPress = () => {
     if (!currentProfile) return;
-    if (currentProfile.isPendingInvite && currentProfile.conversationId) {
-      router.push(
-        chatRoutes.conversation("romance", currentProfile.conversationId, {
-          partnerUserId: currentProfile.id,
-          partnerName: currentProfile.name,
-          partnerPhotoUrl: currentProfile.photoUrl,
-        }) as Parameters<typeof router.push>[0]
-      );
-      return;
-    }
-    router.push(`/(modes)/romance/profile-view?id=${currentProfile.id}`);
+    router.push(`/(modes)/romance/profile-view?id=${currentProfile.id}&source=home`);
   };
 
   type SwipeAction = "pass" | "like" | "intent";
