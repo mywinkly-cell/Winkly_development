@@ -7,6 +7,12 @@ import * as Linking from "expo-linking";
 import { View, Text, ActivityIndicator } from "react-native";
 import { createSessionFromUrl, isRecoveryUrl } from "@/lib/authDeepLink";
 import { Colors } from "@/constants/tokens";
+import { getTermsAndCookiesAccepted } from "@/lib/legalFlags";
+import {
+  clearPendingAuthCallbackUrl,
+  getPendingAuthCallbackUrl,
+  setPendingAuthCallbackUrl,
+} from "@/lib/pendingAuthCallback";
 
 export default function AuthCallback() {
   const router = useRouter();
@@ -15,20 +21,34 @@ export default function AuthCallback() {
   useEffect(() => {
     let handled = false;
 
-    const handleUrl = async (url: string | null) => {
+    const handleUrl = async (incomingUrl: string | null) => {
       if (handled) return;
+
+      let url = incomingUrl;
+      if (!url) {
+        url = await getPendingAuthCallbackUrl();
+      }
       if (!url) {
         router.replace("/(auth)/signin");
         return;
       }
 
       handled = true;
+
+      const termsAccepted = await getTermsAndCookiesAccepted();
+      if (!termsAccepted) {
+        await setPendingAuthCallbackUrl(url);
+        router.replace("/(auth)/terms-cookies?next=callback");
+        return;
+      }
+
       const ok = await createSessionFromUrl(url);
       if (!ok) {
         setStatus("error");
         return;
       }
 
+      await clearPendingAuthCallbackUrl();
       setStatus("success");
       if (isRecoveryUrl(url)) {
         router.replace("/(auth)/reset-confirm");

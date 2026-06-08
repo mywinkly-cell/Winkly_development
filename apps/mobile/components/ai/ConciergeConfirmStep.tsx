@@ -25,6 +25,7 @@ import { requestDateSafetyPrompt } from "@/lib/safety/dateCheckinPrompt";
 import { createDirectChat, sendMessage } from "@/lib/chats";
 import { getPlannerItems } from "@/lib/access/planner";
 import { supabase } from "@/lib/supabase";
+import { recordBusinessAnalyticsEvent } from "@/lib/business/analyticsStore";
 
 type PlannerItemRow = { id: string; title: string; starts_at: string; ends_at: string | null };
 
@@ -379,6 +380,20 @@ export function ConciergeConfirmStep({
             plannerItemId: itemId,
             partnerUserId: partner?.id ?? null,
             scheduledAt: starts_at,
+          });
+        }
+        const opt = chosenOption as Record<string, unknown> | undefined;
+        const businessId = String(opt?.business_id ?? opt?.businessId ?? "");
+        const offerId = String(opt?.offer_id ?? opt?.offerId ?? "");
+        if (businessId) {
+          void recordBusinessAnalyticsEvent({
+            businessId,
+            eventType: "add_to_planner",
+            metadata: {
+              offer_id: offerId || undefined,
+              planner_item_id: itemId,
+              source: "concierge",
+            },
           });
         }
       }

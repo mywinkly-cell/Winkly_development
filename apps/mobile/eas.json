@@ -23,6 +23,9 @@
       },
       "android": {
         "buildType": "apk"
+      },
+      "ios": {
+        "distribution": "store"
       }
     },
     "production": {
@@ -41,6 +44,9 @@
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",
         "track": "internal"
+      },
+      "ios": {
+        "bundleIdentifier": "com.winkly.app"
       }
     },
     "production": {

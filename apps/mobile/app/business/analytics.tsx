@@ -1,5 +1,5 @@
 import { BusinessAnalyticsDashboard } from "@/components/business/BusinessAnalyticsDashboard";
 
-export default function BusinessAnalytics() {
+export default function BusinessAnalyticsRoute() {
   return <BusinessAnalyticsDashboard />;
 }
