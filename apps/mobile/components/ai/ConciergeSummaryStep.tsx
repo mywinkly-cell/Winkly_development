@@ -51,17 +51,19 @@ export function ConciergeSummaryStep({
         ? dayKey(details.date)
         : "";
   const timeLabel =
-    details.timeOfDay === "any"
-      ? ""
-      : details.timeOfDay === "morning"
-        ? "Morning"
-        : details.timeOfDay === "lunch"
-          ? "Lunch"
-          : details.timeOfDay === "afternoon"
-            ? "Afternoon"
-            : details.timeOfDay === "evening"
-              ? "Evening"
-              : "";
+    details.exactTimeHm && /^\d{2}:\d{2}$/.test(details.exactTimeHm)
+      ? details.exactTimeHm
+      : details.timeOfDay === "any"
+        ? ""
+        : details.timeOfDay === "morning"
+          ? "Morning"
+          : details.timeOfDay === "lunch"
+            ? "Lunch"
+            : details.timeOfDay === "afternoon"
+              ? "Afternoon"
+              : details.timeOfDay === "evening"
+                ? "Evening"
+                : "";
   const budgetStr =
     details.budgetAmount && details.budgetCurrency
       ? `${details.budgetCurrency} ${details.budgetAmount}`

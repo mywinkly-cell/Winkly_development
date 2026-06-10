@@ -506,12 +506,18 @@ export function ConciergePlanningFlow({
       });
       if (genId !== genAttemptRef.current) return;
       if (requestId) setLastRequestId(requestId);
+      const providerFallback = plans.some((p) => p?.venue?.name === "No suitable venue found");
       trace("generate:response", {
         count: plans.length,
         venues: plans.slice(0, 2).map((p) => p?.venue?.name).filter(Boolean),
-        providerFallback: plans.some((p) => p?.venue?.name === "No suitable venue found"),
+        providerFallback,
       });
       setLoading(false);
+      if (providerFallback) {
+        setStructuredPlans([]);
+        setError("We couldn't build real venue suggestions. Please wait a moment and try again.");
+        return;
+      }
       setStructuredPlans(plans.slice(0, 2));
       if (!plans.length) {
         setMessage("No plan options returned. Try changing the theme, date/time, or location and retry.");

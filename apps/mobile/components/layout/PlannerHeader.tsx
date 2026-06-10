@@ -48,7 +48,7 @@ export function PlannerHeader({ onFilterPress, onAIPress }: PlannerHeaderProps) 
         {onAIPress != null ? (
           <View style={styles.aiButton3D}>
             <WinklyAISpark
-              feature="concierge"
+              feature="planning_ideas"
               onPress={onAIPress}
               size={HEADER.iconSize}
               style={styles.sparkBtn}

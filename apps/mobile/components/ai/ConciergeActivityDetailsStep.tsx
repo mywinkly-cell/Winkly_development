@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  Platform,
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -819,59 +820,94 @@ export function ConciergeActivityDetailsStep({
           ) : null}
         </>
       )}
-      {showDatePicker && (
-        <Modal visible transparent animationType="fade">
-          <Pressable style={styles.pickerOverlay} onPress={() => setShowDatePicker(false)}>
-            <View style={styles.pickerSheet}>
-              <DateTimePicker
-                value={date}
-                mode="date"
-                display="spinner"
-                onChange={(_, d) => d && setDate(d)}
-                minimumDate={new Date()}
-              />
-              <TouchableOpacity onPress={() => setShowDatePicker(false)} style={styles.pickerDone}>
-                <Text style={styles.pickerDoneText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Modal>
-      )}
-      {showDateEndPicker && (
-        <Modal visible transparent animationType="fade">
-          <Pressable style={styles.pickerOverlay} onPress={() => setShowDateEndPicker(false)}>
-            <View style={styles.pickerSheet}>
-              <DateTimePicker
-                value={dateEnd}
-                mode="date"
-                display="spinner"
-                onChange={(_, d) => d && setDateEnd(d)}
-                minimumDate={date}
-              />
-              <TouchableOpacity onPress={() => setShowDateEndPicker(false)} style={styles.pickerDone}>
-                <Text style={styles.pickerDoneText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Modal>
-      )}
-      {showExactTimePicker && (
-        <Modal visible transparent animationType="fade">
-          <Pressable style={styles.pickerOverlay} onPress={() => setShowExactTimePicker(false)}>
-            <View style={styles.pickerSheet}>
-              <DateTimePicker
-                value={exactTime}
-                mode="time"
-                display="spinner"
-                onChange={(_, d) => d && setExactTime(d)}
-              />
-              <TouchableOpacity onPress={() => setShowExactTimePicker(false)} style={styles.pickerDone}>
-                <Text style={styles.pickerDoneText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Modal>
-      )}
+      {showDatePicker &&
+        (Platform.OS === "ios" ? (
+          <Modal visible transparent animationType="fade">
+            <Pressable style={styles.pickerOverlay} onPress={() => setShowDatePicker(false)}>
+              <Pressable style={styles.pickerSheet} onPress={(e) => e.stopPropagation()}>
+                <DateTimePicker
+                  value={date}
+                  mode="date"
+                  display="spinner"
+                  onChange={(_, d) => d && setDate(d)}
+                  minimumDate={new Date()}
+                />
+                <TouchableOpacity onPress={() => setShowDatePicker(false)} style={styles.pickerDone}>
+                  <Text style={styles.pickerDoneText}>Done</Text>
+                </TouchableOpacity>
+              </Pressable>
+            </Pressable>
+          </Modal>
+        ) : (
+          <DateTimePicker
+            value={date}
+            mode="date"
+            display="default"
+            minimumDate={new Date()}
+            onChange={(event, d) => {
+              setShowDatePicker(false);
+              if (event.type === "set" && d) setDate(d);
+            }}
+          />
+        ))}
+      {showDateEndPicker &&
+        (Platform.OS === "ios" ? (
+          <Modal visible transparent animationType="fade">
+            <Pressable style={styles.pickerOverlay} onPress={() => setShowDateEndPicker(false)}>
+              <Pressable style={styles.pickerSheet} onPress={(e) => e.stopPropagation()}>
+                <DateTimePicker
+                  value={dateEnd}
+                  mode="date"
+                  display="spinner"
+                  onChange={(_, d) => d && setDateEnd(d)}
+                  minimumDate={date}
+                />
+                <TouchableOpacity onPress={() => setShowDateEndPicker(false)} style={styles.pickerDone}>
+                  <Text style={styles.pickerDoneText}>Done</Text>
+                </TouchableOpacity>
+              </Pressable>
+            </Pressable>
+          </Modal>
+        ) : (
+          <DateTimePicker
+            value={dateEnd}
+            mode="date"
+            display="default"
+            minimumDate={date}
+            onChange={(event, d) => {
+              setShowDateEndPicker(false);
+              if (event.type === "set" && d) setDateEnd(d);
+            }}
+          />
+        ))}
+      {showExactTimePicker &&
+        (Platform.OS === "ios" ? (
+          <Modal visible transparent animationType="fade">
+            <Pressable style={styles.pickerOverlay} onPress={() => setShowExactTimePicker(false)}>
+              <Pressable style={styles.pickerSheet} onPress={(e) => e.stopPropagation()}>
+                <DateTimePicker
+                  value={exactTime}
+                  mode="time"
+                  display="spinner"
+                  onChange={(_, d) => d && setExactTime(d)}
+                />
+                <TouchableOpacity onPress={() => setShowExactTimePicker(false)} style={styles.pickerDone}>
+                  <Text style={styles.pickerDoneText}>Done</Text>
+                </TouchableOpacity>
+              </Pressable>
+            </Pressable>
+          </Modal>
+        ) : (
+          <DateTimePicker
+            value={exactTime}
+            mode="time"
+            display="default"
+            onChange={(event, d) => {
+              setShowExactTimePicker(false);
+              if (event.type === "set" && d) setExactTime(d);
+            }}
+          />
+        ))}
 
       {singleDay ? (
         <View style={styles.sectionCard}>
