@@ -32,6 +32,14 @@ function fromTagsArray(arr: string[] | null | undefined): string {
   return arr?.join(", ") ?? "";
 }
 
+function fromMetaTags(value: unknown): string {
+  if (Array.isArray(value)) {
+    return fromTagsArray(value.filter((x): x is string => typeof x === "string"));
+  }
+  if (typeof value === "string") return value;
+  return "";
+}
+
 export default function EditBusiness() {
   const router = useRouter();
   const { user, accountType } = useAuth();
@@ -64,7 +72,7 @@ export default function EditBusiness() {
         setRole((meta.role as string) ?? "");
         setCompany((meta.company as string) ?? "");
         setNetworkingGoal((meta.networking_goal as string) ?? "");
-        setSkills((meta.skills as string) ?? "");
+        setSkills(fromMetaTags(meta.skills));
       }
       setLoading(false);
     })();
@@ -92,7 +100,7 @@ export default function EditBusiness() {
           role: role.trim() || null,
           company: company.trim() || null,
           networking_goal: networkingGoal.trim() || null,
-          skills: skills.trim() || null,
+          skills: fromMetaTags(skills).trim() || null,
         },
       });
       setSaving(false);

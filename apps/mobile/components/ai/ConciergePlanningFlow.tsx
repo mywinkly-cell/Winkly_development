@@ -26,7 +26,12 @@ import {
   type ConciergeContext,
   type ExperienceOption,
 } from "@/lib/ai/conciergeClient";
-import { getWeatherForCityAndDate, getWeatherForCityAndDateRange } from "@/lib/weatherClient";
+import {
+  getWeatherForCityAndDate,
+  getWeatherForCityAndDateRange,
+  buildWeatherTimeOptions,
+  weatherSnapshotToConciergePayload,
+} from "@/lib/weatherClient";
 import { formatDefaultLocationDisplay, normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { ConciergeIntentStep } from "@/components/ai/ConciergeIntentStep";
 import { ConciergeSubActivityStep } from "@/components/ai/ConciergeSubActivityStep";
@@ -315,24 +320,18 @@ export function ConciergePlanningFlow({
         : undefined;
     let weather_snapshot;
     if (city) {
+      const weatherTimeOptions =
+        details.singleDay !== false
+          ? buildWeatherTimeOptions({
+              timeOfDay: details.exactTimeHm ? undefined : details.timeOfDay,
+              exactTimeHm: details.exactTimeHm,
+            })
+          : undefined;
       const w =
         details.singleDay === false && dateEndStr && dateEndStr !== dateStr
           ? await getWeatherForCityAndDateRange(city, dateStr, dateEndStr, country)
-          : await getWeatherForCityAndDate(city, dateStr, country);
-      weather_snapshot = w
-        ? {
-            summary: w.summary,
-            temp_min: w.temp_min,
-            temp_max: w.temp_max,
-            precipitation: w.precipitation,
-            date: w.date,
-            period_summary: w.period_summary,
-            rainy_days: w.rainy_days,
-            total_days: w.total_days,
-            avg_temp_min: w.avg_temp_min,
-            avg_temp_max: w.avg_temp_max,
-          }
-        : undefined;
+          : await getWeatherForCityAndDate(city, dateStr, country, weatherTimeOptions);
+      weather_snapshot = w ? weatherSnapshotToConciergePayload(w) : undefined;
     }
     const baseTopic = activityLabel ?? "Plan";
     const extra =
