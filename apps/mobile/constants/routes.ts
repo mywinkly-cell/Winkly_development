@@ -126,7 +126,7 @@ export const Routes = {
   modeBusinessChats: "/(modes)/business/chats" as const,
   modeBusinessPlanner: "/(modes)/business/planner" as const,
   modeBusinessProfileView: (userId: string) => `/(modes)/business/profile-view?user_id=${encodeURIComponent(userId)}` as const,
-  businessAnalytics: "/business/analytics" as const,
+  businessAnalytics: "/(modes)/business/analytics" as const,
   businessOfferCreate: "/(modes)/business/offers/create" as const,
 } as const;
 

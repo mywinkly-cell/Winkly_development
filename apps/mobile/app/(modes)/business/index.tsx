@@ -22,6 +22,7 @@ import { BusinessFilterSheet } from "@/components/business/BusinessFilterSheet";
 import { BusinessHomeEmptyState } from "@/components/business/BusinessHomeEmptyState";
 import { PendingInvitesSheet } from "@/components/business/PendingInvitesSheet";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Routes } from "@/constants/routes";
 import { supabase } from "@/lib/supabase";
 import { getProfilesForMode, getOwnProfileCore, getOwnProfileMode } from "@/lib/access/profiles";
 import { getBlockedUserIdSet } from "@/lib/access/blocks";
@@ -229,7 +230,7 @@ export default function BusinessHome() {
             </TouchableOpacity>
             {isBusinessAccount ? (
               <TouchableOpacity
-                onPress={() => router.push("/business/analytics")}
+                onPress={() => router.push(Routes.businessAnalytics)}
                 style={styles.insightsCta}
                 activeOpacity={0.85}
               >

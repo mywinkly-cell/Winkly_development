@@ -21,7 +21,7 @@ export function FriendsBottomNav() {
   const pathname = usePathname();
   const activeTab = getActiveTab(pathname ?? "");
 
-  const nav = (tab: FriendsTab) => {
+  const nav = (tab: string) => {
     Haptics.selectionAsync();
     if (tab === "home") router.replace("/(modes)/friends");
     else if (tab === "discover") router.replace("/(modes)/friends/discover");

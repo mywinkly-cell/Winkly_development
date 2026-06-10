@@ -21,7 +21,7 @@ export function RomanceBottomNav() {
   const pathname = usePathname();
   const activeTab = getActiveTab(pathname ?? "");
 
-  const nav = (tab: RomanceTab) => {
+  const nav = (tab: string) => {
     Haptics.selectionAsync();
     if (tab === "home") router.replace("/(modes)/romance");
     else if (tab === "discover") router.replace("/(modes)/romance/discover");
