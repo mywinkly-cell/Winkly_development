@@ -2792,17 +2792,25 @@ function formatWeatherSnapshotProse(w: unknown): string {
   const amax = o.avg_temp_max;
   const tmin = o.temp_min;
   const tmax = o.temp_max;
+  const atTime = o.temp_at_time;
+  const hour = typeof o.forecast_hour === "string" ? o.forecast_hour.trim() : "";
+  if (typeof atTime === "number" && hour) {
+    parts.push(`At ${hour} local: ~${Math.round(atTime)}°C.`);
+  }
   if (typeof amin === "number" && typeof amax === "number") {
     parts.push(`Typical temps ~${amin}–${amax}°C.`);
   } else if (typeof tmin === "number" && typeof tmax === "number") {
-    parts.push(`Temps ${tmin}–${tmax}°C.`);
+    parts.push(`Day temps ${tmin}–${tmax}°C.`);
   }
   const rainy = o.rainy_days;
   const total = o.total_days;
   if (typeof rainy === "number" && typeof total === "number" && total > 1) {
     parts.push(`Rain on ${rainy} of ${total} day(s).`);
   } else if (typeof o.precipitation === "number") {
-    parts.push(`Precipitation indicator: ${o.precipitation}.`);
+    parts.push(`Precipitation at planned time: ${o.precipitation} mm.`);
+    if (typeof o.precipitation_day === "number" && o.precipitation_day !== o.precipitation) {
+      parts.push(`Daily total: ${o.precipitation_day} mm.`);
+    }
   }
   const d = typeof o.date === "string" ? o.date.trim() : "";
   if (d) parts.push(`(Forecast anchor: ${d}.)`);

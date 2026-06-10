@@ -170,7 +170,10 @@ export type ConciergeContext = {
     summary?: string;
     temp_min?: number;
     temp_max?: number;
+    temp_at_time?: number;
+    forecast_hour?: string;
     precipitation?: number;
+    precipitation_day?: number;
     date?: string;
     period_summary?: string;
     rainy_days?: number;

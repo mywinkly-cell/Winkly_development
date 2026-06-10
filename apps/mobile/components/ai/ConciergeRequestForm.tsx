@@ -1,7 +1,7 @@
 // Concierge request form: freeform prompt + optional details (location, date, budget).
 // Fetches weather for selected location/date and passes weather_snapshot to the AI.
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -27,6 +27,9 @@ import {
   getWeatherForCityAndDate,
   getWeatherForCityAndDateRange,
   searchLocationAutocomplete,
+  buildWeatherTimeOptions,
+  formatWeatherDisplayText,
+  weatherSnapshotToConciergePayload,
   type WeatherSnapshot,
   type LocationSuggestion,
 } from "@/lib/weatherClient";
@@ -242,6 +245,17 @@ export function ConciergeRequestForm({
 
   const dateStr = dayKey(date);
   const dateEndStr = dayKey(dateEnd);
+  const weatherTimeOptions = useMemo(
+    () =>
+      dateRangePreset === "single"
+        ? buildWeatherTimeOptions({
+            timeOfDay: timePreference,
+            availableSlots,
+            dateStr,
+          })
+        : undefined,
+    [dateRangePreset, timePreference, availableSlots, dateStr]
+  );
 
   // Pre-fill location when defaults load (e.g. from profile, async)
   useEffect(() => {
@@ -319,7 +333,7 @@ export function ConciergeRequestForm({
     let cancelled = false;
     setWeatherLoading(true);
     if (dateRangePreset === "single") {
-      getWeatherForCityAndDate(cityPart, dateStr, countryPart)
+      getWeatherForCityAndDate(cityPart, dateStr, countryPart, weatherTimeOptions)
         .then((w) => {
           if (!cancelled) setWeatherSnapshot(w ?? null);
         })
@@ -338,7 +352,7 @@ export function ConciergeRequestForm({
     return () => {
       cancelled = true;
     };
-  }, [location, dateStr, dateEndStr, dateRangePreset]);
+  }, [location, dateStr, dateEndStr, dateRangePreset, weatherTimeOptions, appLanguage]);
 
   const fetchPartners = useCallback(() => {
     if (mode === "events") return;
@@ -362,18 +376,7 @@ export function ConciergeRequestForm({
         : undefined;
     const { city: cityPart, country: countryPart } = parseLocation(location, appLanguage);
     const weather_snapshot = weatherSnapshot
-      ? {
-          summary: weatherSnapshot.summary,
-          temp_min: weatherSnapshot.temp_min,
-          temp_max: weatherSnapshot.temp_max,
-          precipitation: weatherSnapshot.precipitation,
-          date: weatherSnapshot.date,
-          period_summary: weatherSnapshot.period_summary,
-          rainy_days: weatherSnapshot.rainy_days,
-          total_days: weatherSnapshot.total_days,
-          avg_temp_min: weatherSnapshot.avg_temp_min,
-          avg_temp_max: weatherSnapshot.avg_temp_max,
-        }
+      ? weatherSnapshotToConciergePayload(weatherSnapshot)
       : undefined;
 
     let sanitizedPersona = "";
@@ -471,7 +474,10 @@ export function ConciergeRequestForm({
     showDetails && cityForAdvisory && weatherSnapshot && source_screen === "planner";
   const rainAdvisory =
     showAdvisory &&
-    ((dateRangePreset === "single" && (weatherSnapshot.precipitation ?? 0) > 2 && weatherSnapshot.date) ||
+    ((dateRangePreset === "single" &&
+      ((weatherSnapshot.precipitation ?? 0) > (weatherSnapshot.forecast_hour ? 0.5 : 2) ||
+        (weatherSnapshot.precipitation_day ?? 0) > 2) &&
+      weatherSnapshot.date) ||
       (dateRangePreset !== "single" && (weatherSnapshot.rainy_days ?? 0) > 0));
 
   const footerReserve = Layout.touchTargetMin + 12 + 12 + Math.max(12, insets.bottom + 10);
@@ -741,9 +747,10 @@ export function ConciergeRequestForm({
                 <>
                   <Ionicons name="partly-sunny-outline" size={18} color={Colors.gray600} />
                   <Text style={styles.weatherText}>
-                    {dateRangePreset === "single"
-                      ? `${dateStr}: ${weatherSnapshot.summary ?? ""}${weatherSnapshot.temp_min != null && weatherSnapshot.temp_max != null ? ` · ${weatherSnapshot.temp_min}–${weatherSnapshot.temp_max}°C` : ""}${weatherSnapshot.precipitation != null && weatherSnapshot.precipitation > 0 ? ` · ${weatherSnapshot.precipitation} mm rain` : ""}`
-                      : `${weatherSnapshot.period_summary ?? ""}${weatherSnapshot.avg_temp_min != null && weatherSnapshot.avg_temp_max != null ? ` · Avg ${weatherSnapshot.avg_temp_min}–${weatherSnapshot.avg_temp_max}°C` : ""}${weatherSnapshot.rainy_days != null && weatherSnapshot.total_days != null ? ` · ${weatherSnapshot.rainy_days} of ${weatherSnapshot.total_days} days rainy` : ""}`}
+                    {formatWeatherDisplayText(weatherSnapshot, {
+                      singleDay: dateRangePreset === "single",
+                      dateLabel: dateStr,
+                    })}
                   </Text>
                 </>
               ) : null}

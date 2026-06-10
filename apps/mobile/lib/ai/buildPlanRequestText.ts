@@ -116,15 +116,21 @@ function weatherBlock(w?: ConciergeContext["weather_snapshot"]): string {
   const parts: string[] = [];
   if (w.period_summary) parts.push(w.period_summary);
   else if (w.summary) parts.push(w.summary);
+  if (w.forecast_hour && w.temp_at_time != null) {
+    parts.push(`At ${w.forecast_hour} local: ~${Math.round(w.temp_at_time)}°C.`);
+  }
   if (w.avg_temp_min != null && w.avg_temp_max != null) {
     parts.push(`Typical temps ~${w.avg_temp_min}–${w.avg_temp_max}°C.`);
   } else if (w.temp_min != null && w.temp_max != null) {
-    parts.push(`Temps ${w.temp_min}–${w.temp_max}°C.`);
+    parts.push(`Day temps ${w.temp_min}–${w.temp_max}°C.`);
   }
   if (w.rainy_days != null && w.total_days != null && w.total_days > 1) {
     parts.push(`Rain on ${w.rainy_days} of ${w.total_days} day(s).`);
   } else if (w.precipitation != null) {
-    parts.push(`Precipitation indicator: ${w.precipitation}.`);
+    parts.push(`Precipitation at planned time: ${w.precipitation} mm.`);
+    if (w.precipitation_day != null && w.precipitation_day !== w.precipitation) {
+      parts.push(`Daily total: ${w.precipitation_day} mm.`);
+    }
   }
   if (w.date) parts.push(`(Forecast anchor: ${w.date}.)`);
   return `Weather (from the app for my destination area and dates—use this; do not substitute another city/day): ${parts.join(" ")}`.trim();

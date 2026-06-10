@@ -24,6 +24,8 @@ import {
   getWeatherForCityAndDate,
   getWeatherForCityAndDateRange,
   searchLocationAutocomplete,
+  buildWeatherTimeOptions,
+  formatWeatherDisplayText,
   type WeatherSnapshot,
   type LocationSuggestion,
 } from "@/lib/weatherClient";
@@ -270,6 +272,19 @@ export function ConciergeActivityDetailsStep({
   const dateStr = dayKey(date);
   const dateEndStr = dayKey(dateEnd);
   const { city: cityPart, country: countryPart } = parseLocation(location, appLanguage);
+  const exactTimeHm = useMemo(() => {
+    if (!exactTimeEnabled) return undefined;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(exactTime.getHours())}:${pad(exactTime.getMinutes())}`;
+  }, [exactTimeEnabled, exactTime]);
+  const weatherTimeOptions = useMemo(
+    () =>
+      buildWeatherTimeOptions({
+        timeOfDay: exactTimeHm ? undefined : timeOfDay,
+        exactTimeHm,
+      }),
+    [timeOfDay, exactTimeHm]
+  );
 
   // Sync location when parent passes pre-set location (e.g. profile city loaded after mount)
   useEffect(() => {
@@ -325,7 +340,7 @@ export function ConciergeActivityDetailsStep({
     let cancelled = false;
     setWeatherLoading(true);
     if (singleDay) {
-      getWeatherForCityAndDate(cityPart, dateStr, countryPart)
+      getWeatherForCityAndDate(cityPart, dateStr, countryPart, weatherTimeOptions)
         .then((w) => {
           if (!cancelled) setWeatherSnapshot(w ?? null);
         })
@@ -344,7 +359,7 @@ export function ConciergeActivityDetailsStep({
     return () => {
       cancelled = true;
     };
-  }, [cityPart, countryPart, dateStr, dateEndStr, singleDay]);
+  }, [cityPart, countryPart, dateStr, dateEndStr, singleDay, weatherTimeOptions]);
 
   // Trip: day-count picker keeps `dateEnd` and `singleDay` aligned.
   useEffect(() => {
@@ -726,9 +741,7 @@ export function ConciergeActivityDetailsStep({
                 <>
                   <Ionicons name="partly-sunny-outline" size={18} color={Colors.gray600} />
                   <Text style={styles.weatherText}>
-                    {singleDay
-                      ? `${dateStr}: ${weatherSnapshot.summary ?? ""}${weatherSnapshot.temp_min != null && weatherSnapshot.temp_max != null ? ` · ${weatherSnapshot.temp_min}–${weatherSnapshot.temp_max}°C` : ""}`
-                      : `${weatherSnapshot.period_summary ?? ""}${weatherSnapshot.avg_temp_min != null && weatherSnapshot.avg_temp_max != null ? ` · Avg ${weatherSnapshot.avg_temp_min}–${weatherSnapshot.avg_temp_max}°C` : ""}`}
+                    {formatWeatherDisplayText(weatherSnapshot, { singleDay, dateLabel: dateStr })}
                   </Text>
                 </>
               ) : (
