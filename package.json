@@ -20,6 +20,7 @@
     "mobile:test:e2e:ios": "npm run -w apps/mobile test:e2e:ios",
     "mobile:test:e2e:android": "npm run -w apps/mobile test:e2e:android",
     "mobile:audit-i18n": "npm run -w apps/mobile audit-i18n",
+    "mobile:audit-a11y": "npm run -w apps/mobile audit-a11y",
     "env:dev": "node scripts/use-env.mjs cloud-development",
     "env:local": "node scripts/use-env.mjs development",
     "env:prod": "node scripts/use-env.mjs production",
@@ -42,6 +43,7 @@
     "website:verify:live": "npm run -w website verify:live"
   },
   "overrides": {
+    "jest": "29.7.0",
     "@expo/vector-icons": "15.1.1",
     "expo-file-system": "19.0.23",
     "expo-image-loader": "6.0.0",

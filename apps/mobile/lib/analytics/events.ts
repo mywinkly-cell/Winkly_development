@@ -20,9 +20,21 @@ export const AnalyticsEvents = {
   AccountCreated: "account_created",
   OnboardingCompleted: "onboarding_completed",
   OnboardingSubProfileSkipped: "onboarding_subprofile_skipped",
+  // Discover tab
+  DiscoverOpen: "discover_open",
+  LikedYouView: "liked_you_view",
+  LikedYouLikeBack: "liked_you_like_back",
+  RecommendationView: "recommendation_view",
+  RecommendationLike: "recommendation_like",
+  RecommendationLimitReached: "recommendation_limit_reached",
+  DiscoverProfileBlock: "discover_profile_block",
+  DiscoverProfileReport: "discover_profile_report",
+  MatchCreatedFromDiscover: "match_created_from_discover",
 } as const;
 
 export type AnalyticsEventName = (typeof AnalyticsEvents)[keyof typeof AnalyticsEvents];
+
+export type DiscoverMode = "romance" | "friends";
 
 /** Generic escape hatch — prefer the typed helpers below. */
 export function trackEvent(event: AnalyticsEventName, props?: AnalyticsProps): void {
@@ -73,4 +85,40 @@ export function trackOnboardingSubProfileSkipped(p: {
   onboarding_step: number;
 }): void {
   track(AnalyticsEvents.OnboardingSubProfileSkipped, { ...p });
+}
+
+export function trackDiscoverOpen(mode: DiscoverMode): void {
+  track(AnalyticsEvents.DiscoverOpen, { mode });
+}
+
+export function trackLikedYouView(mode: DiscoverMode): void {
+  track(AnalyticsEvents.LikedYouView, { mode });
+}
+
+export function trackLikedYouLikeBack(mode: DiscoverMode, targetId: string): void {
+  track(AnalyticsEvents.LikedYouLikeBack, { mode, target_id: targetId });
+}
+
+export function trackRecommendationView(mode: DiscoverMode, targetId: string): void {
+  track(AnalyticsEvents.RecommendationView, { mode, target_id: targetId });
+}
+
+export function trackRecommendationLike(mode: DiscoverMode, targetId: string): void {
+  track(AnalyticsEvents.RecommendationLike, { mode, target_id: targetId });
+}
+
+export function trackRecommendationLimitReached(mode: DiscoverMode): void {
+  track(AnalyticsEvents.RecommendationLimitReached, { mode });
+}
+
+export function trackDiscoverProfileBlock(mode: DiscoverMode, targetId: string): void {
+  track(AnalyticsEvents.DiscoverProfileBlock, { mode, target_id: targetId });
+}
+
+export function trackDiscoverProfileReport(mode: DiscoverMode, targetId: string): void {
+  track(AnalyticsEvents.DiscoverProfileReport, { mode, target_id: targetId });
+}
+
+export function trackMatchCreatedFromDiscover(mode: DiscoverMode, targetId: string): void {
+  track(AnalyticsEvents.MatchCreatedFromDiscover, { mode, target_id: targetId });
 }

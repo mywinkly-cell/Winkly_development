@@ -3,10 +3,12 @@ import {
   AnalyticsEvents,
   trackAccountCreated,
   trackChatStarted,
+  trackDiscoverOpen,
   trackEventRsvp,
   trackMatchCreated,
   trackModeSelected,
   trackOnboardingCompleted,
+  trackRecommendationLike,
   trackSubscriptionUpgraded,
 } from "@/lib/analytics/events";
 
@@ -34,6 +36,8 @@ describe("analytics event taxonomy", () => {
     expect(AnalyticsEvents.SubscriptionUpgraded).toBe("subscription_upgraded");
     expect(AnalyticsEvents.AccountCreated).toBe("account_created");
     expect(AnalyticsEvents.OnboardingCompleted).toBe("onboarding_completed");
+    expect(AnalyticsEvents.DiscoverOpen).toBe("discover_open");
+    expect(AnalyticsEvents.RecommendationLike).toBe("recommendation_like");
   });
 
   it("emits typed payloads through the registered client", () => {
@@ -47,6 +51,8 @@ describe("analytics event taxonomy", () => {
     trackSubscriptionUpgraded({ from_tier: "free", to_tier: "premium" });
     trackAccountCreated({ account_type: "personal", method: "email" });
     trackOnboardingCompleted({ account_type: "business" });
+    trackDiscoverOpen("romance");
+    trackRecommendationLike("friends", "user-42");
 
     expect(captured).toEqual([
       { event: "mode_selected", props: { mode: "romance" } },
@@ -56,6 +62,8 @@ describe("analytics event taxonomy", () => {
       { event: "subscription_upgraded", props: { from_tier: "free", to_tier: "premium" } },
       { event: "account_created", props: { account_type: "personal", method: "email" } },
       { event: "onboarding_completed", props: { account_type: "business" } },
+      { event: "discover_open", props: { mode: "romance" } },
+      { event: "recommendation_like", props: { mode: "friends", target_id: "user-42" } },
     ]);
   });
 

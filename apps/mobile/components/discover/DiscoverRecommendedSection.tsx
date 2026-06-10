@@ -78,6 +78,10 @@ export function DiscoverRecommendedSection({
               activeOpacity={0.95}
               onPress={() => openProfile(item)}
               style={styles.card}
+              accessibilityRole="button"
+              accessibilityLabel={`View recommended profile, ${item.name}${item.age != null ? `, age ${item.age}` : ""}${
+                item.compatibility != null ? `, ${item.compatibility} percent match` : ""
+              }`}
             >
               <View style={styles.cardPhotoWrap}>
                 {item.photoUrl ? (

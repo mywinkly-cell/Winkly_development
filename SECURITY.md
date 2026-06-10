@@ -20,6 +20,8 @@ A public repository exposes schema (migrations), auth patterns, and configuratio
 
 **Repository visibility (GitHub):** `repository_public: true` is a **GitHub / org setting**, not something this repo can change. To make the repo private: **Settings → General → Danger zone → Change repository visibility** (requires admin). For org repos, an org owner may need to allow private repos for your plan.
 
+**If staying public (non-OSS):** add a **`LICENSE`** that matches your intent, and keep **`docs/IMPRINT.md`** / **`website/legal-entity.json`** free of real street addresses until launch — publish the live Impressum on the website only. Current templates use `{{placeholders}}` / bracketed update-before-launch strings.
+
 ### `auth-redirect` Edge Function and JWT verification
 
 The Supabase Edge Function `auth-redirect` (`supabase/functions/auth-redirect`) serves a **small static HTML page** used when email verification or magic links open in a system browser (e.g. Gmail). Those requests are **not** sent with a Supabase `Authorization: Bearer` session JWT, so the platform cannot require JWT verification for this function without **breaking** the email link flow.

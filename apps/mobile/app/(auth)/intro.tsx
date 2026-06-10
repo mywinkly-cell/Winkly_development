@@ -40,6 +40,8 @@ export default function Intro() {
             }}
             style={styles.primaryBtn}
             activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Create account"
           >
             <Text style={styles.primaryText}>Create account</Text>
           </TouchableOpacity>
@@ -51,6 +53,8 @@ export default function Intro() {
             }}
             style={styles.secondaryBtn}
             activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in"
           >
             <Text style={styles.secondaryText}>Sign in</Text>
           </TouchableOpacity>

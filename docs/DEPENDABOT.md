@@ -1,6 +1,6 @@
 # Dependabot merge status
 
-**Last updated:** 2026-06-04  
+**Last updated:** 2026-06-10  
 **Integration branch:** `chore/merge-dependabot-updates` (merge into `develop` or `main` via PR)
 
 ## Merged (SDK 54–compatible)
@@ -14,7 +14,16 @@
 | `react-i18next` | 16.x → **17.0.8** | Major; paired with i18next 26 |
 | `posthog-react-native` | 4.34 → **4.46.7** | Minor |
 
-Local CI: lint + typecheck pass; **12/12** tracked test suites pass on `main` (with CI env placeholders). `jest.setup.js` adds AsyncStorage mock for future tests.
+Local CI: lint + typecheck pass; **25** Jest suites pass with `npm run mobile:test` (CI env placeholders). Root `package.json` **`overrides.jest: 29.7.0`** keeps workspace Jest aligned with **jest-expo@54** (blocks accidental Jest 30 / `clearMocksOnScope` breakage). `jest.setup.js` adds AsyncStorage mock for future tests.
+
+## Triage checklist (open PRs)
+
+| Action | PRs / branches |
+|--------|----------------|
+| **Merge** (SDK 54–safe) | `uuid`, `@supabase/supabase-js`, `axios`, `i18next`, `react-i18next`, `posthog-react-native` — versions already on `develop`; close duplicate Dependabot PRs after merge |
+| **Close + comment** (defer) | `babel-preset-expo-56`, `expo-and-react-native` (Expo 56 group), `multi-cbfe5253e3` (Jest 30) — link to **Deferred** table below |
+
+Without `gh` CLI: use GitHub → Pull requests → filter **Dependabot**. Comment on deferred PRs: _Deferred per docs/DEPENDABOT.md — Expo 54 / Jest 29 until dedicated SDK migration._
 
 ## Deferred (do not merge yet)
 

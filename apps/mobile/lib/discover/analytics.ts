@@ -1,45 +1,58 @@
 /**
- * Discover analytics — events for Discover tab (People Who Liked You, Recommended).
- * Use with usePostHog(); when PostHog is disabled, capture is a no-op.
+ * Discover analytics — compatibility wrappers around canonical events in
+ * lib/analytics/events.ts. The PostHog parameter is accepted for legacy call
+ * sites but routing goes through the shared track() abstraction.
  */
 
 import type { PostHog } from "posthog-react-native";
+import {
+  trackDiscoverOpen,
+  trackDiscoverProfileBlock,
+  trackDiscoverProfileReport,
+  trackLikedYouLikeBack,
+  trackLikedYouView,
+  trackMatchCreatedFromDiscover,
+  trackRecommendationLimitReached,
+  trackRecommendationLike,
+  trackRecommendationView,
+  type DiscoverMode,
+} from "@/lib/analytics/events";
 
-/** Accepts real PostHog client or null when analytics is off. */
+/** @deprecated PostHog client is unused; kept for call-site compatibility. */
 type PostHogLike = PostHog | null;
 
-export function discoverOpen(posthog: PostHogLike, mode: "romance" | "friends") {
-  posthog?.capture("discover_open", { mode });
+export function discoverOpen(_posthog: PostHogLike, mode: DiscoverMode) {
+  trackDiscoverOpen(mode);
 }
 
-export function likedYouView(posthog: PostHogLike, mode: "romance" | "friends") {
-  posthog?.capture("liked_you_view", { mode });
+export function likedYouView(_posthog: PostHogLike, mode: DiscoverMode) {
+  trackLikedYouView(mode);
 }
 
-export function likedYouLikeBack(posthog: PostHogLike, mode: "romance" | "friends", targetId: string) {
-  posthog?.capture("liked_you_like_back", { mode, target_id: targetId });
+export function likedYouLikeBack(_posthog: PostHogLike, mode: DiscoverMode, targetId: string) {
+  trackLikedYouLikeBack(mode, targetId);
 }
 
-export function recommendationView(posthog: PostHogLike, mode: "romance" | "friends", targetId: string) {
-  posthog?.capture("recommendation_view", { mode, target_id: targetId });
+export function recommendationView(_posthog: PostHogLike, mode: DiscoverMode, targetId: string) {
+  trackRecommendationView(mode, targetId);
 }
 
-export function recommendationLike(posthog: PostHogLike, mode: "romance" | "friends", targetId: string) {
-  posthog?.capture("recommendation_like", { mode, target_id: targetId });
+export function recommendationLike(_posthog: PostHogLike, mode: DiscoverMode, targetId: string) {
+  trackRecommendationLike(mode, targetId);
 }
 
-export function recommendationLimitReached(posthog: PostHogLike, mode: "romance" | "friends") {
-  posthog?.capture("recommendation_limit_reached", { mode });
+export function recommendationLimitReached(_posthog: PostHogLike, mode: DiscoverMode) {
+  trackRecommendationLimitReached(mode);
 }
 
-export function discoverProfileBlock(posthog: PostHogLike, mode: "romance" | "friends", targetId: string) {
-  posthog?.capture("discover_profile_block", { mode, target_id: targetId });
+export function discoverProfileBlock(_posthog: PostHogLike, mode: DiscoverMode, targetId: string) {
+  trackDiscoverProfileBlock(mode, targetId);
 }
 
-export function discoverProfileReport(posthog: PostHogLike, mode: "romance" | "friends", targetId: string) {
-  posthog?.capture("discover_profile_report", { mode, target_id: targetId });
+export function discoverProfileReport(_posthog: PostHogLike, mode: DiscoverMode, targetId: string) {
+  trackDiscoverProfileReport(mode, targetId);
 }
 
-export function matchCreatedFromDiscover(posthog: PostHogLike, mode: "romance" | "friends", targetId: string) {
-  posthog?.capture("match_created_from_discover", { mode, target_id: targetId });
+export function matchCreatedFromDiscover(_posthog: PostHogLike, mode: DiscoverMode, targetId: string) {
+  trackMatchCreatedFromDiscover(mode, targetId);
 }

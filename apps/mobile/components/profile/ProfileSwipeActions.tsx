@@ -2,6 +2,7 @@ import React from "react";
 import { View, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "@/constants/tokens";
+import { HIT_SLOP } from "@/constants/a11y";
 
 const ACTION_BUTTON_SIZE = 64;
 const ACTION_ICON_SIZE = 35;
@@ -43,7 +44,10 @@ export function ProfileSwipeActions({
             disabled && styles.disabled,
             pressed && styles.pressed,
           ]}
+          hitSlop={HIT_SLOP}
+          accessibilityRole="button"
           accessibilityLabel="Pass"
+          accessibilityState={{ disabled }}
         >
           <Ionicons name="close" size={ACTION_ICON_SIZE} color={primaryColor} />
         </Pressable>
@@ -57,7 +61,10 @@ export function ProfileSwipeActions({
             (disabled || superDisabled) && styles.disabled,
             pressed && styles.pressed,
           ]}
+          hitSlop={HIT_SLOP}
+          accessibilityRole="button"
           accessibilityLabel={mode === "friends" ? "Super Connect" : mode === "romance" ? "Super Like" : "Connect"}
+          accessibilityState={{ disabled: disabled || superDisabled }}
         >
           <Ionicons name={superIcon} size={ACTION_ICON_SIZE} color="#E6B800" />
         </Pressable>
@@ -72,7 +79,10 @@ export function ProfileSwipeActions({
             disabled && styles.disabled,
             pressed && styles.pressed,
           ]}
+          hitSlop={HIT_SLOP}
+          accessibilityRole="button"
           accessibilityLabel={mode === "friends" ? "Add friend" : mode === "romance" ? "Like" : "Connect"}
+          accessibilityState={{ disabled }}
         >
           <Ionicons name={likeIcon} size={ACTION_ICON_SIZE} color={primaryColor} />
         </Pressable>

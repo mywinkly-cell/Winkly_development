@@ -172,7 +172,13 @@ export default function Signup() {
                 autoComplete="password-new"
                 style={[styles.input, styles.inputFlex, passwordFocused && styles.inputFocused]}
               />
-              <TouchableOpacity onPress={() => setShowPwd((v) => !v)} style={styles.smallBtn} activeOpacity={0.85}>
+              <TouchableOpacity
+                onPress={() => setShowPwd((v) => !v)}
+                style={styles.smallBtn}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={showPwd ? t("auth.hidePassword") : t("auth.showPassword")}
+              >
                 <Text style={styles.smallBtnText}>{showPwd ? t("auth.hidePassword") : t("auth.showPassword")}</Text>
               </TouchableOpacity>
             </View>
@@ -194,6 +200,9 @@ export default function Signup() {
               disabled={loading}
               activeOpacity={0.85}
               style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
+              accessibilityRole="button"
+              accessibilityLabel={t("auth.createAccount")}
+              accessibilityState={{ disabled: loading, busy: loading }}
             >
               {loading ? (
                 <ActivityIndicator color={Colors.accentYellow} />
@@ -211,7 +220,12 @@ export default function Signup() {
               compact
             />
 
-            <TouchableOpacity onPress={() => router.replace("/(auth)/signin")} style={styles.footerLink}>
+            <TouchableOpacity
+              onPress={() => router.replace("/(auth)/signin")}
+              style={styles.footerLink}
+              accessibilityRole="button"
+              accessibilityLabel={`${t("auth.hasAccount")} ${t("auth.signin")}`}
+            >
               <Text style={styles.footerText}>
                 {t("auth.hasAccount")} <Text style={styles.link}>{t("auth.signin")}</Text>
               </Text>
@@ -223,6 +237,8 @@ export default function Signup() {
                 setAccountType(alternateType);
               }}
               style={styles.altTypeLink}
+              accessibilityRole="button"
+              accessibilityLabel={alternateType === "business" ? t("auth.createBusinessInstead") : t("auth.createPersonalInstead")}
             >
               <Text style={styles.altTypeText}>
                 {alternateType === "business" ? t("auth.createBusinessInstead") : t("auth.createPersonalInstead")}

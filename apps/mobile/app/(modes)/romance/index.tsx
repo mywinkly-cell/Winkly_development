@@ -25,6 +25,7 @@ import { MatchCardOverlay } from "@/components/matching/MatchCardOverlay";
 import { MatchCelebration } from "@/components/matching/MatchCelebration";
 import { SwipeDeckEmptyState } from "@/components/matching/SwipeDeckEmptyState";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { HIT_SLOP } from "@/constants/a11y";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { useModeContext } from "@/providers/ModeContextProvider";
 import { romanceLikeProfile } from "@/lib/chats";
@@ -641,6 +642,8 @@ export default function RomanceHome() {
                     showBlockReportMenu();
                   }}
                   style={styles.cardMenuBtn}
+                  hitSlop={HIT_SLOP}
+                  accessibilityRole="button"
                   accessibilityLabel="Block or report"
                 >
                   <Ionicons name="ellipsis-vertical" size={22} color={Colors.romance.primary} />
@@ -670,7 +673,10 @@ export default function RomanceHome() {
                   onPress={handlePass}
                   disabled={transitioning}
                   style={({ pressed }) => [styles.actionIconWrap, styles.actionIconGlowPass, pressed && styles.actionBtnPressed]}
+                  hitSlop={HIT_SLOP}
+                  accessibilityRole="button"
                   accessibilityLabel="Pass"
+                  accessibilityState={{ disabled: transitioning }}
                 >
                   <Ionicons name="close" size={ACTION_ICON_SIZE} color={Colors.romance.primary} />
                 </Pressable>
@@ -686,7 +692,10 @@ export default function RomanceHome() {
                     (intentRemainingToday <= 0 || transitioning) && styles.actionBtnDisabled,
                     pressed && styles.actionBtnPressed,
                   ]}
+                  hitSlop={HIT_SLOP}
+                  accessibilityRole="button"
                   accessibilityLabel="Super Like"
+                  accessibilityState={{ disabled: transitioning || intentRemainingToday <= 0 }}
                 >
                   <Ionicons name="star" size={ACTION_ICON_SIZE} color="#E6B800" />
                 </Pressable>
@@ -697,7 +706,10 @@ export default function RomanceHome() {
                   onPress={handleLike}
                   disabled={transitioning}
                   style={({ pressed }) => [styles.actionIconWrap, styles.actionIconGlowLike, pressed && styles.actionBtnPressed]}
+                  hitSlop={HIT_SLOP}
+                  accessibilityRole="button"
                   accessibilityLabel="Like"
+                  accessibilityState={{ disabled: transitioning }}
                 >
                   <Ionicons name="heart" size={ACTION_ICON_SIZE} color={Colors.romance.primary} />
                 </Pressable>
@@ -715,6 +727,7 @@ export default function RomanceHome() {
                   <Pressable
                     onPress={() => router.push("/account/subscription")}
                     style={styles.intentSubtitleLink}
+                    accessibilityRole="button"
                     accessibilityLabel="Subscription plans"
                   >
                     <Text style={styles.intentSubtitleLinkText}>Subscription plans</Text>
@@ -733,9 +746,15 @@ export default function RomanceHome() {
             <Pressable
               style={styles.modalBackdrop}
               onPress={() => setIntentModalVisible(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Close Super Like message dialog"
             >
               <KeyboardAvoidingView {...keyboardAvoidingProps()} style={styles.modalContentWrap}>
-                <Pressable style={styles.intentModalCard} onPress={(e) => e.stopPropagation()}>
+                <Pressable
+                  style={styles.intentModalCard}
+                  onPress={(e) => e.stopPropagation()}
+                  accessibilityRole="none"
+                >
                   <Text style={styles.intentModalTitle}>Add a message? (optional)</Text>
                   <Text style={styles.intentModalHint}>
                     They&apos;ll see it when they see your profile. Start from a suggested opener or write your own.
@@ -743,6 +762,8 @@ export default function RomanceHome() {
                   <Pressable
                     style={styles.icebreakerChip}
                     onPress={() => setIntentMessage(intentAiIcebreaker)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Use suggested opener"
                   >
                     <SparklesIcon size={16} color={Colors.primaryViolet} />
                     <Text style={styles.icebreakerChipText}>Use suggested opener</Text>
@@ -762,6 +783,8 @@ export default function RomanceHome() {
                       setIntentModalVisible(false);
                       setSuperLikeInviteModalVisible(true);
                     }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Send Super Like with an invite"
                   >
                     <Ionicons name="calendar-outline" size={18} color={Colors.primaryViolet} />
                     <Text style={styles.intentInviteChipText}>Send with an invite (place & time)</Text>
@@ -770,12 +793,16 @@ export default function RomanceHome() {
                     <Pressable
                       style={styles.intentModalBtnSecondary}
                       onPress={() => sendIntent()}
+                      accessibilityRole="button"
+                      accessibilityLabel="Skip message and send Super Like"
                     >
                       <Text style={styles.intentModalBtnSecondaryText}>Skip</Text>
                     </Pressable>
                     <Pressable
                       style={styles.intentModalBtnPrimary}
                       onPress={() => sendIntent(intentMessage.trim() || undefined)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Send Super Like with message"
                     >
                       <Text style={styles.intentModalBtnPrimaryText}>Send</Text>
                     </Pressable>
