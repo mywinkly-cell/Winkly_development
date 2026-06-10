@@ -1,6 +1,6 @@
 # Subscription Tiers & AI Access
 
-**Last updated:** 2026-06-06
+**Last updated:** 2026-06-10
 
 This document defines Winkly subscription tiers (Free, Super, Premium), how AI is gated per tier, the **Winkly AI Spark** icon behaviour, and what you need to do to activate the AI agent.
 
@@ -10,7 +10,7 @@ This document defines Winkly subscription tiers (Free, Super, Premium), how AI i
 
 | Tier | Who it's for | What they get |
 |------|--------------|----------------|
-| **Free (Basic)** | Users who want core Winkly without paying | All core product: modes (Romance/Friends/Business/Events), connect with people, 1:1 and group chat, search, events (discover, participate, create, host), Planner with contacts/calendar/maps. Basic ranking and relevant content only — similar to what other apps offer for free. **No AI suggestions, no concierge.** |
+| **Free (Basic)** | Users who want core Winkly without paying | All core product: modes (Romance/Friends/Business/Events), connect with people, 1:1 and group chat, search, events (discover, participate, create, host), Planner with contacts/calendar/maps. Basic ranking and relevant content only — similar to what other apps offer for free. **One free AI plan** (`planner_theme_plans`, lifetime quota enforced server-side). No other AI suggestions or full concierge. |
 | **Super** | Users who want smarter discovery and light AI help | Everything in Free, plus **limited AI**: Smart AI matching (profile-based), better event suggestions, mid-level planning support (activity/place ideas from interests, location, preferences, wishlist), and support with the opening move in chats. **Not** the full concierge (no weather-aware rescheduling, full trip planning, or “do it for me” coordination). |
 | **Premium** | Users who want the full “5-star” experience | Everything in Super, plus **full AI and concierge**: full concierge service (weather checks, postpone/indoor suggestions, trip planning, routes, coordination), and full AI matching/suggestions everywhere the Spark appears. **Server-side:** Premium/Enterprise requests use **Anthropic Claude** as the primary LLM when `ANTHROPIC_API_KEY` is configured (Gemini/OpenAI as fallbacks). |
 
@@ -26,7 +26,7 @@ This document defines Winkly subscription tiers (Free, Super, Premium), how AI i
 | Basic ranking / relevant feed (non-AI) | ✅ | ✅ | ✅ |
 | **Smart AI matching** (profile analysis, better match order) | ❌ | ✅ | ✅ |
 | **Better event suggestions** (AI) | ❌ | ✅ | ✅ |
-| **Planning ideas** (activities/places from interests, location, wishlist) | ❌ | ✅ | ✅ |
+| **Planning ideas** (activities/places from interests, location, wishlist) | ✅ (1 free plan) | ✅ | ✅ |
 | **Chat opener suggestion** (first message / icebreaker) | ❌ | ✅ | ✅ |
 | **Full concierge** (weather, reschedule suggestions, trip planning, routes) | ❌ | ❌ | ✅ |
 | **All Spark entry points** active (not greyed out) | ❌ | Limited* | ✅ |
@@ -63,7 +63,7 @@ This document defines Winkly subscription tiers (Free, Super, Premium), how AI i
 
 4. **Edge Function (server-side enforcement — IMPLEMENTED)**  
    - `ai-gateway` **derives the tier from `users.subscription_tier`** (server-side lookup, short Redis cache) and enforces a **tier access matrix** (`TASK_MIN_TIER`) for every billable AI task. The client gate (`lib/ai/aiFeatureGate.ts`) is **UX only** and is treated as untrusted.
-   - **Free = no AI** (all billable tasks denied). **Super+**: `chat_topics`, `planner_theme_plans`, `event_suggest`, `plan`, `winkly_plan`, `match_agent`. **Premium+** (full concierge): `concierge`, `match_bridge`.
+   - **Free** = one lifetime **`planner_theme_plans`** request (`AI_FREE_PLANNER_PLANS_QUOTA`, default **1**); all other billable tasks denied. **Super+**: `chat_topics`, `planner_theme_plans`, `event_suggest`, `plan`, `winkly_plan`, `match_agent`. **Premium+** (full concierge): `concierge`, `match_bridge`.
    - Denied requests return **HTTP 403** with `{ code: "ai_tier_required", tier, required_tier, upgrade_to }` so the client can show contextual upsell (`upgrade_to` = `super` or `premium`).
    - **Feature flags (env):** `AI_GATEWAY_DISABLED` (global kill switch → 503, `code: "ai_disabled"`) and `AI_DISABLED_TIERS="free,super"` (per-tier disable → 403, `code: "ai_disabled_for_tier"`).
    - **Cost guards:** output-token ceiling `AI_MAX_OUTPUT_TOKENS` (default 2048) on every provider call; input guard `AI_MAX_CONTEXT_CHARS` (default 24000 → 413, `code: "context_too_large"`); `user_prompt` truncated to 2000 chars; `candidates` clamped to 50.
@@ -84,7 +84,7 @@ This document defines Winkly subscription tiers (Free, Super, Premium), how AI i
 
 ## 6. Summary
 
-- **Free:** Full Winkly without AI; Spark visible but greyed, tap = upsell.  
+- **Free:** Full Winkly with **one free AI plan** in Planner; other Spark entry points greyed, tap = upsell.  
 - **Super:** Limited AI (matching, event suggestions, planning ideas, chat opener); Spark on for those, greyed for full concierge.  
 - **Premium:** Full AI + concierge; Spark on everywhere.  
 - **Activation:** Set `OPENAI_API_KEY`/`GEMINI_API_KEY`, deploy `ai-gateway`, store `subscription_tier`. AI access is **enforced server-side** in the gateway (tier matrix + feature flags + cost guards); the app gate is UX only.  

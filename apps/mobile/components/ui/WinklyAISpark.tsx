@@ -56,7 +56,7 @@ const FEATURE_UPSELL_MESSAGES: Record<
     {
       title: "AI planning ideas",
       message:
-        "Winkly AI suggests activities and places based on your interests, location, and wishlist. Upgrade to Super or Premium.",
+        "You've used your free AI plan. Upgrade to Super or Premium for unlimited planning ideas.",
     },
   chat_opener:
     {

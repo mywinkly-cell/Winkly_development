@@ -80,6 +80,15 @@ const STRUCTURED_UI_MAX_TOKENS = Math.max(
   Math.min(399, Math.floor(Number(Deno.env.get("AI_STRUCTURED_MAX_TOKENS") ?? "384")) || 384),
 );
 
+/** Two-option plan cards (winkly_plan / planner_theme_plans) need more room than generic structured UI. */
+const PLAN_OPTIONS_MAX_TOKENS = Math.max(
+  512,
+  Math.min(
+    2048,
+    Math.floor(Number(Deno.env.get("AI_PLAN_OPTIONS_MAX_TOKENS") ?? "1200")) || 1200,
+  ),
+);
+
 /** Cost guards. Output-token ceiling is applied to every provider call; input guards reject abuse. */
 const AI_LIMITS = {
   // Hard ceiling on output tokens per provider request (clamps every call's maxOutputTokens/max_tokens).
@@ -104,6 +113,9 @@ function capOutputTokens(requested: number): number {
 
 /** Structured UI tasks → brief JSON; narrative tasks → higher budget (still capped). */
 function resolveMaxTokens(task: string, requested = AI_LIMITS.narrativeMaxTokens): number {
+  if (task === "winkly_plan" || task === "planner_theme_plans") {
+    return capOutputTokens(PLAN_OPTIONS_MAX_TOKENS);
+  }
   if (STRUCTURED_UI_TASKS.has(task)) return STRUCTURED_UI_MAX_TOKENS;
   return capOutputTokens(Math.min(requested, AI_LIMITS.narrativeMaxTokens));
 }
@@ -127,7 +139,7 @@ const TIER_RANK: Record<SubscriptionTier, number> = { free: 0, super: 1, premium
  * (lib/ai/aiFeatureGate.ts) but enforced here so it cannot be bypassed.
  *  - "super": limited AI (smart matching, event suggestions, planning ideas, chat opener).
  *  - "premium": full concierge (weather-aware planning, coordination, first-date bridge).
- * Free tier is denied every AI task (Free = no AI, per SUBSCRIPTION_TIERS_AND_AI.md).
+ * Free tier is denied every AI task except `planner_theme_plans`, which has a lifetime quota.
  */
 const TASK_MIN_TIER: Record<string, SubscriptionTier> = {
   chat_topics: "super",
@@ -140,11 +152,58 @@ const TASK_MIN_TIER: Record<string, SubscriptionTier> = {
   match_bridge: "premium",
 };
 
+/** Lifetime free-tier allowance for `planner_theme_plans` (one AI plan generation). */
+const FREE_TIER_PLANNER_PLANS_QUOTA = Math.max(
+  0,
+  Math.min(10, parseInt(Deno.env.get("AI_FREE_PLANNER_PLANS_QUOTA") ?? "1", 10) || 1),
+);
+
 /** True when `tier` meets the minimum required for `task`. Non-AI tasks are always allowed. */
 function tierAllowsTask(tier: SubscriptionTier, task: string): boolean {
   const required = TASK_MIN_TIER[task];
   if (!required) return true;
   return TIER_RANK[tier] >= TIER_RANK[required];
+}
+
+async function countAiTaskUsage(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  task: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("ai_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("task", task);
+  if (error) {
+    console.error("ai_requests count failed:", error.message);
+    return Number.POSITIVE_INFINITY;
+  }
+  return count ?? 0;
+}
+
+type TaskAccessResult =
+  | { allowed: true }
+  | { allowed: false; reason: "tier" | "free_quota_exhausted" };
+
+/** Server-side task access including free-tier planner quota. */
+async function resolveTaskAccess(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  tier: SubscriptionTier,
+  task: string,
+): Promise<TaskAccessResult> {
+  if (tierAllowsTask(tier, task)) return { allowed: true };
+  if (
+    tier === "free" &&
+    task === "planner_theme_plans" &&
+    FREE_TIER_PLANNER_PLANS_QUOTA > 0
+  ) {
+    const used = await countAiTaskUsage(supabase, userId, task);
+    if (used < FREE_TIER_PLANNER_PLANS_QUOTA) return { allowed: true };
+    return { allowed: false, reason: "free_quota_exhausted" };
+  }
+  return { allowed: false, reason: "tier" };
 }
 
 /** Suggested upgrade target for client upsell when a task is denied. */
@@ -215,17 +274,23 @@ async function upstashPipeline(
 ): Promise<Array<{ result?: unknown; error?: string }>> {
   if (!UPSTASH_REDIS_REST_URL || !UPSTASH_REDIS_REST_TOKEN) return commands.map(() => ({ error: "redis_not_configured" }));
   const url = `${UPSTASH_REDIS_REST_URL.replace(/\/$/, "")}/pipeline`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${UPSTASH_REDIS_REST_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(commands.map((c) => ({ ...c, args: c.args.map(String) }))),
-  });
-  if (!res.ok) return commands.map(() => ({ error: `redis_http_${res.status}` }));
-  const data = await res.json() as Array<{ result?: unknown; error?: string }>;
-  return Array.isArray(data) ? data : commands.map(() => ({ error: "redis_bad_response" }));
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${UPSTASH_REDIS_REST_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(commands.map((c) => ({ ...c, args: c.args.map(String) }))),
+    });
+    if (!res.ok) return commands.map(() => ({ error: `redis_http_${res.status}` }));
+    const data = await res.json() as Array<{ result?: unknown; error?: string }>;
+    return Array.isArray(data) ? data : commands.map(() => ({ error: "redis_bad_response" }));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn("[ai-gateway] Upstash unreachable — skipping Redis op:", msg);
+    return commands.map(() => ({ error: "redis_unreachable" }));
+  }
 }
 
 async function redisGetJson<T>(key: string): Promise<T | null> {
@@ -2698,7 +2763,40 @@ function safeIsoOrNull(v: unknown): string | null {
   return d.toISOString();
 }
 
-function parseWinklyPlanOutput(text: string): WinklyPlanOutput | null {
+function mapsSearchUrlForVenue(venueName: string, city?: string, country?: string): string {
+  const q = [venueName, city, country].filter(Boolean).join(" ");
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q).replace(/%20/g, "+")}`;
+}
+
+function isNoVenueFallbackPlan(plan: WinklyPlanOutput | null | undefined): boolean {
+  if (!plan?.options?.length) return true;
+  return plan.options.every((o) => o.venue?.name === "No suitable venue found");
+}
+
+function coerceDurationMinutes(v: unknown): number {
+  if (typeof v === "number" && isFinite(v)) return Math.round(v);
+  if (typeof v === "string") {
+    const n = parseInt(v.replace(/[^\d]/g, ""), 10);
+    if (isFinite(n) && n > 0) return n;
+  }
+  return 120;
+}
+
+function extractPlanOptionsArray(obj: Record<string, unknown>): unknown[] | null {
+  const direct = obj.options;
+  if (Array.isArray(direct) && direct.length > 0) return direct;
+  const plan = obj.plan;
+  if (plan && typeof plan === "object") {
+    const nested = (plan as Record<string, unknown>).options;
+    if (Array.isArray(nested) && nested.length > 0) return nested;
+  }
+  return null;
+}
+
+function parseWinklyPlanOutput(
+  text: string,
+  opts?: { city?: string; country?: string },
+): WinklyPlanOutput | null {
   let raw = text.trim();
   const codeBlock = raw.match(/^```(?:json)?\s*([\s\S]*?)```$/);
   if (codeBlock) raw = codeBlock[1].trim();
@@ -2706,33 +2804,58 @@ function parseWinklyPlanOutput(text: string): WinklyPlanOutput | null {
   try {
     obj = JSON.parse(raw);
   } catch {
-    return null;
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        obj = JSON.parse(raw.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    } else {
+      return null;
+    }
   }
   if (!obj || typeof obj !== "object") return null;
   const o = obj as Record<string, unknown>;
 
-  const optionsRaw = o.options;
-  if (!Array.isArray(optionsRaw) || optionsRaw.length !== 2) return null;
+  const optionsRaw = extractPlanOptionsArray(o);
+  if (!optionsRaw?.length) return null;
 
   const parseOpt = (v: unknown, id: "A" | "B"): WinklyPlanOptionOut | null => {
     if (!v || typeof v !== "object") return null;
     const x = v as Record<string, unknown>;
 
     const option_id = x.option_id === "A" || x.option_id === "B" ? (x.option_id as "A" | "B") : id;
-    const character_label = typeof x.character_label === "string" ? x.character_label.trim() : "";
-    const title = typeof x.title === "string" ? x.title.trim() : "";
-    const why_this_fits = typeof x.why_this_fits === "string" ? x.why_this_fits.trim() : "";
-    const weather_note = typeof x.weather_note === "string" ? x.weather_note.trim() : "";
-    const duration_minutes =
-      typeof x.duration_minutes === "number" && isFinite(x.duration_minutes) ? Math.round(x.duration_minutes) : NaN;
-
     const venueRaw = x.venue;
     if (!venueRaw || typeof venueRaw !== "object") return null;
     const venue = venueRaw as Record<string, unknown>;
     const vname = typeof venue.name === "string" ? venue.name.trim() : "";
+    if (!vname || vname === "No suitable venue found") return null;
+
+    const character_label =
+      typeof x.character_label === "string" && x.character_label.trim()
+        ? x.character_label.trim()
+        : id === "A"
+          ? "Bolder pick"
+          : "Reliable pick";
+    const title =
+      typeof x.title === "string" && x.title.trim()
+        ? x.title.trim()
+        : vname;
+    const why_this_fits =
+      typeof x.why_this_fits === "string" && x.why_this_fits.trim()
+        ? x.why_this_fits.trim()
+        : `A strong fit for ${opts?.city ?? "your area"}.`;
+    let weather_note = typeof x.weather_note === "string" ? x.weather_note.trim() : "";
+    if (!weather_note) weather_note = "Check the forecast closer to your date.";
+    const duration_minutes = coerceDurationMinutes(x.duration_minutes);
+
     const vaddr = typeof venue.address === "string" ? venue.address.trim() : "";
-    const vmap = typeof venue.google_maps_link === "string" ? venue.google_maps_link.trim() : "";
-    const estimated_cost = typeof venue.estimated_cost === "string" ? venue.estimated_cost.trim() : "";
+    let vmap = typeof venue.google_maps_link === "string" ? venue.google_maps_link.trim() : "";
+    let estimated_cost = typeof venue.estimated_cost === "string" ? venue.estimated_cost.trim() : "";
+    if (!vmap) vmap = mapsSearchUrlForVenue(vname, opts?.city, opts?.country);
+    if (!estimated_cost) estimated_cost = "Varies";
     const booking_url =
       typeof venue.booking_url === "string" && /^https?:\/\//i.test(venue.booking_url)
         ? String(venue.booking_url).slice(0, 600)
@@ -2754,20 +2877,6 @@ function parseWinklyPlanOutput(text: string): WinklyPlanOutput | null {
             .slice(0, 10)
         : [];
 
-    if (
-      !title ||
-      !character_label ||
-      !why_this_fits ||
-      !vname ||
-      !vmap ||
-      !estimated_cost ||
-      !weather_note ||
-      !isFinite(duration_minutes) ||
-      duration_minutes <= 0
-    ) {
-      return null;
-    }
-
     return {
       option_id,
       character_label: character_label.slice(0, 40),
@@ -2786,10 +2895,58 @@ function parseWinklyPlanOutput(text: string): WinklyPlanOutput | null {
     };
   };
 
-  const a = parseOpt(optionsRaw[0], "A");
-  const b = parseOpt(optionsRaw[1], "B");
-  if (!a || !b) return null;
-  return { options: [a, b] };
+  const parsed = optionsRaw
+    .slice(0, 2)
+    .map((opt, idx) => parseOpt(opt, idx === 0 ? "A" : "B"))
+    .filter((opt): opt is WinklyPlanOptionOut => !!opt);
+
+  if (!parsed.length) return null;
+  if (parsed.length === 1) {
+    const twin: WinklyPlanOptionOut = {
+      ...parsed[0],
+      option_id: "B",
+      character_label: "Reliable pick",
+      title: parsed[0].title.length < 120 ? `${parsed[0].title} (alt)` : parsed[0].title,
+    };
+    return { options: [parsed[0], twin] };
+  }
+  return { options: [parsed[0], parsed[1]] };
+}
+
+async function runOpenAIPlanJson(
+  openaiKey: string,
+  system: string,
+  userContent: string,
+): Promise<string | null> {
+  const res = await fetchWithBackoff(
+    "https://api.openai.com/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${openaiKey}`,
+      },
+      body: JSON.stringify({
+        model: Deno.env.get("OPENAI_MODEL_PLAN") ?? "gpt-4o-mini",
+        max_tokens: resolveMaxTokens("winkly_plan"),
+        temperature: 0.5,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: userContent },
+        ],
+      }),
+    },
+    { retries: 2, baseMs: 700 },
+  );
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    console.error("[ai-gateway] OpenAI plan !ok status=" + res.status + " body=" + errBody.slice(0, 300));
+    return null;
+  }
+  const data = await res.json();
+  const text = data.choices?.[0]?.message?.content;
+  return typeof text === "string" ? text : null;
 }
 
 function noVenueFoundPlan(seedTitle: string): WinklyPlanOutput {
@@ -3064,13 +3221,17 @@ async function generateWinklyPlan(params: {
   multiDay?: { num_days: number } | null;
   /** Premium/Enterprise → Anthropic (Claude) for single-day plan JSON when ANTHROPIC_API_KEY is set. */
   tier?: SubscriptionTier;
+  /** Short label for fallback cards (e.g. activity theme) — not the full planning brief. */
+  displaySeedTitle?: string;
+  /** Verbatim Planner form text — preferred user brief for the model. */
+  planRequestText?: string;
   /** Pre-fetched [SYSTEM_CONTEXT] location block from middleware. */
   systemContextBlock?: string;
 }): Promise<{
   plan: WinklyPlanOutput;
   trip_days?: PlannerTripDayOut[];
   pending_plan_id: string | null;
-  provider: "gemini" | "anthropic" | "fallback";
+  provider: "gemini" | "anthropic" | "openai" | "fallback";
   location_id: string | null;
   booking_url: string | null;
   participants: string[];
@@ -3140,11 +3301,13 @@ async function generateWinklyPlan(params: {
   const userIdea = (input.planning_form.user_idea ?? "").trim();
   const weather = input.planning_form.weather ?? null;
 
-  const planSeedTitle = userIdea ? userIdea.slice(0, 120) : "Plan";
+  const planSeedTitle = (params.displaySeedTitle ?? userIdea ?? "Plan").trim().slice(0, 120) || "Plan";
 
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+  const openaiKey = Deno.env.get("OPENAI_API_KEY");
   const useAnthropicPlan = params.tier && isPremiumTier(params.tier) && !!anthropicKey;
+  const planRequestText = (params.planRequestText ?? userIdea).trim();
 
   const multiReq = params.multiDay;
   if (multiReq && multiReq.num_days > 1) {
@@ -3206,7 +3369,7 @@ async function generateWinklyPlan(params: {
     };
   }
 
-  if (!geminiKey && !useAnthropicPlan) {
+  if (!geminiKey && !useAnthropicPlan && !openaiKey) {
     const fallback = noVenueFoundPlan(planSeedTitle);
     return {
       plan: fallback,
@@ -3332,44 +3495,107 @@ Required JSON schema:
     ...(verifiedBookingUrl ? { BOOKING_URL: verifiedBookingUrl } : {}),
   };
 
+  const planUserContent = planRequestText
+    ? `USER_REQUEST (authoritative brief from the Planner form):\n\n${planRequestText}\n\n---\nStructured context:\n${JSON.stringify(payload)}`
+    : JSON.stringify(payload);
+
   let parsed: WinklyPlanOutput | null = null;
-  let planProvider: "gemini" | "anthropic" | "fallback" = "fallback";
+  let planProvider: "gemini" | "anthropic" | "openai" | "fallback" = "fallback";
 
   if (useAnthropicPlan && anthropicKey) {
     const anthropicText = await runAnthropicJson(
       anthropicKey,
       SYSTEM,
-      JSON.stringify(payload),
+      planUserContent,
       ANTHROPIC_MODEL_PLAN,
       resolveMaxTokens("winkly_plan"),
       0.5,
     );
-    parsed = anthropicText ? parseWinklyPlanOutput(anthropicText) : null;
+    parsed = anthropicText ? parseWinklyPlanOutput(anthropicText, { city, country }) : null;
     if (parsed) planProvider = "anthropic";
   }
 
   if (!parsed && geminiKey) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(geminiKey)}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_PLAN}:generateContent?key=${encodeURIComponent(geminiKey)}`;
     const body = {
       systemInstruction: { parts: [{ text: SYSTEM }] },
-      contents: [{ role: "user", parts: [{ text: JSON.stringify(payload) }] }],
+      contents: [{ role: "user", parts: [{ text: planUserContent }] }],
       generationConfig: {
         maxOutputTokens: resolveMaxTokens("winkly_plan"),
         temperature: 0.5,
         responseMimeType: "application/json",
       },
     };
-    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const res = await fetchWithBackoff(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }, { retries: 2, baseMs: 700 });
     if (res.ok) {
       const data = await res.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      parsed = typeof text === "string" ? parseWinklyPlanOutput(text) : null;
-      if (parsed) planProvider = "gemini";
+      const candidate = data.candidates?.[0];
+      const text = candidate?.content?.parts?.[0]?.text;
+      parsed = typeof text === "string" ? parseWinklyPlanOutput(text, { city, country }) : null;
+      if (parsed) {
+        planProvider = "gemini";
+      } else {
+        console.error("[ai-gateway] Gemini plan parse failed", {
+          finishReason: candidate?.finishReason,
+          textPreview: typeof text === "string" ? text.slice(0, 500) : null,
+        });
+      }
+    } else {
+      const errBody = await res.text().catch(() => "");
+      console.error("[ai-gateway] Gemini plan !ok status=" + res.status + " body=" + errBody.slice(0, 400));
     }
   }
 
+  if (!parsed && openaiKey) {
+    const openaiText = await runOpenAIPlanJson(openaiKey, SYSTEM, planUserContent);
+    parsed = openaiText ? parseWinklyPlanOutput(openaiText, { city, country }) : null;
+    if (parsed) planProvider = "openai";
+  }
+
+  if (!parsed && verifiedVenue) {
+    const mkFromVenue = (id: "A" | "B", label: string, title: string): WinklyPlanOptionOut => ({
+      option_id: id,
+      character_label: label,
+      title: title.slice(0, 140),
+      why_this_fits: `Matches your brief in ${city}.`,
+      itinerary: [
+        { time: "18:30", description: `Meet at ${verifiedVenue.name}` },
+        { time: "20:00", description: "Enjoy the experience" },
+      ],
+      venue: {
+        name: verifiedVenue.name,
+        address: verifiedVenue.address,
+        google_maps_link: verifiedVenue.google_maps_link,
+        estimated_cost: "Varies",
+        ...(verifiedBookingUrl ? { booking_url: verifiedBookingUrl } : {}),
+      },
+      weather_note: formatWeatherSnapshotProse(weather),
+      duration_minutes: 120,
+    });
+    parsed = {
+      options: [
+        mkFromVenue("A", "Bolder pick", planSeedTitle),
+        mkFromVenue("B", "Reliable pick", `${planSeedTitle} — classic`),
+      ],
+    };
+    planProvider = "fallback";
+  }
+
   let finalPlan: WinklyPlanOutput = parsed ?? noVenueFoundPlan(planSeedTitle);
-  if (!parsed) planProvider = "fallback";
+  if (!parsed) {
+    planProvider = "fallback";
+    console.error("[ai-gateway] generateWinklyPlan all providers failed — using fallback", {
+      city,
+      hasGemini: !!geminiKey,
+      hasAnthropic: !!anthropicKey,
+      hasOpenAI: !!openaiKey,
+      seedTitle: planSeedTitle,
+    });
+  }
 
   if (verifiedVenue) {
     finalPlan = applyVerifiedVenueToOptions(finalPlan, verifiedVenue, verifiedBookingUrl);
@@ -3483,8 +3709,22 @@ serve(async (req) => {
           { status: 403, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } }
         );
       }
-      // 3) Tier access matrix — enforce minimum subscription tier per task.
-      if (!tierAllowsTask(tier, task)) {
+      // 3) Tier access matrix — enforce minimum subscription tier per task (with free planner quota).
+      const taskAccess = await resolveTaskAccess(supabase, user.id, tier, task);
+      if (!taskAccess.allowed) {
+        if (taskAccess.reason === "free_quota_exhausted") {
+          return new Response(
+            JSON.stringify({
+              error: "You've used your free AI plan. Upgrade to Super or Premium for more.",
+              code: "ai_free_quota_exhausted",
+              tier,
+              required_tier: TASK_MIN_TIER[task],
+              upgrade_to: "super",
+              free_quota: FREE_TIER_PLANNER_PLANS_QUOTA,
+            }),
+            { status: 403, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } }
+          );
+        }
         const upgradeTo = suggestedUpgradeTier(task);
         return new Response(
           JSON.stringify({
@@ -3681,10 +3921,14 @@ serve(async (req) => {
 
       // Semantic caching: same theme/city/mode/day/trip length within 24h
       const semKey =
-        // v2: schema unified with winkly_plan options (venue/itinerary/etc.)
-        `sc:planner_theme_plans:v3:${mode}:${normalizeTag(city)}:${normalizeTag(theme)}:${dateTime.slice(0, 10)}:${tripNumDays}:${hashKeyMaterial(participantIds.slice().sort().join(","))}`;
+        // v4: higher plan token budget; skip caching fallback plans
+        `sc:planner_theme_plans:v4:${mode}:${normalizeTag(city)}:${normalizeTag(theme)}:${dateTime.slice(0, 10)}:${tripNumDays}:${hashKeyMaterial(participantIds.slice().sort().join(","))}`;
       const cached = await redisGetJson<PlannerThemePlansOutput>(semKey);
-      if (cached?.plan_options?.length) {
+      const cachedOptions = cached?.plan_options ?? [];
+      if (
+        cachedOptions.length &&
+        !isNoVenueFallbackPlan({ options: cachedOptions as WinklyPlanOptionOut[] })
+      ) {
         return new Response(JSON.stringify(cached), {
           headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
         });
@@ -3720,8 +3964,21 @@ serve(async (req) => {
         maps_grounding: "textsearch",
         multiDay: multiDayOpt,
         tier,
+        displaySeedTitle: theme,
+        planRequestText: pr || undefined,
         systemContextBlock: ptInjection ? formatSystemContextBlock(ptInjection) : undefined,
       });
+
+      if (isNoVenueFallbackPlan(out.plan)) {
+        return new Response(
+          JSON.stringify({
+            error: "Could not generate plan options right now. Please wait a moment and try again.",
+            code: "plan_generation_failed",
+            provider: out.provider,
+          }),
+          { status: 503, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } },
+        );
+      }
 
       const options = Array.isArray(out.plan?.options) ? out.plan.options : [];
       const response: PlannerThemePlansOutput = {
@@ -3731,8 +3988,18 @@ serve(async (req) => {
         })),
       };
 
-      await redisSetJson(semKey, response, 86400).catch(() => {});
-      return new Response(JSON.stringify(response), {
+      if (!isNoVenueFallbackPlan(out.plan)) {
+        await redisSetJson(semKey, response, 86400).catch(() => {});
+      }
+
+      const insPt = await supabase.from("ai_requests").insert({
+        user_id: user.id,
+        mode,
+        task,
+      }).select("id").single();
+      const requestIdPt = !insPt.error ? (insPt.data as { id?: string } | null)?.id ?? null : null;
+
+      return new Response(JSON.stringify({ ...response, request_id: requestIdPt, provider: out.provider }), {
         headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
     }

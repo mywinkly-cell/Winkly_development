@@ -1,6 +1,6 @@
 // ────────────────────────────────────────────────
 // AI feature gating by subscription tier
-// Free = no AI. Super = limited AI. Premium = full concierge.
+// Free = one AI plan (server-enforced quota). Super = limited AI. Premium = full concierge.
 // ────────────────────────────────────────────────
 
 import type { SubscriptionTier } from "@/types";
@@ -27,7 +27,7 @@ const PREMIUM_ONLY_FEATURES: AIFeature[] = ["concierge", "match_bridge"];
  * Whether the given tier has access to the given AI feature.
  */
 export function canUseAIFeature(tier: SubscriptionTier, feature: AIFeature): boolean {
-  if (tier === "free") return false;
+  if (tier === "free") return feature === "planning_ideas";
   if (PREMIUM_ONLY_FEATURES.includes(feature)) return tier === "premium" || tier === "enterprise";
   if (SUPER_FEATURES.includes(feature)) return tier === "super" || tier === "premium" || tier === "enterprise";
   return false;
