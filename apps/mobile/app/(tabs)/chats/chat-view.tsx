@@ -700,7 +700,7 @@ export default function ChatView({
       const dt = new Date(Date.now() + 48 * 3600_000);
       dt.setMinutes(0, 0, 0);
       setStrategicSelectedTopic(topic);
-      const plans = await getPlannerThemePlans({
+      const { plans } = await getPlannerThemePlans({
         mode: conversationMode,
         theme: topic.title,
         participantUserIds: participants.map((p) => p.id),

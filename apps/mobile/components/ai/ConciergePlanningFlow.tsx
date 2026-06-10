@@ -58,7 +58,6 @@ import {
 import { buildPlanRequestText, inclusivePlanDayCount } from "@/lib/ai/buildPlanRequestText";
 import { loadPlanningProfileContext, formatSanitizedPersonaForConciergePrompt } from "@/lib/ai/customPlanPresets";
 import { supabase } from "@/lib/supabase";
-import { saveConciergeFeedback, type ConciergeFeedbackType } from "@/lib/ai/conciergeStorage";
 import { getPartnersForConcierge, searchWinklyUsersForInvite, type ConciergePartner } from "@/lib/ai/conciergePartners";
 import { getMergedDeviceWhiteSpaceSlots, formatCalendarWhiteSpaceForGateway } from "@/lib/integrations/calendarWhiteSpace";
 import { buildBookingContextForAi } from "@/lib/integrations/bookingLinks";
@@ -163,7 +162,7 @@ export function ConciergePlanningFlow({
   const [error, setError] = useState<string | null>(null);
   const [noOptionsReason, setNoOptionsReason] = useState<string | null>(null);
   const lastContextRef = useRef<ConciergeContext | null>(null);
-  const [showFeedbackFor, setShowFeedbackFor] = useState<ExperienceOption | null>(null);
+  const [lastRequestId, setLastRequestId] = useState<string | undefined>(undefined);
   const [invitePickerChoice, setInvitePickerChoice] = useState<"matches" | "friends" | "contacts" | null>(null);
   const [invitePickerFromStep, setInvitePickerFromStep] = useState<"social" | "invite">("invite");
   const [contactsQuery, setContactsQuery] = useState("");
@@ -487,7 +486,7 @@ export function ConciergePlanningFlow({
         dateTimeIso: dt.toISOString(),
         refinement_feedback: refinement_feedback ?? null,
       });
-      const plans = await getPlannerThemePlans({
+      const { plans, requestId } = await getPlannerThemePlans({
         mode: effectiveMode,
         theme,
         partnerUserId: partnerId ?? undefined,
@@ -506,6 +505,7 @@ export function ConciergePlanningFlow({
         },
       });
       if (genId !== genAttemptRef.current) return;
+      if (requestId) setLastRequestId(requestId);
       trace("generate:response", {
         count: plans.length,
         venues: plans.slice(0, 2).map((p) => p?.venue?.name).filter(Boolean),
@@ -1251,10 +1251,8 @@ export function ConciergePlanningFlow({
           exactTimeHm={details.singleDay !== false ? details.exactTimeHm : undefined}
           mode={effectiveMode}
           contextForPendingPlan={lastContextRef.current}
-          onDone={() => {
-            if (chosenOption) setShowFeedbackFor(chosenOption);
-            else onClose();
-          }}
+          aiRequestId={lastRequestId}
+          onDone={onClose}
           onBack={() => {
             setChosenIndex(null);
             setFlowStep(showInviteStepBeforePlanner ? "invite" : "suggestions");
@@ -1265,42 +1263,6 @@ export function ConciergePlanningFlow({
       )}
 
       </View>
-
-      <Modal visible={showFeedbackFor != null} transparent animationType="fade">
-        <Pressable style={styles.feedbackBackdrop} onPress={() => { setShowFeedbackFor(null); onClose(); }}>
-          <Pressable style={styles.feedbackCard} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.feedbackTitle}>How did it go?</Text>
-            <View style={styles.feedbackActions}>
-              {(["went_well", "didnt_use", "not_quite_right"] as ConciergeFeedbackType[]).map((fb) => (
-                <TouchableOpacity
-                  key={fb}
-                  style={styles.feedbackBtn}
-                  onPress={async () => {
-                    Haptics.selectionAsync();
-                    if (showFeedbackFor) {
-                      await saveConciergeFeedback(
-                        String(showFeedbackFor.option_name ?? showFeedbackFor.narrative ?? "Plan"),
-                        fb,
-                        effectiveMode
-                      );
-                    }
-                    setShowFeedbackFor(null);
-                    onClose();
-                  }}
-                  activeOpacity={0.9}
-                >
-                  <Text style={styles.feedbackBtnText}>
-                    {fb === "went_well" ? "Went well" : fb === "didnt_use" ? "Didn't use" : "Not quite right"}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity style={styles.feedbackSkip} onPress={() => { setShowFeedbackFor(null); onClose(); }}>
-              <Text style={styles.feedbackSkipText}>Skip</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 }
@@ -1474,32 +1436,6 @@ const styles = StyleSheet.create({
   },
   planActionText: { ...Typography.caption, color: Colors.white, fontWeight: "600" },
   planActionIcon: { padding: 10 },
-  feedbackBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  feedbackCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: 24,
-    width: "100%",
-    maxWidth: 340,
-  },
-  feedbackTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 20, textAlign: "center" },
-  feedbackActions: { gap: 10 },
-  feedbackBtn: {
-    backgroundColor: Colors.gray100,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  feedbackBtnText: { ...Typography.body, color: Colors.primaryViolet, fontWeight: "600" },
-  feedbackSkip: { alignItems: "center", marginTop: 12 },
-  feedbackSkipText: { ...Typography.caption, color: Colors.gray500 },
   backRow: {
     flexDirection: "row",
     alignItems: "center",

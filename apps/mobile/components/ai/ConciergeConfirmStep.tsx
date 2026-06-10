@@ -17,7 +17,13 @@ import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography } from "@/constants/tokens";
-import { callWinklyPlan, type ConciergeContext, type ExperienceOption, type WinklyPlanOption } from "@/lib/ai/conciergeClient";
+import {
+  callWinklyPlan,
+  reportConciergeOutcome,
+  type ConciergeContext,
+  type ExperienceOption,
+  type WinklyPlanOption,
+} from "@/lib/ai/conciergeClient";
 import type { PlannerThemePlanOption, PlannerTripDay } from "@/lib/ai/strategicHost";
 import type { Mode } from "@/types";
 import { createPlannerItemForSelf, createPlannerInvite } from "@/lib/plannerInvitations";
@@ -26,6 +32,7 @@ import { createDirectChat, sendMessage } from "@/lib/chats";
 import { getPlannerItems } from "@/lib/access/planner";
 import { supabase } from "@/lib/supabase";
 import { recordBusinessAnalyticsEvent } from "@/lib/business/analyticsStore";
+import { PlanRecommendationFeedback } from "@/components/planner/PlanRecommendationFeedback";
 
 type PlannerItemRow = { id: string; title: string; starts_at: string; ends_at: string | null };
 
@@ -102,6 +109,8 @@ export type ConciergeConfirmStepProps = {
   onBack: () => void;
   /** When set, show "Correct Details" to refine (e.g. "Make it cheaper", "Earlier time"). Calls with refinement hint. */
   onCorrectDetails?: (refinementHint: string) => void;
+  /** Links thumb feedback to ai_requests.outcome_satisfaction when set. */
+  aiRequestId?: string;
   showInlineBack?: boolean;
 };
 
@@ -119,6 +128,7 @@ export function ConciergeConfirmStep({
   onDone,
   onBack,
   onCorrectDetails,
+  aiRequestId,
   showInlineBack = true,
 }: ConciergeConfirmStepProps) {
   const [saving, setSaving] = useState(false);
@@ -249,6 +259,13 @@ export function ConciergeConfirmStep({
         : locationLineDisplay?.trim()
           ? locationLineDisplay.trim()
           : undefined;
+      const conciergeMeta: Record<string, unknown> = {
+        from_concierge: true,
+        ...(aiRequestId ? { ai_request_id: aiRequestId } : {}),
+        activity,
+        location,
+        place,
+      };
       const payload = {
         title,
         description: why || undefined,
@@ -258,6 +275,7 @@ export function ConciergeConfirmStep({
         activity,
         location,
         place,
+        item_meta: conciergeMeta,
       };
 
       if (structuredPlan?.trip_days?.length) {
@@ -282,6 +300,8 @@ export function ConciergeConfirmStep({
             location,
             place,
             item_meta: {
+              from_concierge: true,
+              ...(aiRequestId ? { ai_request_id: aiRequestId } : {}),
               concierge_trip: true,
               trip_day: d.day,
               trip_date: d.date,
@@ -375,6 +395,9 @@ export function ConciergeConfirmStep({
         }
       } else {
         const itemId = await createPlannerItemForSelf(meId, payload);
+        if (aiRequestId) {
+          void reportConciergeOutcome(aiRequestId, "added_to_planner");
+        }
         if (mode === "romance") {
           void requestDateSafetyPrompt({
             plannerItemId: itemId,
@@ -441,6 +464,13 @@ export function ConciergeConfirmStep({
           ))}
         </View>
       ) : null}
+
+      <PlanRecommendationFeedback
+        planSummary={title}
+        mode={mode}
+        aiRequestId={aiRequestId}
+        label="Did this match what you had in mind?"
+      />
 
       <TouchableOpacity
         style={styles.sharePlanBtn}

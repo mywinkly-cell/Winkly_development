@@ -10,6 +10,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
+import {
+  buildLocationContextInjection,
+  formatSystemContextBlock,
+  mergeLocationHints,
+  type LocationContextInjection,
+} from "./locationContext.ts";
 
 /**
  * Gemini model routing — defaults use real Generative Language API model IDs.
@@ -58,10 +64,31 @@ const AI_DISABLED_TIERS: Set<SubscriptionTier> = new Set(
     .filter((s): s is SubscriptionTier => ["free", "super", "premium", "enterprise"].includes(s)),
 );
 
+/** Tasks whose responses are structured JSON keys for UI cards — keep outputs brief (<400 tokens). */
+const STRUCTURED_UI_TASKS = new Set<string>([
+  "plan",
+  "concierge",
+  "event_suggest",
+  "planner_theme_plans",
+  "winkly_plan",
+  "chat_topics",
+]);
+
+/** Default max output for structured UI tasks (under 400 — app renders precise JSON keys, not prose). */
+const STRUCTURED_UI_MAX_TOKENS = Math.max(
+  128,
+  Math.min(399, Math.floor(Number(Deno.env.get("AI_STRUCTURED_MAX_TOKENS") ?? "384")) || 384),
+);
+
 /** Cost guards. Output-token ceiling is applied to every provider call; input guards reject abuse. */
 const AI_LIMITS = {
   // Hard ceiling on output tokens per provider request (clamps every call's maxOutputTokens/max_tokens).
   maxOutputTokens: Math.max(64, Math.floor(Number(Deno.env.get("AI_MAX_OUTPUT_TOKENS") ?? "2048")) || 2048),
+  // Narrative tasks (match_agent, match_bridge) may request more tokens; still capped by maxOutputTokens.
+  narrativeMaxTokens: Math.max(
+    STRUCTURED_UI_MAX_TOKENS,
+    Math.floor(Number(Deno.env.get("AI_NARRATIVE_MAX_TOKENS") ?? "900")) || 900,
+  ),
   // Max characters of serialized request context (rejects oversized prompts → token-cost abuse).
   maxContextChars: Math.max(2000, Math.floor(Number(Deno.env.get("AI_MAX_CONTEXT_CHARS") ?? "24000")) || 24000),
   // Max characters of the free-text user prompt.
@@ -73,6 +100,12 @@ const AI_LIMITS = {
 /** Clamp a requested output-token count to the configured per-request ceiling. */
 function capOutputTokens(requested: number): number {
   return Math.max(1, Math.min(requested, AI_LIMITS.maxOutputTokens));
+}
+
+/** Structured UI tasks → brief JSON; narrative tasks → higher budget (still capped). */
+function resolveMaxTokens(task: string, requested = AI_LIMITS.narrativeMaxTokens): number {
+  if (STRUCTURED_UI_TASKS.has(task)) return STRUCTURED_UI_MAX_TOKENS;
+  return capOutputTokens(Math.min(requested, AI_LIMITS.narrativeMaxTokens));
 }
 
 /** Tasks that invoke a paid model (and so must be tier-gated, rate-limited, and cost-guarded). */
@@ -1474,7 +1507,7 @@ Context-aware behavior (use source_screen and source_planner_tab from Context to
 - source_screen=planner, source_planner_tab=events: Same for Events (source_mode=events). Analyze saved events; suggest events (Winkly first via get_winkly_events), or plan something event-like (concerts, workshops) and add to planner.
 - source_screen=chats or absent: Be helpful for general planning; use mode from Context. If user_prompt or activity_hint is provided, treat it as the main request and adapt. If weather_snapshot is provided, use it to tailor suggestions (e.g. indoor if rain) instead of calling get_weather for that same slot.
 
-Output format: You MUST respond with valid JSON only, no markdown, no preamble. Prefer the DETAILED shape so the UI can show Concierge Tips. Exactly 3 items in "options". Put Winkly options FIRST in the array (so the UI can show "Winkly first"). For any option that comes from a Winkly event (get_winkly_events), include in that option: "source": "winkly_event" and "winkly_event_id": "<event id from the tool result>".
+Output format: You MUST respond with valid JSON only — no markdown, no preamble, no conversational filler. Keep every string value SHORT (option_name ≤80 chars, why_this_fits/logic_bridge ≤120 chars, itinerary steps ≤60 chars). The app renders UI from precise keys, not prose. Prefer the DETAILED shape. Exactly 3 items in "options". Put Winkly options FIRST. For Winkly events include "source": "winkly_event" and "winkly_event_id".
 
 Minimal shape (allowed): {"options":[{"option_name":"...","why_this_fits":"...","schedule":["7:00 PM - Activity",...],"business_link":"...","weather_note":"...","price_indicator":"€|€€|€€€"}]}
 
@@ -1483,7 +1516,7 @@ Detailed shape (preferred): {"options":[{"option_id":"opt_1","option_name":"..."
 If you call tools first, after the final turn return this JSON.`;
 
 /** Variant B: more concise, more "vibe" language — for A/B test (add-to-planner rate, satisfaction). */
-const CONCIERGE_SYSTEM_PROMPT_B = `You are Winkly's Concierge. Be concise and vibe-led. Use PRIMARY_USER and PARTNER_USER profile (age, gender, city, interests, lifestyle, dietary) to tailor every suggestion. Prioritize: 1) Safety (allergies, dietary). 2) Context (weather, schedule). 3) DNA match (interests, lifestyle, age, gender). Prefer WINKLY_EVENTS_CANDIDATES then WINKLY_BUSINESS_CANDIDATES when relevant; EXTERNAL_PLACE_HINTS are POI hints only. If a real Winkly event fits, options[0] with source winkly_event + winkly_event_id. Else get_winkly_events. When refinement_structured is provided: cheaper → lower budget; earlier → earlier times; more_relaxed → calmer venues; different_vibe → different atmosphere. Respond with valid JSON only. Exactly 3 items in "options". Put Winkly options first. For options from get_winkly_events include "source": "winkly_event" and "winkly_event_id". Preferred shape: {"options":[{"option_id":"opt_1","option_name":"...","logic_bridge":"Why it fits.","itinerary":[{"time":"18:00","activity":"..."}],"schedule":["18:00 - ..."],"logistics":{...},"price_indicator":"€€"}]}.`;
+const CONCIERGE_SYSTEM_PROMPT_B = `You are Winkly's Concierge. Ultra-brief JSON only — short strings, no prose. Use profiles + [SYSTEM_CONTEXT] location hints. Safety → context → DNA. Prefer Winkly supply; EXTERNAL_PLACE_HINTS = POI hints only. Exactly 3 terse "options". Put Winkly first. Shape: {"options":[{"option_id":"opt_1","option_name":"...","logic_bridge":"≤120 chars","itinerary":[{"time":"18:00","activity":"..."}],"price_indicator":"€€"}]}.`;
 
 function getSystemPrompt(variant: "A" | "B"): string {
   return variant === "B" ? CONCIERGE_SYSTEM_PROMPT_B : CONCIERGE_SYSTEM_PROMPT;
@@ -2114,7 +2147,12 @@ function conciergeUserMessage(task: string, context: Record<string, unknown>): s
 
 function conciergeSystemPromptAugment(base: string, context: Record<string, unknown>): string {
   const hasPr = typeof context.plan_request_text === "string" && String(context.plan_request_text).trim().length > 0;
-  const parts = [base];
+  const parts: string[] = [];
+  const injection = context.SYSTEM_CONTEXT_LOCATION as LocationContextInjection | undefined;
+  if (injection) {
+    parts.push(formatSystemContextBlock(injection));
+  }
+  parts.push(base);
   if (hasPr) {
     parts.push(
       "When USER_REQUEST appears in the user message, it is the authoritative brief (topic, place, dates, budget, weather). Follow it. Do not invent a different city, date range, or budget.",
@@ -2130,7 +2168,25 @@ function conciergeSystemPromptAugment(base: string, context: Record<string, unkn
       "DECISIVE MODE — OVERRIDES PRIOR \"Exactly 3 items\" INSTRUCTION: Return exactly 2 items in \"options\" (not 3). options[0] = your single best recommendation (primary). options[1] = one backup if the primary is unavailable or a poor fit—briefly say why in logic_bridge or narrative. Put Winkly-sourced rows first when applicable.",
     );
   }
+  parts.push(
+    `TOKEN BUDGET: max ${STRUCTURED_UI_MAX_TOKENS} output tokens. JSON only; omit empty fields; keep all string values minimal.`,
+  );
   return parts.join("\n\n");
+}
+
+/** Middleware: capture user message → parallel location fetches → inject SYSTEM_CONTEXT + merge place hints. */
+async function applyLocationContextMiddleware(
+  context: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const injection = await buildLocationContextInjection(context, geocodeCity);
+  if (!injection) return context;
+  const mergedHints = mergeLocationHints(injection);
+  const existing = Array.isArray(context.EXTERNAL_PLACE_HINTS) ? context.EXTERNAL_PLACE_HINTS : [];
+  return {
+    ...context,
+    SYSTEM_CONTEXT_LOCATION: injection,
+    EXTERNAL_PLACE_HINTS: mergedHints.length ? mergedHints : existing,
+  };
 }
 
 async function runGeminiWithTools(
@@ -2164,7 +2220,7 @@ async function runGeminiWithTools(
     const body: Record<string, unknown> = {
       systemInstruction: { parts: [{ text: sysFull }] },
       contents,
-      generationConfig: { maxOutputTokens: capOutputTokens(1024), temperature: 0.7 },
+      generationConfig: { maxOutputTokens: resolveMaxTokens(task), temperature: 0.7 },
     };
     // Grounding control: only enable Gemini tools (Maps/Search/etc.) for final plan phase.
     // We treat winkly_plan + concierge/plan/event_suggest as "final"; topic/theme previews should not invoke tools.
@@ -2275,7 +2331,7 @@ async function runOpenAIWithTools(
     const body: Record<string, unknown> = {
       model: "gpt-4o-mini",
       messages,
-      max_tokens: capOutputTokens(1024),
+      max_tokens: resolveMaxTokens(task),
     };
     if (["plan", "concierge", "event_suggest"].includes(task)) {
       body.tools = conciergeOpenAiTools(context);
@@ -2476,7 +2532,7 @@ async function runAnthropicWithTools(
   while (turn < maxTurns) {
     const body: Record<string, unknown> = {
       model,
-      max_tokens: capOutputTokens(1024),
+      max_tokens: resolveMaxTokens(task),
       temperature: 0.7,
       system: sysFull,
       messages,
@@ -2971,7 +3027,7 @@ Return JSON only:
     systemInstruction: { parts: [{ text: SYSTEM }] },
     contents: [{ role: "user", parts: [{ text: JSON.stringify(payload) }] }],
     generationConfig: {
-      maxOutputTokens: capOutputTokens(2048),
+      maxOutputTokens: resolveMaxTokens("planner_theme_plans"),
       temperature: 0.45,
       responseMimeType: "application/json",
     },
@@ -3008,6 +3064,8 @@ async function generateWinklyPlan(params: {
   multiDay?: { num_days: number } | null;
   /** Premium/Enterprise → Anthropic (Claude) for single-day plan JSON when ANTHROPIC_API_KEY is set. */
   tier?: SubscriptionTier;
+  /** Pre-fetched [SYSTEM_CONTEXT] location block from middleware. */
+  systemContextBlock?: string;
 }): Promise<{
   plan: WinklyPlanOutput;
   trip_days?: PlannerTripDayOut[];
@@ -3220,13 +3278,14 @@ async function generateWinklyPlan(params: {
     }
   }
 
-  const SYSTEM = `You are Winkly Concierge Agent.
+  const SYSTEM = `${params.systemContextBlock ? `${params.systemContextBlock}\n\n` : ""}You are Winkly Concierge Agent.
 
 You will receive: multiple participant profiles (interests, allergies, lifestyle, location) and planning form data (idea/date_time/budget/weather).
 
 Rules:
 - Validate the user's idea against ALL participant constraints.
 - Return exactly two plan options as JSON: { "options": [ {...}, {...} ] }.
+- Keep every string SHORT (title ≤80 chars, why_this_fits ≤120 chars, itinerary descriptions ≤60 chars). JSON only — no prose.
 - Option A — the bolder, more memorable choice. character_label: pick from ["Bolder pick","Surprising choice","Hidden gem","Local favourite"].
 - Option B — the safer, reliable choice. character_label: pick from ["Classic choice","Safe & solid","Reliable pick","Crowd pleaser"].
 - Use your world knowledge to suggest real, specific venues in the city and country provided (named restaurants, cafés, cultural venues, etc.). Do not invent fake URLs.
@@ -3282,7 +3341,7 @@ Required JSON schema:
       SYSTEM,
       JSON.stringify(payload),
       ANTHROPIC_MODEL_PLAN,
-      1400,
+      resolveMaxTokens("winkly_plan"),
       0.5,
     );
     parsed = anthropicText ? parseWinklyPlanOutput(anthropicText) : null;
@@ -3295,7 +3354,7 @@ Required JSON schema:
       systemInstruction: { parts: [{ text: SYSTEM }] },
       contents: [{ role: "user", parts: [{ text: JSON.stringify(payload) }] }],
       generationConfig: {
-        maxOutputTokens: capOutputTokens(1400),
+        maxOutputTokens: resolveMaxTokens("winkly_plan"),
         temperature: 0.5,
         responseMimeType: "application/json",
       },
@@ -3537,6 +3596,8 @@ serve(async (req) => {
           ? rawConv
           : null;
 
+      const locCtxWp = await applyLocationContextMiddleware({ ...scrubbedSafeContext });
+      const wpInjection = locCtxWp.SYSTEM_CONTEXT_LOCATION as LocationContextInjection | undefined;
       const out = await generateWinklyPlan({
         supabase,
         requesterUserId: user.id,
@@ -3545,6 +3606,7 @@ serve(async (req) => {
         persistDraft: true,
         maps_grounding: "verify",
         tier,
+        systemContextBlock: wpInjection ? formatSystemContextBlock(wpInjection) : undefined,
       });
       const agentic_planning_output = {
         topic: out.plan.options?.[0]?.title ?? "Plan",
@@ -3645,6 +3707,9 @@ serve(async (req) => {
       };
       const multiDayOpt = tripNumDays > 1 ? { num_days: tripNumDays } : null;
 
+      const locCtxPt = await applyLocationContextMiddleware({ ...scrubbedSafeContext, city, country: countryStr });
+      const ptInjection = locCtxPt.SYSTEM_CONTEXT_LOCATION as LocationContextInjection | undefined;
+
       // Single canonical plan generator: returns two options (A/B) in the WinklyPlanOption shape.
       const out = await generateWinklyPlan({
         supabase,
@@ -3655,6 +3720,7 @@ serve(async (req) => {
         maps_grounding: "textsearch",
         multiDay: multiDayOpt,
         tier,
+        systemContextBlock: ptInjection ? formatSystemContextBlock(ptInjection) : undefined,
       });
 
       const options = Array.isArray(out.plan?.options) ? out.plan.options : [];
@@ -3937,7 +4003,7 @@ serve(async (req) => {
       const planDateFrom = typeof scrubbedSafeContext.date_from === "string" ? scrubbedSafeContext.date_from : undefined;
       const planDateTo = typeof scrubbedSafeContext.date_to === "string" ? scrubbedSafeContext.date_to : undefined;
 
-      const [preEvents, businessSupply, sponsoredOffers, placeHints] = await Promise.all([
+      const [preEvents, businessSupply, sponsoredOffers] = await Promise.all([
         prefetchMatchingWinklyEvents(supabase, {
           mode,
           city: planCity,
@@ -3962,17 +4028,11 @@ serve(async (req) => {
           dateFrom: planDateFrom,
           dateTo: planDateTo,
         }),
-        fetchExternalVenueHints({
-          activityHint: String(scrubbedSafeContext.activity_hint ?? ""),
-          planRequest: String(scrubbedSafeContext.plan_request_text ?? scrubbedSafeContext.user_prompt ?? ""),
-          city: planCity,
-          country: countryStr,
-        }),
       ]);
       contextForLlm.WINKLY_EVENTS_CANDIDATES = preEvents;
       contextForLlm.WINKLY_SPONSORED_OFFERS = sponsoredOffers;
       contextForLlm.WINKLY_BUSINESS_CANDIDATES = businessSupply;
-      contextForLlm.EXTERNAL_PLACE_HINTS = placeHints;
+      contextForLlm = await applyLocationContextMiddleware(contextForLlm);
       // Conflict resolution: when planning with a partner, inject their planner so you only propose times that don't conflict
       if (partnerUserIdEarly && partnerUserIdEarly !== user.id) {
         const partnerPlannerRaw = await getPlannerItemsForUser(supabase, partnerUserIdEarly, undefined);
