@@ -77,7 +77,7 @@ export async function getPlannerThemePlans(params: {
    * When provided, this is forwarded to ai-gateway so `plan_request_text` and other allowlisted fields reach the model.
    */
   fullContext?: ConciergeContext;
-}): Promise<PlannerThemePlanOption[]> {
+}): Promise<{ plans: PlannerThemePlanOption[]; requestId?: string }> {
   const res = await callConcierge({
     task: "planner_theme_plans",
     context: {
@@ -111,6 +111,9 @@ export async function getPlannerThemePlans(params: {
     throw new Error(err);
   }
   const raw = (res as unknown as { plan_options?: PlannerThemePlanOption[] }).plan_options;
-  return Array.isArray(raw) ? raw : [];
+  return {
+    plans: Array.isArray(raw) ? raw : [],
+    requestId: res.request_id,
+  };
 }
 

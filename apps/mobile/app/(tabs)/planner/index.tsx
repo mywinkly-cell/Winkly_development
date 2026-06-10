@@ -47,6 +47,8 @@ import { WeeklyWeekendCard } from "@/components/planner/WeeklyWeekendCard";
 import { EventParticipantCard } from "@/components/ui/EventParticipantCard";
 import { PlannerHeader } from "@/components/layout/PlannerHeader";
 import { EventReminderModal } from "@/components/planner/EventReminderModal";
+import { PlanRecommendationFeedback } from "@/components/planner/PlanRecommendationFeedback";
+import type { PlanRecommendationRating } from "@/lib/ai/planRecommendationFeedback";
 import type { Mode } from "@/types";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 
@@ -90,6 +92,10 @@ type PlannerItem = {
   archivedAt?: string;
   /** Participants: for dates/1-1 = 2; for groups = 3+ with +N overflow */
   participants?: Participant[];
+  /** True when this plan was added from AI concierge. */
+  fromConcierge?: boolean;
+  aiRequestId?: string;
+  recommendationFeedback?: PlanRecommendationRating | null;
 };
 
 const AVATAR_SIZE = 40;
@@ -1342,6 +1348,25 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                           ))}
                       </View>
                     )}
+                    {isItemPast(selectedItem.dateStr) && selectedItem.fromConcierge ? (
+                      <PlanRecommendationFeedback
+                        planSummary={selectedItem.title}
+                        mode={
+                          selectedItem.source === "dates"
+                            ? "romance"
+                            : selectedItem.source === "meetups"
+                              ? "friends"
+                              : selectedItem.source === "business"
+                                ? "business"
+                                : "events"
+                        }
+                        aiRequestId={selectedItem.aiRequestId}
+                        plannerItemId={selectedItem.id}
+                        initialRating={selectedItem.recommendationFeedback ?? null}
+                        label="Did this meet your expectations?"
+                        compact
+                      />
+                    ) : null}
                     {isItemPast(selectedItem.dateStr) ? (
                       <Text style={styles.detailsHint}>This event has passed. It can no longer be managed.</Text>
                     ) : selectedItem.status === "archived" ? (
