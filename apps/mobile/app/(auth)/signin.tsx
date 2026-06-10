@@ -132,6 +132,9 @@ export default function Signin() {
               disabled={loading}
               activeOpacity={0.85}
               style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
+              accessibilityRole="button"
+              accessibilityLabel={t("auth.signin")}
+              accessibilityState={{ disabled: loading, busy: loading }}
             >
               {loading ? (
                 <ActivityIndicator color={Colors.accentYellow} />
@@ -140,13 +143,23 @@ export default function Signin() {
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => router.push("/(auth)/reset-password")} style={styles.resetLink}>
+            <TouchableOpacity
+              onPress={() => router.push("/(auth)/reset-password")}
+              style={styles.resetLink}
+              accessibilityRole="button"
+              accessibilityLabel={t("auth.forgotPassword")}
+            >
               <Text style={styles.resetText}>{t("auth.forgotPassword")}</Text>
             </TouchableOpacity>
 
             <OAuthButtons disabled={loading} hideDivider compact />
 
-            <TouchableOpacity onPress={() => router.replace("/(onboarding-personal)/get-started")} style={styles.footerLink}>
+            <TouchableOpacity
+              onPress={() => router.replace("/(onboarding-personal)/get-started")}
+              style={styles.footerLink}
+              accessibilityRole="button"
+              accessibilityLabel={`${t("auth.noAccount")} ${t("auth.signup")}`}
+            >
               <Text style={styles.footerText}>
                 {t("auth.noAccount")} <Text style={styles.link}>{t("auth.signup")}</Text>
               </Text>

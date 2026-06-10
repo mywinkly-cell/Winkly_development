@@ -68,6 +68,12 @@ export function DiscoverPeopleWhoLikedYou({
               activeOpacity={0.9}
               onPress={() => openProfile(item)}
               style={styles.card}
+              accessibilityRole="button"
+              accessibilityLabel={
+                canViewFull
+                  ? `View profile, ${item.name}${item.age != null ? `, age ${item.age}` : ""}. Liked you`
+                  : `Upgrade to see ${item.name}${item.age != null ? `, age ${item.age}` : ""}. Liked you`
+              }
             >
               <View style={[styles.cardPhotoWrap, !canViewFull && styles.cardPhotoBlur]}>
                 {item.photoUrl ? (

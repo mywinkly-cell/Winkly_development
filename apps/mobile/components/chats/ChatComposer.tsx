@@ -26,6 +26,7 @@ import {
   useAudioRecorderState,
 } from "expo-audio";
 import { Colors, Typography } from "@/constants/tokens";
+import { hitSlopForSize } from "@/constants/a11y";
 import { RecordingWaveform } from "@/components/chats/RecordingWaveform";
 
 const MAX_VOICE_SECONDS = 180;
@@ -68,6 +69,8 @@ function VoiceDraftPlayer({
       <Pressable
         onPress={toggle}
         style={[styles.previewPlayBtn, { backgroundColor: accentColor + "22" }]}
+        hitSlop={hitSlopForSize(40)}
+        accessibilityRole="button"
         accessibilityLabel={status.playing ? "Pause preview" : "Play preview"}
       >
         {status.isBuffering ? (
@@ -235,7 +238,12 @@ export function ChatComposer({
           <Text style={styles.replyText} numberOfLines={1}>
             Replying to: {replyPreview}
           </Text>
-          <Pressable onPress={onClearReply} hitSlop={10} accessibilityLabel="Cancel reply">
+          <Pressable
+            onPress={onClearReply}
+            hitSlop={hitSlopForSize(22)}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel reply"
+          >
             <Ionicons name="close-circle" size={22} color={Colors.gray500} />
           </Pressable>
         </View>
@@ -246,7 +254,10 @@ export function ChatComposer({
           onPress={onAttachPress}
           style={styles.attachBtn}
           disabled={busy || isRecording}
+          hitSlop={hitSlopForSize(42)}
+          accessibilityRole="button"
           accessibilityLabel="More actions"
+          accessibilityState={{ disabled: busy || isRecording }}
         >
           <Ionicons name="add" size={26} color={Colors.primaryViolet} />
         </Pressable>
@@ -260,6 +271,8 @@ export function ChatComposer({
               <Pressable
                 onPress={() => void stopRecordingToPreview()}
                 style={styles.recordingStopBtn}
+                hitSlop={hitSlopForSize(36)}
+                accessibilityRole="button"
                 accessibilityLabel="Stop recording"
               >
                 <Ionicons name="stop" size={18} color="#FFF" />
@@ -271,6 +284,8 @@ export function ChatComposer({
               <Pressable
                 onPress={discardVoiceDraft}
                 style={styles.discardBtn}
+                hitSlop={hitSlopForSize(40)}
+                accessibilityRole="button"
                 accessibilityLabel="Delete voice message"
               >
                 <Ionicons name="trash-outline" size={22} color={Colors.errorRed} />
@@ -295,7 +310,9 @@ export function ChatComposer({
                 <Pressable
                   onPress={handleMicPress}
                   style={styles.micInlineBtn}
-                  accessibilityLabel="Record voice message"
+                  hitSlop={hitSlopForSize(36)}
+                  accessibilityRole="button"
+                  accessibilityLabel={isRecording ? "Stop recording" : "Record voice message"}
                 >
                   <Ionicons name="mic-outline" size={22} color={Colors.gray600} />
                 </Pressable>
@@ -312,7 +329,10 @@ export function ChatComposer({
             { backgroundColor: accentColor },
             (!canSend || busy) && styles.sendBtnDisabled,
           ]}
+          hitSlop={hitSlopForSize(44)}
+          accessibilityRole="button"
           accessibilityLabel="Send message"
+          accessibilityState={{ disabled: !canSend || busy, busy }}
         >
           {busy ? (
             <ActivityIndicator size="small" color="#FFF" />

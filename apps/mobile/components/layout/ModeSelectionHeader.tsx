@@ -103,6 +103,8 @@ export function ModeSelectionHeader({ showSettingsIcon = false }: ModeSelectionH
         }}
         activeOpacity={0.8}
         style={leftBtnStyle}
+        accessibilityRole="button"
+        accessibilityLabel="Your profile"
       >
         <View style={{ width: HEADER.buttonSize, height: HEADER.buttonSize, borderRadius: HEADER.buttonRadius, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
           {profilePhotoUri ? (
@@ -134,6 +136,8 @@ export function ModeSelectionHeader({ showSettingsIcon = false }: ModeSelectionH
           }}
           activeOpacity={0.8}
           style={rightBtnStyle}
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
         >
           <Ionicons name="settings" size={HEADER.iconSize} color={Colors.primaryViolet} />
         </TouchableOpacity>

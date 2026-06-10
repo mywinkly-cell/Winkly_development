@@ -24,8 +24,8 @@ export function DiscoverUpgradeModal({ visible, primaryColor, onClose }: Props) 
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close upgrade dialog" accessibilityRole="button">
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()} accessibilityRole="none">
           <View style={styles.iconWrap}>
             <Ionicons name="sparkles" size={32} color={primaryColor} />
           </View>
@@ -35,11 +35,21 @@ export function DiscoverUpgradeModal({ visible, primaryColor, onClose }: Props) 
             match with more people every day.
           </Text>
 
-          <Pressable style={[styles.primaryBtn, { backgroundColor: primaryColor }]} onPress={goToPlans}>
+          <Pressable
+            style={[styles.primaryBtn, { backgroundColor: primaryColor }]}
+            onPress={goToPlans}
+            accessibilityRole="button"
+            accessibilityLabel="Choose Super or Premium subscription"
+          >
             <Text style={styles.primaryBtnText}>Choose Super or Premium</Text>
           </Pressable>
 
-          <Pressable style={styles.secondaryBtn} onPress={onClose}>
+          <Pressable
+            style={styles.secondaryBtn}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Maybe later"
+          >
             <Text style={styles.secondaryBtnText}>Maybe later</Text>
           </Pressable>
         </Pressable>

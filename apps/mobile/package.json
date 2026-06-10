@@ -20,6 +20,7 @@
     "test:e2e:ios": "maestro test --device \"iPhone 16\" -e EMAIL=qa@winkly.test -e PASSWORD=Test1234! .maestro/critical-path.yaml",
     "test:e2e:android": "maestro test --device emulator-5554 -e EMAIL=qa@winkly.test -e PASSWORD=Test1234! .maestro/critical-path.yaml",
     "audit-i18n": "node scripts/audit-i18n.mjs",
+    "audit-a11y": "node scripts/lint-a11y-touchables.mjs",
     "sync-i18n": "node scripts/sync-i18n-keys.mjs"
   },
   "dependencies": {

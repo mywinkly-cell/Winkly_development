@@ -25,6 +25,7 @@ import { FriendsBottomNav } from "@/components/layout/FriendsBottomNav";
 import { MatchCardOverlay } from "@/components/matching/MatchCardOverlay";
 import { SwipeDeckEmptyState } from "@/components/matching/SwipeDeckEmptyState";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { HIT_SLOP } from "@/constants/a11y";
 import { supabase } from "@/lib/supabase";
 import { buildFriendsMatchTags, computeFriendsCompatibility, type FriendsProfile } from "@/lib/ai/friendsInsights";
 import { hasAnyAIAccess } from "@/lib/ai/aiFeatureGate";
@@ -540,7 +541,10 @@ export default function FriendsHome() {
                   onPress={() => currentProfile && animateCardOut("left", "pass")}
                   disabled={transitioning}
                   style={({ pressed }) => [styles.actionIconWrap, styles.actionIconGlowPass, pressed && styles.actionBtnPressed]}
+                  hitSlop={HIT_SLOP}
+                  accessibilityRole="button"
                   accessibilityLabel="Pass"
+                  accessibilityState={{ disabled: transitioning }}
                 >
                   <Ionicons name="close" size={ACTION_ICON_SIZE} color={Colors.friends.primary} />
                 </Pressable>
@@ -561,7 +565,10 @@ export default function FriendsHome() {
                     (superLikeRemainingToday <= 0 || transitioning) && styles.actionBtnDisabled,
                     pressed && styles.actionBtnPressed,
                   ]}
+                  hitSlop={HIT_SLOP}
+                  accessibilityRole="button"
                   accessibilityLabel="Super Connect"
+                  accessibilityState={{ disabled: transitioning || superLikeRemainingToday <= 0 }}
                 >
                   <Ionicons name="star" size={ACTION_ICON_SIZE} color="#E6B800" />
                 </Pressable>
@@ -572,7 +579,10 @@ export default function FriendsHome() {
                   onPress={() => currentProfile && animateCardOut("right", "addFriend")}
                   disabled={transitioning}
                   style={({ pressed }) => [styles.actionIconWrap, styles.actionIconGlowLike, pressed && styles.actionBtnPressed]}
+                  hitSlop={HIT_SLOP}
+                  accessibilityRole="button"
                   accessibilityLabel="Add friend"
+                  accessibilityState={{ disabled: transitioning }}
                 >
                   <Ionicons name="heart" size={ACTION_ICON_SIZE} color={Colors.friends.primary} />
                 </Pressable>

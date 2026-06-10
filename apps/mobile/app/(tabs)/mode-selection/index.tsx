@@ -253,6 +253,8 @@ export default function ModeSelectionIndex() {
               Haptics.selectionAsync();
               router.push(getModeSubProfileEditRoute(skippedMode) as never);
             }}
+            accessibilityRole="button"
+            accessibilityLabel={`${SKIPPED_MODE_BANNER[skippedMode].cta}. ${SKIPPED_MODE_BANNER[skippedMode].message}`}
             style={{
               marginBottom: 20,
               padding: 14,
@@ -376,6 +378,13 @@ function ModeCard({ testID, label, description, discoverLine, color, icon, iconI
         onPress={onPress}
         disabled={busy}
         android_ripple={{ color: "transparent" }}
+        accessibilityRole="button"
+        accessibilityLabel={
+          ready
+            ? `Enter ${label} mode. ${description}${discoverLine ? `. ${discoverLine}` : ""}`
+            : `${label} mode locked. ${description}. Set up your profile to unlock.`
+        }
+        accessibilityState={{ selected: active, disabled: busy }}
       >
         <Animated.View
           style={[

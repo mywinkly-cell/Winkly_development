@@ -83,6 +83,12 @@ export function DiscoverHorizontalSection({
                   activeOpacity={0.9}
                   onPress={() => openCard(item, index)}
                   style={styles.card}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    blurred
+                      ? `Upgrade to see ${item.name}${item.age != null ? `, age ${item.age}` : ""}`
+                      : `View profile, ${item.name}${item.age != null ? `, age ${item.age}` : ""}`
+                  }
                 >
                   <View style={styles.cardPhotoWrap}>
                     {item.photoUrl ? (
