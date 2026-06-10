@@ -6,12 +6,18 @@ import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { HIT_SLOP } from "@/constants/a11y";
 import { ModeSwitchCenterButton } from "@/components/layout/ModeSwitchCenterButton";
 
-type Tab = "home" | "discover" | "chats" | "planner";
+export type ModeNavTab = {
+  key: string;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+};
+
 type Mode = "romance" | "friends" | "business" | "events";
 
-const TAB_CONFIG: { key: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+export const DEFAULT_MODE_NAV_TABS: ModeNavTab[] = [
   { key: "home", label: "Home", icon: "home" },
   { key: "discover", label: "Discover", icon: "search" },
   { key: "chats", label: "Chats", icon: "chatbubble-outline" },
@@ -20,12 +26,13 @@ const TAB_CONFIG: { key: Tab; label: string; icon: keyof typeof Ionicons.glyphMa
 
 type Props = {
   mode: Mode;
-  activeTab: Tab;
+  activeTab: string;
   activeColor: string;
-  onNav: (tab: Tab) => void;
+  onNav: (tab: string) => void;
+  tabs?: ModeNavTab[];
 };
 
-export function ModeBottomNavShell({ mode, activeTab, activeColor, onNav }: Props) {
+export function ModeBottomNavShell({ mode, activeTab, activeColor, onNav, tabs = DEFAULT_MODE_NAV_TABS }: Props) {
   const insets = useSafeAreaInsets();
   const inactiveColor = Colors.gray500;
   const barHeight = Layout.bottomBarHeight + insets.bottom;
@@ -47,7 +54,7 @@ export function ModeBottomNavShell({ mode, activeTab, activeColor, onNav }: Prop
       )}
 
       <View style={[styles.row, { paddingTop: 12, paddingBottom }]}>
-        {TAB_CONFIG.slice(0, 2).map((tab) => (
+        {tabs.slice(0, 2).map((tab) => (
           <NavTab
             key={tab.key}
             label={tab.label}
@@ -61,7 +68,7 @@ export function ModeBottomNavShell({ mode, activeTab, activeColor, onNav }: Prop
 
         <ModeSwitchCenterButton mode={mode} />
 
-        {TAB_CONFIG.slice(2).map((tab) => (
+        {tabs.slice(2).map((tab) => (
           <NavTab
             key={tab.key}
             label={tab.label}
@@ -97,7 +104,10 @@ function NavTab({
     <Pressable
       onPress={onPress}
       style={styles.tab}
+      hitSlop={HIT_SLOP}
       accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
     >
       <Ionicons name={icon} size={24} color={color} />
       <Text style={[styles.tabLabel, { color }]}>{label}</Text>

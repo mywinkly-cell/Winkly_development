@@ -1,5 +1,7 @@
-import { BusinessAnalyticsDashboard } from "@/components/business/BusinessAnalyticsDashboard";
+import { Redirect } from "expo-router";
+import { Routes } from "@/constants/routes";
 
+/** Legacy alias — keep deep links working inside the business mode stack. */
 export default function BusinessAnalyticsRoute() {
-  return <BusinessAnalyticsDashboard />;
+  return <Redirect href={Routes.businessAnalytics} />;
 }
