@@ -73,7 +73,7 @@
 
 **Finding (2026-06-04):** All non-`en` locales were missing 2 keys: `settings.photoVerification`, `settings.photoVerificationSub` — patched to match `en.json`.
 
-**Ongoing:** Many screens still use hardcoded English (auth splash, terms-cookies, large planner/chat surfaces). Migrate incrementally with `useTranslation()` + keys in `en.json`.
+**Ongoing:** Large surfaces still partially hardcoded (e.g. `chat-view`, groups, events create forms). Auth, terms, planner hub/settings, and chat inbox are wired to i18n (156 new keys, 411 total; audit passes). Device locale applied on first launch when supported.
 
 ---
 

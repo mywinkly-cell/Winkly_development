@@ -1,25 +1,25 @@
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 
 export default function NotFoundScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   return (
     <View style={[styles.screen, { backgroundColor: Colors.background }]}>
-      <Text style={[Typography.h1, styles.title]}>Oops 👀</Text>
+      <Text style={[Typography.h1, styles.title]}>{t("notFound.title")}</Text>
 
-      <Text style={styles.text}>
-        The page you’re looking for doesn’t exist or has been moved.
-      </Text>
+      <Text style={styles.text}>{t("notFound.message")}</Text>
 
       <TouchableOpacity
         onPress={() => router.replace("/")}
         style={[styles.btn, { backgroundColor: Colors.primary }]}
         activeOpacity={0.9}
       >
-        <Text style={styles.btnText}>Go to home</Text>
+        <Text style={styles.btnText}>{t("notFound.goHome")}</Text>
       </TouchableOpacity>
     </View>
   );

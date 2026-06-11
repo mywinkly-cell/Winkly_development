@@ -9,13 +9,25 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localesDir = path.join(__dirname, "..", "lib", "i18n", "locales");
-const patchPath = path.join(__dirname, "..", "lib", "i18n", "patches", "auth-onboarding.json");
+const patchesDir = path.join(__dirname, "..", "lib", "i18n", "patches");
 
 const en = JSON.parse(fs.readFileSync(path.join(localesDir, "en.json"), "utf8"));
 const enKeys = Object.keys(en);
-const patches = fs.existsSync(patchPath)
-  ? JSON.parse(fs.readFileSync(patchPath, "utf8"))
-  : {};
+
+/** Merge all patch files in lib/i18n/patches/ (locale → key → translation). */
+function loadMergedPatches() {
+  const merged = {};
+  if (!fs.existsSync(patchesDir)) return merged;
+  for (const file of fs.readdirSync(patchesDir).filter((f) => f.endsWith(".json"))) {
+    const data = JSON.parse(fs.readFileSync(path.join(patchesDir, file), "utf8"));
+    for (const [locale, keys] of Object.entries(data)) {
+      merged[locale] = { ...(merged[locale] ?? {}), ...keys };
+    }
+  }
+  return merged;
+}
+
+const patches = loadMergedPatches();
 
 const files = fs
   .readdirSync(localesDir)

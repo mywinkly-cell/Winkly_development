@@ -6,6 +6,7 @@
 import React from "react";
 import { View, Text, Pressable, Image, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography } from "@/constants/tokens";
 import { getChatModeDisplay } from "@/lib/chats/modeDisplay";
 import type { Conversation, Message } from "@/lib/chats/types";
@@ -37,13 +38,19 @@ type ChatPreviewCardProps = {
   lastMessagePreview?: string;
 };
 
-function getLastMessagePreview(msg: Message | null): string {
-  if (!msg) return "No messages yet";
-  if (msg.delete_type === "for_everyone") return "Message deleted";
-  if (msg.message_type === "image" || msg.message_type === "gif") return "📷 Photo";
-  if (msg.message_type === "audio") return "🎤 Voice message";
+function getLastMessagePreview(msg: Message | null, labels: {
+  noMessages: string;
+  deleted: string;
+  photo: string;
+  voice: string;
+  message: string;
+}): string {
+  if (!msg) return labels.noMessages;
+  if (msg.delete_type === "for_everyone") return labels.deleted;
+  if (msg.message_type === "image" || msg.message_type === "gif") return `📷 ${labels.photo}`;
+  if (msg.message_type === "audio") return `🎤 ${labels.voice}`;
   if (msg.content?.trim()) return msg.content.trim();
-  return "Message";
+  return labels.message;
 }
 
 function ModeBadgeIcon({ mode }: { mode: ReturnType<typeof getChatModeDisplay> }) {
@@ -78,6 +85,14 @@ export function ChatPreviewCard({
   isOnline = false,
   lastMessagePreview,
 }: ChatPreviewCardProps) {
+  const { t } = useTranslation();
+  const previewLabels = {
+    noMessages: t("chat.noMessagesYet"),
+    deleted: t("chat.messageDeleted"),
+    photo: t("chat.photo"),
+    voice: t("chat.voiceMessage"),
+    message: t("chat.message"),
+  };
   const hasUnread = unreadCount > 0;
   const isDm = conversation.type === "dm";
   const canOpenProfile = isDm && participantAvatars.length === 1 && onAvatarPress;
@@ -88,7 +103,7 @@ export function ChatPreviewCard({
   const unreadBadgeColor = modeDisplay?.primary ?? Colors.primaryViolet;
   const previewText =
     lastMessagePreview ??
-    (isPendingRomanceInvite ? "Sent you a chat invite" : getLastMessagePreview(lastMessage));
+    (isPendingRomanceInvite ? "Sent you a chat invite" : getLastMessagePreview(lastMessage, previewLabels));
 
   const renderSingleAvatar = (entry: AvatarEntry) => (
     <View

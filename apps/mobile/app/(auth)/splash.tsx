@@ -5,6 +5,7 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, Easing, StyleSheet, Image } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Routes } from "@/constants/routes";
 import { Colors, Typography, FontFamily } from "@/constants/tokens";
 import { getIntroSeen, clearIntroSeen } from "@/lib/introFlags";
@@ -47,6 +48,7 @@ function destinationToPath(dest: SplashDestination): string {
 
 export default function Splash() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.96)).current;
@@ -189,7 +191,7 @@ export default function Splash() {
         </Animated.Text>
 
         <Animated.Text style={[styles.subtitle, { color: "rgba(255,255,255,0.85)" }]}>
-          Where every connection starts with a wink 😉
+          {t("auth.splash.tagline")}
         </Animated.Text>
       </Animated.View>
     </Animated.View>

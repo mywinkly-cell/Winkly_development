@@ -21,12 +21,14 @@ import {
 } from "react-native";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { getEmailRedirectTo } from "@/lib/authRedirectUrl";
 
 export default function ResetPassword() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [sentToEmail, setSentToEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -38,7 +40,7 @@ export default function ResetPassword() {
   const handleReset = async () => {
     const cleanEmail = email.trim();
     if (!cleanEmail) {
-      Alert.alert("Incomplete", "Please enter your email address.");
+      Alert.alert(t("auth.incomplete"), t("auth.reset.enterEmail"));
       return;
     }
 
@@ -53,7 +55,7 @@ export default function ResetPassword() {
       setSentToEmail(cleanEmail);
       setSent(true);
     } catch (err: any) {
-      Alert.alert("Error", err.message ?? "Unable to send reset link.");
+      Alert.alert(t("common.error"), err.message ?? t("auth.reset.sendFailed"));
     } finally {
       setLoading(false);
     }
@@ -96,7 +98,7 @@ export default function ResetPassword() {
                 marginBottom: 12,
               }}
             >
-              Forgot your password?
+              {t("auth.forgotPassword")}
             </Text>
             <Text
               style={{
@@ -106,11 +108,11 @@ export default function ResetPassword() {
                 marginBottom: 24,
               }}
             >
-              Enter your email address and we’ll send you a link to reset it.
+              {t("auth.reset.subtitle")}
             </Text>
 
             <TextInput
-              placeholder="Email"
+              placeholder={t("auth.email")}
               placeholderTextColor={Colors.gray500}
               value={email}
               onChangeText={setEmail}
@@ -138,7 +140,7 @@ export default function ResetPassword() {
                 <ActivityIndicator color={Colors.accentYellow} />
               ) : (
                 <Text style={{ ...Typography.button, color: Colors.accentYellow }}>
-                  Send reset link
+                  {t("auth.reset.sendLink")}
                 </Text>
               )}
             </TouchableOpacity>
@@ -148,7 +150,7 @@ export default function ResetPassword() {
               style={{ marginTop: 24 }}
             >
               <Text style={{ ...Typography.body, color: Colors.primaryViolet }}>
-                Back to Sign in
+                {t("auth.reset.backToSignIn")}
               </Text>
             </TouchableOpacity>
           </>
@@ -162,7 +164,7 @@ export default function ResetPassword() {
                 marginBottom: 12,
               }}
             >
-              📩 Check your inbox
+              📩 {t("auth.reset.checkInbox")}
             </Text>
             <Text
               style={{
@@ -172,7 +174,7 @@ export default function ResetPassword() {
                 marginBottom: 28,
               }}
             >
-              We’ve sent a password reset link to:
+              {t("auth.reset.sentTo")}
             </Text>
             <Text
               style={{
@@ -195,7 +197,7 @@ export default function ResetPassword() {
               }}
             >
               <Text style={{ ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" }}>
-                Already have the link? Set new password →
+                {t("auth.reset.haveLink")}
               </Text>
             </TouchableOpacity>
 
@@ -210,7 +212,7 @@ export default function ResetPassword() {
               }}
             >
               <Text style={{ ...Typography.button, color: Colors.accentYellow }}>
-                Return to Sign in
+                {t("auth.reset.returnToSignIn")}
               </Text>
             </TouchableOpacity>
           </>

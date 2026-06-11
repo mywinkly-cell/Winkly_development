@@ -16,6 +16,7 @@ import { SafeScreenView } from "@/components/SafeScreenView";
 import * as Haptics from "expo-haptics";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { getTermsAndCookiesAccepted, setTermsAndCookiesAccepted } from "@/lib/legalFlags";
 
@@ -24,6 +25,7 @@ const PRIVACY_URL = "https://winkly.app/privacy";
 const COOKIES_URL = "https://winkly.app/privacy#cookies";
 
 export default function TermsCookiesScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{ next?: string }>();
   const next =
@@ -78,10 +80,8 @@ export default function TermsCookiesScreen() {
           <View style={styles.iconWrap}>
             <Ionicons name="document-text" size={48} color={Colors.primaryViolet} />
           </View>
-          <Text style={styles.title}>Terms & Conditions</Text>
-          <Text style={styles.subtitle}>
-            To use Winkly, please read and accept our Terms of Service and our use of cookies. You can review our Privacy Policy and Data protection information at any time in Settings → Support & legal → Legal.
-          </Text>
+          <Text style={styles.title}>{t("legal.termsTitle")}</Text>
+          <Text style={styles.subtitle}>{t("legal.termsSubtitle")}</Text>
 
           <TouchableOpacity
             onPress={() => {
@@ -95,8 +95,10 @@ export default function TermsCookiesScreen() {
               {acceptedTerms && <Ionicons name="checkmark" size={18} color={Colors.white} />}
             </View>
             <Text style={styles.checkLabel}>
-              I have read and accept the{" "}
-              <Text style={styles.link} onPress={() => openUrl(TERMS_URL)}>Terms of Service</Text>
+              {t("legal.acceptTermsPrefix")}{" "}
+              <Text style={styles.link} onPress={() => openUrl(TERMS_URL)}>
+                {t("legal.termsOfService")}
+              </Text>
             </Text>
           </TouchableOpacity>
 
@@ -112,9 +114,14 @@ export default function TermsCookiesScreen() {
               {acceptedCookies && <Ionicons name="checkmark" size={18} color={Colors.white} />}
             </View>
             <Text style={styles.checkLabel}>
-              I accept the use of cookies and similar technologies as described in our{" "}
-              <Text style={styles.link} onPress={() => openUrl(COOKIES_URL)}>Cookie notice</Text> and{" "}
-              <Text style={styles.link} onPress={() => openUrl(PRIVACY_URL)}>Privacy Policy</Text>
+              {t("legal.acceptCookiesPrefix")}{" "}
+              <Text style={styles.link} onPress={() => openUrl(COOKIES_URL)}>
+                {t("legal.cookieNotice")}
+              </Text>{" "}
+              {t("legal.and")}{" "}
+              <Text style={styles.link} onPress={() => openUrl(PRIVACY_URL)}>
+                {t("legal.privacyPolicy")}
+              </Text>
             </Text>
           </TouchableOpacity>
 
@@ -129,7 +136,7 @@ export default function TermsCookiesScreen() {
             disabled={!canAccept}
           >
             <Text style={[styles.ctaText, !canAccept && styles.ctaTextDisabled]}>
-              Accept and continue
+              {t("legal.acceptAndContinue")}
             </Text>
           </TouchableOpacity>
         </View>

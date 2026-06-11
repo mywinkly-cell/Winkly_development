@@ -1,6 +1,6 @@
 # API Keys and Environment Variables — Winkly
 
-**Last updated:** 2026-06-07
+**Last updated:** 2026-06-10
 
 This doc lists every API key and env var used by Winkly, where they are used, and **how to set them**. You must set these yourself (in Supabase Dashboard / CLI and in the mobile app `.env`); the app cannot set them for you.
 
@@ -128,17 +128,19 @@ Audit what's set (names only — no values):
 npx supabase secrets list --project-ref orjccytcmklzcfjgqwwj
 ```
 
-| Secret | Status (2026-06-06) | Action if missing |
+| Secret | Status (2026-06-10) | Action if missing |
 |--------|---------------------|-------------------|
-| `OPENAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` | Set | Required for AI; **Anthropic** is primary for Premium tier |
-| `UPSTASH_REDIS_REST_URL` + `TOKEN` | Set | Enables ai-gateway rate limits + caches |
-| `CORS_ALLOWED_ORIGINS` | Set | `https://orjccytcmklzcfjgqwwj.supabase.co` |
-| `WEBHOOK_SECRET` | Set | Must match `private.webhook_config.secret` (see below) |
-| `AUTH_REDIRECT_STATE_SECRET` | Set | HTTPS email redirect CSRF |
+| `OPENAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` | **Set** | Required for AI; **Anthropic** is primary for Premium tier |
+| `UPSTASH_REDIS_REST_URL` + `TOKEN` | **Missing** | Copy from dev (`gwgjdpqskusuejlwrsnd`) or create Upstash DB → set both → redeploy `ai-gateway` |
+| `AUTH_REDIRECT_STATE_SECRET` | **Set** | HTTPS email redirect CSRF |
+| `GOOGLE_PLACES_API_KEY` | **Missing** | Enable Places API in Google Cloud → set secret for venue grounding |
+| `CORS_ALLOWED_ORIGINS` | **Not set** | Set `https://orjccytcmklzcfjgqwwj.supabase.co` if testing browser CORS |
+| `WEBHOOK_SECRET` | **Not set** | Required for server push; sync with `private.webhook_config` |
 | `EXPO_ACCESS_TOKEN` | **Not set** | Create at expo.dev → set secret → redeploy push functions |
 | `MEETUP_API_KEY` | Optional | External events |
-| `EVENTBRITE_PRIVATE_TOKEN` | Set | External events |
-| `GOOGLE_PLACES_API_KEY` | Optional | Richer venue hints in ai-gateway |
+| `EVENTBRITE_PRIVATE_TOKEN` | **Not set** (dev has it) | External events |
+| `MOCK_FACE_MATCH` | **Not set** ✓ | Must stay unset on production |
+| `AI_GATEWAY_DISABLED` | **Not set** ✓ | Kill switch — see **docs/RUNBOOK.md** §1 |
 
 **Sync `WEBHOOK_SECRET` with the database** (after setting the Edge Function secret):
 

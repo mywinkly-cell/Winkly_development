@@ -21,6 +21,7 @@ import {
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter, useFocusEffect } from "expo-router";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
@@ -129,38 +130,35 @@ function AvatarImage({ photoUrl, size }: { photoUrl?: string | null; size: numbe
   );
 }
 
-const TAB_CONFIG: { key: TabKey; label: string; accent: string; secondary: string }[] = [
-  { key: "all", label: "All", accent: Colors.primaryViolet, secondary: Colors.white },
-  { key: "dates", label: "Dates", accent: Colors.romance.primary, secondary: Colors.romance.secondary },
-  { key: "meetups", label: "Meet-ups", accent: Colors.friends.primary, secondary: Colors.friends.secondary },
-  { key: "business", label: "Business", accent: Colors.business.primary, secondary: Colors.business.secondary },
-  { key: "events", label: "Events", accent: Colors.events.primary, secondary: Colors.events.secondary },
-  { key: "archive", label: "Archive", accent: Colors.gray600, secondary: Colors.gray200 },
+const TAB_CONFIG: { key: TabKey; labelKey: string; accent: string; secondary: string }[] = [
+  { key: "all", labelKey: "planner.allTab", accent: Colors.primaryViolet, secondary: Colors.white },
+  { key: "dates", labelKey: "planner.dates", accent: Colors.romance.primary, secondary: Colors.romance.secondary },
+  { key: "meetups", labelKey: "planner.meetups", accent: Colors.friends.primary, secondary: Colors.friends.secondary },
+  { key: "business", labelKey: "planner.business", accent: Colors.business.primary, secondary: Colors.business.secondary },
+  { key: "events", labelKey: "planner.events", accent: Colors.events.primary, secondary: Colors.events.secondary },
+  { key: "archive", labelKey: "planner.archive", accent: Colors.gray600, secondary: Colors.gray200 },
 ];
 
-const CANCEL_STANDARD_RESPONSES = [
-  "Something came up — I need to reschedule",
-  "Unfortunately I can't make it this time",
-  "Apologies — my schedule has changed",
-  "I'd love to reconnect another time",
+const TIME_RANGE_KEYS: { key: TimeRange; labelKey: string }[] = [
+  { key: "all", labelKey: "planner.allTime" },
+  { key: "today", labelKey: "planner.today" },
+  { key: "specific_day", labelKey: "planner.pickDate" },
+  { key: "this_week", labelKey: "planner.thisWeek" },
+  { key: "next_week", labelKey: "planner.nextWeek" },
+  { key: "this_weekend", labelKey: "planner.thisWeekend" },
+  { key: "next_weekend", labelKey: "planner.nextWeekend" },
+  { key: "specific_week", labelKey: "planner.pickWeek" },
+  { key: "this_month", labelKey: "planner.thisMonth" },
+  { key: "next_month", labelKey: "planner.nextMonth" },
+  { key: "specific_month", labelKey: "planner.pickMonth" },
 ];
 
-const TIME_RANGE_OPTIONS: { key: TimeRange; label: string }[] = [
-  { key: "all", label: "All time" },
-  { key: "today", label: "Today" },
-  { key: "specific_day", label: "Pick a date" },
-  { key: "this_week", label: "This week" },
-  { key: "next_week", label: "Next week" },
-  { key: "this_weekend", label: "This weekend" },
-  { key: "next_weekend", label: "Next weekend" },
-  { key: "specific_week", label: "Pick a week" },
-  { key: "this_month", label: "This month" },
-  { key: "next_month", label: "Next month" },
-  { key: "specific_month", label: "Pick a month" },
-];
-
-const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const CANCEL_RESPONSE_KEYS = [
+  "planner.cancelResponses.somethingCameUp",
+  "planner.cancelResponses.cantMakeIt",
+  "planner.cancelResponses.scheduleChanged",
+  "planner.cancelResponses.reconnect",
+] as const;
 
 export type OverviewMode = "list" | "week" | "month";
 
@@ -222,7 +220,7 @@ function getISOWeekNumber(d: Date): number {
   return 1 + Math.ceil((firstThursday - target.getTime()) / 604800000);
 }
 
-function getWeeksForYear(year: number): { key: string; label: string }[] {
+function getWeeksForYear(year: number, locale: string): { key: string; label: string }[] {
   const weeks: { key: string; label: string }[] = [];
   const jan1 = new Date(year, 0, 1);
   const dayOfWeek = jan1.getDay();
@@ -238,18 +236,18 @@ function getWeeksForYear(year: number): { key: string; label: string }[] {
     weekEnd.setDate(weekStart.getDate() + 6);
     const cw = getISOWeekNumber(weekStart);
     const key = `${weekStart.getFullYear()}-${weekStart.getMonth()}-${weekStart.getDate()}`;
-    const startStr = `${MONTH_SHORT[weekStart.getMonth()]} ${weekStart.getDate()}`;
-    const endStr = `${MONTH_SHORT[weekEnd.getMonth()]} ${weekEnd.getDate()}`;
+    const startStr = weekStart.toLocaleDateString(locale, { month: "short", day: "numeric" });
+    const endStr = weekEnd.toLocaleDateString(locale, { month: "short", day: "numeric" });
     const label = `cw ${cw} ${startStr} - ${endStr}`;
     weeks.push({ key, label });
   }
   return weeks;
 }
 
-function getMonthsForYear(year: number): { key: string; label: string }[] {
-  return MONTH_NAMES.map((name, i) => ({
+function getMonthsForYear(year: number, locale: string): { key: string; label: string }[] {
+  return Array.from({ length: 12 }, (_, i) => ({
     key: `${year}-${String(i + 1).padStart(2, "0")}`,
-    label: `${name} ${year}`,
+    label: new Date(year, i, 1).toLocaleDateString(locale, { month: "long", year: "numeric" }),
   }));
 }
 
@@ -349,6 +347,7 @@ const BOTTOM_BAR_HEIGHT = Layout.bottomBarHeight ?? 76;
 
 const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function PlannerIndex({ embedded, initialTab }, ref) {
   const router = useRouter();
+  const { t, i18n } = useTranslation();
   const fmtLocationLine = useFormatLocationDisplay();
   const insets = useSafeAreaInsets();
   const filterModalBottomPadding = BOTTOM_BAR_HEIGHT + insets.bottom;
@@ -465,8 +464,8 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     })();
   }, []);
 
-  const weekOptions = useMemo(() => getWeeksForYear(filterYear), [filterYear]);
-  const monthOptions = useMemo(() => getMonthsForYear(filterYear), [filterYear]);
+  const weekOptions = useMemo(() => getWeeksForYear(filterYear, i18n.language), [filterYear, i18n.language]);
+  const monthOptions = useMemo(() => getMonthsForYear(filterYear, i18n.language), [filterYear, i18n.language]);
 
   const onTabPress = (key: TabKey) => {
     Haptics.selectionAsync();
@@ -573,10 +572,10 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
 
   const confirmCancel = useCallback(() => {
     if (!selectedItem) return;
-    const msg = cancelCustomMessage.trim() || selectedCancelResponse || "I won't be able to make it.";
+    const msg = cancelCustomMessage.trim() || selectedCancelResponse || t("planner.cantMakeItDefault");
     Haptics.selectionAsync();
     archiveItem(selectedItem, msg);
-  }, [selectedItem, cancelCustomMessage, selectedCancelResponse, archiveItem]);
+  }, [selectedItem, cancelCustomMessage, selectedCancelResponse, archiveItem, t]);
 
   const todayStart = useMemo(() => {
     const t = new Date();
@@ -827,7 +826,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                     isActive && { color: tab.accent },
                   ]}
                 >
-                  {tab.label}
+                  {t(tab.labelKey)}
                 </Text>
               </TouchableOpacity>
             );
@@ -901,8 +900,8 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
             {items.length === 0 ? (
               <View style={styles.emptyState}>
                 <Ionicons name={activeTab === "archive" ? "archive-outline" : "calendar-outline"} size={48} color={Colors.gray400} style={{ marginBottom: 12 }} />
-                <Text style={styles.emptyTitle}>{activeTab === "archive" ? "No archived plans" : "No plans yet"}</Text>
-                <Text style={styles.emptySub}>{activeTab === "archive" ? "Canceled plans appear here for 2 weeks. You can restore them anytime." : "Your upcoming plans will show up here."}</Text>
+                <Text style={styles.emptyTitle}>{activeTab === "archive" ? t("planner.noArchivedPlans") : t("planner.noPlansYet")}</Text>
+                <Text style={styles.emptySub}>{activeTab === "archive" ? t("planner.archivedEmptySub") : t("planner.upcomingEmptySub")}</Text>
               </View>
             ) : items.map((it) => renderItemCard(it))}
           </>
@@ -915,7 +914,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                 <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
               <Text style={styles.weekNavTitle}>
-                {MONTH_SHORT[viewedWeekStart.getMonth()]} {viewedWeekStart.getDate()} – {MONTH_SHORT[weekDays[6].getMonth()]} {weekDays[6].getDate()}, {viewedWeekStart.getFullYear()}
+                {viewedWeekStart.toLocaleDateString(i18n.language, { month: "short", day: "numeric" })} – {weekDays[6].toLocaleDateString(i18n.language, { month: "short", day: "numeric", year: "numeric" })}
               </Text>
               <TouchableOpacity onPress={() => { Haptics.selectionAsync(); const next = new Date(viewedWeekStart); next.setDate(next.getDate() + 7); setViewedWeekStart(next); }} style={styles.weekNavBtn} hitSlop={12}>
                 <Ionicons name="chevron-forward" size={24} color={Colors.textPrimary} />
@@ -942,7 +941,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
               const dayItems = itemsByDayWeek[dayKey(d)] ?? [];
               return (
                 <View key={dayKey(d)} style={styles.weekDayBlock}>
-                  <Text style={styles.weekDayBlockTitle}>{d.getDate()} {MONTH_SHORT[d.getMonth()]}</Text>
+                  <Text style={styles.weekDayBlockTitle}>{d.toLocaleDateString(i18n.language, { day: "numeric", month: "short" })}</Text>
                   {dayItems.length === 0 ? <Text style={styles.weekDayEmpty}>No events</Text> : dayItems.map((it) => renderItemCard(it))}
                 </View>
               );
@@ -956,7 +955,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
               <TouchableOpacity onPress={() => { Haptics.selectionAsync(); const prev = new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() - 1); setViewedMonth(prev); }} style={styles.weekNavBtn} hitSlop={12}>
                 <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={styles.weekNavTitle}>{MONTH_NAMES[viewedMonth.getMonth()]} {viewedMonth.getFullYear()}</Text>
+              <Text style={styles.weekNavTitle}>{viewedMonth.toLocaleDateString(i18n.language, { month: "long", year: "numeric" })}</Text>
               <TouchableOpacity onPress={() => { Haptics.selectionAsync(); const next = new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() + 1); setViewedMonth(next); }} style={styles.weekNavBtn} hitSlop={12}>
                 <Ionicons name="chevron-forward" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
@@ -1023,7 +1022,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                     const d = monthGrid.find((x): x is Date => x !== null && dayKey(x) === selectedMonthDay);
                     return (
                       <View style={styles.weekDayBlock}>
-                        {d && <Text style={styles.weekDayBlockTitle}>{d.getDate()} {MONTH_SHORT[d.getMonth()]}</Text>}
+                        {d && <Text style={styles.weekDayBlockTitle}>{d.toLocaleDateString(i18n.language, { day: "numeric", month: "short" })}</Text>}
                         {dayItems.length === 0 ? (
                           <View style={styles.emptyState}>
                             <Ionicons name="calendar-outline" size={48} color={Colors.gray400} style={{ marginBottom: 12 }} />
@@ -1042,7 +1041,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                     if (dayItems.length === 0) return null;
                     return (
                       <View key={dayKey(d)} style={styles.weekDayBlock}>
-                        <Text style={styles.weekDayBlockTitle}>{d.getDate()} {MONTH_SHORT[d.getMonth()]}</Text>
+                        <Text style={styles.weekDayBlockTitle}>{d.toLocaleDateString(i18n.language, { day: "numeric", month: "short" })}</Text>
                         {dayItems.map((it) => renderItemCard(it))}
                       </View>
                     );
@@ -1076,7 +1075,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
             <View style={styles.filterSheetWrapper}>
               <View style={[styles.modalContent, styles.sheetPanel]} onStartShouldSetResponder={() => true}>
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Filters & Views</Text>
+                  <Text style={styles.modalTitle}>{t("planner.filtersAndViewsTitle")}</Text>
                   <TouchableOpacity onPress={() => setFilterModalVisible(false)} hitSlop={12}>
                     <Ionicons name="close" size={24} color={Colors.textPrimary} />
                   </TouchableOpacity>
@@ -1088,7 +1087,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                   nestedScrollEnabled
                   contentContainerStyle={{ paddingBottom: 16 }}
                 >
-                  <Text style={styles.filterSection}>Overview</Text>
+                  <Text style={styles.filterSection}>{t("planner.overview")}</Text>
                   <View style={styles.overviewRow}>
                     {(["list", "week", "month"] as const).map((mode) => (
                       <TouchableOpacity
@@ -1097,13 +1096,13 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                         style={[styles.overviewChip, overviewMode === mode && styles.filterChipActive]}
                       >
                         <Text style={[styles.filterChipText, overviewMode === mode && styles.filterChipTextActive]}>
-                          {mode === "list" ? "List" : mode === "week" ? "Week" : "Month"}
+                          {mode === "list" ? t("planner.listView") : mode === "week" ? t("planner.weekView") : t("planner.monthView")}
                         </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
 
-                  <Text style={styles.filterSection}>Sort (list)</Text>
+                  <Text style={styles.filterSection}>{t("planner.sortList")}</Text>
                   <View style={styles.overviewRow}>
                     {(["earliest", "latest"] as const).map((order) => (
                       <TouchableOpacity
@@ -1112,13 +1111,13 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                         style={[styles.overviewChip, listSortOrder === order && styles.filterChipActive]}
                       >
                         <Text style={[styles.filterChipText, listSortOrder === order && styles.filterChipTextActive]}>
-                          {order === "earliest" ? "Earliest first" : "Latest first"}
+                          {order === "earliest" ? t("planner.earliestFirst") : t("planner.latestFirst")}
                         </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
 
-                  <Text style={styles.filterSection}>Time range</Text>
+                  <Text style={styles.filterSection}>{t("planner.timeRange")}</Text>
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -1126,7 +1125,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                     contentContainerStyle={styles.filterRowContent}
                     keyboardShouldPersistTaps="handled"
                   >
-                    {TIME_RANGE_OPTIONS.map((opt) => (
+                    {TIME_RANGE_KEYS.map((opt) => (
                       <TouchableOpacity
                         key={opt.key}
                         onPress={() => {
@@ -1140,7 +1139,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                         activeOpacity={0.8}
                       >
                         <Text style={[styles.filterChipText, timeRange === opt.key && styles.filterChipTextActive]} numberOfLines={1}>
-                          {opt.label}
+                          {t(opt.labelKey)}
                         </Text>
                       </TouchableOpacity>
                     ))}
@@ -1260,7 +1259,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                 </ScrollView>
 
                 <TouchableOpacity onPress={applyFilters} style={styles.applyBtn} activeOpacity={0.9}>
-                  <Text style={styles.applyBtnText}>Apply filters</Text>
+                  <Text style={styles.applyBtnText}>{t("planner.applyFilters")}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1375,7 +1374,14 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                       </Text>
                     ) : !selectedItem.isOrganiser ? (
                       <Text style={styles.detailsHint}>
-                        {selectedItem.source === "dates" ? "Your date" : selectedItem.source === "events" ? "Event organiser" : "The other party"} will be notified if you cancel or reschedule.
+                        {t("planner.cancelNotifyHint", {
+                          party:
+                            selectedItem.source === "dates"
+                              ? t("planner.cancelNotifyDate")
+                              : selectedItem.source === "events"
+                                ? t("planner.cancelNotifyOrganiser")
+                                : t("planner.cancelNotifyOther"),
+                        })}
                       </Text>
                     ) : null}
                   </ScrollView>
@@ -1388,7 +1394,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                           accessibilityLabel="Restore"
                         >
                           <Ionicons name="arrow-undo" size={DETAIL_ACTION_ICON_CANCEL} color={Colors.events.primary} />
-                          <Text style={styles.detailActionLabel}>Restore</Text>
+                          <Text style={styles.detailActionLabel}>{t("planner.restore")}</Text>
                         </TouchableOpacity>
                       ) : (
                         <>
@@ -1398,7 +1404,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                             accessibilityLabel="Confirm"
                           >
                             <Image source={require("@/assets/icons/confirm-icon.png")} style={{ width: DETAIL_ACTION_ICON_CONFIRM, height: DETAIL_ACTION_ICON_CONFIRM }} resizeMode="contain" />
-                            <Text style={styles.detailActionLabel}>Confirm</Text>
+                            <Text style={styles.detailActionLabel}>{t("planner.confirm")}</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
                             onPress={() => { Haptics.selectionAsync(); closeDetails(); }}
@@ -1406,7 +1412,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                             accessibilityLabel="Postpone or reschedule"
                           >
                             <Image source={require("@/assets/icons/reschedule-icon.png")} style={{ width: DETAIL_ACTION_ICON_RESCHEDULE, height: DETAIL_ACTION_ICON_RESCHEDULE }} resizeMode="contain" />
-                            <Text style={styles.detailActionLabel}>Reschedule</Text>
+                            <Text style={styles.detailActionLabel}>{t("planner.reschedule")}</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
                             onPress={() => { setDetailsModalVisible(false); openCancelModal(); }}
@@ -1414,7 +1420,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                             accessibilityLabel="Cancel"
                           >
                             <Image source={require("@/assets/icons/decline-icon.png")} style={{ width: DETAIL_ACTION_ICON_CANCEL, height: DETAIL_ACTION_ICON_CANCEL }} resizeMode="contain" />
-                            <Text style={styles.detailActionLabel}>Cancel</Text>
+                            <Text style={styles.detailActionLabel}>{t("planner.cancel")}</Text>
                           </TouchableOpacity>
                         </>
                       )}
@@ -1433,26 +1439,26 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalOverlay}>
           <Pressable style={styles.modalOverlay} onPress={closeCancelModal}>
           <Pressable style={styles.cancelModalContent} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.cancelModalTitle}>Cancel this plan?</Text>
-              <Text style={styles.cancelModalSub}>
-                The other party will be notified. You can add a message (optional). Canceled items are kept in Archive for 2 weeks.
-              </Text>
-              <Text style={styles.cancelLabel}>Quick reply</Text>
-              {CANCEL_STANDARD_RESPONSES.map((r) => (
+            <Text style={styles.cancelModalTitle}>{t("planner.cancelModalTitle")}</Text>
+              <Text style={styles.cancelModalSub}>{t("planner.cancelModalSub")}</Text>
+              <Text style={styles.cancelLabel}>{t("planner.quickReply")}</Text>
+              {CANCEL_RESPONSE_KEYS.map((key) => {
+                const label = t(key);
+                return (
                 <TouchableOpacity
-                  key={r}
-                  onPress={() => { Haptics.selectionAsync(); setSelectedCancelResponse(r); setCancelCustomMessage(""); }}
-                  style={[styles.cancelOptionRow, selectedCancelResponse === r && styles.cancelOptionActive]}
+                  key={key}
+                  onPress={() => { Haptics.selectionAsync(); setSelectedCancelResponse(label); setCancelCustomMessage(""); }}
+                  style={[styles.cancelOptionRow, selectedCancelResponse === label && styles.cancelOptionActive]}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.cancelOptionText, selectedCancelResponse === r && { color: Colors.primaryViolet, fontWeight: "600" }]}>{r}</Text>
-                  {selectedCancelResponse === r && <Ionicons name="checkmark" size={20} color={Colors.primaryViolet} />}
+                  <Text style={[styles.cancelOptionText, selectedCancelResponse === label && { color: Colors.primaryViolet, fontWeight: "600" }]}>{label}</Text>
+                  {selectedCancelResponse === label && <Ionicons name="checkmark" size={20} color={Colors.primaryViolet} />}
                 </TouchableOpacity>
-              ))}
-              <Text style={[styles.cancelLabel, { marginTop: 16 }]}>Or write your own</Text>
+              );})}
+              <Text style={[styles.cancelLabel, { marginTop: 16 }]}>{t("planner.orWriteYourOwn")}</Text>
               <TextInput
                 style={styles.cancelInput}
-                placeholder="Add a personal message..."
+                placeholder={t("planner.addPersonalMessage")}
                 placeholderTextColor={Colors.gray500}
                 value={cancelCustomMessage}
                 onChangeText={(t) => { setCancelCustomMessage(t); setSelectedCancelResponse(null); }}
@@ -1465,10 +1471,10 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                   style={styles.cancelSecondaryBtn}
                   activeOpacity={0.9}
                 >
-                  <Text style={styles.cancelSecondaryText}>Keep plan</Text>
+                  <Text style={styles.cancelSecondaryText}>{t("planner.keepPlan")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={confirmCancel} style={styles.cancelPrimaryBtn} activeOpacity={0.9}>
-                  <Text style={styles.cancelPrimaryText}>Cancel plan</Text>
+                  <Text style={styles.cancelPrimaryText}>{t("planner.cancelPlan")}</Text>
                 </TouchableOpacity>
               </View>
             </Pressable>

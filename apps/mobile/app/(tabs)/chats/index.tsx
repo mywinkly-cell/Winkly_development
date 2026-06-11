@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, FlatList, ActivityIndicator, StyleSheet, RefreshControl } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 
 import type { AppMode, Conversation, ConversationMember, Message, UserMini } from "@/lib/chats";
@@ -19,16 +20,17 @@ function isChatMode(x: unknown): x is AppMode {
   return x === "romance" || x === "friends" || x === "business" || x === "events";
 }
 
-function formatName(u?: UserMini | null) {
-  if (!u) return "Unknown";
+function formatName(u: UserMini | null | undefined, unknownLabel: string) {
+  if (!u) return unknownLabel;
   const fn = (u.first_name ?? "").trim();
   const ln = (u.last_name ?? "").trim();
   const full = `${fn} ${ln}`.trim();
-  return full || "Unknown";
+  return full || unknownLabel;
 }
 
 export default function ChatsHome() {
   const router = useRouter();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ mode?: string }>();
   const { context: modeContext } = useModeContext();
 
@@ -82,7 +84,7 @@ export default function ChatsHome() {
       setMemberSettingsByConv(data.memberSettingsByConv);
       setUnreadByConv(data.unreadByConv);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to load chats.");
+      setError(e instanceof Error ? e.message : t("chat.loadFailed"));
       setItems([]);
       setParticipantsByConv({});
       setLastMessageByConv({});
@@ -117,16 +119,15 @@ export default function ChatsHome() {
     if (conv.type === "dm") {
       const parts = participantsByConv[conv.id] ?? [];
       const otherId = parts.find((p) => p.user_id !== meId)?.user_id ?? null;
-      return formatName(otherId ? usersById[otherId] : null);
+      return formatName(otherId ? usersById[otherId] : null, t("chat.unknown"));
     }
 
     if (conv.name) return conv.name;
     if (conv.type === "event") {
-      // Later: join events table to show title.
-      return "Event chat";
+      return t("chat.eventChat");
     }
 
-    return "Group chat";
+    return t("chat.groupChatTitle");
   }
 
   /** Avatar photo per participant: use mode-specific main photo when available (conversation mode). */
@@ -171,7 +172,7 @@ export default function ChatsHome() {
         <ChatModeTabBar tabs={CHAT_TAB_CONFIG} activeTab="all" onTabPress={() => {}} />
         <View style={{ flex: 1, paddingHorizontal: Layout.screenPadding, justifyContent: "center" }}>
           <ActivityIndicator size="large" color={Colors.primaryViolet} />
-          <Text style={{ textAlign: "center", marginTop: 8 }}>Loading chats…</Text>
+          <Text style={{ textAlign: "center", marginTop: 8 }}>{t("chat.loadingChats")}</Text>
         </View>
       </View>
     );
@@ -189,7 +190,7 @@ export default function ChatsHome() {
       />
 
       <View style={styles.contentArea}>
-        <Button title="+ New chat" variant="secondary" onPress={goNewChat} style={styles.newChatBtn} />
+        <Button title={t("chat.newChatButton")} variant="secondary" onPress={goNewChat} style={styles.newChatBtn} />
         {useDemoPreview ? (
           <FlatList<DemoChatPreviewRow>
             style={{ flex: 1 }}
@@ -259,9 +260,7 @@ export default function ChatsHome() {
               );
             }}
             ListEmptyComponent={
-              <Text style={styles.emptyText}>
-                There is no active chats yet. It&apos;s time to spark a conversation!
-              </Text>
+              <Text style={styles.emptyText}>{t("chat.emptyInbox")}</Text>
             }
           />
         )}

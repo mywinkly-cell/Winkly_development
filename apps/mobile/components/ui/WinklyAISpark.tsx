@@ -56,7 +56,7 @@ const FEATURE_UPSELL_MESSAGES: Record<
     {
       title: "AI planning ideas",
       message:
-        "You've used your free AI plan. Upgrade to Super or Premium for unlimited planning ideas.",
+        "You've used your 3 free AI plans for today. Upgrade to Super or Premium for unlimited planning ideas.",
     },
   chat_opener:
     {

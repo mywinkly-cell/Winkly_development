@@ -39,6 +39,9 @@ import { ConciergeActivityDetailsStep } from "@/components/ai/ConciergeActivityD
 import { ConciergeSummaryStep } from "@/components/ai/ConciergeSummaryStep";
 import { ConciergeInviteStep } from "@/components/ai/ConciergeInviteStep";
 import { ConciergeConfirmStep } from "@/components/ai/ConciergeConfirmStep";
+import { ConciergeRateLimitCard } from "@/components/ai/ConciergeRateLimitCard";
+import { addRecentRequest } from "@/lib/ai/conciergeStorage";
+import type { ConciergeErrorCode, ConciergeLimitType } from "@/lib/ai/conciergeClient";
 import { TripPlanningFlow } from "@/components/ai/TripPlanningFlow";
 import { getPlannerThemePlans, type PlannerThemePlanOption } from "@/lib/ai/strategicHost";
 import {
@@ -160,6 +163,13 @@ export function ConciergePlanningFlow({
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [limitError, setLimitError] = useState<{
+    error_code: ConciergeErrorCode;
+    limit_type?: ConciergeLimitType;
+    retry_after?: number;
+    upgrade_to?: "super" | "premium";
+  } | null>(null);
+  const [savingRequest, setSavingRequest] = useState(false);
   const [noOptionsReason, setNoOptionsReason] = useState<string | null>(null);
   const lastContextRef = useRef<ConciergeContext | null>(null);
   const [lastRequestId, setLastRequestId] = useState<string | undefined>(undefined);
@@ -440,6 +450,7 @@ export function ConciergePlanningFlow({
   const handleGenerate = useCallback(async (opts?: { refinementFeedback?: string; previousOptions?: ExperienceOption[] | null }) => {
     const genId = ++genAttemptRef.current;
     setError(null);
+    setLimitError(null);
     setNoOptionsReason(null);
     setMessage("");
     setSuggestions(null);
@@ -486,7 +497,7 @@ export function ConciergePlanningFlow({
         dateTimeIso: dt.toISOString(),
         refinement_feedback: refinement_feedback ?? null,
       });
-      const { plans, requestId } = await getPlannerThemePlans({
+      const { plans, requestId, limitError: gatewayLimit } = await getPlannerThemePlans({
         mode: effectiveMode,
         theme,
         partnerUserId: partnerId ?? undefined,
@@ -505,6 +516,11 @@ export function ConciergePlanningFlow({
         },
       });
       if (genId !== genAttemptRef.current) return;
+      if (gatewayLimit) {
+        setLoading(false);
+        setLimitError(gatewayLimit);
+        return;
+      }
       if (requestId) setLastRequestId(requestId);
       const providerFallback = plans.some((p) => p?.venue?.name === "No suitable venue found");
       trace("generate:response", {
@@ -864,7 +880,31 @@ export function ConciergePlanningFlow({
 
       {flowStep === "suggestions" && (
         <View style={styles.suggestionsWrap}>
-          {error ? (
+          {limitError ? (
+            <GestureScrollView contentContainerStyle={styles.errorContent}>
+              <ConciergeRateLimitCard
+                errorCode={limitError.error_code}
+                limitType={limitError.limit_type}
+                retryAfter={limitError.retry_after}
+                upgradeTo={limitError.upgrade_to}
+                saving={savingRequest}
+                onSaveForLater={
+                  lastContextRef.current
+                    ? async () => {
+                        setSavingRequest(true);
+                        try {
+                          await addRecentRequest(lastContextRef.current!);
+                          setFlowStep("summary");
+                        } finally {
+                          setSavingRequest(false);
+                        }
+                      }
+                    : undefined
+                }
+                onRetry={() => handleGenerate()}
+              />
+            </GestureScrollView>
+          ) : error ? (
             <GestureScrollView contentContainerStyle={styles.errorContent}>
               <Text style={styles.errorText}>{error}</Text>
               <TouchableOpacity style={styles.retryBtn} onPress={() => handleGenerate()} activeOpacity={0.9}>
