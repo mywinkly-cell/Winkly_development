@@ -5,7 +5,8 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 
 import type { AppMode, Conversation, ConversationMember, Message, UserMini } from "@/lib/chats";
-import { CHAT_TAB_CONFIG } from "@/lib/chats/chatTabs";
+import { getChatTabAccent } from "@/lib/chats/chatTabs";
+import { useChatTabConfig } from "@/lib/i18n/useChatTabs";
 import { getDemoInboxPreview, shouldShowDemoInboxPreview, type DemoChatPreviewRow } from "@/lib/chats/demoInboxPreview";
 import { subscribeChatsHubUpdates } from "@/lib/chats/hubRealtime";
 import { formatChatInboxTimestamp, loadChatInbox, sortChatInboxItems } from "@/lib/chats/inbox";
@@ -31,6 +32,7 @@ function formatName(u: UserMini | null | undefined, unknownLabel: string) {
 export default function ChatsHome() {
   const router = useRouter();
   const { t } = useTranslation();
+  const chatTabs = useChatTabConfig();
   const params = useLocalSearchParams<{ mode?: string }>();
   const { context: modeContext } = useModeContext();
 
@@ -154,10 +156,7 @@ export default function ChatsHome() {
     [items, lastMessageByConv, memberSettingsByConv]
   );
 
-  const refreshTintColor = useMemo(() => {
-    if (activeTab === "all") return Colors.primaryViolet;
-    return CHAT_TAB_CONFIG.find((t) => t.key === activeTab)?.accent ?? Colors.primaryViolet;
-  }, [activeTab]);
+  const refreshTintColor = useMemo(() => getChatTabAccent(activeTab), [activeTab]);
 
   const useDemoPreview = shouldShowDemoInboxPreview(sortedItems.length);
   const demoRows = useMemo(
@@ -169,7 +168,7 @@ export default function ChatsHome() {
     return (
       <View style={styles.screen}>
         <ChatsHeader mode={modeContext.active_mode ?? undefined} />
-        <ChatModeTabBar tabs={CHAT_TAB_CONFIG} activeTab="all" onTabPress={() => {}} />
+        <ChatModeTabBar tabs={chatTabs} activeTab="all" onTabPress={() => {}} />
         <View style={{ flex: 1, paddingHorizontal: Layout.screenPadding, justifyContent: "center" }}>
           <ActivityIndicator size="large" color={Colors.primaryViolet} />
           <Text style={{ textAlign: "center", marginTop: 8 }}>{t("chat.loadingChats")}</Text>
@@ -184,7 +183,7 @@ export default function ChatsHome() {
       <ChatsHeader mode={modeContext.active_mode ?? undefined} />
 
       <ChatModeTabBar
-        tabs={CHAT_TAB_CONFIG}
+        tabs={chatTabs}
         activeTab={activeTab}
         onTabPress={setActiveTab}
       />
@@ -248,11 +247,12 @@ export default function ChatsHome() {
                   }
                   onPress={() => router.push(`/chats/${conv.id}`)}
                   onAvatarPress={
-                    conv.mode && conv.mode !== "events"
+                    conv.mode
                       ? (userId) => {
                           if (conv.mode === "romance") router.push(`/(modes)/romance/profile-view?id=${userId}`);
                           else if (conv.mode === "friends") router.push(`/(modes)/friends/profile-view?user_id=${userId}`);
                           else if (conv.mode === "business") router.push(`/(modes)/business/profile-view?user_id=${userId}`);
+                          else if (conv.mode === "events") router.push(`/(modes)/events/profile-view?user_id=${userId}`);
                         }
                       : undefined
                   }

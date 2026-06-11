@@ -60,6 +60,7 @@ type Profile = {
   city: string;
   occupation?: string | null;
   chipItems: string[];
+  highlightChips?: string[];
   photoUrl: string;
   about?: string;
 };
@@ -147,6 +148,7 @@ export default function FriendsHome() {
         city: row.city || "City",
         occupation: row.occupation ?? null,
         chipItems: row.chipItems,
+        highlightChips: row.highlightChips,
         photoUrl: row.photoUrl,
         about: row.about ?? undefined,
       }));
@@ -525,6 +527,7 @@ export default function FriendsHome() {
                     city={currentProfile.city}
                     occupation={currentProfile.occupation ?? null}
                     chipItems={chipItems}
+                    highlightItems={currentProfile.highlightChips}
                     mode="friends"
                     aiHint={friendsAiHint}
                     cardRadius={CARD_RADIUS}

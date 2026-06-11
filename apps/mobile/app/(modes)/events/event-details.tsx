@@ -466,7 +466,7 @@ export default function EventDetails() {
                     <EventParticipantCard
                       key={p.id}
                       participant={p}
-                      onPress={() => router.push(`/(modes)/friends/profile-view?user_id=${p.id}`)}
+                      onPress={() => router.push(`/(modes)/events/profile-view?user_id=${p.id}`)}
                     />
                   ))}
                 </View>

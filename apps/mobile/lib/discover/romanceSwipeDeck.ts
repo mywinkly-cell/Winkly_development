@@ -12,6 +12,7 @@ import {
 } from "@/lib/filters/romanceFiltersStorage";
 import { combinedMatchScore, fetchBehaviorAffinityMap } from "@/lib/matching/behaviorAffinities";
 import { getBlockedUserIdSet } from "@/lib/access/blocks";
+import { modeDisplayName } from "@/lib/profile/otherUserCore";
 
 export type RomanceSwipeCardProfile = {
   id: string;
@@ -20,10 +21,27 @@ export type RomanceSwipeCardProfile = {
   city: string;
   occupation?: string | null;
   chipItems: string[];
+  /** Subset of chipItems shared with the viewer — highlighted on the card. */
+  highlightChips?: string[];
   photoUrl: string;
   /** Rounded, privacy-safe distance label from the server (e.g. "~3 km away"). */
   distanceLabel?: string | null;
 };
+
+/** Reorder another user's interests so shared ones come first; return the shared subset too. */
+function orderSharedFirst(
+  interests: string[],
+  selfInterests: string[] | undefined
+): { ordered: string[]; shared: string[] } {
+  const selfSet = new Set((selfInterests ?? []).map((s) => s.trim().toLowerCase()));
+  const shared: string[] = [];
+  const rest: string[] = [];
+  for (const i of interests) {
+    if (selfSet.has(i.trim().toLowerCase())) shared.push(i);
+    else rest.push(i);
+  }
+  return { ordered: [...shared, ...rest], shared };
+}
 
 type FeedRow = {
   id: string;
@@ -138,19 +156,40 @@ export async function fetchRomanceSwipeDeckProfiles(
     });
   }
 
+  // Names + privacy flag aren't part of the feed RPC; fetch them for the visible ids.
+  const nameMap = new Map<string, { last_name?: string | null; show_full_name?: boolean | null }>();
+  const visibleIds = filtered.map((r) => r.id);
+  if (visibleIds.length) {
+    const { data: nameRows } = await supabase
+      .from("user_profiles")
+      .select("id, last_name, show_full_name")
+      .in("id", visibleIds);
+    (nameRows ?? []).forEach((n) => {
+      const row = n as { id: string; last_name?: string | null; show_full_name?: boolean | null };
+      nameMap.set(row.id, { last_name: row.last_name, show_full_name: row.show_full_name });
+    });
+  }
+
   return filtered.map((r) => {
     const interests = (r.romance_interests?.filter(Boolean) as string[] | undefined)?.length
       ? (r.romance_interests as string[])
       : r.interests ?? [];
-    const chipItems = interests.slice(0, 3);
+    const { ordered, shared } = orderSharedFirst(interests, self?.interests);
+    const chipItems = ordered.slice(0, 3);
     const photo = r.romance_photos?.[0] ?? r.core_photos?.[0];
+    const nm = nameMap.get(r.id);
     return {
       id: r.id,
-      name: r.first_name ?? "Someone",
+      name: modeDisplayName(
+        { first_name: r.first_name, last_name: nm?.last_name, show_full_name: nm?.show_full_name },
+        "romance",
+        r.first_name ?? "Someone"
+      ),
       age: typeof r.age === "number" && r.age > 0 ? r.age : 25,
       city: r.city ?? "",
       occupation: r.occupation ?? null,
       chipItems: chipItems.length ? chipItems : ["Romance"],
+      highlightChips: shared,
       photoUrl: photo ?? "https://i.pravatar.cc/400?u=winkly",
       distanceLabel: r.distance_label ?? null,
     };

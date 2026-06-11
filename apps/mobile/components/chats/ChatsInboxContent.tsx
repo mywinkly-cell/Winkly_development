@@ -10,7 +10,8 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import type { AppMode, Conversation, ConversationMember, Message, UserMini } from "@/lib/chats";
-import { CHAT_TAB_CONFIG, getChatTabsWithModeFirst } from "@/lib/chats/chatTabs";
+import { getChatTabAccent } from "@/lib/chats/chatTabs";
+import { useChatTabsWithModeFirst } from "@/lib/i18n/useChatTabs";
 import { getDemoInboxPreview, shouldShowDemoInboxPreview, type DemoChatPreviewRow } from "@/lib/chats/demoInboxPreview";
 import { subscribeChatsHubUpdates } from "@/lib/chats/hubRealtime";
 import { appModeToHub, chatRoutes } from "@/lib/navigation/modeHub";
@@ -20,13 +21,6 @@ import { ChatModeTabBar } from "./ChatModeTabBar";
 import { ChatPreviewCard } from "./ChatPreviewCard";
 import { MatchesConnectionsSubheader, type MatchConnectionItem } from "./MatchesConnectionsSubheader";
 
-function formatName(u?: UserMini | null) {
-  if (!u) return "Unknown";
-  const fn = (u.first_name ?? "").trim();
-  const ln = (u.last_name ?? "").trim();
-  const full = `${fn} ${ln}`.trim();
-  return full || "Unknown";
-}
 
 type ChatsInboxContentProps = {
   sourceMode: "romance" | "friends" | "business" | "events" | "all";
@@ -34,9 +28,10 @@ type ChatsInboxContentProps = {
 
 export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
   const chatHub = appModeToHub(sourceMode === "all" ? null : sourceMode);
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
-  const tabs = useMemo(() => getChatTabsWithModeFirst(sourceMode), [sourceMode]);
+  const tabs = useChatTabsWithModeFirst(sourceMode);
+  const unknownLabel = t("chat.unknown");
   const initialTab: "all" | AppMode = sourceMode === "all" ? "all" : sourceMode;
 
   const [activeTab, setActiveTab] = useState<"all" | AppMode>(initialTab);
@@ -278,6 +273,14 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
     }, sourceMode);
   }, [loadConversationsAndMeta, sourceMode]);
 
+  function formatName(u?: UserMini | null) {
+    if (!u) return unknownLabel;
+    const fn = (u.first_name ?? "").trim();
+    const ln = (u.last_name ?? "").trim();
+    const full = `${fn} ${ln}`.trim();
+    return full || unknownLabel;
+  }
+
   function getConversationTitle(conv: Conversation): string {
     if (conv.type === "dm") {
       const parts = participantsByConv[conv.id] ?? [];
@@ -285,8 +288,8 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
       return formatName(otherId ? usersById[otherId] : null);
     }
     if (conv.name) return conv.name;
-    if (conv.type === "event") return "Event chat";
-    return "Group chat";
+    if (conv.type === "event") return t("chat.eventChat");
+    return t("chat.groupChatTitle");
   }
 
   /** Avatar photo per participant: use mode-specific main photo (conversation mode) for consistency. */
@@ -326,7 +329,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
     return (
       <View style={{ flex: 1, padding: 16, justifyContent: "center" }}>
         <ActivityIndicator size="large" color={spinnerColor} />
-        <Text style={{ textAlign: "center", marginTop: 8 }}>Loading chats…</Text>
+        <Text style={{ textAlign: "center", marginTop: 8 }}>{t("chat.loadingChats")}</Text>
       </View>
     );
   }
@@ -338,7 +341,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
         <View
           style={[
             styles.modeContextBar,
-            { backgroundColor: CHAT_TAB_CONFIG.find((t) => t.key === sourceMode)?.accent },
+            { backgroundColor: getChatTabAccent(sourceMode) },
           ]}
           accessibilityLabel={`${sourceMode} chats`}
         />
@@ -444,11 +447,12 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
                     }
                   }}
                   onAvatarPress={
-                    item.mode && item.mode !== "events"
+                    item.mode
                       ? (userId) => {
                           if (item.mode === "romance") router.push(`/(modes)/romance/profile-view?id=${userId}`);
                           else if (item.mode === "friends") router.push(`/(modes)/friends/profile-view?user_id=${userId}`);
                           else if (item.mode === "business") router.push(`/(modes)/business/profile-view?user_id=${userId}`);
+                          else if (item.mode === "events") router.push(`/(modes)/events/profile-view?user_id=${userId}`);
                         }
                       : undefined
                   }

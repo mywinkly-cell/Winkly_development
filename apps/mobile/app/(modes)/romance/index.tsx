@@ -66,6 +66,8 @@ type Profile = {
   occupation?: string | null;
   /** First 3 shown: interests + relationship goals combined */
   chipItems: string[];
+  /** Subset of chipItems shared with the viewer — highlighted on the card. */
+  highlightChips?: string[];
   photoUrl: string;
   /** Rounded, privacy-safe distance label from the server (e.g. "~3 km away"). */
   distanceLabel?: string | null;
@@ -655,6 +657,7 @@ export default function RomanceHome() {
                   city={currentProfile.city}
                   occupation={currentProfile.occupation ?? null}
                   chipItems={currentProfile.chipItems}
+                  highlightItems={currentProfile.highlightChips}
                   mode="romance"
                   aiHint={romanceAiHint}
                   distanceLabel={currentProfile.distanceLabel}

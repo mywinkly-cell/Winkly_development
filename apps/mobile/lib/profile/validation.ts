@@ -12,10 +12,7 @@ export type ProfileCoreSubmitInput = {
   /** ISO date string or in-memory Date from the date picker. */
   birthday: string | Date | null;
   city: string;
-  lookingFor: string[];
   corePhotoCount: number;
-  /** When false, skips the looking-for requirement (Friends/Business-only onboarding). */
-  requireLookingFor?: boolean;
 };
 
 function hasBirthdayValue(birthday: string | Date | null): boolean {
@@ -31,9 +28,6 @@ export type ProfileValidationResult =
 export function validateProfileCoreSubmit(input: ProfileCoreSubmitInput): ProfileValidationResult {
   if (!input.firstName || !input.lastName || !input.gender || !hasBirthdayValue(input.birthday) || !input.city) {
     return { ok: false, title: "Incomplete", message: "Please fill in all required fields." };
-  }
-  if (input.requireLookingFor !== false && input.lookingFor.length === 0) {
-    return { ok: false, title: "Almost there", message: "Please choose who you're looking to meet." };
   }
   if (input.corePhotoCount < MIN_CORE_PHOTOS) {
     return {
@@ -53,7 +47,6 @@ export function isProfileCoreStepComplete(input: ProfileCoreSubmitInput): boolea
     !!input.lastName.trim() &&
     hasBirthdayValue(input.birthday) &&
     !!input.gender.trim() &&
-    !!input.city.trim() &&
-    input.lookingFor.length > 0
+    !!input.city.trim()
   );
 }

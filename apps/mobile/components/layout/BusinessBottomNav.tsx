@@ -6,20 +6,10 @@ import * as Haptics from "expo-haptics";
 import { Colors } from "@/constants/tokens";
 import { Routes } from "@/constants/routes";
 import { useAuth } from "@/providers";
-import {
-  DEFAULT_MODE_NAV_TABS,
-  ModeBottomNavShell,
-  type ModeNavTab,
-} from "@/components/layout/ModeBottomNavShell";
+import { ModeBottomNavShell } from "@/components/layout/ModeBottomNavShell";
+import { useBusinessAccountNavTabs, useDefaultModeNavTabs } from "@/lib/i18n/useModeNavTabs";
 
 type BusinessTab = "home" | "discover" | "analytics" | "chats" | "planner";
-
-const BUSINESS_ACCOUNT_TABS: ModeNavTab[] = [
-  { key: "home", label: "Home", icon: "home" },
-  { key: "analytics", label: "BA", icon: "stats-chart-outline" },
-  { key: "chats", label: "Chats", icon: "chatbubble-outline" },
-  { key: "planner", label: "Planner", icon: "calendar-outline" },
-];
 
 function getActiveTab(pathname: string): BusinessTab {
   if (!pathname) return "home";
@@ -34,9 +24,11 @@ export function BusinessBottomNav() {
   const router = useRouter();
   const pathname = usePathname();
   const { accountType } = useAuth();
+  const defaultTabs = useDefaultModeNavTabs();
+  const businessTabs = useBusinessAccountNavTabs();
   const isBusinessAccount = accountType === "business";
   const activeTab = getActiveTab(pathname ?? "");
-  const tabs = isBusinessAccount ? BUSINESS_ACCOUNT_TABS : DEFAULT_MODE_NAV_TABS;
+  const tabs = isBusinessAccount ? businessTabs : defaultTabs;
 
   const nav = (tab: string) => {
     Haptics.selectionAsync();

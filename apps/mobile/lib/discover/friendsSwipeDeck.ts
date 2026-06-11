@@ -11,6 +11,7 @@ import {
 } from "@/lib/filters/friendsFiltersStorage";
 import { combinedMatchScore, fetchBehaviorAffinityMap } from "@/lib/matching/behaviorAffinities";
 import { getBlockedUserIdSet } from "@/lib/access/blocks";
+import { modeDisplayName } from "@/lib/profile/otherUserCore";
 
 export type FriendsSwipeCardProfile = {
   id: string;
@@ -20,6 +21,8 @@ export type FriendsSwipeCardProfile = {
   city: string;
   occupation?: string | null;
   chipItems: string[];
+  /** Subset of chipItems shared with the viewer — highlighted on the card. */
+  highlightChips?: string[];
   photoUrl: string;
   about?: string | null;
 };
@@ -28,6 +31,9 @@ type FeedRow = {
   user_id?: string;
   id?: string;
   display_name?: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  show_full_name?: boolean | null;
   city?: string | null;
   occupation?: string | null;
   age?: number | null;
@@ -62,7 +68,7 @@ export async function fetchFriendsSwipeDeckProfiles(
     const { data: fallback } = await supabase
       .from("friend_profiles")
       .select(
-        "id,user_id,display_name,city,occupation,age,vibe_tags,about_short,interests,main_photo_url,avatar_url",
+        "id,user_id,display_name,first_name,last_name,show_full_name,city,occupation,age,vibe_tags,about_short,interests,main_photo_url,avatar_url",
       )
       .limit(60);
     rows = ((fallback ?? []) as FeedRow[])
@@ -109,11 +115,16 @@ export async function fetchFriendsSwipeDeckProfiles(
     );
   }
 
+  const selfSet = new Set((self?.interests ?? []).concat(self?.vibe_tags ?? []).map((s) => s.trim().toLowerCase()));
+
   return filtered.map((r) => {
     const uid = r.user_id ?? r.id ?? "";
     const interests = r.interests ?? [];
     const vibeTags = r.vibe_tags ?? [];
-    const chipItems = [...interests, ...vibeTags].slice(0, 3);
+    const allChips = [...interests, ...vibeTags];
+    const shared = allChips.filter((c) => selfSet.has(c.trim().toLowerCase()));
+    const rest = allChips.filter((c) => !selfSet.has(c.trim().toLowerCase()));
+    const chipItems = [...shared, ...rest].slice(0, 3);
     const other: FriendsProfile = {
       id: uid,
       display_name: r.display_name ?? "Friend",
@@ -126,11 +137,22 @@ export async function fetchFriendsSwipeDeckProfiles(
     return {
       id: uid,
       user_id: uid,
-      display_name: r.display_name ?? "Friend",
+      // Privacy: full name only if the user opted in (first name otherwise).
+      display_name: modeDisplayName(
+        {
+          first_name: r.first_name,
+          last_name: r.last_name,
+          show_full_name: r.show_full_name,
+          display_name: r.display_name,
+        },
+        "friends",
+        r.display_name ?? "Friend"
+      ),
       age: r.age ?? null,
       city: r.city ?? "",
       occupation: r.occupation ?? null,
       chipItems: chipItems.length ? chipItems : tags.slice(0, 3),
+      highlightChips: shared,
       photoUrl:
         r.main_photo_url ?? r.avatar_url ?? "https://i.pravatar.cc/400?u=winklyfriends",
       about: r.about_short ?? null,

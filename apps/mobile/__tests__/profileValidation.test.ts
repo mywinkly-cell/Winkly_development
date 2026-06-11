@@ -10,7 +10,6 @@ const validInput = {
   gender: "woman",
   birthday: "2000-01-01",
   city: "Berlin",
-  lookingFor: ["friends"],
   corePhotoCount: MIN_CORE_PHOTOS,
 };
 
@@ -22,14 +21,6 @@ describe("validateProfileCoreSubmit", () => {
       ok: false,
       title: "Incomplete",
       message: "Please fill in all required fields.",
-    });
-  });
-
-  it("requires at least one looking-for selection", () => {
-    expect(validateProfileCoreSubmit({ ...validInput, lookingFor: [] })).toEqual({
-      ok: false,
-      title: "Almost there",
-      message: "Please choose who you're looking to meet.",
     });
   });
 

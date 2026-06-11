@@ -98,20 +98,17 @@ export function ProfileGeneralBlock({
   coreBio,
   education,
   languages,
-  activityPreferences,
   nightOwl,
 }: {
   coreBio?: string | null;
   education?: string | null;
   languages?: string[];
-  activityPreferences?: string[];
   nightOwl?: boolean | null;
 }) {
   const hasGeneral =
     !!coreBio ||
     !!education ||
     (languages?.length ?? 0) > 0 ||
-    (activityPreferences?.length ?? 0) > 0 ||
     typeof nightOwl === "boolean";
 
   if (!hasGeneral) return null;
@@ -131,12 +128,6 @@ export function ProfileGeneralBlock({
         <>
           <Text style={[styles.subheading, { marginTop: 12 }]}>Languages</Text>
           <Text style={styles.body}>{languages.join(", ")}</Text>
-        </>
-      ) : null}
-      {activityPreferences && activityPreferences.length > 0 ? (
-        <>
-          <Text style={[styles.subheading, { marginTop: 12 }]}>Activity preferences</Text>
-          <ProfileChipList items={activityPreferences} />
         </>
       ) : null}
     </ProfileSection>

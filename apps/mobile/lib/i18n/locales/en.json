@@ -437,5 +437,12 @@
   "common.sent": "Sent",
   "common.pasteLink": "Paste link",
   "common.mismatch": "Mismatch",
-  "common.tryAgain": "Please try again."
+  "common.tryAgain": "Please try again.",
+
+  "nav.home": "Home",
+  "nav.modes": "Modes",
+  "nav.analytics": "BA",
+
+  "chat.now": "Now",
+  "chat.yesterday": "Yesterday"
 }

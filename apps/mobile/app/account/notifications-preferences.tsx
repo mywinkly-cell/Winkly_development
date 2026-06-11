@@ -18,7 +18,7 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
-import { SUPPORTED_LANGUAGES } from "@/lib/i18n";
+import { SUPPORTED_LANGUAGES, normalizeLanguageCode } from "@/lib/i18n";
 
 export default function NotificationsPreferences() {
   const { t, i18n } = useTranslation();
@@ -144,7 +144,7 @@ export default function NotificationsPreferences() {
             <Ionicons name="language-outline" size={20} color={Colors.primaryViolet} />
             <Text style={styles.rowText}>{t("notifications.language")}</Text>
             <Text style={styles.rowValue}>
-              {SUPPORTED_LANGUAGES.find((l) => l.code === i18n.language)?.name ?? "English"}
+              {SUPPORTED_LANGUAGES.find((l) => l.code === normalizeLanguageCode(i18n.language))?.name ?? "English"}
             </Text>
             <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
           </TouchableOpacity>

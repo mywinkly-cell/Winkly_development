@@ -11,6 +11,8 @@ export type BusinessPersonItem = {
   meta?: string;
   photoUrl?: string | null;
   tags: string[];
+  /** Subset of tags shared with the viewer — highlighted on the card. */
+  highlightTags?: string[];
   intentGoal?: string;
   mutualCount?: number;
 };
@@ -153,6 +155,17 @@ export function scoreBusinessSimilarity(
   return score;
 }
 
+/** Tags this candidate shares with the viewer's professional context (for card highlighting). */
+export function sharedBusinessTags(
+  viewer: BusinessViewerContext,
+  candidate: BusinessPersonItem
+): string[] {
+  const viewerSet = new Set(
+    [...viewer.interests, ...viewer.industries, ...viewer.networkingGoals, ...viewer.tags].map(norm)
+  );
+  return candidate.tags.filter((t) => viewerSet.has(norm(t)));
+}
+
 export function rankSimilarProfiles(
   viewer: BusinessViewerContext,
   candidates: BusinessPersonItem[],
@@ -160,6 +173,7 @@ export function rankSimilarProfiles(
 ): BusinessPersonItem[] {
   return [...candidates]
     .sort((a, b) => scoreBusinessSimilarity(viewer, b) - scoreBusinessSimilarity(viewer, a))
-    .slice(0, limit);
+    .slice(0, limit)
+    .map((c) => ({ ...c, highlightTags: sharedBusinessTags(viewer, c) }));
 }
 

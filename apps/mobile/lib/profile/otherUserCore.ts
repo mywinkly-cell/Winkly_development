@@ -1,11 +1,11 @@
-import { supabase } from "@/lib/supabase";
+import type { Mode } from "@/types";
+import {
+  loadPublicCoreProfile,
+  type PublicCoreProfile,
+} from "@/lib/profile/publicModeProfile";
 
-export type OtherUserCoreFields = {
-  bio: string | null;
-  education: string | null;
-  activity_preferences: string[];
-  core_photos: string[];
-};
+/** @deprecated Prefer PublicCoreProfile — kept for existing imports. */
+export type OtherUserCoreFields = PublicCoreProfile;
 
 export function asStringArray(v: unknown): string[] {
   if (!Array.isArray(v)) return [];
@@ -15,28 +15,31 @@ export function asStringArray(v: unknown): string[] {
 /** Public core fields from user_profiles (authenticated users can read). */
 export async function getOtherUserCoreFields(
   targetUserId: string
-): Promise<OtherUserCoreFields | null> {
-  const { data, error } = await supabase
-    .from("user_profiles")
-    .select("bio, education, activity_preferences, core_photos")
-    .eq("id", targetUserId)
-    .maybeSingle();
+): Promise<PublicCoreProfile | null> {
+  return loadPublicCoreProfile(targetUserId);
+}
 
-  if (error || !data) return null;
-
-  const row = data as {
-    bio?: string | null;
-    education?: string | null;
-    activity_preferences?: string[] | null;
-    core_photos?: string[] | null;
-  };
-
-  return {
-    bio: row.bio?.trim() || null,
-    education: row.education?.trim() || null,
-    activity_preferences: asStringArray(row.activity_preferences),
-    core_photos: asStringArray(row.core_photos),
-  };
+/**
+ * Name to display for another user in a given mode, honoring their privacy choice.
+ * - Business: always full name (professional networking).
+ * - Romance / Friends: full name only if the user opted in; otherwise first name.
+ */
+export function modeDisplayName(
+  input: {
+    first_name?: string | null;
+    last_name?: string | null;
+    show_full_name?: boolean | null;
+    display_name?: string | null;
+  },
+  mode: Mode,
+  fallback = "Someone"
+): string {
+  const first = (input.first_name ?? "").trim();
+  const last = (input.last_name ?? "").trim();
+  const full = `${first} ${last}`.trim();
+  if (mode === "business") return full || (input.display_name ?? "").trim() || fallback;
+  if (input.show_full_name === true) return full || first || (input.display_name ?? "").trim() || fallback;
+  return first || (input.display_name ?? "").trim() || fallback;
 }
 
 export function mergePhotoUrls(...groups: (string | null | undefined)[][]): string[] {

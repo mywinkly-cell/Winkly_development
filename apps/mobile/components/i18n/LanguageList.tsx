@@ -7,7 +7,12 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useTranslation } from "react-i18next";
 import { Colors, Typography, Layout } from "@/constants/tokens";
-import { SUPPORTED_LANGUAGES, changeLanguage, type SupportedLanguageCode } from "@/lib/i18n";
+import {
+  SUPPORTED_LANGUAGES,
+  normalizeLanguageCode,
+  setUserLanguage,
+  type SupportedLanguageCode,
+} from "@/lib/i18n";
 
 type LanguageListProps = {
   onLanguageChanged?: (code: SupportedLanguageCode) => void;
@@ -15,7 +20,7 @@ type LanguageListProps = {
 
 export function LanguageList({ onLanguageChanged }: LanguageListProps) {
   const { i18n } = useTranslation();
-  const currentCode = (i18n.language ?? "en") as SupportedLanguageCode;
+  const currentCode = normalizeLanguageCode(i18n.language);
   const [saving, setSaving] = useState<string | null>(null);
 
   const onSelect = useCallback(
@@ -24,7 +29,7 @@ export function LanguageList({ onLanguageChanged }: LanguageListProps) {
       Haptics.selectionAsync();
       setSaving(code);
       try {
-        await changeLanguage(code);
+        await setUserLanguage(code);
         onLanguageChanged?.(code as SupportedLanguageCode);
       } finally {
         setSaving(null);

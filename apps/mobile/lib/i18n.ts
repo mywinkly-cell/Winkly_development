@@ -11,6 +11,25 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getLocales } from "expo-localization";
 
 const STORAGE_KEY = "winkly_app_language";
+/** Set when the user picks a language (onboarding globe or Settings). */
+const EXPLICIT_LANGUAGE_KEY = "winkly_app_language_explicit";
+
+export async function hasExplicitLanguageChoice(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(EXPLICIT_LANGUAGE_KEY)) === "true";
+  } catch {
+    return false;
+  }
+}
+
+async function setExplicitLanguageChoice(explicit: boolean): Promise<void> {
+  try {
+    if (explicit) await AsyncStorage.setItem(EXPLICIT_LANGUAGE_KEY, "true");
+    else await AsyncStorage.removeItem(EXPLICIT_LANGUAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 export const SUPPORTED_LANGUAGES = [
   { code: "en", name: "English" },
@@ -47,6 +66,15 @@ export const SUPPORTED_CODES = SUPPORTED_LANGUAGES.map((l) => l.code);
 /** App language on first launch and when the user has not chosen a language in Settings. */
 export const DEFAULT_LANGUAGE: SupportedLanguageCode = "en";
 
+/** Map i18n / BCP-47 tags to a supported app language code. */
+export function normalizeLanguageCode(raw: string | null | undefined): SupportedLanguageCode {
+  const base = (raw ?? "en").split("-")[0]?.toLowerCase() ?? "en";
+  if (SUPPORTED_CODES.includes(base as SupportedLanguageCode)) {
+    return base as SupportedLanguageCode;
+  }
+  return DEFAULT_LANGUAGE;
+}
+
 async function getStoredLanguage(): Promise<string | null> {
   try {
     return await AsyncStorage.getItem(STORAGE_KEY);
@@ -77,7 +105,7 @@ function deviceLanguageToSupportedCode(): SupportedLanguageCode | null {
 
 async function resolveInitialLanguage(): Promise<string> {
   const stored = await getStoredLanguage();
-  if (stored && SUPPORTED_CODES.includes(stored as SupportedLanguageCode)) return stored;
+  if (stored) return normalizeLanguageCode(stored);
   return deviceLanguageToSupportedCode() ?? DEFAULT_LANGUAGE;
 }
 
@@ -148,29 +176,49 @@ let initPromise: Promise<void> | null = null;
 export async function initI18n(): Promise<void> {
   if (initPromise) return initPromise;
   initPromise = (async () => {
-    const lng = await resolveInitialLanguage();
+    const stored = await getStoredLanguage();
+    let explicit = await hasExplicitLanguageChoice();
+    // Users who picked a language before the explicit flag existed still have a stored code.
+    if (stored && !explicit) {
+      await setExplicitLanguageChoice(true);
+      explicit = true;
+    }
+    const lng = normalizeLanguageCode(await resolveInitialLanguage());
+    // No English fallback — show only the active language (avoids EN/UK mix on partial locales).
+    const fallbackLng = false;
+
     await i18n.use(initReactI18next).init({
-      // Start with no eagerly-bundled resources; load only what we need below.
       resources: {},
       lng,
-      fallbackLng: "en",
+      fallbackLng,
       supportedLngs: SUPPORTED_CODES,
-      partialBundledLanguages: true,
-      // Locale JSON uses flat dotted keys (e.g. "auth.signin"), not nested objects.
+      partialBundledLanguages: false,
+      load: "languageOnly",
+      nonExplicitSupportedLngs: true,
       keySeparator: false,
       interpolation: { escapeValue: false },
       react: { useSuspense: false },
     } as InitOptions);
-    // Always load the fallback; load the detected language only if different.
-    addLanguageBundle("en");
-    if (lng !== "en") addLanguageBundle(lng);
+
+    addLanguageBundle(lng);
   })();
   return initPromise;
 }
 
+/** User chose a language (onboarding globe or Settings) — persist and apply everywhere. */
+export async function setUserLanguage(code: string): Promise<void> {
+  const normalized = normalizeLanguageCode(code);
+  addLanguageBundle(normalized);
+  await setExplicitLanguageChoice(true);
+  await setStoredLanguage(normalized);
+  if (i18n.options) {
+    i18n.options.fallbackLng = false;
+    i18n.options.partialBundledLanguages = false;
+  }
+  await i18n.changeLanguage(normalized);
+}
+
+/** @deprecated Prefer setUserLanguage — kept for call sites that only switch language. */
 export async function changeLanguage(code: string): Promise<void> {
-  if (!SUPPORTED_CODES.includes(code as SupportedLanguageCode)) return;
-  addLanguageBundle(code);
-  await setStoredLanguage(code);
-  await i18n.changeLanguage(code);
+  await setUserLanguage(code);
 }

@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { HIT_SLOP } from "@/constants/a11y";
 import { ModeSwitchCenterButton } from "@/components/layout/ModeSwitchCenterButton";
+import { useDefaultModeNavTabs } from "@/lib/i18n/useModeNavTabs";
 
 export type ModeNavTab = {
   key: string;
@@ -17,13 +18,6 @@ export type ModeNavTab = {
 
 type Mode = "romance" | "friends" | "business" | "events";
 
-export const DEFAULT_MODE_NAV_TABS: ModeNavTab[] = [
-  { key: "home", label: "Home", icon: "home" },
-  { key: "discover", label: "Discover", icon: "search" },
-  { key: "chats", label: "Chats", icon: "chatbubble-outline" },
-  { key: "planner", label: "Planner", icon: "calendar-outline" },
-];
-
 type Props = {
   mode: Mode;
   activeTab: string;
@@ -32,7 +26,9 @@ type Props = {
   tabs?: ModeNavTab[];
 };
 
-export function ModeBottomNavShell({ mode, activeTab, activeColor, onNav, tabs = DEFAULT_MODE_NAV_TABS }: Props) {
+export function ModeBottomNavShell({ mode, activeTab, activeColor, onNav, tabs }: Props) {
+  const defaultTabs = useDefaultModeNavTabs();
+  const resolvedTabs = tabs ?? defaultTabs;
   const insets = useSafeAreaInsets();
   const inactiveColor = Colors.gray500;
   const barHeight = Layout.bottomBarHeight + insets.bottom;
@@ -54,7 +50,7 @@ export function ModeBottomNavShell({ mode, activeTab, activeColor, onNav, tabs =
       )}
 
       <View style={[styles.row, { paddingTop: 12, paddingBottom }]}>
-        {tabs.slice(0, 2).map((tab) => (
+        {resolvedTabs.slice(0, 2).map((tab) => (
           <NavTab
             key={tab.key}
             label={tab.label}
@@ -68,7 +64,7 @@ export function ModeBottomNavShell({ mode, activeTab, activeColor, onNav, tabs =
 
         <ModeSwitchCenterButton mode={mode} />
 
-        {tabs.slice(2).map((tab) => (
+        {resolvedTabs.slice(2).map((tab) => (
           <NavTab
             key={tab.key}
             label={tab.label}

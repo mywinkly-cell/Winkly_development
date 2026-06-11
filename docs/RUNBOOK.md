@@ -1,6 +1,6 @@
 # Winkly Operations Runbook
 
-**Last updated:** 2026-06-10
+**Last updated:** 2026-06-10 (§7 Android bundle download)
 
 Operational procedures for AI cost control, incident response, and production secret hygiene.
 
@@ -146,7 +146,22 @@ Remove the variable (or leave empty) before release builds.
 
 ---
 
-## 6. Related docs
+## 6. Android: `IOException: Failed to download remote update`
+
+This is **not** a Java bug — the installed app could not download its JavaScript bundle (from Metro on your PC or from Expo’s update server).
+
+| You are using | Fix |
+|---------------|-----|
+| **EAS dev / preview APK** (not Expo Go) | From repo root: `npm run start` (or `npm run start:tunnel` if phone and PC are on different networks / Windows firewall blocks LAN). Open the dev-client launcher and connect to the running Metro URL. Rebuild the APK after `expo-dev-client` / `app.config.js` changes: `cd apps/mobile && eas build --profile development --platform android`. |
+| **Expo Go** | Use `cd apps/mobile && npm run start:go` instead of the dev-client start script. Scan the QR code again. |
+| **Android emulator** | Start Metro first, then press `a` in the terminal, or run `adb reverse tcp:8081 tcp:8081` and reload. |
+| **Preview build, offline / bad network** | App should launch from the embedded bundle after the config fix (`checkAutomatically: ON_ERROR_RECOVERY`). If an old APK still blocks on launch, install a new preview build or ensure network to `u.expo.dev`. |
+
+**Root causes we fixed in repo:** monorepo Metro `nodeModulesPaths` (deps live in repo root), missing `expo-dev-client` / `expo-updates`, and OTA config that blocked startup when the update server was unreachable.
+
+---
+
+## 7. Related docs
 
 - **docs/API_KEYS_AND_ENV.md** — full env reference
 - **docs/SUBSCRIPTION_TIERS_AND_AI.md** — tier matrix and gateway enforcement

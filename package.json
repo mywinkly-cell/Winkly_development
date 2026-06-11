@@ -9,7 +9,9 @@
   "scripts": {
     "start": "npm run mobile:start",
     "start:clear": "npm run -w apps/mobile start:clear",
+    "start:tunnel": "npm run -w apps/mobile start:tunnel",
     "mobile:start": "npm run -w apps/mobile start",
+    "mobile:start:tunnel": "npm run -w apps/mobile start:tunnel",
     "mobile:android": "npm run -w apps/mobile android",
     "mobile:ios": "npm run -w apps/mobile ios",
     "mobile:web": "npm run -w apps/mobile web",
