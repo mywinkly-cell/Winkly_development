@@ -24,6 +24,7 @@ import { Colors, Typography, FontFamily, HEADER } from "@/constants/tokens";
 import type { ConciergeContext, ExperienceOption } from "@/lib/ai/conciergeClient";
 import { ConciergeRequestForm } from "@/components/ai/ConciergeRequestForm";
 import { ConciergePlanningFlow } from "@/components/ai/ConciergePlanningFlow";
+import { ConciergeRateLimitCard } from "@/components/ai/ConciergeRateLimitCard";
 import { callConciergeStream, reportConciergeOutcome } from "@/lib/ai/conciergeClient";
 import { getMergedDeviceWhiteSpaceSlots, formatCalendarWhiteSpaceForGateway } from "@/lib/integrations/calendarWhiteSpace";
 import { buildBookingContextForAi } from "@/lib/integrations/bookingLinks";
@@ -194,7 +195,10 @@ export default function ConciergeScreen() {
   const [savedIdeas, setSavedIdeas] = useState<SavedIdea[]>([]);
   const [, setSavedIds] = useState<Set<string>>(new Set());
   const [lastErrorCode, setLastErrorCode] = useState<import("@/lib/ai/conciergeClient").ConciergeErrorCode | null>(null);
+  const [lastLimitType, setLastLimitType] = useState<import("@/lib/ai/conciergeClient").ConciergeLimitType | null>(null);
+  const [lastUpgradeTo, setLastUpgradeTo] = useState<"super" | "premium" | null>(null);
   const [lastRetryAfter, setLastRetryAfter] = useState<number | null>(null);
+  const [savingRequest, setSavingRequest] = useState(false);
   const [noOptionsReason, setNoOptionsReason] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState<boolean | null>(true);
   const [compareIndices, setCompareIndices] = useState<number[]>([]);
@@ -358,6 +362,8 @@ export default function ConciergeScreen() {
   const handleSubmit = async (context: ConciergeContext) => {
     setError(null);
     setLastErrorCode(null);
+    setLastLimitType(null);
+    setLastUpgradeTo(null);
     setLastRetryAfter(null);
     setNoOptionsReason(null);
     setMessage(null);
@@ -402,7 +408,13 @@ export default function ConciergeScreen() {
         onDelta: (content) => setMessage((prev) => (prev ?? "") + content),
         onDone: (res) => {
           setLoading(false);
-          if (res.error) {
+          if (res.error_code === "rate_limit" || res.error_code === "daily_quota" || res.error_code === "tier_required") {
+            setError(null);
+            setLastErrorCode(res.error_code);
+            setLastLimitType(res.limit_type ?? null);
+            setLastUpgradeTo(res.upgrade_to ?? null);
+            setLastRetryAfter(res.retry_after ?? null);
+          } else if (res.error) {
             setError(res.error);
             setLastErrorCode(res.error_code ?? null);
             setLastRetryAfter(res.retry_after ?? null);
@@ -664,12 +676,39 @@ export default function ConciergeScreen() {
               <Text style={styles.offlineBannerText}>Check connection and try again.</Text>
             </View>
           )}
-          {error ? (
+          {lastErrorCode === "rate_limit" || lastErrorCode === "daily_quota" || lastErrorCode === "tier_required" ? (
+            <ConciergeRateLimitCard
+              errorCode={lastErrorCode}
+              limitType={lastLimitType ?? undefined}
+              retryAfter={lastRetryAfter ?? undefined}
+              upgradeTo={lastUpgradeTo ?? undefined}
+              saving={savingRequest}
+              onSaveForLater={
+                lastSubmittedContext.current
+                  ? async () => {
+                      setSavingRequest(true);
+                      try {
+                        await addRecentRequest(lastSubmittedContext.current!);
+                        await loadRecent();
+                        setLastErrorCode(null);
+                        setLastLimitType(null);
+                        setLastUpgradeTo(null);
+                        setLastRetryAfter(null);
+                      } finally {
+                        setSavingRequest(false);
+                      }
+                    }
+                  : undefined
+              }
+              onRetry={
+                lastSubmittedContext.current
+                  ? () => handleSubmit(lastSubmittedContext.current!)
+                  : undefined
+              }
+            />
+          ) : error ? (
             <View style={styles.errorBlock}>
               <Text style={styles.errorText}>{error}</Text>
-              {lastErrorCode === "rate_limit" && lastRetryAfter != null && lastRetryAfter >= 60 && (
-                <Text style={styles.errorHint}>Try after 1 minute.</Text>
-              )}
               {lastSubmittedContext.current && (
                 <TouchableOpacity
                   style={styles.retryBtn}

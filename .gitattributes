@@ -1,0 +1,30 @@
+# Normalize line endings to LF in the repo; check out as-is on all platforms
+* text=auto eol=lf
+
+# Markdown files — store and check out as UTF-8
+*.md text working-tree-encoding=UTF-8
+
+# JSON / JS / TS source
+*.json text eol=lf
+*.js   text eol=lf
+*.jsx  text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.mjs  text eol=lf
+*.cjs  text eol=lf
+
+# Shell and config
+*.sh   text eol=lf
+*.env  text eol=lf
+
+# Binary assets — do not diff or mangle
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.ttf  binary
+*.otf  binary
+*.woff binary
+*.woff2 binary

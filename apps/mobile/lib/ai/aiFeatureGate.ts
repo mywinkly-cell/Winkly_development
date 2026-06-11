@@ -1,6 +1,6 @@
 // ────────────────────────────────────────────────
 // AI feature gating by subscription tier
-// Free = one AI plan (server-enforced quota). Super = limited AI. Premium = full concierge.
+// Free = 3 AI plans/day (server-enforced). Super = limited AI. Premium = full concierge.
 // ────────────────────────────────────────────────
 
 import type { SubscriptionTier } from "@/types";

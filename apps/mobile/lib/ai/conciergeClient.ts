@@ -4,6 +4,7 @@
 // ────────────────────────────────────────────────
 
 import { supabase } from "@/lib/supabase";
+import { getConciergeDevLimitMockResponse } from "@/lib/ai/conciergeDevLimitMock";
 import type { Mode } from "@/types";
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -372,7 +373,78 @@ export type ExperienceOption = {
 };
 
 /** Error classification for UI (retry, rate limit messaging, offline). */
-export type ConciergeErrorCode = "network" | "rate_limit" | "unknown";
+export type ConciergeErrorCode =
+  | "network"
+  | "rate_limit"
+  | "daily_quota"
+  | "tier_required"
+  | "unknown";
+
+export type ConciergeLimitType = "burst" | "daily_quota" | "provider_burst" | "provider_quota";
+
+/** Seconds until next UTC midnight (for daily quota retry hints). */
+export function secondsUntilUtcMidnight(): number {
+  const now = Date.now();
+  const next = Date.UTC(
+    new Date().getUTCFullYear(),
+    new Date().getUTCMonth(),
+    new Date().getUTCDate() + 1,
+  );
+  return Math.max(60, Math.ceil((next - now) / 1000));
+}
+
+function mapGatewayErrorResponse(
+  data: Record<string, unknown>,
+  status: number,
+): Pick<ConciergeResponse, "error" | "error_code" | "retry_after" | "limit_type" | "upgrade_to"> {
+  const code = typeof data.code === "string" ? data.code : undefined;
+  const limitType =
+    typeof data.limit_type === "string" ? (data.limit_type as ConciergeLimitType) : undefined;
+  const retryAfter =
+    typeof data.retry_after === "number"
+      ? data.retry_after
+      : limitType === "daily_quota"
+        ? secondsUntilUtcMidnight()
+        : undefined;
+  const upgradeTo =
+    data.upgrade_to === "super" || data.upgrade_to === "premium" ? data.upgrade_to : undefined;
+
+  if (
+    code === "limit_reached" ||
+    code === "rate_limited" ||
+    code === "quota_exhausted" ||
+    status === 429
+  ) {
+    if (limitType === "daily_quota" || code === "ai_free_quota_exhausted") {
+      return {
+        error: undefined,
+        error_code: "daily_quota",
+        retry_after: retryAfter,
+        limit_type: "daily_quota",
+        upgrade_to: upgradeTo ?? "super",
+      };
+    }
+    return {
+      error: undefined,
+      error_code: "rate_limit",
+      retry_after: retryAfter ?? 60,
+      limit_type: limitType ?? "burst",
+    };
+  }
+
+  if (code === "ai_tier_required" || code === "ai_disabled_for_tier") {
+    return {
+      error: undefined,
+      error_code: "tier_required",
+      upgrade_to: upgradeTo ?? "super",
+    };
+  }
+
+  const baseError =
+    (typeof data.error === "string" ? data.error : undefined) ??
+    (status === 429 ? "Request limit reached." : `Request failed: ${status}`);
+  return { error: baseError, error_code: "unknown", retry_after: retryAfter };
+}
 
 /** Coerce gateway JSON options to typed suggestions (validated at runtime by UI). */
 function coerceSuggestions(raw: unknown[] | undefined): ExperienceOption[] | undefined {
@@ -392,6 +464,10 @@ export type ConciergeResponse = {
   plan_options?: unknown[];
   /** When set, UI can show Retry and friendly message (e.g. "Check connection", "Wait a moment"). */
   error_code?: ConciergeErrorCode;
+  /** Gateway limit bucket when `error_code` is rate_limit or daily_quota. */
+  limit_type?: ConciergeLimitType;
+  /** Suggested upgrade tier for quota/tier upsell cards. */
+  upgrade_to?: "super" | "premium";
   /** Seconds after which to retry (e.g. 60 for "Try after 1 minute"). */
   retry_after?: number;
   /** When message is set but suggestions empty: short reason to show in empty state. */
@@ -464,6 +540,17 @@ export async function callConcierge(params: {
     return { message: "", error: "Not signed in" };
   }
 
+  const devLimitMock = getConciergeDevLimitMockResponse();
+  if (devLimitMock) {
+    if (__DEV__) {
+      console.log(logPrefix, `← ${task} (dev limit mock)`, {
+        error_code: devLimitMock.error_code,
+        limit_type: devLimitMock.limit_type,
+      });
+    }
+    return devLimitMock;
+  }
+
   const cacheKey = optionsCacheKey(context);
   if (cacheKey) {
     const entry = optionsCache.get(cacheKey);
@@ -533,23 +620,20 @@ export async function callConcierge(params: {
     }
   }
   if (!res.ok) {
-    const retryAfter = typeof data?.retry_after === "number" ? data.retry_after : undefined;
-    const rateLimitMessage =
-      "You're doing a lot of requests. Wait a moment and try again." +
-      (retryAfter != null && retryAfter >= 60 ? " Try after 1 minute." : retryAfter != null && retryAfter > 0 ? ` Try again in ${retryAfter} seconds.` : "");
-    const baseError =
-      (typeof data?.error === "string" ? data.error : undefined) ??
-      (res.status === 429 ? rateLimitMessage : `Request failed: ${res.status}`);
+    const mapped = mapGatewayErrorResponse(data, res.status);
+    if (mapped.error_code && mapped.error_code !== "unknown") {
+      return { message: "", ...mapped };
+    }
     const detail = typeof data?.detail === "string" ? data.detail.trim() : "";
     const error =
-      __DEV__ && detail && baseError === "Internal error"
-        ? `${baseError}: ${detail}`
-        : baseError;
+      __DEV__ && detail && mapped.error === "Internal error"
+        ? `${mapped.error}: ${detail}`
+        : mapped.error ?? `Request failed: ${res.status}`;
     return {
       message: "",
       error,
-      error_code: res.status === 429 ? "rate_limit" : "unknown",
-      retry_after: retryAfter,
+      error_code: mapped.error_code ?? "unknown",
+      retry_after: mapped.retry_after,
     };
   }
   const response: ConciergeResponse = {
@@ -602,6 +686,16 @@ export async function callConciergeStream(
     onDone({ message: "", error: "Not signed in" });
     return;
   }
+  const devLimitMock = getConciergeDevLimitMockResponse();
+  if (devLimitMock) {
+    if (__DEV__) {
+      console.log("[ai-gateway]", `← ${task} (stream, dev limit mock)`, {
+        error_code: devLimitMock.error_code,
+      });
+    }
+    onDone(devLimitMock);
+    return;
+  }
   const url = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/ai-gateway`;
   let res: Response;
   if (__DEV__) {
@@ -644,12 +738,17 @@ export async function callConciergeStream(
           : { rawSnippet: rawText.slice(0, 400) }
       );
     }
+    const mapped = mapGatewayErrorResponse(parsedBody, res.status);
+    if (mapped.error_code && mapped.error_code !== "unknown") {
+      onDone({ message: "", ...mapped });
+      return;
+    }
     onDone({
       message: "",
       error:
         (typeof parsedBody.error === "string" ? parsedBody.error : undefined) ?? `Request failed: ${res.status}`,
-      error_code: res.status === 429 ? "rate_limit" : "unknown",
-      retry_after: typeof parsedBody.retry_after === "number" ? parsedBody.retry_after : undefined,
+      error_code: mapped.error_code ?? "unknown",
+      retry_after: mapped.retry_after,
     });
     return;
   }

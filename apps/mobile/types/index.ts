@@ -12,7 +12,7 @@ export type BusinessProfileType =
 
 export type Mode = "romance" | "friends" | "business" | "events";
 
-/** Free = basic Winkly + one free AI plan. Super = limited AI (matching, event suggestions, planning ideas, chat opener). Premium = full AI + concierge. */
+/** Free = basic Winkly + 3 AI plans/day. Super = limited AI (matching, event suggestions, planning ideas, chat opener). Premium = full AI + concierge. */
 export type SubscriptionTier = "free" | "super" | "premium" | "enterprise";
 
 /** Single source of truth for authorization across the app */

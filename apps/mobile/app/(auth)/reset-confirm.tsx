@@ -23,12 +23,14 @@ import {
 import { SafeScreenView } from "@/components/SafeScreenView";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { createSessionFromUrl } from "@/lib/authDeepLink";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 
 export default function ResetConfirm() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -40,8 +42,8 @@ export default function ResetConfirm() {
     const url = pasteUrl.trim();
     if (!url) {
       Alert.alert(
-        "Paste link",
-        "Paste the full URL from the reset email, or from your browser’s address bar after opening the link. You can use either the link from the email or the URL after it redirects."
+        t("common.pasteLink"),
+        t("auth.resetConfirm.pasteLinkMessage")
       );
       return;
     }
@@ -51,34 +53,34 @@ export default function ResetConfirm() {
       const ok = await createSessionFromUrl(urlToUse);
       if (ok) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert("Link applied", "You can now enter your new password below.");
+        Alert.alert(t("auth.resetConfirm.linkAppliedTitle"), t("auth.resetConfirm.linkAppliedMessage"));
       } else {
         Alert.alert(
-          "Invalid or expired link",
-          "Use the full URL from the reset email (the link you received), or the URL from your browser after opening it. Links expire after about an hour."
+          t("auth.resetConfirm.invalidLinkTitle"),
+          t("auth.resetConfirm.invalidLinkMessage")
         );
       }
     } catch {
-      Alert.alert("Error", "Could not apply link. Try again.");
+      Alert.alert(t("common.error"), t("auth.resetConfirm.applyLinkFailed"));
     } finally {
       setPasteLoading(false);
     }
-  }, [pasteUrl]);
+  }, [pasteUrl, t]);
 
   // ────────────────────────────────────────────────
   //  Handle Password Update
   // ────────────────────────────────────────────────
   const handleUpdatePassword = async () => {
     if (!password || !confirmPassword) {
-      Alert.alert("Incomplete", "Please fill in both password fields.");
+      Alert.alert(t("auth.incomplete"), t("auth.resetConfirm.fillBoth"));
       return;
     }
     if (password.length < 8) {
-      Alert.alert("Weak password", "Password must be at least 8 characters long.");
+      Alert.alert(t("common.weakPassword"), t("auth.passwordMinLength"));
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert("Mismatch", "Passwords do not match.");
+      Alert.alert(t("auth.resetConfirm.mismatchTitle"), t("auth.resetConfirm.mismatchMessage"));
       return;
     }
 
@@ -87,10 +89,10 @@ export default function ResetConfirm() {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
 
-      Alert.alert("Success", "Your password has been updated!");
+      Alert.alert(t("common.success"), t("auth.resetConfirm.successMessage"));
       router.replace("/(auth)/signin");
     } catch (err: any) {
-      Alert.alert("Error", err.message ?? "Unable to update password.");
+      Alert.alert(t("common.error"), err.message ?? t("auth.resetConfirm.updateFailed"));
     } finally {
       setLoading(false);
     }
@@ -130,7 +132,7 @@ export default function ResetConfirm() {
             marginBottom: 12,
           }}
         >
-          Set a new password 🔒
+          {t("auth.resetConfirm.title")}
         </Text>
 
         <Text
@@ -141,21 +143,21 @@ export default function ResetConfirm() {
             marginBottom: 24,
           }}
         >
-          Please enter and confirm your new password to complete the reset.
+          {t("auth.resetConfirm.subtitle")}
         </Text>
 
         {__DEV__ && (
         <View style={{ marginBottom: 24, width: "100%", maxWidth: 360 }}>
           <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 8, fontWeight: "600" }}>
-            Testing in Expo Go?
+            {t("auth.verify.devTitle")}
           </Text>
           <Text style={{ ...Typography.caption, color: Colors.gray500, marginBottom: 8 }}>
-            Deep links don&apos;t work in Expo Go. Paste the full URL from the reset email (or from your browser after opening the link):
+            {t("auth.verify.devHint")}
           </Text>
           <TextInput
             value={pasteUrl}
             onChangeText={setPasteUrl}
-            placeholder="Paste https://... or full URL"
+            placeholder={t("auth.verify.pastePlaceholder")}
             placeholderTextColor={Colors.gray500}
             autoCapitalize="none"
             autoCorrect={false}
@@ -180,14 +182,14 @@ export default function ResetConfirm() {
             {pasteLoading ? (
               <ActivityIndicator color={Colors.accentYellow} size="small" />
             ) : (
-              <Text style={{ ...Typography.button, color: Colors.accentYellow }}>Paste & continue</Text>
+              <Text style={{ ...Typography.button, color: Colors.accentYellow }}>{t("auth.resetConfirm.pasteAndContinue")}</Text>
             )}
           </TouchableOpacity>
         </View>
         )}
 
         <TextInput
-          placeholder="New password (use password manager to suggest)"
+          placeholder={t("auth.resetConfirm.newPasswordPlaceholder")}
           placeholderTextColor={Colors.gray500}
           value={password}
           onChangeText={setPassword}
@@ -198,7 +200,7 @@ export default function ResetConfirm() {
         />
 
         <TextInput
-          placeholder="Confirm new password"
+          placeholder={t("auth.resetConfirm.confirmPlaceholder")}
           placeholderTextColor={Colors.gray500}
           value={confirmPassword}
           onChangeText={setConfirmPassword}
@@ -225,7 +227,7 @@ export default function ResetConfirm() {
             <ActivityIndicator color={Colors.accentYellow} />
           ) : (
             <Text style={{ ...Typography.button, color: Colors.accentYellow }}>
-              Update password
+              {t("auth.resetConfirm.updateButton")}
             </Text>
           )}
         </TouchableOpacity>
@@ -235,7 +237,7 @@ export default function ResetConfirm() {
           style={{ marginTop: 24 }}
         >
           <Text style={{ ...Typography.body, color: Colors.primaryViolet }}>
-            Back to Sign in
+            {t("auth.reset.backToSignIn")}
           </Text>
         </TouchableOpacity>
       </ScrollView>

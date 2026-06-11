@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator } from "react-native";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { supabase } from "@/lib/supabase";
 
@@ -12,6 +13,7 @@ type NotificationItem = {
 };
 
 export default function Notifications() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -43,20 +45,20 @@ export default function Notifications() {
   return (
     <View style={[styles.screen, { backgroundColor: Colors.background }]}>
       <View style={styles.header}>
-        <Text style={[Typography.h2, styles.title]}>Notifications</Text>
+        <Text style={[Typography.h2, styles.title]}>{t("notifications.inboxTitle")}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color={Colors.primaryViolet} />
-            <Text style={{ marginTop: 8, color: Colors.mutedText }}>Loading…</Text>
+            <Text style={{ marginTop: 8, color: Colors.mutedText }}>{t("common.loading")}</Text>
           </View>
         ) : items.length === 0 ? (
           <View style={[styles.empty, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-            <Text style={{ color: Colors.text, fontWeight: "900" }}>No notifications yet</Text>
+            <Text style={{ color: Colors.text, fontWeight: "900" }}>{t("notifications.emptyTitle")}</Text>
             <Text style={{ color: Colors.mutedText, marginTop: 6 }}>
-              You’ll see updates about matches, events, and messages here.
+              {t("notifications.emptySubtitle")}
             </Text>
           </View>
         ) : (

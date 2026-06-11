@@ -19,6 +19,7 @@ import { SafeScreenView } from "@/components/SafeScreenView";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { createSessionFromUrl } from "@/lib/authDeepLink";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
@@ -26,6 +27,7 @@ import { getEmailRedirectTo } from "@/lib/authRedirectUrl";
 
 export default function Verify() {
   const router = useRouter();
+  const { t } = useTranslation();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [loading, setLoading] = useState(false);
   const [emailForResend, setEmailForResend] = useState("");
@@ -46,7 +48,7 @@ export default function Verify() {
   const resendEmail = useCallback(async () => {
     const cleanEmail = emailForResend.trim();
     if (!cleanEmail) {
-      Alert.alert("Email required", "Please enter the email you used to sign up.");
+      Alert.alert(t("auth.incomplete"), t("auth.verify.emailRequiredMessage"));
       return;
     }
     setLoading(true);
@@ -60,14 +62,14 @@ export default function Verify() {
       if (error) throw error;
       await AsyncStorage.setItem("winkly_last_signup_email", cleanEmail);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Sent", "Verification email has been resent. Check your inbox and tap the link.");
+      Alert.alert(t("auth.verify.sentTitle"), t("auth.verify.sentMessage"));
     } catch (err: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Resend failed", err?.message ?? "Please try again.");
+      Alert.alert(t("auth.verify.resendFailedTitle"), err?.message ?? t("common.tryAgain"));
     } finally {
       setLoading(false);
     }
-  }, [emailForResend]);
+  }, [emailForResend, t]);
 
   const goSignin = useCallback(() => router.replace("/(auth)/signin"), [router]);
   const goSignup = useCallback(() => router.replace("/(onboarding-personal)/get-started"), [router]);
@@ -78,7 +80,7 @@ export default function Verify() {
   const handlePasteVerify = useCallback(async () => {
     const url = pasteUrl.trim();
     if (!url) {
-      Alert.alert("Paste link", "Paste the full URL from your browser's address bar into the field above.");
+      Alert.alert(t("common.pasteLink"), t("auth.verify.pasteLinkMessage"));
       return;
     }
     setPasteLoading(true);
@@ -89,14 +91,14 @@ export default function Verify() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.replace("/(auth)/email-verified");
       } else {
-        Alert.alert("Invalid link", "Could not use this link. Make sure it's the full URL from the verification email.");
+        Alert.alert(t("auth.verify.invalidLinkTitle"), t("auth.verify.invalidLinkMessage"));
       }
     } catch {
-      Alert.alert("Error", "Could not verify. Try again.");
+      Alert.alert(t("common.error"), t("common.tryAgain"));
     } finally {
       setPasteLoading(false);
     }
-  }, [pasteUrl, router]);
+  }, [pasteUrl, router, t]);
 
   return (
     <SafeScreenView style={styles.safe}>
@@ -105,18 +107,15 @@ export default function Verify() {
           <Image source={require("../../assets/icons/winkly-logo.png")} resizeMode="contain" style={styles.wordmark} />
 
           <View style={styles.card}>
-            <Text style={styles.title}>Please confirm your email</Text>
-            <Text style={styles.subtitle}>
-              We sent a verification link to your inbox. Tap the link to verify your email and continue.{"\n\n"}
-              You can&apos;t use the app until your email is verified.
-            </Text>
+            <Text style={styles.title}>{t("auth.verify.title")}</Text>
+            <Text style={styles.subtitle}>{t("auth.verify.subtitle")}</Text>
 
             <View style={styles.resendSection}>
-              <Text style={styles.resendTitle}>Didn&apos;t get the email?</Text>
+              <Text style={styles.resendTitle}>{t("auth.verify.resendTitle")}</Text>
               <TextInput
                 value={emailForResend}
                 onChangeText={setEmailForResend}
-                placeholder="Email you used to sign up"
+                placeholder={t("auth.verify.emailPlaceholder")}
                 placeholderTextColor={Colors.gray500}
                 autoCapitalize="none"
                 keyboardType="email-address"
@@ -133,19 +132,19 @@ export default function Verify() {
                 {loading ? (
                   <ActivityIndicator color={Colors.accentYellow} size="small" />
                 ) : (
-                  <Text style={styles.resendBtnText}>Resend verification email</Text>
+                  <Text style={styles.resendBtnText}>{t("auth.verify.resendButton")}</Text>
                 )}
               </TouchableOpacity>
             </View>
 
             {__DEV__ && (
               <View style={styles.devSection}>
-                <Text style={styles.devTitle}>Testing in Expo Go?</Text>
-                <Text style={styles.devHint}>Deep links don&apos;t work in Expo Go. Paste the full URL from your browser after opening the verification link:</Text>
+                <Text style={styles.devTitle}>{t("auth.verify.devTitle")}</Text>
+                <Text style={styles.devHint}>{t("auth.verify.devHint")}</Text>
                 <TextInput
                   value={pasteUrl}
                   onChangeText={setPasteUrl}
-                  placeholder="Paste https://... or the full URL"
+                  placeholder={t("auth.verify.pastePlaceholder")}
                   placeholderTextColor={Colors.gray500}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -161,18 +160,18 @@ export default function Verify() {
                   {pasteLoading ? (
                     <ActivityIndicator color={Colors.accentYellow} size="small" />
                   ) : (
-                    <Text style={styles.pasteBtnText}>Paste & verify</Text>
+                    <Text style={styles.pasteBtnText}>{t("auth.verify.pasteAndVerify")}</Text>
                   )}
                 </TouchableOpacity>
               </View>
             )}
 
             <TouchableOpacity onPress={goSignin} style={styles.linkBtn} activeOpacity={0.7}>
-              <Text style={styles.linkText}>Back to Sign in</Text>
+              <Text style={styles.linkText}>{t("auth.verify.backToSignIn")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity onPress={goSignup} style={styles.linkBtn} activeOpacity={0.7}>
-              <Text style={styles.linkText}>Signed up with another email? Sign up again</Text>
+              <Text style={styles.linkText}>{t("auth.verify.signUpAgain")}</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>

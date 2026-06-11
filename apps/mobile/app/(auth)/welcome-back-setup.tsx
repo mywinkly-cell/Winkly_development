@@ -6,11 +6,13 @@ import { Text, TouchableOpacity, Animated, StyleSheet } from "react-native";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/providers";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 
 export default function WelcomeBackSetup() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { accountType } = useAuth();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideY = useRef(new Animated.Value(16)).current;
@@ -42,17 +44,15 @@ export default function WelcomeBackSetup() {
           },
         ]}
       >
-        <Text style={styles.title}>Welcome back</Text>
-        <Text style={styles.subtitle}>
-          Your profile is almost ready. Complete it to unlock the next step.
-        </Text>
+        <Text style={styles.title}>{t("auth.welcomeBack")}</Text>
+        <Text style={styles.subtitle}>{t("auth.welcomeBack.subtitle")}</Text>
 
         <TouchableOpacity
           onPress={handleContinue}
           style={[styles.cta, { ...Shadow.button }]}
           activeOpacity={0.9}
         >
-          <Text style={styles.ctaText}>Continue to setup</Text>
+          <Text style={styles.ctaText}>{t("auth.welcomeBack.continue")}</Text>
         </TouchableOpacity>
       </Animated.View>
     </SafeScreenView>

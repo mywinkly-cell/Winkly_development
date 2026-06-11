@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import * as Calendar from "expo-calendar";
@@ -35,25 +36,26 @@ const STORAGE_KEYS = {
 export type DefaultReminderWhen = "at_time" | "5m" | "10m" | "15m" | "30m" | "1h" | "1d";
 export type DefaultReminderChannel = "push" | "email" | "both";
 
-const DEFAULT_REMINDER_WHEN_OPTIONS: { value: DefaultReminderWhen; label: string }[] = [
-  { value: "at_time", label: "At time of event" },
-  { value: "5m", label: "5 minutes before" },
-  { value: "10m", label: "10 minutes before" },
-  { value: "15m", label: "15 minutes before" },
-  { value: "30m", label: "30 minutes before" },
-  { value: "1h", label: "1 hour before" },
-  { value: "1d", label: "1 day before" },
+const DEFAULT_REMINDER_WHEN_OPTIONS: { value: DefaultReminderWhen; labelKey: string }[] = [
+  { value: "at_time", labelKey: "planner.atTimeOfEvent" },
+  { value: "5m", labelKey: "planner.minutesBefore5" },
+  { value: "10m", labelKey: "planner.minutesBefore10" },
+  { value: "15m", labelKey: "planner.minutesBefore15" },
+  { value: "30m", labelKey: "planner.minutesBefore30" },
+  { value: "1h", labelKey: "planner.hourBefore" },
+  { value: "1d", labelKey: "planner.dayBefore" },
 ];
-const DEFAULT_REMINDER_CHANNEL_OPTIONS: { value: DefaultReminderChannel; label: string }[] = [
-  { value: "push", label: "Push notification" },
-  { value: "email", label: "Email" },
-  { value: "both", label: "Both" },
+const DEFAULT_REMINDER_CHANNEL_OPTIONS: { value: DefaultReminderChannel; labelKey: string }[] = [
+  { value: "push", labelKey: "planner.pushNotification" },
+  { value: "email", labelKey: "planner.email" },
+  { value: "both", labelKey: "planner.both" },
 ];
 
 type PermissionStatus = "undetermined" | "granted" | "denied";
 
 export default function PlannerSettings() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [reminders, setReminders] = useState(false);
   const [weeklyDigest, setWeeklyDigest] = useState(false);
   const [defaultReminderWhen, setDefaultReminderWhen] = useState<DefaultReminderWhen>("15m");
@@ -162,16 +164,16 @@ export default function PlannerSettings() {
       setCalendarStatus(status === "granted" ? "granted" : status === "denied" ? "denied" : "undetermined");
       if (status === "denied") {
         Alert.alert(
-          "Calendar access",
-          "To sync planner items with your calendar, enable calendar access in your device settings.",
+          t("planner.calendarAccessTitle"),
+          t("planner.calendarAccessMessage"),
           [
-            { text: "Cancel", style: "cancel" },
-            { text: "Open settings", onPress: () => Linking.openSettings() },
+            { text: t("common.cancel"), style: "cancel" },
+            { text: t("planner.openSettings"), onPress: () => Linking.openSettings() },
           ]
         );
       }
     } catch (_e) {
-      Alert.alert("Error", "Could not request calendar access. Please try again.");
+      Alert.alert(t("common.error"), t("planner.calendarPermissionError"));
     } finally {
       setLoading(null);
     }
@@ -199,11 +201,11 @@ export default function PlannerSettings() {
 
     if (calendarStatus === "denied") {
       Alert.alert(
-        "Calendar access needed",
-        "To sync planner items to your calendar, enable calendar access for Winkly in your device settings.",
+        t("planner.calendarAccessNeededTitle"),
+        t("planner.calendarAccessNeededMessage"),
         [
-          { text: "Cancel", style: "cancel" },
-          { text: "Open settings", onPress: () => Linking.openSettings() },
+          { text: t("common.cancel"), style: "cancel" },
+          { text: t("planner.openSettings"), onPress: () => Linking.openSettings() },
         ]
       );
       return;
@@ -220,18 +222,18 @@ export default function PlannerSettings() {
         await persistCalendarSync(false);
         if (next === "denied") {
           Alert.alert(
-            "Calendar access",
-            "Calendar sync stays off until you allow calendar access in your device settings.",
+            t("planner.calendarAccessTitle"),
+            t("planner.calendarSyncOffMessage"),
             [
-              { text: "Cancel", style: "cancel" },
-              { text: "Open settings", onPress: () => Linking.openSettings() },
+              { text: t("common.cancel"), style: "cancel" },
+              { text: t("planner.openSettings"), onPress: () => Linking.openSettings() },
             ]
           );
         }
       }
     } catch (_e) {
       await persistCalendarSync(false);
-      Alert.alert("Error", "Could not request calendar access. Please try again.");
+      Alert.alert(t("common.error"), t("planner.calendarPermissionError"));
     } finally {
       setLoading(null);
     }
@@ -253,25 +255,25 @@ export default function PlannerSettings() {
       setLocationStatus(status === "granted" ? "granted" : status === "denied" ? "denied" : "undetermined");
       if (status === "denied") {
         Alert.alert(
-          "Location access",
-          "To show event locations and get directions, enable location access in your device settings.",
+          t("planner.locationAccessTitle"),
+          t("planner.locationAccessMessage"),
           [
-            { text: "Cancel", style: "cancel" },
-            { text: "Open settings", onPress: () => Linking.openSettings() },
+            { text: t("common.cancel"), style: "cancel" },
+            { text: t("planner.openSettings"), onPress: () => Linking.openSettings() },
           ]
         );
       }
     } catch (_e) {
-      Alert.alert("Error", "Could not request location access. Please try again.");
+      Alert.alert(t("common.error"), t("planner.locationPermissionError"));
     } finally {
       setLoading(null);
     }
   };
 
   const getStatusLabel = (status: PermissionStatus) => {
-    if (status === "granted") return "Connected";
-    if (status === "denied") return "Access denied";
-    return "Not connected";
+    if (status === "granted") return t("planner.connected");
+    if (status === "denied") return t("planner.accessDenied");
+    return t("planner.notConnected");
   };
 
   const getStatusColor = (status: PermissionStatus) => {
@@ -288,21 +290,21 @@ export default function PlannerSettings() {
             onPress={() => { Haptics.selectionAsync(); router.back(); }}
             style={styles.backBtn}
             activeOpacity={0.9}
-            accessibilityLabel="Back"
+            accessibilityLabel={t("common.back")}
           >
             <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Planner settings</Text>
+          <Text style={styles.headerTitle}>{t("planner.settingsTitle")}</Text>
           <View style={styles.headerPlaceholder} />
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.title}>Notifications</Text>
+          <Text style={styles.title}>{t("planner.notificationsSection")}</Text>
 
           <View style={styles.row}>
             <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>Reminders</Text>
-              <Text style={styles.rowSub}>Get notified before planned items.</Text>
+              <Text style={styles.rowTitle}>{t("planner.reminders")}</Text>
+              <Text style={styles.rowSub}>{t("planner.remindersSub")}</Text>
             </View>
             <Switch
               value={reminders}
@@ -316,8 +318,8 @@ export default function PlannerSettings() {
 
           <View style={styles.row}>
             <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>Weekly digest</Text>
-              <Text style={styles.rowSub}>Summary of your week and suggestions.</Text>
+              <Text style={styles.rowTitle}>{t("planner.weeklyDigest")}</Text>
+              <Text style={styles.rowSub}>{t("planner.weeklyDigestSub")}</Text>
             </View>
             <Switch
               value={weeklyDigest}
@@ -329,7 +331,7 @@ export default function PlannerSettings() {
 
           <View style={styles.hr} />
 
-          <Text style={styles.rowSub}>Default reminder time (for new items)</Text>
+          <Text style={styles.rowSub}>{t("planner.defaultReminderTime")}</Text>
           <View style={styles.pickerRow}>
             {DEFAULT_REMINDER_WHEN_OPTIONS.map((opt) => (
               <TouchableOpacity
@@ -339,7 +341,7 @@ export default function PlannerSettings() {
                 activeOpacity={0.8}
               >
                 <Text style={[styles.pillOptionText, defaultReminderWhen === opt.value && styles.pillOptionTextActive]}>
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -347,7 +349,7 @@ export default function PlannerSettings() {
 
           <View style={styles.hr} />
 
-          <Text style={styles.rowSub}>Default reminder channel</Text>
+          <Text style={styles.rowSub}>{t("planner.defaultReminderChannel")}</Text>
           <View style={styles.pickerRow}>
             {DEFAULT_REMINDER_CHANNEL_OPTIONS.map((opt) => (
               <TouchableOpacity
@@ -357,7 +359,7 @@ export default function PlannerSettings() {
                 activeOpacity={0.8}
               >
                 <Text style={[styles.pillOptionText, defaultReminderChannel === opt.value && styles.pillOptionTextActive]}>
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -371,16 +373,14 @@ export default function PlannerSettings() {
             activeOpacity={0.8}
           >
             <Ionicons name="notifications-outline" size={20} color={Colors.primaryViolet} />
-            <Text style={styles.linkRowText}>Manage app notifications</Text>
+            <Text style={styles.linkRowText}>{t("planner.manageAppNotifications")}</Text>
             <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
           </TouchableOpacity>
         </View>
 
         <View style={[styles.card, { marginTop: 20 }]}>
-          <Text style={styles.title}>Calendar & Maps</Text>
-          <Text style={styles.subtitle}>
-            Sync your planner with your device calendar and enable maps for event locations.
-          </Text>
+          <Text style={styles.title}>{t("planner.calendarMapsSection")}</Text>
+          <Text style={styles.subtitle}>{t("planner.calendarMapsSub")}</Text>
 
           <View style={styles.integrationRow}>
             <View style={[styles.iconWrap, { backgroundColor: Colors.events.primary + "20" }]}>
@@ -388,11 +388,9 @@ export default function PlannerSettings() {
             </View>
             <View style={styles.integrationContent}>
               <Text style={styles.rowTitle}>
-                {Platform.OS === "ios" ? "Apple Calendar" : "Google Calendar"}
+                {Platform.OS === "ios" ? t("planner.appleCalendar") : t("planner.googleCalendar")}
               </Text>
-              <Text style={styles.rowSub}>
-                Sync planner items with your device calendar. Never miss a date or event.
-              </Text>
+              <Text style={styles.rowSub}>{t("planner.calendarSyncSub")}</Text>
               <View style={styles.statusRow}>
                 <View style={[styles.statusDot, { backgroundColor: getStatusColor(calendarStatus) }]} />
                 <Text style={[styles.statusText, { color: getStatusColor(calendarStatus) }]}>
@@ -412,10 +410,10 @@ export default function PlannerSettings() {
             ) : null}
             <Text style={styles.integrationBtnText}>
               {loading === "calendar"
-                ? "Requesting…"
+                ? t("planner.requesting")
                 : calendarStatus === "granted"
-                  ? "Disconnect"
-                  : "Connect"}
+                  ? t("planner.disconnect")
+                  : t("planner.connect")}
             </Text>
             {calendarStatus !== "granted" && loading !== "calendar" && (
               <Ionicons name="chevron-forward" size={18} color={Colors.primaryViolet} />
@@ -424,11 +422,11 @@ export default function PlannerSettings() {
 
           <View style={styles.row}>
             <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>Sync planner items to calendar</Text>
+              <Text style={styles.rowTitle}>{t("planner.syncToCalendar")}</Text>
               <Text style={styles.rowSub}>
                 {calendarStatus === "granted"
-                  ? "Add dates and events you plan to your device calendar automatically."
-                  : "Turn on to add planned dates and events to your device calendar. We'll ask for calendar access."}
+                  ? t("planner.syncToCalendarGranted")
+                  : t("planner.syncToCalendarPrompt")}
               </Text>
             </View>
             <Switch
@@ -448,11 +446,9 @@ export default function PlannerSettings() {
             </View>
             <View style={styles.integrationContent}>
               <Text style={styles.rowTitle}>
-                {Platform.OS === "ios" ? "Apple Maps" : "Google Maps"}
+                {Platform.OS === "ios" ? t("planner.appleMaps") : t("planner.googleMaps")}
               </Text>
-              <Text style={styles.rowSub}>
-                Show event locations and get directions. Used for nearby discovery.
-              </Text>
+              <Text style={styles.rowSub}>{t("planner.mapsSub")}</Text>
               <View style={styles.statusRow}>
                 <View style={[styles.statusDot, { backgroundColor: getStatusColor(locationStatus) }]} />
                 <Text style={[styles.statusText, { color: getStatusColor(locationStatus) }]}>
@@ -472,10 +468,10 @@ export default function PlannerSettings() {
             ) : null}
             <Text style={styles.integrationBtnText}>
               {loading === "location"
-                ? "Requesting…"
+                ? t("planner.requesting")
                 : locationStatus === "granted"
-                  ? "Disconnect"
-                  : "Connect"}
+                  ? t("planner.disconnect")
+                  : t("planner.connect")}
             </Text>
             {locationStatus !== "granted" && loading !== "location" && (
               <Ionicons name="chevron-forward" size={18} color={Colors.primaryViolet} />

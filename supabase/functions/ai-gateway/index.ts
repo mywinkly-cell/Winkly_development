@@ -139,7 +139,8 @@ const TIER_RANK: Record<SubscriptionTier, number> = { free: 0, super: 1, premium
  * (lib/ai/aiFeatureGate.ts) but enforced here so it cannot be bypassed.
  *  - "super": limited AI (smart matching, event suggestions, planning ideas, chat opener).
  *  - "premium": full concierge (weather-aware planning, coordination, first-date bridge).
- * Free tier is denied every AI task except `planner_theme_plans`, which has a lifetime quota.
+ * Free tier is denied every AI task except plan generation (`planner_theme_plans`, `winkly_plan`),
+ * which share a daily allowance (see FREE_TIER_PLANS_PER_DAY).
  */
 const TASK_MIN_TIER: Record<string, SubscriptionTier> = {
   chat_topics: "super",
@@ -152,10 +153,13 @@ const TASK_MIN_TIER: Record<string, SubscriptionTier> = {
   match_bridge: "premium",
 };
 
-/** Lifetime free-tier allowance for `planner_theme_plans` (one AI plan generation). */
-const FREE_TIER_PLANNER_PLANS_QUOTA = Math.max(
+/** Plan-generation tasks that free users may call within the daily allowance. */
+const FREE_PLAN_TASKS = new Set<string>(["planner_theme_plans", "winkly_plan"]);
+
+/** Free-tier combined plan allowance per UTC calendar day (launch default: 3/day). */
+const FREE_TIER_PLANS_PER_DAY = Math.max(
   0,
-  Math.min(10, parseInt(Deno.env.get("AI_FREE_PLANNER_PLANS_QUOTA") ?? "1", 10) || 1),
+  Math.min(20, parseInt(Deno.env.get("AI_FREE_PLANS_PER_DAY") ?? "3", 10) || 3),
 );
 
 /** True when `tier` meets the minimum required for `task`. Non-AI tasks are always allowed. */
@@ -165,18 +169,24 @@ function tierAllowsTask(tier: SubscriptionTier, task: string): boolean {
   return TIER_RANK[tier] >= TIER_RANK[required];
 }
 
-async function countAiTaskUsage(
+function utcDayStartIso(): string {
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString();
+}
+
+/** Count successful plan AI calls today (planner_theme_plans + winkly_plan share one pool). */
+async function countFreePlanUsageToday(
   supabase: ReturnType<typeof createClient>,
   userId: string,
-  task: string,
 ): Promise<number> {
   const { count, error } = await supabase
     .from("ai_requests")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
-    .eq("task", task);
+    .in("task", [...FREE_PLAN_TASKS])
+    .gte("created_at", utcDayStartIso());
   if (error) {
-    console.error("ai_requests count failed:", error.message);
+    console.error("ai_requests daily plan count failed:", error.message);
     return Number.POSITIVE_INFINITY;
   }
   return count ?? 0;
@@ -194,13 +204,9 @@ async function resolveTaskAccess(
   task: string,
 ): Promise<TaskAccessResult> {
   if (tierAllowsTask(tier, task)) return { allowed: true };
-  if (
-    tier === "free" &&
-    task === "planner_theme_plans" &&
-    FREE_TIER_PLANNER_PLANS_QUOTA > 0
-  ) {
-    const used = await countAiTaskUsage(supabase, userId, task);
-    if (used < FREE_TIER_PLANNER_PLANS_QUOTA) return { allowed: true };
+  if (tier === "free" && FREE_PLAN_TASKS.has(task) && FREE_TIER_PLANS_PER_DAY > 0) {
+    const usedToday = await countFreePlanUsageToday(supabase, userId);
+    if (usedToday < FREE_TIER_PLANS_PER_DAY) return { allowed: true };
     return { allowed: false, reason: "free_quota_exhausted" };
   }
   return { allowed: false, reason: "tier" };
@@ -323,10 +329,14 @@ async function rateLimitOrThrow(params: {
   const { userId, tier, task } = params;
   const nowMin = Math.floor(Date.now() / 60000);
   const key = `rl:${tier}:${task}:${userId}:${nowMin}`;
-  // Limits per minute (tune as needed)
+  // Per-minute burst limits (daily plan caps enforced separately in resolveTaskAccess).
   const limit =
     tier === "free"
-      ? (task === "winkly_plan" ? 0 : task === "planner_theme_plans" ? 3 : task === "chat_topics" ? 6 : 10)
+      ? (FREE_PLAN_TASKS.has(task)
+        ? 2
+        : task === "chat_topics"
+          ? 6
+          : 10)
       : tier === "super"
         ? (task === "winkly_plan" ? 6 : task === "planner_theme_plans" ? 12 : task === "chat_topics" ? 24 : 30)
         : tier === "premium" || tier === "enterprise"
@@ -3713,16 +3723,23 @@ serve(async (req) => {
       const taskAccess = await resolveTaskAccess(supabase, user.id, tier, task);
       if (!taskAccess.allowed) {
         if (taskAccess.reason === "free_quota_exhausted") {
+          const retryAfterUtcMidnight = Math.max(
+            60,
+            Math.ceil((Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() + 1) - Date.now()) / 1000),
+          );
           return new Response(
             JSON.stringify({
-              error: "You've used your free AI plan. Upgrade to Super or Premium for more.",
-              code: "ai_free_quota_exhausted",
+              error: `You've used your ${FREE_TIER_PLANS_PER_DAY} free AI plans for today.`,
+              message: `You've used your ${FREE_TIER_PLANS_PER_DAY} free AI plans for today.`,
+              code: "limit_reached",
+              limit_type: "daily_quota",
               tier,
               required_tier: TASK_MIN_TIER[task],
               upgrade_to: "super",
-              free_quota: FREE_TIER_PLANNER_PLANS_QUOTA,
+              free_plans_per_day: FREE_TIER_PLANS_PER_DAY,
+              retry_after: retryAfterUtcMidnight,
             }),
-            { status: 403, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } }
+            { status: 429, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } }
           );
         }
         const upgradeTo = suggestedUpgradeTier(task);
@@ -3765,10 +3782,16 @@ serve(async (req) => {
     if (isAiTask) {
       const rl = await rateLimitOrThrow({ userId: user.id, tier, task });
       if (!rl.ok) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded", retry_after: rl.retry_after }), {
-          status: 429,
-          headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
-        });
+        return new Response(
+          JSON.stringify({
+            error: "You're sending requests too quickly. Wait a moment and try again.",
+            message: "You're sending requests too quickly. Wait a moment and try again.",
+            code: "limit_reached",
+            limit_type: "burst",
+            retry_after: rl.retry_after,
+          }),
+          { status: 429, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } },
+        );
       }
     }
 
@@ -3848,6 +3871,17 @@ serve(async (req) => {
         tier,
         systemContextBlock: wpInjection ? formatSystemContextBlock(wpInjection) : undefined,
       });
+      if (isNoVenueFallbackPlan(out.plan)) {
+        return new Response(
+          JSON.stringify({
+            error: "Could not generate plan options right now. Please wait a moment and try again.",
+            code: "plan_generation_failed",
+            provider: out.provider,
+          }),
+          { status: 503, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } },
+        );
+      }
+
       const agentic_planning_output = {
         topic: out.plan.options?.[0]?.title ?? "Plan",
         date_time: typeof scrubbedSafeContext.date_from === "string" ? scrubbedSafeContext.date_from : null,
@@ -3856,11 +3890,20 @@ serve(async (req) => {
         booking_url: out.booking_url,
         participants: out.participants,
       };
+
+      const insWp = await supabase.from("ai_requests").insert({
+        user_id: user.id,
+        mode,
+        task,
+      }).select("id").single();
+      const requestIdWp = !insWp.error ? (insWp.data as { id?: string } | null)?.id ?? null : null;
+
       return new Response(JSON.stringify({
         options: out.plan.options,
         agentic_planning_output,
         pending_plan_id: out.pending_plan_id,
         provider: out.provider,
+        request_id: requestIdWp,
       }), { headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } });
     }
 
@@ -4381,7 +4424,8 @@ serve(async (req) => {
           error: result.message,
           retry_after: result.retry_after ?? 60,
           provider_status: result.provider_status,
-          code: result.quota_exhausted ? "quota_exhausted" : "rate_limited",
+          code: result.quota_exhausted ? "quota_exhausted" : "limit_reached",
+          limit_type: result.quota_exhausted ? "provider_quota" : "provider_burst",
           quota_exhausted: result.quota_exhausted ?? false,
         }),
         { status: 429, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } }

@@ -1,6 +1,6 @@
 /**
  * Winkly i18n — Multi-language support
- * Uses i18next + react-i18next. Default language is English until the user selects another in Settings.
+ * Uses i18next + react-i18next. On first launch, uses device locale when supported; English otherwise.
  * User language override persisted in AsyncStorage.
  */
 
@@ -8,6 +8,7 @@ import i18n from "i18next";
 import type { InitOptions } from "i18next";
 import { initReactI18next } from "react-i18next";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getLocales } from "expo-localization";
 
 const STORAGE_KEY = "winkly_app_language";
 
@@ -62,11 +63,22 @@ export async function setStoredLanguage(code: string): Promise<void> {
   }
 }
 
+/** Map BCP-47 tag (e.g. de-DE) to a supported app language code, or null. */
+function deviceLanguageToSupportedCode(): SupportedLanguageCode | null {
+  const locales = getLocales();
+  for (const locale of locales) {
+    const code = locale.languageCode?.toLowerCase();
+    if (code && SUPPORTED_CODES.includes(code as SupportedLanguageCode)) {
+      return code as SupportedLanguageCode;
+    }
+  }
+  return null;
+}
+
 async function resolveInitialLanguage(): Promise<string> {
   const stored = await getStoredLanguage();
   if (stored && SUPPORTED_CODES.includes(stored as SupportedLanguageCode)) return stored;
-  // English by default — device locale is not used until the user picks a language in Settings.
-  return DEFAULT_LANGUAGE;
+  return deviceLanguageToSupportedCode() ?? DEFAULT_LANGUAGE;
 }
 
 type TranslationModule = Record<string, string> | { default: Record<string, string> };

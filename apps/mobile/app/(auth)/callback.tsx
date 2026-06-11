@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import * as Linking from "expo-linking";
 import { View, Text, ActivityIndicator } from "react-native";
+import { useTranslation } from "react-i18next";
 import { createSessionFromUrl, isRecoveryUrl } from "@/lib/authDeepLink";
 import { Colors } from "@/constants/tokens";
 import { getTermsAndCookiesAccepted } from "@/lib/legalFlags";
@@ -16,6 +17,7 @@ import {
 
 export default function AuthCallback() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
 
   useEffect(() => {
@@ -68,7 +70,7 @@ export default function AuthCallback() {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24 }}>
         <Text style={{ color: Colors.textSecondary, textAlign: "center" }}>
-          This link may have expired. Please try signing in again.
+          {t("auth.callback.expiredLink")}
         </Text>
       </View>
     );
@@ -77,7 +79,7 @@ export default function AuthCallback() {
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
       <ActivityIndicator size="large" color={Colors.primaryViolet} />
-      <Text style={{ marginTop: 16, color: Colors.textSecondary }}>Completing sign in…</Text>
+      <Text style={{ marginTop: 16, color: Colors.textSecondary }}>{t("auth.callback.completing")}</Text>
     </View>
   );
 }

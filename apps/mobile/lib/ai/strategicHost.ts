@@ -1,4 +1,4 @@
-import { callConcierge, type ConciergeContext } from "@/lib/ai/conciergeClient";
+import { callConcierge, type ConciergeContext, type ConciergeErrorCode, type ConciergeLimitType } from "@/lib/ai/conciergeClient";
 import type { Mode } from "@/types";
 
 export type StrategicHostTopic = {
@@ -77,7 +77,16 @@ export async function getPlannerThemePlans(params: {
    * When provided, this is forwarded to ai-gateway so `plan_request_text` and other allowlisted fields reach the model.
    */
   fullContext?: ConciergeContext;
-}): Promise<{ plans: PlannerThemePlanOption[]; requestId?: string }> {
+}): Promise<{
+  plans: PlannerThemePlanOption[];
+  requestId?: string;
+  limitError?: {
+    error_code: ConciergeErrorCode;
+    limit_type?: ConciergeLimitType;
+    retry_after?: number;
+    upgrade_to?: "super" | "premium";
+  };
+}> {
   const res = await callConcierge({
     task: "planner_theme_plans",
     context: {
@@ -95,6 +104,21 @@ export async function getPlannerThemePlans(params: {
       origin_context: `Planner_${params.mode.charAt(0).toUpperCase() + params.mode.slice(1)}`,
     },
   });
+  if (
+    res.error_code === "rate_limit" ||
+    res.error_code === "daily_quota" ||
+    res.error_code === "tier_required"
+  ) {
+    return {
+      plans: [],
+      limitError: {
+        error_code: res.error_code,
+        limit_type: res.limit_type,
+        retry_after: res.retry_after,
+        upgrade_to: res.upgrade_to,
+      },
+    };
+  }
   const err = (res as unknown as { error?: unknown })?.error;
   if (typeof err === "string" && err.trim()) {
     if (__DEV__) {
