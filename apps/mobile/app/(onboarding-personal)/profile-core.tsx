@@ -49,15 +49,12 @@ import { reverseGeocodeToDisplay } from "@/lib/location";
 import { upsertOwnProfileCore } from "@/lib/access/profiles";
 import {
   LANGUAGE_OPTIONS as PROFILE_LANGUAGE_OPTIONS,
-  LOOKING_FOR_OPTIONS,
-  ACTIVITY_PREFERENCE_OPTIONS,
-  ACTIVITY_PREFERENCES_MAX,
-  POPULAR_ACTIVITY_PREFERENCE_KEYS,
 } from "@/constants/profileOptions";
-import { ActivityPreferenceCard } from "@/components/onboarding/ActivityPreferenceCard";
 import { RomanceSubProfile } from "@/components/onboarding/RomanceSubProfile";
 import { FriendsSubProfile } from "@/components/onboarding/FriendsSubProfile";
 import { BusinessSubProfile } from "@/components/onboarding/BusinessSubProfile";
+import { InterestPickerModal } from "@/components/onboarding/InterestPickerModal";
+import { GENERAL_INTERESTS_MAX, interestEmoji } from "@/constants/interestCategories";
 import { OnboardingStepIndicator } from "@/components/onboarding/OnboardingStepIndicator";
 import {
   ONBOARDING_STEP_COUNT,
@@ -70,7 +67,6 @@ import { PhotoConfirmModal } from "@/components/media/PhotoConfirmModal";
 import { uploadLocalPhotos, uploadLocalVideos } from "@/lib/uploadMedia";
 import { validatePickerAsset } from "@/lib/mediaValidation";
 import {
-  MAX_CORE_BIO,
   MAX_CORE_PHOTOS,
   MIN_CORE_PHOTOS,
   MIN_PHOTO_DIMENSION,
@@ -171,9 +167,11 @@ export default function ProfileCore() {
   const [instagram, setInstagram] = useState("");
 
   // ─────────────── CORE PROFILE EXTRAS ───────────────
-  const [bio, setBio] = useState("");
-  const [lookingFor, setLookingFor] = useState<string[]>([]);
-  const [activityPreferences, setActivityPreferences] = useState<string[]>([]);
+  // General interests live on the General profile (shared across Romance & Friends).
+  const [interests, setInterests] = useState<string[]>([]);
+  const [interestsModalVisible, setInterestsModalVisible] = useState(false);
+  // Privacy: when off (default), Romance & Friends show only the first name.
+  const [showFullName, setShowFullName] = useState(false);
 
   // ─────────────── MEDIA (UI only for now) ───────────────
   // Core photos: 2–5 required, ordered (first = main). Stored as actual URIs (no null padding).
@@ -202,7 +200,6 @@ export default function ProfileCore() {
   const [smokingRomance, setSmokingRomance] = useState("");
   const [alcoholRomance, setAlcoholRomance] = useState("");
   const [kidsRomance, setKidsRomance] = useState("");
-  const [interestsRomance, setInterestsRomance] = useState<string[]>([]);
   const [sexualViewsRomance, setSexualViewsRomance] = useState("");
   const [relationshipGoalsRomance, setRelationshipGoalsRomance] = useState<string[]>([]);
   const [religionRomance, setReligionRomance] = useState("");
@@ -213,7 +210,6 @@ export default function ProfileCore() {
   const [foodRomance, setFoodRomance] = useState("");
 
   // Friends fields
-  const [interestsFriends, setInterestsFriends] = useState<string[]>([]);
   const [lifestyleFriends, setLifestyleFriends] = useState("");
   const [alcoholFriends, setAlcoholFriends] = useState("");
   const [smokingFriends, setSmokingFriends] = useState("");
@@ -234,8 +230,6 @@ export default function ProfileCore() {
 
   const [saving, setSaving] = useState(false);
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(1);
-  const activityGridShake = useRef(new Animated.Value(0)).current;
-  const didPreselectActivities = useRef(false);
   const [selectedPrimaryMode, setSelectedPrimaryMode] = useState<PrimaryOnboardingMode>("romance");
   const [cropModalVisible, setCropModalVisible] = useState(false);
   const [pendingCrop, setPendingCrop] = useState<{ uri: string; type: "core" | "romance" | "friends" | "business"; index: number } | null>(null);
@@ -267,7 +261,7 @@ export default function ProfileCore() {
 
           const { data: up } = await supabase
             .from("user_profiles")
-            .select("first_name, last_name, gender, birthday, city, education, occupation, languages, instagram, core_photos, main_photo_url, night_owl, bio, looking_for, activity_preferences")
+            .select("first_name, last_name, gender, birthday, city, education, occupation, languages, instagram, core_photos, main_photo_url, night_owl, interests, show_full_name")
             .eq("id", userId)
             .maybeSingle();
 
@@ -275,9 +269,13 @@ export default function ProfileCore() {
             first_name?: string; last_name?: string; gender?: string; birthday?: string;
             city?: string; education?: string; occupation?: string; languages?: string[] | null;
             instagram?: string; core_photos?: string[]; main_photo_url?: string;
-            night_owl?: boolean | null; bio?: string | null;
-            looking_for?: string[] | null; activity_preferences?: string[] | null;
+            night_owl?: boolean | null; interests?: string[] | null;
+            show_full_name?: boolean | null;
           } | null;
+
+          // General interests are the source of truth; we seed from legacy
+          // per-mode interests below if the general list is still empty.
+          let generalInterests: string[] = Array.isArray(upRow?.interests) ? upRow!.interests! : [];
 
           if (upRow?.first_name || upRow?.last_name) {
             loadedFromSupabase = true;
@@ -292,9 +290,7 @@ export default function ProfileCore() {
             setLanguages(Array.isArray(upRow.languages) ? upRow.languages : []);
             setOccupation(upRow.occupation ?? "");
             setInstagram(upRow.instagram ?? "");
-            setBio(upRow.bio ?? "");
-            setLookingFor(Array.isArray(upRow.looking_for) ? upRow.looking_for : []);
-            setActivityPreferences(Array.isArray(upRow.activity_preferences) ? upRow.activity_preferences : []);
+            setShowFullName(upRow.show_full_name === true);
             const photos = Array.isArray(upRow.core_photos) && upRow.core_photos.length > 0
               ? upRow.core_photos.filter(Boolean)
               : upRow.main_photo_url
@@ -322,7 +318,9 @@ export default function ProfileCore() {
               setRomanceEnabled(true);
               setBioRomance(row.bio ?? "");
               setRomancePhotos(Array.isArray(row.photos) && row.photos.length > 0 ? ensureLength(row.photos, 3) : [null, null, null]);
-              setInterestsRomance(Array.isArray(row.interests) ? row.interests : []);
+              if (generalInterests.length === 0 && Array.isArray(row.interests) && row.interests.length > 0) {
+                generalInterests = row.interests;
+              }
               setHeightRomance(String(meta.height ?? ""));
               setWeightRomance(String(meta.weight ?? ""));
               setLifestyleRomance(String(meta.lifestyle ?? ""));
@@ -344,7 +342,9 @@ export default function ProfileCore() {
               setFriendsEnabled(true);
               setBioFriends(row.bio ?? "");
               setFriendsPhotos(Array.isArray(row.photos) && row.photos.length > 0 ? ensureLength(row.photos, 3) : [null, null, null]);
-              setInterestsFriends(Array.isArray(row.interests) ? row.interests : []);
+              if (generalInterests.length === 0 && Array.isArray(row.interests) && row.interests.length > 0) {
+                generalInterests = row.interests;
+              }
               setLifestyleFriends(String(meta.lifestyle ?? ""));
               setAlcoholFriends(String(meta.alcohol ?? ""));
               setSmokingFriends(String(meta.smoking ?? ""));
@@ -379,6 +379,8 @@ export default function ProfileCore() {
               setBusinessVideos(Array.isArray(meta.videos) ? ensureLength(meta.videos, 1) : [null]);
             }
           });
+
+          setInterests(generalInterests);
         }
 
         if (!loadedFromSupabase) {
@@ -396,9 +398,8 @@ export default function ProfileCore() {
             setLanguages(data.languages ?? []);
             setOccupation(data.occupation ?? "");
             setInstagram(data.instagram ?? "");
-            setBio(data.bio ?? "");
-            setLookingFor(Array.isArray(data.lookingFor) ? data.lookingFor : []);
-            setActivityPreferences(Array.isArray(data.activityPreferences) ? data.activityPreferences : []);
+            setInterests(Array.isArray(data.interests) ? data.interests : []);
+            setShowFullName(data.showFullName === true);
             setBioRomance(data.bioRomance ?? "");
             setBioFriends(data.bioFriends ?? "");
             setBioBusiness(data.bioBusiness ?? "");
@@ -412,7 +413,6 @@ export default function ProfileCore() {
             setSmokingRomance(data.smokingRomance ?? "");
             setAlcoholRomance(data.alcoholRomance ?? "");
             setKidsRomance(data.kidsRomance ?? "");
-            setInterestsRomance(data.interestsRomance ?? []);
             setSexualViewsRomance(data.sexualViewsRomance ?? "");
             setRelationshipGoalsRomance(data.relationshipGoalsRomance ?? []);
             setReligionRomance(data.religionRomance ?? "");
@@ -421,7 +421,6 @@ export default function ProfileCore() {
             setPetsRomance(data.petsRomance ?? []);
             setAllergiesRomance(Array.isArray(data.allergiesRomance) ? data.allergiesRomance : (data.allergiesRomance ? [data.allergiesRomance] : []));
             setFoodRomance(data.foodRomance ?? "");
-            setInterestsFriends(data.interestsFriends ?? []);
             setLifestyleFriends(data.lifestyleFriends ?? "");
             setAlcoholFriends(data.alcoholFriends ?? "");
             setSmokingFriends(data.smokingFriends ?? "");
@@ -494,9 +493,8 @@ export default function ProfileCore() {
       languages,
       occupation,
       instagram,
-      bio,
-      lookingFor,
-      activityPreferences,
+      interests,
+      showFullName,
       bioRomance,
       bioFriends,
       bioBusiness,
@@ -510,7 +508,6 @@ export default function ProfileCore() {
       smokingRomance,
       alcoholRomance,
       kidsRomance,
-      interestsRomance,
       sexualViewsRomance,
       relationshipGoalsRomance,
       religionRomance,
@@ -519,7 +516,6 @@ export default function ProfileCore() {
       petsRomance,
       allergiesRomance,
       foodRomance,
-      interestsFriends,
       lifestyleFriends,
       alcoholFriends,
       smokingFriends,
@@ -561,9 +557,8 @@ export default function ProfileCore() {
     languages,
     occupation,
     instagram,
-    bio,
-    lookingFor,
-    activityPreferences,
+    interests,
+    showFullName,
     bioRomance,
     bioFriends,
     bioBusiness,
@@ -577,7 +572,6 @@ export default function ProfileCore() {
     smokingRomance,
     alcoholRomance,
     kidsRomance,
-    interestsRomance,
     sexualViewsRomance,
     relationshipGoalsRomance,
     religionRomance,
@@ -586,7 +580,6 @@ export default function ProfileCore() {
       petsRomance,
       allergiesRomance,
       foodRomance,
-      interestsFriends,
     lifestyleFriends,
     alcoholFriends,
     smokingFriends,
@@ -634,9 +627,8 @@ export default function ProfileCore() {
         occupation: occupation || null,
         languages: languages.length ? languages : null,
         instagram: instagram.trim() || null,
-        bio: bio.trim() || null,
-        looking_for: lookingFor.length ? lookingFor : null,
-        activity_preferences: activityPreferences.length ? activityPreferences : null,
+        interests: interests.length ? interests : null,
+        show_full_name: showFullName,
         core_photos: corePhotos.filter(Boolean) as string[],
         main_photo_url: corePhotos[0] || null,
       }, { onConflict: "id" });
@@ -644,14 +636,13 @@ export default function ProfileCore() {
         first_name: firstName.trim() || null,
         last_name: lastName.trim() || null,
         city: cityNorm,
-        bio: bio.trim() || null,
-        looking_for: lookingFor.length ? lookingFor : null,
-        activity_preferences: activityPreferences.length ? activityPreferences : null,
+        interests: interests.length ? interests : null,
+        show_full_name: showFullName,
       });
     } catch (e) {
       console.warn("Auto-save to Supabase:", e);
     }
-  }, [firstName, lastName, gender, birthday, city, education, occupation, languages, instagram, bio, lookingFor, activityPreferences, corePhotos, appLanguage]);
+  }, [firstName, lastName, gender, birthday, city, education, occupation, languages, instagram, interests, showFullName, corePhotos, appLanguage]);
 
   useEffect(() => {
     if (!firstName && !lastName) return;
@@ -964,48 +955,6 @@ export default function ProfileCore() {
     Alert.alert("Edit photo", index === 0 ? "This is your main photo." : undefined, options);
   };
 
-  const toggleLookingFor = (val: string) => {
-    Haptics.selectionAsync();
-    setLookingFor((prev) => {
-      // "Everyone" is exclusive of the specific options
-      if (val === "Everyone") return prev.includes("Everyone") ? [] : ["Everyone"];
-      const without = prev.filter((x) => x !== "Everyone");
-      return without.includes(val) ? without.filter((x) => x !== val) : [...without, val];
-    });
-  };
-
-  const toggleActivityPreference = (key: string) => {
-    setActivityPreferences((prev) => {
-      if (prev.includes(key)) {
-        Haptics.selectionAsync();
-        return prev.filter((x) => x !== key);
-      }
-      if (prev.length >= ACTIVITY_PREFERENCES_MAX) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        Animated.sequence([
-          Animated.timing(activityGridShake, { toValue: 8, duration: 45, useNativeDriver: true }),
-          Animated.timing(activityGridShake, { toValue: -8, duration: 45, useNativeDriver: true }),
-          Animated.timing(activityGridShake, { toValue: 6, duration: 40, useNativeDriver: true }),
-          Animated.timing(activityGridShake, { toValue: -6, duration: 40, useNativeDriver: true }),
-          Animated.timing(activityGridShake, { toValue: 0, duration: 35, useNativeDriver: true }),
-        ]).start();
-        return prev;
-      }
-      Haptics.selectionAsync();
-      return [...prev, key];
-    });
-  };
-
-  useEffect(() => {
-    if (isEditFlow || currentStep !== 3 || didPreselectActivities.current) return;
-    if (activityPreferences.length > 0) {
-      didPreselectActivities.current = true;
-      return;
-    }
-    didPreselectActivities.current = true;
-    setActivityPreferences([...POPULAR_ACTIVITY_PREFERENCE_KEYS]);
-  }, [activityPreferences.length, currentStep, isEditFlow]);
-
   const MAX_VIDEO_SEC = 10;
   const pickVideo = async (type: "romance" | "friends" | "business") => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -1046,9 +995,7 @@ export default function ProfileCore() {
       gender,
       birthday,
       city,
-      lookingFor,
       corePhotoCount: corePhotos.length,
-      requireLookingFor: isEditFlow ? romanceEnabled : selectedPrimaryMode === "romance",
     });
     if (!validation.ok) {
       Alert.alert(validation.title, validation.message);
@@ -1099,9 +1046,8 @@ export default function ProfileCore() {
         occupation: occupation || null,
         languages: languages.length ? languages : null,
         instagram: instagram.trim() || null,
-        bio: bio.trim() || null,
-        looking_for: lookingFor,
-        activity_preferences: activityPreferences,
+        interests: interests.length ? interests : null,
+        show_full_name: showFullName,
         core_photos: uploadedCorePhotos,
         main_photo_url: uploadedCorePhotos[0] || null,
       };
@@ -1116,9 +1062,8 @@ export default function ProfileCore() {
         first_name: firstName.trim() || null,
         last_name: lastName.trim() || null,
         city: cityNorm,
-        bio: bio.trim() || null,
-        looking_for: lookingFor,
-        activity_preferences: activityPreferences,
+        interests: interests.length ? interests : null,
+        show_full_name: showFullName,
       });
       if (coreErr) throw coreErr;
 
@@ -1151,7 +1096,7 @@ export default function ProfileCore() {
           mode: "romance",
           bio: bioRomance || null,
           photos: uploadedRomancePhotos,
-          interests: interestsRomance.length ? interestsRomance : null,
+          interests: interests.length ? interests : null,
           meta: romanceMeta,
         };
         await supabase.from("sub_profiles").upsert(romancePayload, { onConflict: "user_id,mode" });
@@ -1180,7 +1125,7 @@ export default function ProfileCore() {
           mode: "friends",
           bio: bioFriends || null,
           photos: uploadedFriendsPhotos,
-          interests: interestsFriends.length ? interestsFriends : null,
+          interests: interests.length ? interests : null,
           meta: friendsMeta,
         };
         await supabase.from("sub_profiles").upsert(friendsPayload, { onConflict: "user_id,mode" });
@@ -1252,7 +1197,6 @@ export default function ProfileCore() {
       city,
       corePhotoCount: corePhotos.length,
       gender,
-      lookingFor,
       selectedMode: selectedPrimaryMode,
     });
     if (!stepValidation.ok) {
@@ -1270,7 +1214,8 @@ export default function ProfileCore() {
   };
 
   const handleSkipSubProfile = async () => {
-    for (const step of [1, 2, 3] as const) {
+    // Skipping the sub-profile still requires the shared basics (steps 1–2).
+    for (const step of [1, 2] as const) {
       const stepValidation = validateOnboardingStep(step, {
         firstName,
         lastName,
@@ -1278,7 +1223,6 @@ export default function ProfileCore() {
         city,
         corePhotoCount: corePhotos.length,
         gender,
-        lookingFor,
         selectedMode: selectedPrimaryMode,
       });
       if (!stepValidation.ok) {
@@ -1313,9 +1257,8 @@ export default function ProfileCore() {
         occupation: occupation || null,
         languages: languages.length ? languages : null,
         instagram: instagram.trim() || null,
-        bio: bio.trim() || null,
-        looking_for: lookingFor.length ? lookingFor : null,
-        activity_preferences: activityPreferences.length ? activityPreferences : null,
+        interests: interests.length ? interests : null,
+        show_full_name: showFullName,
         core_photos: uploadedCorePhotos,
         main_photo_url: uploadedCorePhotos[0] || null,
       };
@@ -1327,9 +1270,8 @@ export default function ProfileCore() {
         first_name: firstName.trim() || null,
         last_name: lastName.trim() || null,
         city: cityNorm,
-        bio: bio.trim() || null,
-        looking_for: lookingFor.length ? lookingFor : null,
-        activity_preferences: activityPreferences.length ? activityPreferences : null,
+        interests: interests.length ? interests : null,
+        show_full_name: showFullName,
       });
 
       await AsyncStorage.removeItem("winkly_profile_draft");
@@ -1372,9 +1314,8 @@ export default function ProfileCore() {
       !!birthday,
       !!gender.trim(),
       !!city.trim(),
-      lookingFor.length > 0,
     ],
-    [corePhotos.length, firstName, lastName, birthday, gender, city, lookingFor.length]
+    [corePhotos.length, firstName, lastName, birthday, gender, city]
   );
 
   const coreProgress = useMemo(() => {
@@ -1389,11 +1330,11 @@ export default function ProfileCore() {
     total += coreHas;
     if (romanceEnabled) {
       max += 3;
-      total += [!!bioRomance.trim(), romancePhotos.some(Boolean), interestsRomance.length > 0].filter(Boolean).length;
+      total += [!!bioRomance.trim(), romancePhotos.some(Boolean), interests.length > 0].filter(Boolean).length;
     }
     if (friendsEnabled) {
       max += 3;
-      total += [!!bioFriends.trim(), friendsPhotos.some(Boolean), interestsFriends.length > 0].filter(Boolean).length;
+      total += [!!bioFriends.trim(), friendsPhotos.some(Boolean), interests.length > 0].filter(Boolean).length;
     }
     if (businessEnabled) {
       max += 3;
@@ -1402,8 +1343,9 @@ export default function ProfileCore() {
     return Math.round((total / max) * 100);
   }, [
     coreChecklist,
-    romanceEnabled, bioRomance, romancePhotos, interestsRomance,
-    friendsEnabled, bioFriends, friendsPhotos, interestsFriends,
+    interests,
+    romanceEnabled, bioRomance, romancePhotos,
+    friendsEnabled, bioFriends, friendsPhotos,
     businessEnabled, bioBusiness, businessPhotos, networkingGoalsBusiness,
   ]);
 
@@ -1444,7 +1386,7 @@ export default function ProfileCore() {
             onPress={async () => {
               Haptics.selectionAsync();
               await autoSave();
-              router.push("/profile/preview");
+              router.push("/profile/view-profile");
             }}
             style={headerBtn}
             activeOpacity={0.9}
@@ -1599,6 +1541,34 @@ export default function ProfileCore() {
           Your birthday will remain private — only your age will be visible.
         </Text>
 
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingVertical: 12,
+            paddingHorizontal: 14,
+            borderWidth: 1,
+            borderColor: Colors.gray200,
+            borderRadius: Layout.radii.control,
+            backgroundColor: Colors.white,
+            marginBottom: 16,
+          }}
+        >
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text style={[label, { marginBottom: 2 }]}>Show my full name in Romance &amp; Friends</Text>
+            <Text style={{ ...Typography.caption, color: Colors.gray500 }}>
+              Off by default — others see only your first name on cards and your profile. Business networking always shows your full name.
+            </Text>
+          </View>
+          <Switch
+            value={showFullName}
+            onValueChange={(v) => { Haptics.selectionAsync(); setShowFullName(v); }}
+            trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }}
+            thumbColor={Colors.white}
+          />
+        </View>
+
         {isEditFlow && (
         <>
         <Text style={[label, { marginBottom: 8 }]}>Gender <Text style={requiredMark}>*</Text></Text>
@@ -1623,33 +1593,6 @@ export default function ProfileCore() {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
-
-        <Text style={[label, { marginBottom: 8 }]}>Looking for <Text style={requiredMark}>*</Text></Text>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 16 }}>
-          {LOOKING_FOR_OPTIONS.map((opt) => {
-            const selected = lookingFor.includes(opt);
-            return (
-              <TouchableOpacity
-                key={opt}
-                onPress={() => toggleLookingFor(opt)}
-                style={{
-                  flex: 1,
-                  marginHorizontal: 4,
-                  backgroundColor: selected ? Colors.primaryViolet : Colors.white,
-                  borderWidth: 2,
-                  borderColor: selected ? Colors.primaryViolet : Colors.gray200,
-                  borderRadius: Layout.radii.control,
-                  paddingVertical: 12,
-                  alignItems: "center",
-                }}
-              >
-                <Text style={{ ...Typography.body, color: selected ? "#FFF" : Colors.textPrimary }}>
-                  {opt}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
         </View>
 
         </>
@@ -1713,25 +1656,6 @@ export default function ProfileCore() {
           </View>
         )}
 
-        {isEditFlow && (
-        <>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-          <Text style={[label, { marginBottom: 0 }]}>Short bio</Text>
-          <Text style={{ ...Typography.caption, color: Colors.gray500 }}>{bio.length}/{MAX_CORE_BIO}</Text>
-        </View>
-        <TextInput
-          placeholder="Say something about yourself…"
-          placeholderTextColor={Colors.gray500}
-          value={bio}
-          onChangeText={(t) => setBio(t.slice(0, MAX_CORE_BIO))}
-          multiline
-          maxLength={MAX_CORE_BIO}
-          onFocus={() => setFocusedField("bio")}
-          onBlur={() => setFocusedField(null)}
-          style={[inputBase, { minHeight: 90, textAlignVertical: "top", paddingTop: 12 }, focusedField === "bio" && inputFocused]}
-        />
-        </>
-        )}
           </View>
             )}
 
@@ -1784,43 +1708,6 @@ export default function ProfileCore() {
               </View>
             </View>
             )}
-
-          {/* Section: What do you enjoy? (activity preferences — Winkly's differentiator) */}
-          {(isEditFlow || currentStep === 3) && (
-          <View style={[sectionCard, { marginBottom: 20 }]}>
-            <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 4, fontFamily: FontFamily.headingBold }}>What do you enjoy? 🎉</Text>
-            <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 16 }}>
-              Pick the things you love doing — we&apos;ll use these to suggest date ideas you&apos;ll both enjoy. Choose up to {ACTIVITY_PREFERENCES_MAX}. ({activityPreferences.length}/{ACTIVITY_PREFERENCES_MAX})
-            </Text>
-            <Animated.View
-              style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                justifyContent: "center",
-                marginHorizontal: -4,
-                transform: [{ translateX: activityGridShake }],
-              }}
-            >
-              {ACTIVITY_PREFERENCE_OPTIONS.map((opt) => {
-                const selected = activityPreferences.includes(opt.key);
-                const atMax = !selected && activityPreferences.length >= ACTIVITY_PREFERENCES_MAX;
-                const suggested = POPULAR_ACTIVITY_PREFERENCE_KEYS.includes(
-                  opt.key as (typeof POPULAR_ACTIVITY_PREFERENCE_KEYS)[number],
-                );
-                return (
-                  <ActivityPreferenceCard
-                    key={opt.key}
-                    option={opt}
-                    selected={selected}
-                    suggested={suggested}
-                    disabled={atMax}
-                    onPress={() => toggleActivityPreference(opt.key)}
-                  />
-                );
-              })}
-            </Animated.View>
-          </View>
-          )}
 
           {/* Section: More about you — edit flow only */}
           {isEditFlow && (
@@ -1945,8 +1832,61 @@ export default function ProfileCore() {
           autoCorrect={false}
           onFocus={() => setFocusedField("instagram")}
           onBlur={() => setFocusedField(null)}
-          style={[inputBase, focusedField === "instagram" && inputFocused, { marginBottom: 4 }]}
+          style={[inputBase, focusedField === "instagram" && inputFocused, { marginBottom: 16 }]}
         />
+
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+          <Text style={[label, { marginBottom: 0 }]}>Interests</Text>
+          <Text style={{ ...Typography.caption, color: Colors.gray500 }}>{interests.length}/{GENERAL_INTERESTS_MAX}</Text>
+        </View>
+        <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 10 }}>
+          Shared across Romance & Friends — pick what you love.
+        </Text>
+        <TouchableOpacity
+          onPress={() => { Haptics.selectionAsync(); setInterestsModalVisible(true); }}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingVertical: 12,
+            borderRadius: Layout.radii.control,
+            borderWidth: 1,
+            borderColor: Colors.primaryViolet,
+            backgroundColor: Colors.primaryViolet + "10",
+            marginBottom: interests.length > 0 ? 12 : 4,
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Choose interests"
+        >
+          <Ionicons name="add-circle-outline" size={18} color={Colors.primaryViolet} style={{ marginRight: 6 }} />
+          <Text style={{ ...Typography.button, color: Colors.primaryViolet }}>
+            {interests.length > 0 ? "Edit interests" : "Choose interests"}
+          </Text>
+        </TouchableOpacity>
+        {interests.length > 0 && (
+          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+            {interests.map((it) => (
+              <TouchableOpacity
+                key={it}
+                onPress={() => { Haptics.selectionAsync(); setInterests((prev) => prev.filter((x) => x !== it)); }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 20,
+                  marginRight: 8,
+                  marginBottom: 8,
+                  backgroundColor: Colors.primaryViolet,
+                }}
+              >
+                <Text style={{ fontSize: 14, marginRight: 6 }}>{interestEmoji(it)}</Text>
+                <Text style={{ ...Typography.caption, color: Colors.white }}>{it}</Text>
+                <Ionicons name="close-circle" size={15} color={Colors.white} style={{ marginLeft: 6 }} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
           </View>
           )}
@@ -1976,8 +1916,6 @@ export default function ProfileCore() {
           onAlcoholChange={setAlcoholRomance}
           kids={kidsRomance}
           onKidsChange={setKidsRomance}
-          interests={interestsRomance}
-          onInterestsChange={setInterestsRomance}
           sexualViews={sexualViewsRomance}
           onSexualViewsChange={setSexualViewsRomance}
           relationshipGoals={relationshipGoalsRomance}
@@ -2007,8 +1945,6 @@ export default function ProfileCore() {
           onPickVideo={() => pickVideo("friends")}
           bio={bioFriends}
           onBioChange={setBioFriends}
-          interests={interestsFriends}
-          onInterestsChange={setInterestsFriends}
           lifestyle={lifestyleFriends}
           onLifestyleChange={setLifestyleFriends}
           alcohol={alcoholFriends}
@@ -2057,7 +1993,7 @@ export default function ProfileCore() {
           toggleMulti={toggleMulti}
         />
           </View>
-          ) : currentStep === 4 ? (
+          ) : currentStep === 3 ? (
           <View style={[sectionCard, { marginBottom: 8 }]}>
             <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 8, fontFamily: FontFamily.headingBold }}>
               Set up your profile
@@ -2122,35 +2058,6 @@ export default function ProfileCore() {
             </View>
 
             {selectedPrimaryMode === "romance" && (
-              <>
-                <Text style={[label, { marginBottom: 8 }]}>Looking for <Text style={requiredMark}>*</Text></Text>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 16 }}>
-                  {LOOKING_FOR_OPTIONS.map((opt) => {
-                    const selected = lookingFor.includes(opt);
-                    return (
-                      <TouchableOpacity
-                        key={opt}
-                        onPress={() => toggleLookingFor(opt)}
-                        style={{
-                          flex: 1,
-                          marginHorizontal: 4,
-                          backgroundColor: selected ? Colors.primaryViolet : Colors.white,
-                          borderWidth: 2,
-                          borderColor: selected ? Colors.primaryViolet : Colors.gray200,
-                          borderRadius: Layout.radii.control,
-                          paddingVertical: 12,
-                          alignItems: "center",
-                        }}
-                      >
-                        <Text style={{ ...Typography.body, color: selected ? "#FFF" : Colors.textPrimary }}>{opt}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </>
-            )}
-
-            {selectedPrimaryMode === "romance" && (
               <RomanceSubProfile
                 enabled
                 hideToggle
@@ -2173,8 +2080,6 @@ export default function ProfileCore() {
                 onAlcoholChange={setAlcoholRomance}
                 kids={kidsRomance}
                 onKidsChange={setKidsRomance}
-                interests={interestsRomance}
-                onInterestsChange={setInterestsRomance}
                 sexualViews={sexualViewsRomance}
                 onSexualViewsChange={setSexualViewsRomance}
                 relationshipGoals={relationshipGoalsRomance}
@@ -2207,8 +2112,6 @@ export default function ProfileCore() {
                 onPickVideo={() => pickVideo("friends")}
                 bio={bioFriends}
                 onBioChange={setBioFriends}
-                interests={interestsFriends}
-                onInterestsChange={setInterestsFriends}
                 lifestyle={lifestyleFriends}
                 onLifestyleChange={setLifestyleFriends}
                 alcohol={alcoholFriends}
@@ -2313,6 +2216,14 @@ export default function ProfileCore() {
         ) : null}
           </Animated.View>
         </ScrollView>
+
+      <InterestPickerModal
+        visible={interestsModalVisible}
+        selected={interests}
+        onChange={setInterests}
+        onClose={() => setInterestsModalVisible(false)}
+        max={GENERAL_INTERESTS_MAX}
+      />
 
       <PhotoConfirmModal
         visible={cropModalVisible}

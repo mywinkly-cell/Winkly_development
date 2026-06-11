@@ -2,17 +2,16 @@
 
 import { MIN_CORE_PHOTOS } from "@/lib/profile/validation";
 
-export const ONBOARDING_STEP_COUNT = 4;
+export const ONBOARDING_STEP_COUNT = 3;
 
 /** Editorial step labels shown in the onboarding wizard header. */
 export const ONBOARDING_STEP_LABELS = [
   "The basics",
   "Your photos",
-  "What you enjoy",
   "Your modes",
 ] as const;
 
-export type OnboardingStep = 1 | 2 | 3 | 4;
+export type OnboardingStep = 1 | 2 | 3;
 
 export type PrimaryOnboardingMode = "romance" | "friends" | "business";
 
@@ -23,7 +22,6 @@ export type OnboardingStepInput = {
   city: string;
   corePhotoCount: number;
   gender?: string;
-  lookingFor?: string[];
   selectedMode?: PrimaryOnboardingMode | null;
 };
 
@@ -63,17 +61,8 @@ export function validateOnboardingStep(
       }
       return { ok: true };
     case 3:
-      return { ok: true };
-    case 4:
       if (!input.gender?.trim()) {
         return { ok: false, title: "Gender", message: "Please select your gender." };
-      }
-      if (input.selectedMode === "romance" && (!input.lookingFor || input.lookingFor.length === 0)) {
-        return {
-          ok: false,
-          title: "Almost there",
-          message: "Please choose who you're looking to meet.",
-        };
       }
       if (!input.selectedMode) {
         return { ok: false, title: "Choose a mode", message: "Pick Romance, Friends, or Business to set up your profile." };

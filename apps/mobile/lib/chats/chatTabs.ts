@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import { Colors } from "@/constants/tokens";
 import type { AppMode } from "@/lib/chats/types";
 import type { Ionicons } from "@expo/vector-icons";
@@ -13,32 +14,28 @@ export type ChatTabConfig = {
   useEventsImage?: boolean;
 };
 
-export const CHAT_TAB_CONFIG: ChatTabConfig[] = [
-  { key: "all", label: "All", secondary: Colors.white, accent: Colors.primaryViolet },
+const CHAT_TAB_STYLES: Omit<ChatTabConfig, "label">[] = [
+  { key: "all", secondary: Colors.white, accent: Colors.primaryViolet },
   {
     key: "romance",
-    label: "Romance",
     secondary: Colors.romance.secondary,
     accent: Colors.romance.primary,
     icon: "heart",
   },
   {
     key: "friends",
-    label: "Friends",
     secondary: Colors.friends.secondary,
     accent: Colors.friends.primary,
     icon: "people",
   },
   {
     key: "business",
-    label: "Business",
     secondary: Colors.business.secondary,
     accent: Colors.business.primary,
     icon: "briefcase",
   },
   {
     key: "events",
-    label: "Events",
     secondary: Colors.events.secondary,
     accent: Colors.events.primary,
     useEventsImage: true,
@@ -46,13 +43,44 @@ export const CHAT_TAB_CONFIG: ChatTabConfig[] = [
   },
 ];
 
+function tabLabel(key: ChatTabKey, t: TFunction): string {
+  if (key === "all") return t("modes.all");
+  return t(`modes.${key}`);
+}
+
+/** Build chat tab config with labels in the active app language. */
+export function buildChatTabConfig(t: TFunction): ChatTabConfig[] {
+  return CHAT_TAB_STYLES.map((style) => ({
+    ...style,
+    label: tabLabel(style.key, t),
+  }));
+}
+
+/** @deprecated Use `useChatTabConfig()` — labels are English only. */
+export const CHAT_TAB_CONFIG: ChatTabConfig[] = buildChatTabConfig(((key: string) => {
+  const en: Record<string, string> = {
+    "modes.all": "All",
+    "modes.romance": "Romance",
+    "modes.friends": "Friends",
+    "modes.business": "Business",
+    "modes.events": "Events",
+  };
+  return en[key] ?? key;
+}) as TFunction);
+
 export function getChatTabsWithModeFirst(
-  sourceMode: "romance" | "friends" | "business" | "events" | "all"
+  sourceMode: "romance" | "friends" | "business" | "events" | "all",
+  t: TFunction
 ): ChatTabConfig[] {
-  if (sourceMode === "all") return CHAT_TAB_CONFIG;
-  const modeTab = CHAT_TAB_CONFIG.find((t) => t.key === sourceMode)!;
-  const rest = CHAT_TAB_CONFIG.filter((t) => t.key !== sourceMode && t.key !== "all");
-  return [modeTab, CHAT_TAB_CONFIG.find((t) => t.key === "all")!, ...rest];
+  const config = buildChatTabConfig(t);
+  if (sourceMode === "all") return config;
+  const modeTab = config.find((tab) => tab.key === sourceMode)!;
+  const rest = config.filter((tab) => tab.key !== sourceMode && tab.key !== "all");
+  return [modeTab, config.find((tab) => tab.key === "all")!, ...rest];
+}
+
+export function getChatTabAccent(key: ChatTabKey): string {
+  return CHAT_TAB_STYLES.find((tab) => tab.key === key)?.accent ?? Colors.primaryViolet;
 }
 
 export function filterConversationsByTab<T extends { mode: AppMode }>(

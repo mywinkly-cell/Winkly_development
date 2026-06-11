@@ -27,6 +27,8 @@ export type MatchCardOverlayProps = {
   occupation?: string | null;
   /** Up to 3 tags (interests, vibe, goals) */
   chipItems: string[];
+  /** Subset of chipItems that are shared with the viewer — highlighted as "in common". */
+  highlightItems?: string[];
   mode: MatchCardMode;
   /** Shown only for paid subscribers: compatibility score + short tags */
   aiHint?: { score: number; tags: string[] } | null;
@@ -47,6 +49,7 @@ export function MatchCardOverlay({
   city,
   occupation,
   chipItems,
+  highlightItems = [],
   mode,
   aiHint,
   distanceLabel,
@@ -55,6 +58,7 @@ export function MatchCardOverlay({
 }: MatchCardOverlayProps) {
   const { i18n } = useTranslation();
   const accent = modePrimary(mode);
+  const highlightSet = new Set(highlightItems.map((h) => h.trim().toLowerCase()));
   const nameAgeLine = age != null && age > 0 ? `${name}, ${age}` : name;
   const cityLine = city?.trim()
     ? normalizeLocationDisplayString(city, i18n?.language ?? "en")
@@ -99,11 +103,25 @@ export function MatchCardOverlay({
       ) : null}
       {chipItems.length > 0 ? (
         <View style={styles.chipRow}>
-          {chipItems.slice(0, 3).map((i) => (
-            <View key={i} style={[styles.chipOverlay, { borderColor: "rgba(255,255,255,0.35)" }]}>
-              <Text style={styles.chipTextOverlay}>{i}</Text>
-            </View>
-          ))}
+          {chipItems.slice(0, 3).map((i) => {
+            const shared = highlightSet.has(i.trim().toLowerCase());
+            return (
+              <View
+                key={i}
+                style={[
+                  styles.chipOverlay,
+                  shared
+                    ? { backgroundColor: accent, borderColor: accent }
+                    : { borderColor: "rgba(255,255,255,0.35)" },
+                ]}
+              >
+                {shared ? (
+                  <Ionicons name="sparkles" size={11} color="#fff" style={{ marginRight: 4 }} />
+                ) : null}
+                <Text style={styles.chipTextOverlay}>{i}</Text>
+              </View>
+            );
+          })}
         </View>
       ) : null}
     </View>
@@ -193,6 +211,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   chipOverlay: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: 14,

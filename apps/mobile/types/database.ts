@@ -73,7 +73,9 @@ export interface Database {
           languages: string[] | null;
           occupation: string | null;
           bio: string | null;
+          interests: string[] | null;
           core_photos: string[] | null;
+          show_full_name: boolean | null;
         } & Timestamps;
         Insert: {
           id: string;
@@ -86,7 +88,9 @@ export interface Database {
           languages?: string[] | null;
           occupation?: string | null;
           bio?: string | null;
+          interests?: string[] | null;
           core_photos?: string[] | null;
+          show_full_name?: boolean | null;
           created_at?: string;
           updated_at?: string;
         };

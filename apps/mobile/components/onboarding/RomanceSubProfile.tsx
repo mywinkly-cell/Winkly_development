@@ -15,9 +15,7 @@ import {
   PETS_OPTIONS,
   ALLERGIES_OPTIONS,
   FOOD_OPTIONS,
-  INTEREST_POPULAR_ROMANCE,
 } from "@/constants/profileOptions";
-import { InterestSelect } from "./InterestSelect";
 
 const inputStyle = {
   borderWidth: 1,
@@ -130,8 +128,6 @@ export function RomanceSubProfile(props: {
   onAlcoholChange: (v: string) => void;
   kids: string;
   onKidsChange: (v: string) => void;
-  interests: string[];
-  onInterestsChange: (v: string[]) => void;
   sexualViews: string;
   onSexualViewsChange: (v: string) => void;
   relationshipGoals: string[];
@@ -156,7 +152,7 @@ export function RomanceSubProfile(props: {
   const { enabled, toggle, photos, onPickPhoto, video, onPickVideo, bio, onBioChange, hideToggle } = props;
   const { height, onHeightChange, weight, onWeightChange } = props;
   const { lifestyle, onLifestyleChange, smoking, onSmokingChange, alcohol, onAlcoholChange, kids, onKidsChange } = props;
-  const { interests, onInterestsChange, sexualViews, onSexualViewsChange } = props;
+  const { sexualViews, onSexualViewsChange } = props;
   const { relationshipGoals, onRelationshipGoalsChange, religion, onReligionChange } = props;
   const { politicalViews, onPoliticalViewsChange, values, onValuesChange, pets, onPetsChange, allergies, onAllergiesChange, food, onFoodChange, toggleMulti, onAllergiesToggle, onPetsToggle } = props;
 
@@ -243,14 +239,6 @@ export function RomanceSubProfile(props: {
         exclusiveOption="None"
       />
       <SingleSelect options={FOOD_OPTIONS} selected={food} onSelect={onFoodChange} label="Food habits" />
-
-      <Text style={label}>Interests</Text>
-      <InterestSelect
-        popularOptions={INTEREST_POPULAR_ROMANCE}
-        selected={interests}
-        onChange={onInterestsChange}
-        max={12}
-      />
 
       <SingleSelect options={SEXUAL_VIEWS_OPTIONS} selected={sexualViews} onSelect={onSexualViewsChange} label="Sexual orientation" />
       <Text style={label}>Relationship goals (up to 2) <Text style={requiredMark}>*</Text></Text>

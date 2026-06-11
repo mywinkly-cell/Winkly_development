@@ -3,7 +3,9 @@
  * Used by ChatsInboxContent and /chats index.
  */
 
+import i18n from "i18next";
 import { supabase } from "@/lib/supabase";
+import { getAppLocaleTag } from "@/lib/i18n/appLocale";
 import type { AppMode, Conversation, ConversationMember, Message, UserMini } from "./types";
 
 export type ChatInboxTab = "all" | AppMode;
@@ -193,10 +195,10 @@ export function formatChatInboxTimestamp(ts: string | null | undefined): string 
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
-  if (diffMins < 1) return "Now";
+  if (diffMins < 1) return i18n.t("chat.now");
   if (diffMins < 60) return `${diffMins}m`;
   if (diffHours < 24) return `${diffHours}h`;
-  if (diffDays === 1) return "Yesterday";
+  if (diffDays === 1) return i18n.t("chat.yesterday");
   if (diffDays < 7) return `${diffDays}d`;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return d.toLocaleDateString(getAppLocaleTag(), { month: "short", day: "numeric" });
 }

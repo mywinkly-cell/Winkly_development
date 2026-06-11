@@ -29,6 +29,14 @@ export function BusinessProfileCard({
     ? buildStorageImageUrl(person.photoUrl, { width: Math.round(PHOTO_WIDTH), quality: 80, resize: "cover" })
     : null;
   const intent = person.intentGoal?.slice(0, 16);
+  const highlightSet = new Set((person.highlightTags ?? []).map((t) => t.trim().toLowerCase()));
+  // Show up to 3 tags, shared-with-viewer first so common interests surface and highlight.
+  const sortedTags = [...(person.tags ?? [])].sort((a, b) => {
+    const sa = highlightSet.has(a.trim().toLowerCase()) ? 0 : 1;
+    const sb = highlightSet.has(b.trim().toLowerCase()) ? 0 : 1;
+    return sa - sb;
+  });
+  const topTags = sortedTags.slice(0, 3);
 
   return (
     <Pressable
@@ -66,6 +74,23 @@ export function BusinessProfileCard({
           <Text style={styles.intentText} numberOfLines={1}>
             {intent}
           </Text>
+        </View>
+      ) : null}
+      {topTags.length > 0 ? (
+        <View style={styles.tagRow}>
+          {topTags.map((t) => {
+            const shared = highlightSet.has(t.trim().toLowerCase());
+            return (
+              <View key={t} style={[styles.tagChip, shared && styles.tagChipShared]}>
+                <Text
+                  style={[styles.tagText, shared && styles.tagTextShared]}
+                  numberOfLines={1}
+                >
+                  {t}
+                </Text>
+              </View>
+            );
+          })}
         </View>
       ) : null}
       {(person.mutualCount ?? 0) > 0 ? (
@@ -146,6 +171,33 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "600",
     color: Colors.business.primary,
+  },
+  tagRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: 6,
+  },
+  tagChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: Colors.gray100,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    maxWidth: "100%",
+  },
+  tagChipShared: {
+    backgroundColor: Colors.business.primary,
+    borderColor: Colors.business.primary,
+  },
+  tagText: {
+    fontSize: 10,
+    color: Colors.gray600,
+  },
+  tagTextShared: {
+    color: Colors.white,
+    fontWeight: "700",
   },
   mutual: {
     fontSize: 10,

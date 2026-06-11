@@ -52,6 +52,7 @@ import { PlanRecommendationFeedback } from "@/components/planner/PlanRecommendat
 import type { PlanRecommendationRating } from "@/lib/ai/planRecommendationFeedback";
 import type { Mode } from "@/types";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
+import { useAppLocaleTag } from "@/lib/i18n/appLocale";
 
 type TabKey = "all" | "dates" | "meetups" | "business" | "events" | "archive";
 type TimeRange =
@@ -347,7 +348,8 @@ const BOTTOM_BAR_HEIGHT = Layout.bottomBarHeight ?? 76;
 
 const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function PlannerIndex({ embedded, initialTab }, ref) {
   const router = useRouter();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const appLocale = useAppLocaleTag();
   const fmtLocationLine = useFormatLocationDisplay();
   const insets = useSafeAreaInsets();
   const filterModalBottomPadding = BOTTOM_BAR_HEIGHT + insets.bottom;
@@ -464,8 +466,8 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     })();
   }, []);
 
-  const weekOptions = useMemo(() => getWeeksForYear(filterYear, i18n.language), [filterYear, i18n.language]);
-  const monthOptions = useMemo(() => getMonthsForYear(filterYear, i18n.language), [filterYear, i18n.language]);
+  const weekOptions = useMemo(() => getWeeksForYear(filterYear, appLocale), [filterYear, appLocale]);
+  const monthOptions = useMemo(() => getMonthsForYear(filterYear, appLocale), [filterYear, appLocale]);
 
   const onTabPress = (key: TabKey) => {
     Haptics.selectionAsync();
@@ -914,7 +916,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                 <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
               <Text style={styles.weekNavTitle}>
-                {viewedWeekStart.toLocaleDateString(i18n.language, { month: "short", day: "numeric" })} – {weekDays[6].toLocaleDateString(i18n.language, { month: "short", day: "numeric", year: "numeric" })}
+                {viewedWeekStart.toLocaleDateString(appLocale, { month: "short", day: "numeric" })} – {weekDays[6].toLocaleDateString(appLocale, { month: "short", day: "numeric", year: "numeric" })}
               </Text>
               <TouchableOpacity onPress={() => { Haptics.selectionAsync(); const next = new Date(viewedWeekStart); next.setDate(next.getDate() + 7); setViewedWeekStart(next); }} style={styles.weekNavBtn} hitSlop={12}>
                 <Ionicons name="chevron-forward" size={24} color={Colors.textPrimary} />
@@ -941,7 +943,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
               const dayItems = itemsByDayWeek[dayKey(d)] ?? [];
               return (
                 <View key={dayKey(d)} style={styles.weekDayBlock}>
-                  <Text style={styles.weekDayBlockTitle}>{d.toLocaleDateString(i18n.language, { day: "numeric", month: "short" })}</Text>
+                  <Text style={styles.weekDayBlockTitle}>{d.toLocaleDateString(appLocale, { day: "numeric", month: "short" })}</Text>
                   {dayItems.length === 0 ? <Text style={styles.weekDayEmpty}>No events</Text> : dayItems.map((it) => renderItemCard(it))}
                 </View>
               );
@@ -955,7 +957,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
               <TouchableOpacity onPress={() => { Haptics.selectionAsync(); const prev = new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() - 1); setViewedMonth(prev); }} style={styles.weekNavBtn} hitSlop={12}>
                 <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
-              <Text style={styles.weekNavTitle}>{viewedMonth.toLocaleDateString(i18n.language, { month: "long", year: "numeric" })}</Text>
+              <Text style={styles.weekNavTitle}>{viewedMonth.toLocaleDateString(appLocale, { month: "long", year: "numeric" })}</Text>
               <TouchableOpacity onPress={() => { Haptics.selectionAsync(); const next = new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() + 1); setViewedMonth(next); }} style={styles.weekNavBtn} hitSlop={12}>
                 <Ionicons name="chevron-forward" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
@@ -1022,7 +1024,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                     const d = monthGrid.find((x): x is Date => x !== null && dayKey(x) === selectedMonthDay);
                     return (
                       <View style={styles.weekDayBlock}>
-                        {d && <Text style={styles.weekDayBlockTitle}>{d.toLocaleDateString(i18n.language, { day: "numeric", month: "short" })}</Text>}
+                        {d && <Text style={styles.weekDayBlockTitle}>{d.toLocaleDateString(appLocale, { day: "numeric", month: "short" })}</Text>}
                         {dayItems.length === 0 ? (
                           <View style={styles.emptyState}>
                             <Ionicons name="calendar-outline" size={48} color={Colors.gray400} style={{ marginBottom: 12 }} />
@@ -1041,7 +1043,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                     if (dayItems.length === 0) return null;
                     return (
                       <View key={dayKey(d)} style={styles.weekDayBlock}>
-                        <Text style={styles.weekDayBlockTitle}>{d.toLocaleDateString(i18n.language, { day: "numeric", month: "short" })}</Text>
+                        <Text style={styles.weekDayBlockTitle}>{d.toLocaleDateString(appLocale, { day: "numeric", month: "short" })}</Text>
                         {dayItems.map((it) => renderItemCard(it))}
                       </View>
                     );
@@ -1154,7 +1156,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                       activeOpacity={0.8}
                     >
                       <Text style={styles.dateDisplayText}>
-                        {selectedDate.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+                        {selectedDate.toLocaleDateString(appLocale, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
                       </Text>
                       <Ionicons name={showDatePicker ? "chevron-up" : "calendar-outline"} size={20} color={Colors.primaryViolet} />
                     </TouchableOpacity>

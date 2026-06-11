@@ -1,3 +1,4 @@
+import i18n from "i18next";
 import { Colors } from "@/constants/tokens";
 import type { AppMode } from "@/lib/chats/types";
 import type { Ionicons } from "@expo/vector-icons";
@@ -12,30 +13,26 @@ export type ChatModeDisplay = {
   useEventsImage?: boolean;
 };
 
-const MODE_DISPLAY: Record<AppMode, Omit<ChatModeDisplay, "mode">> = {
+const MODE_STYLE: Record<AppMode, Omit<ChatModeDisplay, "mode" | "label">> = {
   romance: {
-    label: "Romance",
     shortLabel: "R",
     primary: Colors.romance.primary,
     secondary: Colors.romance.secondary,
     icon: "heart",
   },
   friends: {
-    label: "Friends",
     shortLabel: "F",
     primary: Colors.friends.primary,
     secondary: Colors.friends.secondary,
     icon: "people",
   },
   business: {
-    label: "Business",
     shortLabel: "B",
     primary: Colors.business.primary,
     secondary: Colors.business.secondary,
     icon: "briefcase",
   },
   events: {
-    label: "Events",
     shortLabel: "E",
     primary: Colors.events.primary,
     secondary: Colors.events.secondary,
@@ -44,8 +41,12 @@ const MODE_DISPLAY: Record<AppMode, Omit<ChatModeDisplay, "mode">> = {
   },
 };
 
-/** Mode colors + labels for mixed inbox rows (All tab). */
+/** Mode colors + labels for mixed inbox rows (All tab). Labels follow app language. */
 export function getChatModeDisplay(mode: AppMode | null | undefined): ChatModeDisplay | null {
-  if (!mode || !(mode in MODE_DISPLAY)) return null;
-  return { mode, ...MODE_DISPLAY[mode] };
+  if (!mode || !(mode in MODE_STYLE)) return null;
+  return {
+    mode,
+    label: i18n.t(`modes.${mode}`),
+    ...MODE_STYLE[mode],
+  };
 }

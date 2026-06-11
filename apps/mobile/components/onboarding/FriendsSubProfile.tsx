@@ -12,9 +12,7 @@ import {
   PETS_OPTIONS,
   ALLERGIES_OPTIONS,
   FOOD_OPTIONS,
-  INTEREST_POPULAR_FRIENDS,
 } from "@/constants/profileOptions";
-import { InterestSelect } from "./InterestSelect";
 
 const inputStyle = {
   borderWidth: 1,
@@ -89,8 +87,6 @@ export function FriendsSubProfile(props: {
   onPickVideo: () => void;
   bio: string;
   onBioChange: (v: string) => void;
-  interests: string[];
-  onInterestsChange: (v: string[]) => void;
   lifestyle: string;
   onLifestyleChange: (v: string) => void;
   alcohol: string;
@@ -115,7 +111,7 @@ export function FriendsSubProfile(props: {
   hideToggle?: boolean;
 }) {
   const { enabled, toggle, photos, onPickPhoto, video, onPickVideo, bio, onBioChange, hideToggle } = props;
-  const { interests, onInterestsChange, lifestyle, onLifestyleChange, alcohol, onAlcoholChange, smoking, onSmokingChange } = props;
+  const { lifestyle, onLifestyleChange, alcohol, onAlcoholChange, smoking, onSmokingChange } = props;
   const { meetupGoals, onMeetupGoalsChange, status, onStatusChange, kids, onKidsChange, pets, onPetsChange, allergies, onAllergiesChange, food, onFoodChange, toggleMulti, onAllergiesToggle, onPetsToggle } = props;
 
   if (!enabled) {
@@ -173,14 +169,6 @@ export function FriendsSubProfile(props: {
 
       <Text style={label}>Bio <Text style={requiredMark}>*</Text></Text>
       <TextInput placeholder="What kind of friendships do you enjoy?" value={bio} onChangeText={onBioChange} multiline style={[inputStyle, { height: 100, textAlignVertical: "top" }]} placeholderTextColor={Colors.gray500} />
-
-      <Text style={label}>Interests</Text>
-      <InterestSelect
-        popularOptions={INTEREST_POPULAR_FRIENDS}
-        selected={interests}
-        onChange={onInterestsChange}
-        max={8}
-      />
 
       <SingleSelect options={LIFESTYLE_ROMANCE} selected={lifestyle} onSelect={onLifestyleChange} label="Lifestyle" />
       <SingleSelect options={ALCOHOL_OPTIONS} selected={alcohol} onSelect={onAlcoholChange} label="Alcohol" />

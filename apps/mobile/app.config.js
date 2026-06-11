@@ -34,6 +34,7 @@ module.exports = {
     userInterfaceStyle: "light",
 
     plugins: [
+      "expo-dev-client",
       "expo-localization",
       "expo-web-browser",
       "expo-apple-authentication",
@@ -147,6 +148,22 @@ module.exports = {
     experiments: {
       typedRoutes: true
     },
+
+    // Dev client (APP_ENV=development): OTA disabled — app loads JS from Metro via `expo start --dev-client`.
+    // Preview/production: embedded bundle launches first; failed OTA fetch must not block startup.
+    runtimeVersion: {
+      policy: "appVersion",
+    },
+    ...(easProjectId
+      ? {
+          updates: {
+            url: `https://u.expo.dev/${easProjectId}`,
+            enabled: APP_ENV !== "development",
+            checkAutomatically: "ON_ERROR_RECOVERY",
+            fallbackToCacheTimeout: 0,
+          },
+        }
+      : {}),
 
     extra: {
       ...(easProjectId ? { eas: { projectId: easProjectId } } : {}),

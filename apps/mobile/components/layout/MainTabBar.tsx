@@ -1,21 +1,27 @@
 // MainTabBar — Global hub tabs: Modes | Chats | Planner (expo-router Tabs)
 
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, Pressable } from "react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 
-const TAB_CONFIG = [
-  { name: "mode-selection", label: "Modes", icon: "grid-outline" as const, activeIcon: "grid" as const },
-  { name: "chats", label: "Chats", icon: "chatbubble-outline" as const, activeIcon: "chatbubble" as const },
-  { name: "planner", label: "Planner", icon: "calendar-outline" as const, activeIcon: "calendar" as const },
-] as const;
-
 export function MainTabBar({ state, navigation }: BottomTabBarProps) {
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
+
+  const tabConfig = useMemo(
+    () =>
+      [
+        { name: "mode-selection", label: t("nav.modes"), icon: "grid-outline" as const, activeIcon: "grid" as const },
+        { name: "chats", label: t("modes.chats"), icon: "chatbubble-outline" as const, activeIcon: "chatbubble" as const },
+        { name: "planner", label: t("modes.planner"), icon: "calendar-outline" as const, activeIcon: "calendar" as const },
+      ] as const,
+    [t, i18n.language]
+  );
   const activeColor = Colors.primaryViolet;
   const inactiveColor = Colors.gray500;
   const barHeight = Layout.bottomBarHeight + insets.bottom;
@@ -42,7 +48,7 @@ export function MainTabBar({ state, navigation }: BottomTabBarProps) {
       }}
     >
       {state.routes.map((route, index) => {
-        const config = TAB_CONFIG.find((t) => t.name === route.name);
+        const config = tabConfig.find((tab) => tab.name === route.name);
         if (!config) return null;
 
         const focused = state.index === index;

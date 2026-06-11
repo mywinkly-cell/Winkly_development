@@ -8,6 +8,7 @@ import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
@@ -19,6 +20,7 @@ type ModeBottomBarProps = {
 };
 
 export function ModeBottomBar({ mode }: ModeBottomBarProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -63,10 +65,10 @@ export function ModeBottomBar({ mode }: ModeBottomBarProps) {
       <Pressable
         onPress={onChatsPress}
         style={{ alignItems: "center", justifyContent: "center", minWidth: 48, minHeight: 48 }}
-        accessibilityLabel="Chats"
+        accessibilityLabel={t("modes.chats")}
       >
         <Ionicons name="chatbubble-outline" size={24} color={Colors.textPrimary} />
-        <Text style={{ ...Typography.caption, color: Colors.textPrimary, marginTop: 4 }}>Chats</Text>
+        <Text style={{ ...Typography.caption, color: Colors.textPrimary, marginTop: 4 }}>{t("modes.chats")}</Text>
       </Pressable>
 
       {mode ? <ModeSwitchCenterButton mode={mode} /> : null}
@@ -74,10 +76,10 @@ export function ModeBottomBar({ mode }: ModeBottomBarProps) {
       <Pressable
         onPress={onPlannerPress}
         style={{ alignItems: "center", justifyContent: "center", minWidth: 48, minHeight: 48 }}
-        accessibilityLabel="Planner"
+        accessibilityLabel={t("modes.planner")}
       >
         <Ionicons name="calendar-outline" size={24} color={Colors.textPrimary} />
-        <Text style={{ ...Typography.caption, color: Colors.textPrimary, marginTop: 4 }}>Planner</Text>
+        <Text style={{ ...Typography.caption, color: Colors.textPrimary, marginTop: 4 }}>{t("modes.planner")}</Text>
       </Pressable>
     </View>
   );

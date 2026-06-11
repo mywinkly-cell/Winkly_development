@@ -14,7 +14,6 @@ describe("validateOnboardingStep", () => {
     city: "Berlin",
     corePhotoCount: MIN_CORE_PHOTOS,
     gender: "Female",
-    lookingFor: ["Women"],
     selectedMode: "romance",
   };
 
@@ -31,18 +30,18 @@ describe("validateOnboardingStep", () => {
     expect(validateOnboardingStep(2, identity)).toEqual({ ok: true });
   });
 
-  it("allows skipping activity picks on step 3", () => {
+  it("requires gender and a chosen mode on step 3", () => {
+    expect(validateOnboardingStep(3, { ...identity, gender: "" })).toMatchObject({ ok: false });
+    expect(
+      validateOnboardingStep(3, { ...identity, selectedMode: null })
+    ).toMatchObject({ ok: false, title: "Choose a mode" });
     expect(validateOnboardingStep(3, identity)).toEqual({ ok: true });
   });
 
-  it("requires gender and romance looking-for on step 4", () => {
-    expect(validateOnboardingStep(4, { ...identity, gender: "" })).toMatchObject({ ok: false });
-    expect(
-      validateOnboardingStep(4, { ...identity, lookingFor: [], selectedMode: "romance" })
-    ).toMatchObject({ ok: false });
-    expect(
-      validateOnboardingStep(4, { ...identity, lookingFor: [], selectedMode: "friends" })
-    ).toEqual({ ok: true });
+  it("does not collect a looking-for preference during onboarding", () => {
+    // "Looking for" is now a per-mode discovery filter, not a profile field.
+    expect(validateOnboardingStep(3, { ...identity, selectedMode: "friends" })).toEqual({ ok: true });
+    expect(validateOnboardingStep(3, { ...identity, selectedMode: "romance" })).toEqual({ ok: true });
   });
 });
 
@@ -90,7 +89,7 @@ describe("inferOnboardingResumeStep", () => {
     ).toBe(3);
   });
 
-  it("exports four onboarding steps", () => {
-    expect(ONBOARDING_STEP_COUNT).toBe(4);
+  it("exports three onboarding steps", () => {
+    expect(ONBOARDING_STEP_COUNT).toBe(3);
   });
 });

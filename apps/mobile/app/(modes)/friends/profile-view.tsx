@@ -25,21 +25,17 @@ import {
 } from "@/lib/profile/profilePlanInvite";
 import {
   getOtherUserCoreFields,
-  mergePhotoUrls,
-  metaStringArray,
+  modeDisplayName,
   type OtherUserCoreFields,
 } from "@/lib/profile/otherUserCore";
 import {
-  ProfileChipList,
-  ProfileGeneralBlock,
-  ProfileInstagramLink,
-  ProfilePhotoGallery,
-  ProfileSection,
-} from "@/components/profile/OtherUserProfileSections";
+  normalizeModeProfileRow,
+  emptyPublicCoreProfile,
+} from "@/lib/profile/publicModeProfile";
+import { ModeProfilePublicView } from "@/components/profile/ModeProfilePublicView";
 import { ProfileViewHeader } from "@/components/profile/ProfileViewHeader";
 import { ProfileSwipeActions } from "@/components/profile/ProfileSwipeActions";
 import { ProfileConnectionActions } from "@/components/profile/ProfileConnectionActions";
-import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 
 type FriendProfile = {
@@ -67,14 +63,6 @@ type FriendProfile = {
   instagram?: string | null;
   created_at?: string | null;
 };
-
-function fullName(p: FriendProfile) {
-  const fn = (p.first_name ?? "").trim();
-  const ln = (p.last_name ?? "").trim();
-  const dn = (p.display_name ?? "").trim();
-  const composed = `${fn} ${ln}`.trim();
-  return composed || dn || "Friend";
-}
 
 function isUuid(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
@@ -136,16 +124,32 @@ export default function FriendsProfileView() {
 
   const targetUserId = profile?.user_id ?? profile?.id ?? userId;
 
-  const photos = useMemo(() => {
-    if (!profile) return [] as string[];
-    const modePhotos = (profile.photos ?? []).filter((p): p is string => !!p);
-    const fallbacks = [profile.main_photo_url, profile.avatar_url].filter((p): p is string => !!p);
-    return mergePhotoUrls(modePhotos, fallbacks, coreFields?.core_photos ?? []);
-  }, [coreFields?.core_photos, profile]);
+  // Privacy: full name only if the user opted in (first name otherwise).
+  const displayName = useMemo(
+    () =>
+      profile
+        ? modeDisplayName(
+            {
+              first_name: profile.first_name,
+              last_name: profile.last_name,
+              show_full_name: coreFields?.show_full_name,
+              display_name: profile.display_name,
+            },
+            "friends",
+            "Friend"
+          )
+        : "Friend",
+    [profile, coreFields?.show_full_name]
+  );
 
-  const meetupGoals = useMemo(
-    () => metaStringArray(profile?.meta ?? null, "meetup_goals"),
-    [profile?.meta]
+  const modeRow = useMemo(
+    () => normalizeModeProfileRow("friends", profile as Record<string, unknown> | null),
+    [profile]
+  );
+
+  const coreForView = useMemo(
+    () => coreFields ?? emptyPublicCoreProfile(),
+    [coreFields]
   );
 
   const handlePass = useCallback(async () => {
@@ -215,7 +219,7 @@ export default function FriendsProfileView() {
     if (!profile || !targetUserId) return;
     confirmRemoveConnection({
       mode: "friends",
-      firstName: fullName(profile),
+      firstName: displayName,
       onConfirm: async () => {
         setActionBusy(true);
         try {
@@ -229,7 +233,7 @@ export default function FriendsProfileView() {
         }
       },
     });
-  }, [profile, router, targetUserId]);
+  }, [profile, router, targetUserId, displayName]);
 
   const handlePlannerPress = useCallback(() => {
     if (!targetUserId) return;
@@ -288,149 +292,15 @@ export default function FriendsProfileView() {
           </View>
         ) : (
           <>
-            <ProfilePhotoGallery photos={photos} />
-
-            <View style={[styles.profileCard, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-              <Text style={[styles.name, { color: Colors.text }]}>{fullName(profile)}</Text>
-              <Text style={{ color: Colors.mutedText, marginTop: 6 }}>
-                {profile.city?.trim()
-                  ? normalizeLocationDisplayString(profile.city, i18n?.language ?? "en")
-                  : "Location not specified"}
-              </Text>
-            </View>
-
-            {coreFields?.bio ||
-            coreFields?.education ||
-            (coreFields?.activity_preferences?.length ?? 0) > 0 ||
-            typeof profile.night_owl === "boolean" ? (
-              <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-                <ProfileGeneralBlock
-                  coreBio={coreFields?.bio}
-                  education={coreFields?.education}
-                  activityPreferences={coreFields?.activity_preferences}
-                  nightOwl={profile.night_owl}
-                />
-              </View>
-            ) : null}
-
-            <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-              <ProfileSection title="Friends">
-                <Text style={{ color: Colors.text, lineHeight: 20 }}>
-                  {profile.about?.trim() || "No friends bio yet."}
-                </Text>
-              </ProfileSection>
-            </View>
-
-            {(profile.vibe_tags ?? []).length > 0 ? (
-              <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-                <ProfileSection title="Vibes">
-                  <ProfileChipList items={(profile.vibe_tags ?? []).slice(0, 24)} />
-                </ProfileSection>
-              </View>
-            ) : null}
-
-            {(profile.interests ?? []).length > 0 ? (
-              <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-                <ProfileSection title="Interests">
-                  <ProfileChipList items={(profile.interests ?? []).slice(0, 24)} />
-                </ProfileSection>
-              </View>
-            ) : null}
-
-            {meetupGoals.length > 0 ? (
-              <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-                <ProfileSection title="Meetup goals">
-                  <ProfileChipList items={meetupGoals} />
-                </ProfileSection>
-              </View>
-            ) : null}
-
-            {/* Friends sub-profile details (lifestyle, meetup goals, etc.) */}
-            {profile.meta && Object.keys(profile.meta).length > 0 && (
-              <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-                <Text style={[styles.blockTitle, { color: Colors.text }]}>Lifestyle & meetup</Text>
-                <View style={{ marginTop: 10, gap: 8 }}>
-                  {typeof profile.night_owl === "boolean" && (
-                    <View style={styles.metaRow}>
-                      <Text style={{ color: Colors.mutedText, width: 100 }}>Timing</Text>
-                      <Text style={{ color: Colors.text, flex: 1 }}>{profile.night_owl ? "Night owl" : "Early bird"}</Text>
-                    </View>
-                  )}
-                  {!!profile.meta.lifestyle && (
-                    <View style={styles.metaRow}>
-                      <Text style={{ color: Colors.mutedText, width: 100 }}>Lifestyle</Text>
-                      <Text style={{ color: Colors.text, flex: 1 }}>{String(profile.meta.lifestyle)}</Text>
-                    </View>
-                  )}
-                  {!!profile.meta.alcohol && (
-                    <View style={styles.metaRow}>
-                      <Text style={{ color: Colors.mutedText, width: 100 }}>Alcohol</Text>
-                      <Text style={{ color: Colors.text, flex: 1 }}>{String(profile.meta.alcohol)}</Text>
-                    </View>
-                  )}
-                  {!!profile.meta.smoking && (
-                    <View style={styles.metaRow}>
-                      <Text style={{ color: Colors.mutedText, width: 100 }}>Smoking</Text>
-                      <Text style={{ color: Colors.text, flex: 1 }}>{String(profile.meta.smoking)}</Text>
-                    </View>
-                  )}
-                  {!!profile.meta.status && (
-                    <View style={styles.metaRow}>
-                      <Text style={{ color: Colors.mutedText, width: 100 }}>Status</Text>
-                      <Text style={{ color: Colors.text, flex: 1 }}>{String(profile.meta.status)}</Text>
-                    </View>
-                  )}
-                  {!!profile.meta.kids && (
-                    <View style={styles.metaRow}>
-                      <Text style={{ color: Colors.mutedText, width: 100 }}>Kids</Text>
-                      <Text style={{ color: Colors.text, flex: 1 }}>{String(profile.meta.kids)}</Text>
-                    </View>
-                  )}
-                  {Array.isArray(profile.meta.pets) && profile.meta.pets.length > 0 && (
-                    <View style={styles.metaRow}>
-                      <Text style={{ color: Colors.mutedText, width: 100 }}>Pets</Text>
-                      <Text style={{ color: Colors.text, flex: 1 }}>{(profile.meta.pets as string[]).join(", ")}</Text>
-                    </View>
-                  )}
-                  {Array.isArray(profile.meta.allergies) && profile.meta.allergies.length > 0 && (
-                    <View style={styles.metaRow}>
-                      <Text style={{ color: Colors.mutedText, width: 100 }}>Allergies</Text>
-                      <Text style={{ color: Colors.text, flex: 1 }}>{(profile.meta.allergies as string[]).join(", ")}</Text>
-                    </View>
-                  )}
-                  {!!profile.meta.food && (
-                    <View style={styles.metaRow}>
-                      <Text style={{ color: Colors.mutedText, width: 100 }}>Food</Text>
-                      <Text style={{ color: Colors.text, flex: 1 }}>{String(profile.meta.food)}</Text>
-                    </View>
-                  )}
-                  {Array.isArray(profile.meta.meetup_goals) && profile.meta.meetup_goals.length > 0 && (
-                    <View style={{ marginTop: 4 }}>
-                      <Text style={{ color: Colors.mutedText, marginBottom: 6 }}>Meetup goals</Text>
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                        {(profile.meta.meetup_goals as string[]).map((g, idx) => (
-                          <View
-                            key={`${g}-${idx}`}
-                            style={[styles.chip, { backgroundColor: Colors.friends.primary + "22", borderColor: Colors.friends.primary }]}
-                          >
-                            <Text style={{ color: Colors.text, fontWeight: "700" }}>{g}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  )}
-                </View>
-              </View>
-            )}
-
-            {profile.instagram?.trim() ? (
-              <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-                <ProfileInstagramLink handle={profile.instagram} />
-              </View>
-            ) : null}
+            <ModeProfilePublicView
+              mode="friends"
+              core={coreForView}
+              modeRow={modeRow}
+              locale={i18n?.language ?? "en"}
+            />
 
             {isConnected ? (
-              <View style={{ paddingHorizontal: Layout?.screenPadding ?? 16 }}>
+              <View style={{ paddingHorizontal: Layout?.screenPadding ?? 16, marginTop: 8 }}>
                 <ProfileConnectionActions
                   mode="friends"
                   primaryColor={Colors.friends.primary}
@@ -459,7 +329,7 @@ export default function FriendsProfileView() {
           visible={inviteVisible}
           mode="friends"
           partnerUserId={targetUserId}
-          partnerDisplayName={fullName(profile)}
+          partnerDisplayName={displayName}
           onClose={() => setInviteVisible(false)}
           onSubmit={handleInviteSubmit}
         />

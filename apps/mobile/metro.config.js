@@ -1,11 +1,18 @@
-// metro.config.js – Winkly
-// Minimal Expo Metro config, works with expo-router
+// metro.config.js – Winkly (npm workspaces monorepo)
+// Resolve hoisted deps from repo root so Android/iOS can download the bundle.
 
+const path = require("path");
 const { getDefaultConfig } = require("expo/metro-config");
 
-const config = getDefaultConfig(__dirname);
+const projectRoot = __dirname;
+const monorepoRoot = path.resolve(projectRoot, "../..");
 
-// If you later need custom asset file extensions, SVG support, etc.,
-// we can extend config here. For now the default is enough.
+const config = getDefaultConfig(projectRoot);
+
+config.watchFolders = [monorepoRoot];
+config.resolver.nodeModulesPaths = [
+  path.resolve(projectRoot, "node_modules"),
+  path.resolve(monorepoRoot, "node_modules"),
+];
 
 module.exports = config;

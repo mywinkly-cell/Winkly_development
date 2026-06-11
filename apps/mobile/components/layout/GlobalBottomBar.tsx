@@ -8,6 +8,7 @@ import { View, Text, Pressable } from "react-native";
 import { usePathname, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import { Routes } from "@/constants/routes";
 import { Colors, Typography, Layout } from "@/constants/tokens";
@@ -22,6 +23,7 @@ function getActiveTab(pathname: string): Tab {
 }
 
 export function GlobalBottomBar() {
+  const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname() ?? "";
   const insets = useSafeAreaInsets();
@@ -63,18 +65,18 @@ export function GlobalBottomBar() {
       <Pressable
         onPress={() => nav("modes")}
         style={{ alignItems: "center", justifyContent: "center", minWidth: 48, minHeight: 48 }}
-        accessibilityLabel="Modes"
+        accessibilityLabel={t("nav.modes")}
       >
         <Ionicons name="grid-outline" size={24} color={isActive("modes") ? activeColor : inactiveColor} />
         <Text style={[Typography.caption, { marginTop: 4, color: isActive("modes") ? activeColor : inactiveColor }]}>
-          Modes
+          {t("nav.modes")}
         </Text>
       </Pressable>
 
       <Pressable
         onPress={() => nav("chats")}
         style={{ alignItems: "center", justifyContent: "center", minWidth: 48, minHeight: 48 }}
-        accessibilityLabel="Chats"
+        accessibilityLabel={t("modes.chats")}
       >
         <Ionicons
           name="chatbubble-outline"
@@ -82,14 +84,14 @@ export function GlobalBottomBar() {
           color={isActive("chats") ? activeColor : inactiveColor}
         />
         <Text style={[Typography.caption, { marginTop: 4, color: isActive("chats") ? activeColor : inactiveColor }]}>
-          Chats
+          {t("modes.chats")}
         </Text>
       </Pressable>
 
       <Pressable
         onPress={() => nav("planner")}
         style={{ alignItems: "center", justifyContent: "center", minWidth: 48, minHeight: 48 }}
-        accessibilityLabel="Planner"
+        accessibilityLabel={t("modes.planner")}
       >
         <Ionicons
           name="calendar-outline"
@@ -97,7 +99,7 @@ export function GlobalBottomBar() {
           color={isActive("planner") ? activeColor : inactiveColor}
         />
         <Text style={[Typography.caption, { marginTop: 4, color: isActive("planner") ? activeColor : inactiveColor }]}>
-          Planner
+          {t("modes.planner")}
         </Text>
       </Pressable>
     </View>

@@ -29,17 +29,14 @@ import {
 } from "@/lib/profile/profilePlanInvite";
 import {
   getOtherUserCoreFields,
-  mergePhotoUrls,
   type OtherUserCoreFields,
 } from "@/lib/profile/otherUserCore";
 import {
-  ProfileChipList,
-  ProfileGeneralBlock,
-  ProfileInstagramLink,
-  ProfilePhotoGallery,
-  ProfileSection,
-} from "@/components/profile/OtherUserProfileSections";
-import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
+  normalizeModeProfileRow,
+  emptyPublicCoreProfile,
+  type PublicModeProfileRow,
+} from "@/lib/profile/publicModeProfile";
+import { ModeProfilePublicView } from "@/components/profile/ModeProfilePublicView";
 import { recordBusinessAnalyticsEvent } from "@/lib/business/analyticsStore";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import type { BusinessConnectionStatus } from "@/types/business";
@@ -93,6 +90,7 @@ export default function BusinessProfileView() {
   const [meId, setMeId] = useState<string | null>(null);
   const [chatId, setChatId] = useState<string | null>(null);
   const [coreFields, setCoreFields] = useState<OtherUserCoreFields | null>(null);
+  const [modeRow, setModeRow] = useState<PublicModeProfileRow | null>(null);
 
   async function loadProfile() {
     try {
@@ -118,9 +116,11 @@ export default function BusinessProfileView() {
       setCoreFields(core);
       if (!row) {
         setProfile(null);
+        setModeRow(null);
         return;
       }
 
+      setModeRow(normalizeModeProfileRow("business", row as Record<string, unknown>));
       setProfile({
         id: String(row.id ?? row.user_id ?? userId),
         user_id: String(row.user_id ?? row.id ?? userId),
@@ -216,13 +216,10 @@ export default function BusinessProfileView() {
   const targetId = profile?.user_id ?? profile?.id ?? userId;
   const isConnected = connectionStatus === "accepted";
 
-  const photos = useMemo(() => {
-    if (!profile) return [] as string[];
-    return mergePhotoUrls(
-      [profile.main_photo_url, profile.avatar_url].filter((p): p is string => !!p),
-      coreFields?.core_photos ?? []
-    );
-  }, [coreFields?.core_photos, profile]);
+  const coreForView = useMemo(
+    () => coreFields ?? emptyPublicCoreProfile(),
+    [coreFields]
+  );
 
   const openConnectFlow = useCallback(() => {
     if (connectionStatus === "pending_sent") {
@@ -335,74 +332,12 @@ export default function BusinessProfileView() {
           </View>
         ) : (
           <>
-            <ProfilePhotoGallery photos={photos} />
-
-            <View style={[styles.profileCard, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-              <Text style={[styles.name, { color: Colors.text }]}>{fullName(profile)}</Text>
-              <Text style={{ color: Colors.mutedText, marginTop: 6 }}>
-                {[profile.role_title, profile.company_name].filter(Boolean).join(" · ") || "Business profile"}
-              </Text>
-              <Text style={{ color: Colors.mutedText, marginTop: 6 }}>
-                {profile.city?.trim()
-                  ? normalizeLocationDisplayString(profile.city, i18n?.language ?? "en")
-                  : "Location not specified"}
-              </Text>
-            </View>
-
-            {(coreFields?.bio ||
-              coreFields?.education ||
-              (coreFields?.activity_preferences?.length ?? 0) > 0) && (
-              <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-                <ProfileGeneralBlock
-                  coreBio={coreFields?.bio}
-                  education={coreFields?.education}
-                  activityPreferences={coreFields?.activity_preferences}
-                />
-              </View>
-            )}
-
-            <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-              <ProfileSection title="Business">
-                <Text style={{ color: Colors.text, lineHeight: 20 }}>
-                  {profile.bio?.trim() || "No business bio yet."}
-                </Text>
-              </ProfileSection>
-            </View>
-
-            {profile.skills && profile.skills.length > 0 ? (
-              <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-                <ProfileSection title="Skills">
-                  <ProfileChipList items={profile.skills.slice(0, 24)} />
-                </ProfileSection>
-              </View>
-            ) : null}
-
-            {/* Links */}
-            <View style={[styles.block, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-              <Text style={[styles.blockTitle, { color: Colors.text }]}>Links</Text>
-
-              <View style={{ marginTop: 10, gap: 10 }}>
-                <View style={[styles.linkRow, { backgroundColor: Colors.background, borderColor: Colors.border }]}>
-                  <Text style={{ color: Colors.mutedText, width: 90 }}>Website</Text>
-                  <Text style={{ color: Colors.text, flex: 1 }} numberOfLines={1}>
-                    {profile.website || "—"}
-                  </Text>
-                </View>
-
-                <View style={[styles.linkRow, { backgroundColor: Colors.background, borderColor: Colors.border }]}>
-                  <Text style={{ color: Colors.mutedText, width: 90 }}>LinkedIn</Text>
-                  <Text style={{ color: Colors.text, flex: 1 }} numberOfLines={1}>
-                    {profile.linkedin_url || "—"}
-                  </Text>
-                </View>
-
-                {profile.instagram?.trim() ? (
-                  <View style={{ marginTop: 10 }}>
-                    <ProfileInstagramLink handle={profile.instagram} />
-                  </View>
-                ) : null}
-              </View>
-            </View>
+            <ModeProfilePublicView
+              mode="business"
+              core={coreForView}
+              modeRow={modeRow}
+              locale={i18n?.language ?? "en"}
+            />
 
             {isConnected ? (
               <View style={{ paddingHorizontal: Layout?.screenPadding ?? 16 }}>

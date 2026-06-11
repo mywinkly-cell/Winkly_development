@@ -227,11 +227,15 @@ export type ProfileCoreUpdate = {
   languages?: string[] | null;
   occupation?: string | null;
   bio?: string | null;
+  /** General profile interests (shared across Romance & Friends). */
+  interests?: string[] | null;
   looking_for?: string[] | null;
   activity_preferences?: string[] | null;
   core_photos?: string[] | null;
   instagram?: string | null;
   night_owl?: boolean | null;
+  /** When true, Romance & Friends show the user's full name; otherwise first name only. */
+  show_full_name?: boolean | null;
 };
 
 /** Upsert current user's core profile (insert or update by id). */

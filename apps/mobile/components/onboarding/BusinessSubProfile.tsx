@@ -161,12 +161,13 @@ export function BusinessSubProfile(props: {
         placeholder="Add your own skill…"
       />
 
-      <Text style={label}>Interests</Text>
+      <Text style={label}>Professional interests</Text>
       <InterestSelect
         popularOptions={INTEREST_POPULAR_BUSINESS}
         selected={interests}
         onChange={onInterestsChange}
         max={5}
+        placeholder="Add a professional interest…"
       />
 
       <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>

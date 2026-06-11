@@ -8,6 +8,7 @@ import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import { Ionicons } from "@expo/vector-icons";
 import { Routes } from "@/constants/routes";
@@ -23,6 +24,7 @@ function getActiveTab(pathname: string): Tab {
 }
 
 export function ModeSelectionBottomBar() {
+  const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
@@ -64,33 +66,33 @@ export function ModeSelectionBottomBar() {
       <Pressable
         onPress={() => nav("home")}
         style={{ alignItems: "center", justifyContent: "center", minWidth: 48, minHeight: 48 }}
-        accessibilityLabel="Home"
+        accessibilityLabel={t("nav.home")}
       >
         <Ionicons name="home" size={24} color={isActive("home") ? activeColor : inactiveColor} />
         <Text style={[Typography.caption, { marginTop: 4, color: isActive("home") ? activeColor : inactiveColor }]}>
-          Home
+          {t("nav.home")}
         </Text>
       </Pressable>
 
       <Pressable
         onPress={() => nav("chats")}
         style={{ alignItems: "center", justifyContent: "center", minWidth: 48, minHeight: 48 }}
-        accessibilityLabel="Chats"
+        accessibilityLabel={t("modes.chats")}
       >
         <Ionicons name="chatbubble-outline" size={24} color={isActive("chats") ? activeColor : inactiveColor} />
         <Text style={[Typography.caption, { marginTop: 4, color: isActive("chats") ? activeColor : inactiveColor }]}>
-          Chats
+          {t("modes.chats")}
         </Text>
       </Pressable>
 
       <Pressable
         onPress={() => nav("planner")}
         style={{ alignItems: "center", justifyContent: "center", minWidth: 48, minHeight: 48 }}
-        accessibilityLabel="Planner"
+        accessibilityLabel={t("modes.planner")}
       >
         <Ionicons name="calendar-outline" size={24} color={isActive("planner") ? activeColor : inactiveColor} />
         <Text style={[Typography.caption, { marginTop: 4, color: isActive("planner") ? activeColor : inactiveColor }]}>
-          Planner
+          {t("modes.planner")}
         </Text>
       </Pressable>
     </View>

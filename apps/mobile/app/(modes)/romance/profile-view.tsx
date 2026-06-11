@@ -26,7 +26,6 @@ import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 
 import { Colors, Typography, Layout } from "@/constants/tokens";
-import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { ProfileViewHeader } from "@/components/profile/ProfileViewHeader";
 import { ProfileSwipeActions } from "@/components/profile/ProfileSwipeActions";
@@ -44,17 +43,14 @@ import {
 } from "@/lib/profile/profilePlanInvite";
 import {
   getOtherUserCoreFields,
-  mergePhotoUrls,
-  metaStringArray,
+  modeDisplayName,
   type OtherUserCoreFields,
 } from "@/lib/profile/otherUserCore";
 import {
-  ProfileChipList,
-  ProfileGeneralBlock,
-  ProfileInstagramLink,
-  ProfilePhotoGallery,
-  ProfileSection,
-} from "@/components/profile/OtherUserProfileSections";
+  normalizeModeProfileRow,
+  emptyPublicCoreProfile,
+} from "@/lib/profile/publicModeProfile";
+import { ModeProfilePublicView } from "@/components/profile/ModeProfilePublicView";
 import {
   computeCompatibilityScore,
   buildMatchTags,
@@ -203,27 +199,14 @@ export default function RomanceProfileView() {
     return { score, tags };
   }, [selfProfile, targetProfile]);
 
-  const photos: string[] = useMemo(() => {
-    if (!targetProfile) return [];
-    const romance = (targetProfile.romance_photos || []).filter((p): p is string => !!p);
-    const core = (targetProfile.core_photos || []).filter((p): p is string => !!p);
-    return mergePhotoUrls(romance, core, coreFields?.core_photos ?? []);
-  }, [coreFields?.core_photos, targetProfile]);
+  const modeRow = useMemo(
+    () => normalizeModeProfileRow("romance", targetProfile as Record<string, unknown> | null),
+    [targetProfile]
+  );
 
-  const romanceInterests = useMemo(() => {
-    if (!targetProfile) return [] as string[];
-    const fromMode = (targetProfile.romance_interests ?? []).filter(Boolean) as string[];
-    const fromCore = (targetProfile.interests ?? []).filter(Boolean) as string[];
-    return Array.from(new Set([...fromMode, ...fromCore]));
-  }, [targetProfile]);
-
-  const relationshipGoals = useMemo(
-    () =>
-      metaStringArray(
-        targetProfile?.romance_meta ?? null,
-        "relationship_goals"
-      ).concat(metaStringArray(targetProfile?.romance_meta ?? null, "relationship_goal")),
-    [targetProfile?.romance_meta]
+  const coreForView = useMemo(
+    () => coreFields ?? emptyPublicCoreProfile(),
+    [coreFields]
   );
 
   // ────────────────────────────────────────────────
@@ -362,33 +345,6 @@ export default function RomanceProfileView() {
   }, [router, targetProfile]);
 
   // ────────────────────────────────────────────────
-  // Lifestyle chips helper
-  // ────────────────────────────────────────────────
-  const lifestyleChips = useMemo(() => {
-    if (!targetProfile) return [] as string[];
-
-    const chips: string[] = [];
-    if (typeof targetProfile.night_owl === "boolean")
-      chips.push(targetProfile.night_owl ? "Night owl" : "Early bird");
-    if (targetProfile.lifestyle_smoking)
-      chips.push(`Smoking: ${targetProfile.lifestyle_smoking}`);
-    if (targetProfile.lifestyle_drinking)
-      chips.push(`Drinking: ${targetProfile.lifestyle_drinking}`);
-    if (targetProfile.lifestyle_pets)
-      chips.push(`Pets: ${targetProfile.lifestyle_pets}`);
-    if (targetProfile.lifestyle_kids)
-      chips.push(`Kids: ${targetProfile.lifestyle_kids}`);
-    if (targetProfile.lifestyle_fitness)
-      chips.push(`Fitness: ${targetProfile.lifestyle_fitness}`);
-    if (targetProfile.lifestyle_food)
-      chips.push(`Food: ${targetProfile.lifestyle_food}`);
-    if (targetProfile.lifestyle_religion)
-      chips.push(`Religion: ${targetProfile.lifestyle_religion}`);
-
-    return chips;
-  }, [targetProfile]);
-
-  // ────────────────────────────────────────────────
   // UI
   // ────────────────────────────────────────────────
   if (loading) {
@@ -443,10 +399,16 @@ export default function RomanceProfileView() {
     );
   }
 
-  const fullName =
-    targetProfile.last_name && targetProfile.last_name.trim().length > 0
-      ? `${targetProfile.first_name} ${targetProfile.last_name}`
-      : targetProfile.first_name;
+  // Privacy: only show the full name if the user opted in (first name otherwise).
+  const fullName = modeDisplayName(
+    {
+      first_name: targetProfile.first_name,
+      last_name: targetProfile.last_name,
+      show_full_name: coreFields?.show_full_name,
+    },
+    "romance",
+    targetProfile.first_name || "Someone"
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
@@ -460,57 +422,12 @@ export default function RomanceProfileView() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 24 }}
       >
-        <ProfilePhotoGallery photos={photos} />
-
-        {/* TEXT BLOCK */}
-        <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
-          {/* Name + Age + City */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              marginBottom: 8,
-            }}
-          >
-            <View style={{ flex: 1, paddingRight: 8 }}>
-              <Text
-                style={{
-                  ...Typography.h1,
-                  fontSize: 26,
-                  color: Colors.textPrimary,
-                }}
-                numberOfLines={1}
-              >
-                {fullName}
-                {targetProfile.age ? `, ${targetProfile.age}` : ""}
-              </Text>
-              <Text
-                style={{
-                  ...Typography.body,
-                  color: Colors.gray700,
-                }}
-                numberOfLines={1}
-              >
-                {targetProfile.city?.trim()
-                  ? normalizeLocationDisplayString(targetProfile.city, i18n?.language ?? "en")
-                  : "Somewhere nearby"}
-              </Text>
-              {targetProfile.occupation && (
-                <Text
-                  style={{
-                    ...Typography.caption,
-                    color: Colors.gray600,
-                    marginTop: 2,
-                  }}
-                  numberOfLines={1}
-                >
-                  {targetProfile.occupation}
-                </Text>
-              )}
-            </View>
-
-            {/* AI Compatibility Badge */}
+        <ModeProfilePublicView
+          mode="romance"
+          core={coreForView}
+          modeRow={modeRow}
+          locale={i18n?.language ?? "en"}
+          nameAccessory={
             <View
               style={{
                 flexDirection: "row",
@@ -535,94 +452,20 @@ export default function RomanceProfileView() {
                 {ai.score}% match
               </Text>
             </View>
-          </View>
-
-          {/* AI Tags */}
-          {ai.tags.length > 0 && (
-            <View
-              style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                marginBottom: 10,
-              }}
-            >
-              {ai.tags.slice(0, 4).map((tag) => (
-                <View
-                  key={tag}
-                  style={{
-                    borderRadius: 999,
-                    backgroundColor: Colors.gray100,
-                    paddingVertical: 4,
-                    paddingHorizontal: 8,
-                    marginRight: 6,
-                    marginBottom: 6,
-                  }}
-                >
-                  <Text
-                    style={{
-                      ...Typography.caption,
-                      color: Colors.gray700,
-                    }}
-                  >
-                    {tag}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          <ProfileGeneralBlock
-            coreBio={coreFields?.bio}
-            education={targetProfile.education ?? coreFields?.education}
-            languages={(targetProfile.languages ?? []).filter(Boolean) as string[]}
-            activityPreferences={coreFields?.activity_preferences}
-            nightOwl={targetProfile.night_owl}
-          />
-
-          <ProfileSection title="Romance">
-            {targetProfile.bio_romance ? (
-              <Text style={{ ...Typography.body, color: Colors.gray800, lineHeight: 22 }}>
-                {targetProfile.bio_romance}
-              </Text>
-            ) : (
-              <Text style={{ ...Typography.caption, color: Colors.gray500 }}>
-                No romance bio yet.
-              </Text>
-            )}
-          </ProfileSection>
-
-          {romanceInterests.length > 0 ? (
-            <ProfileSection title="Interests">
-              <ProfileChipList items={romanceInterests} />
-            </ProfileSection>
-          ) : null}
-
-          {relationshipGoals.length > 0 ? (
-            <ProfileSection title="Dating goals">
-              <ProfileChipList items={relationshipGoals} />
-            </ProfileSection>
-          ) : null}
-
-          {targetProfile.instagram?.trim() ? (
-            <ProfileInstagramLink handle={targetProfile.instagram} />
-          ) : null}
-
-          {/* Lifestyle */}
-          {lifestyleChips.length > 0 && (
-            <View style={{ marginBottom: 16 }}>
-              <Text
+          }
+          aboutYouExtra={
+            ai.tags.length > 0 ? (
+              <View
                 style={{
-                  ...Typography.h3,
-                  color: Colors.textPrimary,
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  marginTop: 8,
                   marginBottom: 4,
                 }}
               >
-                Lifestyle
-              </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-                {lifestyleChips.map((chip) => (
+                {ai.tags.slice(0, 4).map((tag) => (
                   <View
-                    key={chip}
+                    key={tag}
                     style={{
                       borderRadius: 999,
                       backgroundColor: Colors.gray100,
@@ -632,20 +475,15 @@ export default function RomanceProfileView() {
                       marginBottom: 6,
                     }}
                   >
-                    <Text
-                      style={{
-                        ...Typography.caption,
-                        color: Colors.textPrimary,
-                      }}
-                    >
-                      {chip}
-                    </Text>
+                    <Text style={{ ...Typography.caption, color: Colors.gray700 }}>{tag}</Text>
                   </View>
                 ))}
               </View>
-            </View>
-          )}
+            ) : null
+          }
+        />
 
+        <View style={{ paddingHorizontal: 20, marginTop: 8 }}>
           {isConnected ? (
             <ProfileConnectionActions
               mode="romance"
