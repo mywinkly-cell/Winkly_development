@@ -338,6 +338,11 @@ verify_jwt = false
 [functions.notify-fanout]
 verify_jwt = false
 
+# weather-pivot-cron is invoked by a pg_cron schedule (pg_net), not by users. It has no
+# Bearer JWT; it is protected by the `x-cron-secret` header (CRON_SECRET env var) instead.
+[functions.weather-pivot-cron]
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

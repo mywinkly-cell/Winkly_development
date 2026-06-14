@@ -11,6 +11,7 @@ import {
   FlatList,
   ActivityIndicator,
   Alert,
+  Pressable,
 } from "react-native";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { useRouter } from "expo-router";
@@ -22,6 +23,7 @@ import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
 import { supabase } from "@/lib/supabase";
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { RomanceBottomNav } from "@/components/layout/RomanceBottomNav";
+import { chatRoutes } from "@/lib/navigation/modeHub";
 import {
   computeCompatibilityScore,
   buildMatchTags,
@@ -39,23 +41,41 @@ type LikedProfileRow = {
   compatibility?: number | null;
   romance_photos?: (string | null)[] | null;
   core_photos?: (string | null)[] | null;
-  liked_you_back?: boolean;
+  matched_chat_id?: string | null;
 };
 
-function LikedYouBackBadge({ style }: { style?: object }) {
+function MatchedChatPill({
+  conversationId,
+  style,
+}: {
+  conversationId: string;
+  style?: object;
+}) {
+  const router = useRouter();
   return (
-    <View
+    <Pressable
+      onPress={() =>
+        router.push(
+          chatRoutes.conversation("romance", conversationId) as Parameters<typeof router.push>[0],
+        )
+      }
       style={[
         {
           alignSelf: "flex-start",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 4,
           paddingHorizontal: 10,
-          paddingVertical: 4,
+          paddingVertical: 5,
           borderRadius: 999,
           backgroundColor: Colors.romance.primary,
         },
         style,
       ]}
+      accessibilityRole="button"
+      accessibilityLabel="You matched — open chat"
     >
+      <Ionicons name="chatbubble-ellipses" size={13} color={Colors.white} />
       <Text
         style={{
           ...Typography.caption,
@@ -64,9 +84,9 @@ function LikedYouBackBadge({ style }: { style?: object }) {
           color: Colors.white,
         }}
       >
-        Likes you too
+        You matched — open chat
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -190,9 +210,9 @@ export default function RomanceLiked() {
               <Text style={{ fontSize: 38 }}>📷</Text>
             </View>
           )}
-          {item.liked_you_back ? (
-            <View style={{ position: "absolute", top: 8, left: 8 }}>
-              <LikedYouBackBadge />
+          {item.matched_chat_id ? (
+            <View style={{ position: "absolute", top: 8, left: 8, right: 8 }}>
+              <MatchedChatPill conversationId={item.matched_chat_id} />
             </View>
           ) : null}
         </View>
@@ -293,7 +313,9 @@ export default function RomanceLiked() {
             {item.first_name}, {item.age ?? "—"}
           </Text>
 
-          {item.liked_you_back ? <LikedYouBackBadge style={{ marginTop: 6 }} /> : null}
+          {item.matched_chat_id ? (
+            <MatchedChatPill conversationId={item.matched_chat_id} style={{ marginTop: 6, marginBottom: 4 }} />
+          ) : null}
 
           <Text style={{ ...Typography.body, color: Colors.gray700 }}>
             {fmtLoc(item.city)}

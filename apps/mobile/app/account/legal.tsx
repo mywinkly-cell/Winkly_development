@@ -10,12 +10,12 @@ import * as Haptics from "expo-haptics";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 
-const URL_TERMS = "https://winkly.app/terms";
-const URL_PRIVACY = "https://winkly.app/privacy";
-const URL_COOKIES = "https://winkly.app/privacy#cookies";
-const URL_COMMUNITY = "https://winkly.app/community";
-const URL_IMPRINT = "https://winkly.app/imprint";
-const MAIL_SUPPORT = "mailto:support@winkly.app";
+const URL_TERMS = "https://mywinkly.de/terms";
+const URL_PRIVACY = "https://mywinkly.de/privacy";
+const URL_COOKIES = "https://mywinkly.de/privacy#cookies";
+const URL_COMMUNITY = "https://mywinkly.de/community";
+const URL_IMPRINT = "https://mywinkly.de/imprint";
+const MAIL_SUPPORT = "mailto:customer-care@mywinkly.de";
 
 export default function Legal() {
   const router = useRouter();

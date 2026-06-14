@@ -290,7 +290,8 @@ async function upstashPipeline(
         Authorization: `Bearer ${UPSTASH_REDIS_REST_TOKEN}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(commands.map((c) => ({ ...c, args: c.args.map(String) }))),
+      // Upstash REST /pipeline expects an array of command arrays: [["SET","k","v"], ...]
+      body: JSON.stringify(commands.map((c) => [c.command, ...c.args.map(String)])),
     });
     if (!res.ok) return commands.map(() => ({ error: `redis_http_${res.status}` }));
     const data = await res.json() as Array<{ result?: unknown; error?: string }>;
@@ -434,6 +435,8 @@ const ALLOWLISTED_CONTEXT_KEYS = [
   "num_days",
   /** Super Like icebreaker: viewer + target profile signals (interests, city, first name). */
   "self_profile", "other_profile",
+  /** App UI language code (e.g. "de") — AI responds in this language; default English. */
+  "app_language",
 ];
 
 type AiGatewayRequest = {
@@ -1350,7 +1353,7 @@ async function fetchExternalVenueHints(input: {
     try {
       const q = encodeURIComponent(`${qBase} ${location}`.slice(0, 200));
       const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=5`, {
-        headers: { "User-Agent": "WinklyApp/1.0 (ai-gateway; https://winkly.app)" },
+        headers: { "User-Agent": "WinklyApp/1.0 (ai-gateway; https://mywinkly.de)" },
       });
       const arr = await res.json() as Array<{ display_name?: string; lat?: string; lon?: string }>;
       for (const r of (arr ?? []).slice(0, 5)) {
@@ -2283,6 +2286,27 @@ function conciergeUserMessage(task: string, context: Record<string, unknown>): s
   return `Task: ${task}. Context: ${JSON.stringify(context)}`;
 }
 
+/** Human-readable language names for the supported app locales (used to build the "respond in X" directive). */
+const LANGUAGE_NAMES: Record<string, string> = {
+  de: "German", fr: "French", es: "Spanish", it: "Italian", nl: "Dutch",
+  pt: "Portuguese", pl: "Polish", uk: "Ukrainian", ru: "Russian", el: "Greek",
+  ro: "Romanian", hu: "Hungarian", cs: "Czech", sv: "Swedish", da: "Danish",
+  fi: "Finnish", sk: "Slovak", bg: "Bulgarian", hr: "Croatian", sl: "Slovenian",
+  et: "Estonian", lv: "Latvian", lt: "Lithuanian", mt: "Maltese", ga: "Irish",
+};
+
+/**
+ * Build a concise "respond in the user's language" directive from the client `app_language`.
+ * Returns "" for English or empty/unknown input so the prompt stays English by default.
+ */
+function languageDirective(appLanguage: unknown): string {
+  const raw = typeof appLanguage === "string" ? appLanguage.trim().toLowerCase() : "";
+  const code = raw.slice(0, 2);
+  if (!code || code === "en") return "";
+  const name = LANGUAGE_NAMES[code] ?? code.toUpperCase();
+  return `LANGUAGE: Write ALL user-facing string values (titles, option names, why_this_fits/logic_bridge, narrative, itinerary descriptions, concierge tips, weather notes) in ${name} (app_language="${code}"). Keep JSON keys, enum values (e.g. option_id), URLs, and street addresses unchanged. If unsure of a term, use English.`;
+}
+
 function conciergeSystemPromptAugment(base: string, context: Record<string, unknown>): string {
   const hasPr = typeof context.plan_request_text === "string" && String(context.plan_request_text).trim().length > 0;
   const parts: string[] = [];
@@ -2291,6 +2315,10 @@ function conciergeSystemPromptAugment(base: string, context: Record<string, unkn
     parts.push(formatSystemContextBlock(injection));
   }
   parts.push(base);
+  const langDirective = languageDirective(context.app_language);
+  if (langDirective) {
+    parts.push(langDirective);
+  }
   if (hasPr) {
     parts.push(
       "When USER_REQUEST appears in the user message, it is the authoritative brief (topic, place, dates, budget, weather). Follow it. Do not invent a different city, date range, or budget.",
@@ -3210,9 +3238,11 @@ async function runMultiDayWinklyGemini(params: {
   dtIso: string;
   numDays: number;
   mode: string;
+  appLanguage?: string;
 }): Promise<{ plan: WinklyPlanOutput; trip_days: PlannerTripDayOut[] }> {
   const startIso = params.dtIso.slice(0, 10);
-  const SYSTEM = `You are Winkly Concierge Agent — multi-day trip planner.
+  const langDirective = languageDirective(params.appLanguage);
+  const SYSTEM = `${langDirective ? `${langDirective}\n\n` : ""}You are Winkly Concierge Agent — multi-day trip planner.
 
 Rules:
 - Respect ALL participant allergies/constraints from profiles when naming activities.
@@ -3300,6 +3330,8 @@ async function generateWinklyPlan(params: {
   planRequestText?: string;
   /** Pre-fetched [SYSTEM_CONTEXT] location block from middleware. */
   systemContextBlock?: string;
+  /** App UI language code (e.g. "de") — AI responds in this language; default English. */
+  appLanguage?: string;
 }): Promise<{
   plan: WinklyPlanOutput;
   trip_days?: PlannerTripDayOut[];
@@ -3405,6 +3437,7 @@ async function generateWinklyPlan(params: {
       weather,
       amount,
       currency,
+      appLanguage: params.appLanguage,
       dtIso: dt,
       numDays: Math.min(7, Math.max(2, Math.round(multiReq.num_days))),
       mode: input.mode,
@@ -3514,7 +3547,8 @@ async function generateWinklyPlan(params: {
     }
   }
 
-  const SYSTEM = `${params.systemContextBlock ? `${params.systemContextBlock}\n\n` : ""}You are Winkly Concierge Agent.
+  const planLangDirective = languageDirective(params.appLanguage);
+  const SYSTEM = `${planLangDirective ? `${planLangDirective}\n\n` : ""}${params.systemContextBlock ? `${params.systemContextBlock}\n\n` : ""}You are Winkly Concierge Agent.
 
 You will receive: multiple participant profiles (interests, allergies, lifestyle, location) and planning form data (idea/date_time/budget/weather).
 
@@ -3932,6 +3966,7 @@ serve(async (req) => {
         persistDraft: true,
         maps_grounding: "verify",
         tier,
+        appLanguage: typeof scrubbedSafeContext.app_language === "string" ? scrubbedSafeContext.app_language : undefined,
         systemContextBlock: wpInjection ? formatSystemContextBlock(wpInjection) : undefined,
       });
       if (isNoVenueFallbackPlan(out.plan)) {
@@ -4072,6 +4107,7 @@ serve(async (req) => {
         tier,
         displaySeedTitle: theme,
         planRequestText: pr || undefined,
+        appLanguage: typeof scrubbedSafeContext.app_language === "string" ? scrubbedSafeContext.app_language : undefined,
         systemContextBlock: ptInjection ? formatSystemContextBlock(ptInjection) : undefined,
       });
 

@@ -6,7 +6,7 @@
 import { expandCountryForDisplay } from "@/lib/location/countryDisplay";
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
-const USER_AGENT = "WinklyApp/1.0 (contact@winkly.app)";
+const USER_AGENT = "WinklyApp/1.0 (info@mywinkly.de)";
 
 export type CityCountry = { city: string; country: string };
 

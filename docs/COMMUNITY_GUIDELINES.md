@@ -61,7 +61,7 @@ We may remove content, restrict features, suspend, or permanently ban accounts t
 
 ## 8. Contact
 
-Questions or reports: **General settings → Support & legal → Contact Support** in the app, or email [support@winkly.app](mailto:support@winkly.app).
+Questions or reports: **General settings → Support & legal → Contact Support** in the app, or email [customer-care@mywinkly.de](mailto:customer-care@mywinkly.de).
 
 ---
 

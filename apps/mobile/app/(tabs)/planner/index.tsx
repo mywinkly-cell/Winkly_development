@@ -45,6 +45,7 @@ import {
 import { ProactiveSuggestionCard } from "@/components/planner/ProactiveSuggestionCard";
 import { ProactiveSuggestionDetailModal } from "@/components/planner/ProactiveSuggestionDetailModal";
 import { WeeklyWeekendCard } from "@/components/planner/WeeklyWeekendCard";
+import { WeatherPivotBanner } from "@/components/planner/WeatherPivotBanner";
 import { EventParticipantCard } from "@/components/ui/EventParticipantCard";
 import { PlannerHeader } from "@/components/layout/PlannerHeader";
 import { EventReminderModal } from "@/components/planner/EventReminderModal";
@@ -842,6 +843,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + filterModalBottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
+        {activeTab !== "archive" && <WeatherPivotBanner />}
         {activeTab !== "archive" && showWeeklyCard && weeklySuggestion && (
           <WeeklyWeekendCard
             suggestion={weeklySuggestion}

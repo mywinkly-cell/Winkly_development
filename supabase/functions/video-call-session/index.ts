@@ -120,7 +120,7 @@ serve(async (req) => {
   return new Response(
     JSON.stringify({
       provider: "placeholder",
-      room_url: `https://winkly.app/video-placeholder?conversation=${encodeURIComponent(convId)}`,
+      room_url: `https://mywinkly.de/video-placeholder?conversation=${encodeURIComponent(convId)}`,
       message: "Set DAILY_API_KEY in Supabase secrets for in-app Daily.co rooms.",
     }),
     { status: 200, headers: { ...cors, "Content-Type": "application/json" } }

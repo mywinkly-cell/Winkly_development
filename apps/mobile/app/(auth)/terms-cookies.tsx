@@ -20,9 +20,9 @@ import { useTranslation } from "react-i18next";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { getTermsAndCookiesAccepted, setTermsAndCookiesAccepted } from "@/lib/legalFlags";
 
-const TERMS_URL = "https://winkly.app/terms";
-const PRIVACY_URL = "https://winkly.app/privacy";
-const COOKIES_URL = "https://winkly.app/privacy#cookies";
+const TERMS_URL = "https://mywinkly.de/terms";
+const PRIVACY_URL = "https://mywinkly.de/privacy";
+const COOKIES_URL = "https://mywinkly.de/privacy#cookies";
 
 export default function TermsCookiesScreen() {
   const { t } = useTranslation();

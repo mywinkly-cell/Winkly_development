@@ -408,6 +408,43 @@ export function ConciergeActivityDetailsStep({
     }
   }, []);
 
+  /**
+   * Proactive rain pivot: when the fetched weather for the chosen date/location looks rainy,
+   * offer "Postpone a day" / "Prefer indoor" so outdoor plans aren't dead on arrival.
+   * (Ported from the legacy ConciergeRequestForm advisory, which was unreachable for Planner.)
+   */
+  const rainAdvisory = useMemo(() => {
+    if (!weatherSnapshot || !cityPart) return false;
+    if (singleDay) {
+      return (
+        !!weatherSnapshot.date &&
+        ((weatherSnapshot.precipitation ?? 0) > (weatherSnapshot.forecast_hour ? 0.5 : 2) ||
+          (weatherSnapshot.precipitation_day ?? 0) > 2)
+      );
+    }
+    return (weatherSnapshot.rainy_days ?? 0) > 0;
+  }, [weatherSnapshot, cityPart, singleDay]);
+
+  const handlePostponeDay = useCallback(() => {
+    Haptics.selectionAsync();
+    setDate((prev) => {
+      const next = new Date(prev);
+      next.setDate(next.getDate() + 1);
+      return next;
+    });
+    setDateEnd((prev) => {
+      const next = new Date(prev);
+      next.setDate(next.getDate() + 1);
+      return next;
+    });
+    setDatePreset("custom");
+  }, []);
+
+  const handlePreferIndoor = useCallback(() => {
+    Haptics.selectionAsync();
+    setIndoorOutdoor((prev) => (prev === "indoor" ? "any" : "indoor"));
+  }, []);
+
   const handleNext = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const locLine = normalizeLocationDisplayString(location, appLanguage);
@@ -750,6 +787,34 @@ export function ConciergeActivityDetailsStep({
               )}
             </View>
           </View>
+          {rainAdvisory ? (
+            <View style={styles.advisoryBox}>
+              <View style={styles.advisoryHeaderRow}>
+                <Ionicons name="rainy-outline" size={20} color={Colors.primaryViolet} />
+                <Text style={styles.advisoryText}>
+                  {singleDay
+                    ? `Rain is forecast for this date in ${cityPart}. Consider an indoor plan or shift a day.`
+                    : `${weatherSnapshot?.rainy_days ?? 0} of ${weatherSnapshot?.total_days ?? 0} days may have rain in ${cityPart}. Consider indoor or flexible plans.`}
+                </Text>
+              </View>
+              <View style={styles.advisoryActions}>
+                {singleDay ? (
+                  <TouchableOpacity onPress={handlePostponeDay} style={styles.advisoryBtn} activeOpacity={0.8}>
+                    <Text style={styles.advisoryBtnText}>Postpone a day</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  onPress={handlePreferIndoor}
+                  style={[styles.advisoryBtn, indoorOutdoor === "indoor" && styles.advisoryBtnActive]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.advisoryBtnText, indoorOutdoor === "indoor" && styles.advisoryBtnTextActive]}>
+                    {indoorOutdoor === "indoor" ? "Indoor preferred ✓" : "Prefer indoor"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
         </View>
       ) : null}
 
@@ -1327,6 +1392,28 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   weatherText: { ...Typography.caption, color: Colors.gray600, flex: 1 },
+  advisoryBox: {
+    marginTop: 10,
+    backgroundColor: Colors.romance.secondary,
+    borderRadius: 12,
+    padding: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.primaryViolet,
+  },
+  advisoryHeaderRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 10 },
+  advisoryText: { ...Typography.caption, color: Colors.textPrimary, flex: 1 },
+  advisoryActions: { flexDirection: "row", gap: 10 },
+  advisoryBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+  },
+  advisoryBtnActive: { backgroundColor: Colors.primaryViolet, borderColor: Colors.primaryViolet },
+  advisoryBtnText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
+  advisoryBtnTextActive: { color: Colors.white },
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
   chipsRowTight: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {

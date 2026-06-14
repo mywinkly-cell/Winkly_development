@@ -469,16 +469,9 @@ export function ConciergeRequestForm({
           ? "Business"
           : "Events";
   const chips = ACTIVITY_CHIPS[mode] ?? ACTIVITY_CHIPS.events;
-  const { city: cityForAdvisory } = parseLocation(location, appLanguage);
-  const showAdvisory =
-    showDetails && cityForAdvisory && weatherSnapshot && source_screen === "planner";
-  const rainAdvisory =
-    showAdvisory &&
-    ((dateRangePreset === "single" &&
-      ((weatherSnapshot.precipitation ?? 0) > (weatherSnapshot.forecast_hour ? 0.5 : 2) ||
-        (weatherSnapshot.precipitation_day ?? 0) > 2) &&
-      weatherSnapshot.date) ||
-      (dateRangePreset !== "single" && (weatherSnapshot.rainy_days ?? 0) > 0));
+  // Note: the proactive rain advisory now lives in ConciergeActivityDetailsStep (the Planner
+  // flow step). This form only renders for chat (non-planner) entry points, where the advisory
+  // was unreachable, so it was removed here to avoid dead code.
 
   const footerReserve = Layout.touchTargetMin + 12 + 12 + Math.max(12, insets.bottom + 10);
 
@@ -658,40 +651,6 @@ export function ConciergeRequestForm({
             multiline
             maxLength={300}
           />
-          {rainAdvisory ? (
-            <View style={styles.advisoryBox}>
-              <Ionicons name="rainy-outline" size={20} color={Colors.primaryViolet} />
-              <Text style={styles.advisoryText}>
-                {dateRangePreset === "single"
-                  ? `Note: ${weatherSnapshot.date} is forecast for rain in ${cityForAdvisory}. Consider indoor options or another day.`
-                  : `Note: ${weatherSnapshot.rainy_days ?? 0} of ${weatherSnapshot.total_days ?? 0} days may have rain in ${cityForAdvisory}. Consider indoor options or flexible plans.`}
-              </Text>
-              <View style={styles.advisoryActions}>
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    const next = new Date(date);
-                    next.setDate(next.getDate() + 1);
-                    setDate(next);
-                  }}
-                  style={styles.advisoryBtn}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.advisoryBtnText}>Postpone a day</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setPrompt((p) => (p ? `${p}, indoor` : "Indoor options"));
-                  }}
-                  style={styles.advisoryBtn}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.advisoryBtnText}>Change activity</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : null}
           <Text style={styles.label}>Location</Text>
           <View style={styles.locationWrap}>
             <TextInput
@@ -1170,32 +1129,6 @@ const styles = StyleSheet.create({
   whenFreeBtnActive: { backgroundColor: Colors.primaryViolet },
   whenFreeBtnText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "500" },
   whenFreeBtnTextActive: { color: Colors.white },
-  advisoryBox: {
-    flexDirection: "column",
-    backgroundColor: Colors.romance.secondary,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.primaryViolet,
-  },
-  advisoryText: {
-    ...Typography.caption,
-    color: Colors.textPrimary,
-    marginBottom: 10,
-  },
-  advisoryActions: { flexDirection: "row", gap: 10 },
-  advisoryBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: Colors.white,
-  },
-  advisoryBtnText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
-    fontWeight: "600",
-  },
   hint: {
     ...Typography.caption,
     color: Colors.gray600,

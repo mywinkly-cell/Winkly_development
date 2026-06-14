@@ -17,6 +17,7 @@ const CHECKS = [
   { path: "/privacy#cookies", file: "privacy/index.html", mustInclude: ["Cookies", "PostHog"] },
   { path: "/community", file: "community/index.html", mustInclude: ["Community Guidelines", "respectful"] },
   { path: "/imprint", file: "imprint/index.html", mustInclude: ["Impressum", "Winkly Technologies"] },
+  { path: "/auth", file: "auth/index.html", mustInclude: ["winkly://callback", "winkly_state"] },
 ];
 
 function main() {

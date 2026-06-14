@@ -5,6 +5,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { getConciergeDevLimitMockResponse } from "@/lib/ai/conciergeDevLimitMock";
+import { getAppLanguageCode } from "@/lib/i18n/appLocale";
 import type { Mode } from "@/types";
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -81,6 +82,7 @@ export async function callWinklyPlan(params: {
         weather_snapshot: context.weather_snapshot,
         partner_user_id: context.partner_user_id,
         participant_user_ids: context.participant_user_ids,
+        app_language: context.app_language ?? getAppLanguageCode(),
       },
     }),
   });
@@ -100,6 +102,52 @@ export type PendingPlanConfirmResponse = {
   planner_item_id: string | null;
   counts?: { confirmed?: number; participants?: number };
 };
+
+/** A weather-pivot proposal (pending_plans.status = 'pivot_pending') created by weather-pivot-cron. */
+export type WeatherPivotPlan = {
+  id: string;
+  pivot_of: string | null;
+  conversation_id: string | null;
+  created_at: string;
+  plan: {
+    topic?: string;
+    date_time?: string;
+    location_details?: { name?: string; address?: string; google_maps_link?: string };
+    weather_context?: string;
+    weather_alert?: boolean;
+  };
+};
+
+/**
+ * Pending weather-pivot proposals for the current user (creator or participant).
+ * RLS on pending_plans restricts rows to the user's own plans.
+ */
+export async function getPendingWeatherPivots(): Promise<WeatherPivotPlan[]> {
+  const { data, error } = await supabase
+    .from("pending_plans")
+    .select("id, pivot_of, conversation_id, created_at, plan_json")
+    .eq("status", "pivot_pending")
+    .order("created_at", { ascending: false })
+    .limit(10);
+  if (error || !Array.isArray(data)) return [];
+  return data.map((row) => ({
+    id: String((row as Record<string, unknown>).id),
+    pivot_of: ((row as Record<string, unknown>).pivot_of as string | null) ?? null,
+    conversation_id: ((row as Record<string, unknown>).conversation_id as string | null) ?? null,
+    created_at: String((row as Record<string, unknown>).created_at ?? ""),
+    plan: ((row as Record<string, unknown>).plan_json as WeatherPivotPlan["plan"]) ?? {},
+  }));
+}
+
+/** Dismiss a weather-pivot proposal (creator only; sets status = 'cancelled'). */
+export async function dismissWeatherPivot(pendingPlanId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from("pending_plans")
+    .update({ status: "cancelled", updated_at: new Date().toISOString() })
+    .eq("id", pendingPlanId)
+    .eq("status", "pivot_pending");
+  return !error;
+}
 
 export async function confirmPendingPlan(pendingPlanId: string): Promise<PendingPlanConfirmResponse> {
   if (!SUPABASE_URL) throw new Error("Missing Supabase URL");
@@ -226,6 +274,12 @@ export type ConciergeContext = {
   self_profile?: { interests?: string[]; city?: string };
   /** Super Like icebreaker: target profile signals (name, interests, city). */
   other_profile?: { name?: string; interests?: string[]; city?: string };
+  /**
+   * App UI language code (e.g. "de", "en") so AI-generated copy (option names,
+   * "why this fits", itinerary, tips) is returned in the user's language.
+   * Defaults to the current i18n language at serialization time.
+   */
+  app_language?: string;
 }
 
 /** Context object sent to ai-gateway (must stay in sync with allowlist server-side). */
@@ -277,6 +331,7 @@ function serializeConciergeContextForGateway(context: ConciergeContext) {
     num_days: context.num_days,
     self_profile: context.self_profile,
     other_profile: context.other_profile,
+    app_language: context.app_language ?? getAppLanguageCode(),
   };
 }
 

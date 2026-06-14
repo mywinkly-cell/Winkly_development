@@ -6,7 +6,7 @@
 //   - winkly://**
 //
 // If the email link opens in a browser and shows an empty page: host auth-redirect/index.html
-// at an HTTPS URL (e.g. https://winkly.app/auth/) and use that as emailRedirectTo.
+// at an HTTPS URL (e.g. https://mywinkly.de/auth/) and use that as emailRedirectTo.
 
 import * as QueryParams from "expo-auth-session/build/QueryParams";
 import { validateAuthRedirectStateFromUrl } from "@/lib/authRedirectUrl";
