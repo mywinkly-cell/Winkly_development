@@ -14,6 +14,8 @@ export async function getChatStrategicHostTopics(params: {
   country?: string;
   selectedDateTimeIso?: string;
   conversationId?: string;
+  /** Group "Vibe Check" prose (mood/energy/notes) injected for group planning. */
+  groupVibe?: string;
 }): Promise<StrategicHostTopic[]> {
   const res = await callConcierge({
     task: "chat_topics",
@@ -24,6 +26,7 @@ export async function getChatStrategicHostTopics(params: {
       participant_user_ids: params.participantUserIds,
       conversation_id: params.conversationId,
       selected_date_time: params.selectedDateTimeIso,
+      group_vibe: params.groupVibe,
       source_screen: "chats",
       origin_context: `Chat_${params.mode.charAt(0).toUpperCase() + params.mode.slice(1)}`,
     },
@@ -72,6 +75,8 @@ export async function getPlannerThemePlans(params: {
   country?: string;
   dateTimeIso?: string;
   weatherForecastText?: string;
+  /** Group "Vibe Check" prose (mood/energy/notes) injected for group planning. */
+  groupVibe?: string;
   /**
    * Full-fidelity planning context (Planner form + anonymised persona).
    * When provided, this is forwarded to ai-gateway so `plan_request_text` and other allowlisted fields reach the model.
@@ -100,6 +105,7 @@ export async function getPlannerThemePlans(params: {
       country: params.country ?? params.fullContext?.country,
       date_from: params.dateTimeIso ?? params.fullContext?.date_from,
       weather_forecast: params.weatherForecastText ?? params.fullContext?.weather_forecast,
+      group_vibe: params.groupVibe ?? params.fullContext?.group_vibe,
       source_screen: "planner",
       origin_context: `Planner_${params.mode.charAt(0).toUpperCase() + params.mode.slice(1)}`,
     },

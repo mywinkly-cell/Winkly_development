@@ -425,6 +425,8 @@ const ALLOWLISTED_CONTEXT_KEYS = [
   "participant_user_ids",
   /** Strategic Host (chat topics): selected meeting date-time (falls back to date_from). */
   "selected_date_time",
+  /** Group "Vibe Check": aggregated mood/energy/notes prose for group AI planning. */
+  "group_vibe",
   /** Planner Concierge (theme cards): active mode + theme inputs. */
   "current_tab_mode",
   "theme",
@@ -466,6 +468,8 @@ type WinklyPlanOptionOut = {
   character_label: string;
   title: string;
   why_this_fits: string;
+  /** Group planning (≥3 participants): per-person "why this works for everyone" bullets. */
+  group_fit_notes?: string[];
   itinerary: Array<{ time: string; description: string }>;
   venue: {
     name: string;
@@ -502,6 +506,7 @@ type PlannerThemePlansOutput = {
     character_label: string;
     title: string;
     why_this_fits: string;
+    group_fit_notes?: string[];
     itinerary: Array<{ time: string; description: string }>;
     venue: {
       name: string;
@@ -2978,11 +2983,19 @@ function parseWinklyPlanOutput(
             .slice(0, 10)
         : [];
 
+    const group_fit_notes = Array.isArray(x.group_fit_notes)
+      ? (x.group_fit_notes as unknown[])
+          .filter((n): n is string => typeof n === "string" && n.trim().length > 0)
+          .map((n) => n.trim().slice(0, 120))
+          .slice(0, 4)
+      : [];
+
     return {
       option_id,
       character_label: character_label.slice(0, 40),
       title: title.slice(0, 140),
       why_this_fits: why_this_fits.slice(0, 340),
+      ...(group_fit_notes.length ? { group_fit_notes } : {}),
       itinerary,
       venue: {
         name: vname.slice(0, 120),
@@ -3332,6 +3345,8 @@ async function generateWinklyPlan(params: {
   systemContextBlock?: string;
   /** App UI language code (e.g. "de") — AI responds in this language; default English. */
   appLanguage?: string;
+  /** Group "Vibe Check" prose (mood/energy/notes) injected into the brief for group plans. */
+  groupVibe?: string | null;
 }): Promise<{
   plan: WinklyPlanOutput;
   trip_days?: PlannerTripDayOut[];
@@ -3395,6 +3410,31 @@ async function generateWinklyPlan(params: {
       hobbies: Array.isArray(hobbies) ? hobbies : typeof hobbies === "string" ? [hobbies] : [],
     };
   });
+
+  // Multi-person scheduling conflicts (TB-2.3): for true groups (>2 participants),
+  // fetch each participant's busy blocks so the model can avoid double-booking.
+  // Capped at the group size limit (8) so this stays cheap.
+  let participantsPlannerItems: Array<{ user_id: string; busy: unknown }> | null = null;
+  if (ensureRequester.length > 2) {
+    const capped = ensureRequester.slice(0, 8);
+    try {
+      const results = await Promise.all(
+        capped.map(async (uid) => {
+          try {
+            const raw = await getPlannerItemsForUser(supabase, uid, undefined);
+            const busy = JSON.parse(raw);
+            return { user_id: uid, busy: Array.isArray(busy) ? busy : [] };
+          } catch {
+            return { user_id: uid, busy: [] as unknown[] };
+          }
+        }),
+      );
+      const withBusy = results.filter((r) => Array.isArray(r.busy) && (r.busy as unknown[]).length > 0);
+      participantsPlannerItems = withBusy.length > 0 ? withBusy : null;
+    } catch {
+      participantsPlannerItems = null;
+    }
+  }
 
   const city = (input.planning_form.city ?? undefined) ||
     (typeof profiles[0]?.location === "string" ? profiles[0].location : undefined) ||
@@ -3559,6 +3599,10 @@ Rules:
 - Option A — the bolder, more memorable choice. character_label: pick from ["Bolder pick","Surprising choice","Hidden gem","Local favourite"].
 - Option B — the safer, reliable choice. character_label: pick from ["Classic choice","Safe & solid","Reliable pick","Crowd pleaser"].
 - Use your world knowledge to suggest real, specific venues in the city and country provided (named restaurants, cafés, cultural venues, etc.). Do not invent fake URLs.
+- GROUP SYNTHESIS (when group_size > 2): (1) Apply hard constraints as a UNION — any one participant's allergy/dietary/accessibility need excludes that venue type for everyone (lowest common denominator). (2) Build Option A around the group's shared interest intersection ("the core thing everyone likes"); build Option B for variety/rotation so it isn't always the same person's pick. (3) Use GROUP_VIBE_TODAY only as a tiebreaker between otherwise-equal options, never as a hard filter. (4) Respect group_size when picking venues — avoid spots better suited to 2 people, and for groups of 5+ add a note to ask about a group table / reservation / private area.
+- If PARTICIPANTS_PLANNER_ITEMS is present, propose a start time that does not overlap any participant's busy blocks; if a perfect slot doesn't exist, pick the time with the fewest conflicts and say so explicitly in why_this_fits or weather_note (e.g. "this overlaps with one member's gym class until 18:00, so I've set the start at 18:30").
+- If GROUP_VIBE_TODAY is present, weight the group's stated mood/energy and honour any notes (e.g. "nothing too far from the S-Bahn") when choosing venues and pacing.
+- When group_size > 2, populate group_fit_notes with 2-4 short bullets explaining why the plan works for the group — reference concrete constraints (dietary needs, the rain forecast, a member's timing, group_size). This is the "why this works for everyone" a thoughtful organiser would say. Omit group_fit_notes (or leave empty) for 1:1 plans.
 - When VERIFIED_VENUE is non-null, BOTH options MUST use that exact venue name, address, and google_maps_link for their venue objects (still vary titles, itinerary tone, and why_this_fits).
 - When VERIFIED_VENUE is null, propose two distinct real venues. For google_maps_link use a Maps search URL: https://www.google.com/maps/search/?api=1&query=ENCODED_VENUE_NAME_AND_CITY (encode spaces as +).
 - Put human-readable weather in weather_note — never paste raw JSON.
@@ -3573,6 +3617,7 @@ Required JSON schema:
       "character_label": string,
       "title": string,
       "why_this_fits": string,
+      "group_fit_notes"?: string[],
       "itinerary": [{ "time": string, "description": string }],
       "venue": {
         "name": string,
@@ -3588,6 +3633,7 @@ Required JSON schema:
   ]
 }`;
 
+  const groupVibeText = (params.groupVibe ?? "").trim();
   const payload = {
     participant_profiles: profiles,
     planning_form: {
@@ -3598,6 +3644,9 @@ Required JSON schema:
       city,
       country,
     },
+    ...(ensureRequester.length > 2 ? { group_size: ensureRequester.length } : {}),
+    ...(groupVibeText ? { GROUP_VIBE_TODAY: groupVibeText } : {}),
+    ...(participantsPlannerItems ? { PARTICIPANTS_PLANNER_ITEMS: participantsPlannerItems } : {}),
     ...(verifiedVenue ? { VERIFIED_VENUE: verifiedVenue } : {}),
     ...(verifiedBookingUrl ? { BOOKING_URL: verifiedBookingUrl } : {}),
   };
@@ -3968,6 +4017,7 @@ serve(async (req) => {
         tier,
         appLanguage: typeof scrubbedSafeContext.app_language === "string" ? scrubbedSafeContext.app_language : undefined,
         systemContextBlock: wpInjection ? formatSystemContextBlock(wpInjection) : undefined,
+        groupVibe: typeof scrubbedSafeContext.group_vibe === "string" ? scrubbedSafeContext.group_vibe : undefined,
       });
       if (isNoVenueFallbackPlan(out.plan)) {
         return new Response(
@@ -4060,10 +4110,12 @@ serve(async (req) => {
           ? "Prefer indoor venues or weather-proof options."
           : "Prefer outdoor-friendly options when feasible.";
 
-      // Semantic caching: same theme/city/mode/day/trip length within 24h
+      // Semantic caching: same theme/city/mode/day/trip length within 24h.
+      // Group vibe is part of the key so a fresh Vibe Check produces fresh plans.
+      const groupVibeForKey = typeof scrubbedSafeContext.group_vibe === "string" ? scrubbedSafeContext.group_vibe : "";
       const semKey =
         // v4: higher plan token budget; skip caching fallback plans
-        `sc:planner_theme_plans:v4:${mode}:${normalizeTag(city)}:${normalizeTag(theme)}:${dateTime.slice(0, 10)}:${tripNumDays}:${hashKeyMaterial(participantIds.slice().sort().join(","))}`;
+        `sc:planner_theme_plans:v4:${mode}:${normalizeTag(city)}:${normalizeTag(theme)}:${dateTime.slice(0, 10)}:${tripNumDays}:${hashKeyMaterial(participantIds.slice().sort().join(",") + "|" + groupVibeForKey)}`;
       const cached = await redisGetJson<PlannerThemePlansOutput>(semKey);
       const cachedOptions = cached?.plan_options ?? [];
       if (
@@ -4109,6 +4161,7 @@ serve(async (req) => {
         planRequestText: pr || undefined,
         appLanguage: typeof scrubbedSafeContext.app_language === "string" ? scrubbedSafeContext.app_language : undefined,
         systemContextBlock: ptInjection ? formatSystemContextBlock(ptInjection) : undefined,
+        groupVibe: typeof scrubbedSafeContext.group_vibe === "string" ? scrubbedSafeContext.group_vibe : undefined,
       });
 
       if (isNoVenueFallbackPlan(out.plan)) {

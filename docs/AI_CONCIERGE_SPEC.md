@@ -308,7 +308,7 @@ If the user says e.g. **“I don’t like Option 2, give me something more chill
 - **Business bridge:** When `business_profiles` or `business_offers` exist, gateway will query them first and use as Anchor for Option A.
 - **Planner 2-option generator:** Planner / "Plan together" (`planner_theme_plans`) and `winkly_plan` are produced by `generateWinklyPlan` (single-day, Maps-verified A/B) and `runMultiDayWinklyGemini` (trips), not by the `CONCIERGE_SYSTEM_PROMPT`. Premium may use Anthropic for the JSON; Super uses the Gemini-first chain.
 - **Localization:** Client sends `app_language` (allowlisted); the system prompts instruct the model to return all user-facing strings in that language (default English). JSON keys, enum values, URLs and addresses stay unchanged.
-- **Weather pivot (wired 2026-06):** `weather-pivot-cron` runs hourly via pg_cron (`20260625120000_weather_pivot_cron_schedule.sql`), re-checks weather ~24h ahead of confirmed `pending_plans`, and on severe forecasts inserts a `pivot_pending` row with an indoor alternative. The mobile Planner surfaces this via `WeatherPivotBanner` (Use indoor plan / Keep original).
+- **Weather pivot (wired 2026-06):** `weather-pivot-cron` runs hourly via pg_cron (`20260625120000_weather_pivot_cron_schedule.sql`), re-checks weather ~24h ahead of confirmed `pending_plans`, and on severe forecasts inserts a `pivot_pending` row (B) with `pivot_of = <original A id>` and an indoor alternative. The mobile Planner surfaces this via `WeatherPivotBanner` (Use indoor plan / Keep original). **Confirming a pivot UPDATES the original plan in place:** `pending-plan-confirm` rewrites A's existing `planner_items` **and** `confirmed_events` row (same ids, same `event_uid` — so calendar sync stays stable) with the indoor title/venue, stashes the previous plan under `planner_items.meta.weather_pivot.original_plan_json`, and points B at A's `planner_item_id` (B → `pivot_confirmed`). It does **not** create a second planner entry/calendar event. "Keep original" cancels B and leaves A untouched.
 - **Follow-up / DNA refinement:** Post-event feedback (“How was the date?”) is captured via `reportConciergeOutcome` → `ai_requests.outcome*`, but the read-side that folds it back into `user_concierge_signals` is **not yet implemented** (P2).
 
 ---
@@ -322,3 +322,85 @@ If the user says e.g. **“I don’t like Option 2, give me something more chill
 | **Profile fields in DB** | Partial | Ensure allergies, food, lifestyle, values, relationship_goals, meetup_goals are in `profiles_mode.meta`. Optional: `transport` or `preferred_transport` (e.g. Driver, Uber, Public transit) for Arrival logic (parking vs drop-off). |
 | **Post-event feedback / DNA refinement** | Future | Store "How was the date?" answers and use to adjust weights (e.g. noise tolerance); not yet in gateway. |
 | **Vector search (interests / business_tags)** | Future | Optional: use vector DB for interest and business_tag matching; not required for MVP. |
+
+---
+
+## 11. Group Planning extension (Friends/Business groups)
+
+Formalises **TB-2.1–2.6**. Group planning reuses the existing `planner_theme_plans` / `winkly_plan` pipeline — the backend already fans out to every participant's `profiles_mode`. There is **no new AI task**; group behaviour is driven by a few extra context fields and prompt rules. **Monetisation rides the 1:1 gate**: Super+ → 2-option group flow, Premium → 3-option Experience Menu for groups.
+
+### 11.1 New / extended context fields (client → gateway)
+
+| Field | Type | Source | Notes |
+|-------|------|--------|-------|
+| `participant_user_ids` | `string[]` | `conversation_members` of the group conversation | Already supported. |
+| `conversation_id` | `uuid` | the group conversation | Already supported — used for membership scoping. |
+| `group_size` | `number` | `participant_user_ids.length` | **New.** Injected only when > 2. Lets the model reason about venue capacity ("table for 5", "private room"). |
+| `GROUP_VIBE_TODAY` | prose (`{ mood_counts, notes[] }` formatted via `formatVibeSnapshotForPrompt`) | new `group_plan_vibes` table (TB-2.2) | **New.** Soft preference signal (tier-3 "delight filter"), tiebreaker only. |
+| `PARTICIPANTS_PLANNER_ITEMS` | `{ user_id, busy: PlannerItem[] }[]` | `getPlannerItemsForUser` × N (TB-2.3) | **New** — generalises the 1:1 `PARTNER_PLANNER_ITEMS`. Capped at the group size limit (8). |
+
+### 11.2 Reasoning chain — STEP 0: Group synthesis
+
+Runs before the existing Analysis → Discovery → Refinement state machine, when `group_size > 2`:
+
+1. **Constraint union (hard filters):** any one participant's allergy/dietary/accessibility need excludes that venue type for everyone (the same "lowest common denominator" rule as 1:1, applied over N people).
+2. **Interest split:** Option A targets the **interest intersection** (the shared "core" thing); Option B leans toward **variety/rotation** so the plan isn't always the same person's pick.
+3. **Vibe tiebreaker:** `GROUP_VIBE_TODAY` only breaks ties between otherwise-equal options — never a hard filter.
+4. **Capacity:** respect `group_size` when picking venues (avoid 2-person spots); for groups of 5+, prompt the user to ask about a group table / reservation / private area.
+
+### 11.3 Output addition — `group_fit_notes`
+
+Each option in the `planner_theme_plans` / `winkly_plan` JSON gains an optional array:
+
+```json
+{
+  "option_id": "A",
+  "title": "...",
+  "why_this_fits": "...",
+  "group_fit_notes": [
+    "Vegan-friendly for Maria",
+    "Indoor seating — good given the rain forecast",
+    "Starts at 19:00 so Alex can come straight from his 18:00 training"
+  ]
+}
+```
+
+This is the **"why this works for everyone"** — the headline qualitative differentiator (§13.1). Parsed defensively in `parseWinklyPlanOutput` (max 4 bullets, ≤120 chars each), persisted into `pending_plans.plan_json.options`, and rendered by `GroupPlanConsensusCard`. Omitted/empty for 1:1 plans.
+
+### 11.4 Consensus is a product layer, not an AI layer
+
+The AI's job ends at *"here are 2 good options for this group, and here's why."* Consensus (👍/🤔/👎 + host confirm) is **UI + a small DB table** (`pending_plan_reactions`, `confirm_pending_plan_host` RPC), not a new AI task. The AI proposes; it does not impose (see §13).
+
+---
+
+## 12. Data model summary — group objects
+
+| Object | Change | Phase | Status |
+|--------|--------|-------|--------|
+| `groups.max_members` | new column, default 8 (CHECK 2–100) | 1 | Done (`20260626120000`) |
+| `group_members` insert | RLS/trigger cap check (`enforce_group_member_cap`) | 1 | Done |
+| `group_plan_vibes` | new table (mood/energy/note, 72h expiry, UPSERT) | 2 | Done |
+| `pending_plans.participant_ids` | confirm path works for N>2 | 2 | Verified — `pending-plan-confirm` loops all `partIds` |
+| `pending_plan_reactions` | new table for 👍/🤔/👎 per option per user (Realtime) | 2 | Done (`20260626130000`) |
+| `confirm_pending_plan_host` | RPC: host records confirmations for all participants | 2 | Done |
+| `group_invitations.invite_code` (nullable) | link-based join for non-members | 3 | Done (`ensure_group_invite_code` / `join_group_by_code`) |
+| `planner_items` / `planner_participants` | no schema change — already N-capable | 2 | Verified |
+
+---
+
+## 13. Roadmap — making group planning outstanding (brainstorm)
+
+These are **not yet implemented**; captured here so the per-plan reasoning compounds into a recurring, defensible product. Most are light extensions of existing systems.
+
+- **13.1 `group_fit_notes` (shipped, §11.3)** — "this works because Maria's vegan, Alex needs to be home by 9, and it's covered for rain." Reframes the AI from search engine to *the friend who thinks about everyone*.
+- **13.2 Living "Group DNA"** — private per-group card: top shared interests, common vibe-check moods over time, go-to venue types, "whose pick is it this time?" rotation. Feeds better priors back into compatibility scoring.
+- **13.3 Weather-aware group auto-pivot** — extend `weather-pivot-cron` to `pending_plans` with `participant_ids.length > 2`; 24h before a confirmed group plan, post an indoor alternative + switch/keep vote (reuses TB-2.6 consensus).
+- **13.4 "Bring a friend" gap-filling** — when the interest union is missing something a plan needs (everyone wants padel, nobody plays), suggest a Friends match who fits. Builds on `getBringAFriendSuggestions` (TB-3.2).
+- **13.5 Recurring rituals** — after 2–3 successful similar plans, offer a recurring weekly suggestion (extends `proactiveSuggestion.ts` / `WeeklyWeekendCard` scoped to a group conversation).
+- **13.6 Business-mode bridge** — businesses mark "group bookings welcome (up to N)" with a perk; when `group_size >= 4`, weight those venues up and surface the perk inside `group_fit_notes`. Demo-able B2B monetisation.
+- **13.7 Cost transparency** — soft `estimated_cost_per_person = estimated_cost / group_size` + "split evenly" note; no Stripe needed, feeds the "budget" vibe tag.
+- **13.8 Post-event group feedback** — single "How was it?" (😍/🙂/😕) to the group, aggregated into `user_concierge_signals` per responder; group response rates beat 1:1.
+- **13.9 Privacy-respecting "vibe, not location"** — city + 1-tap vibe gets ~90% of planning value with no live GPS. Marketing angle: "we don't need to know where you are — just what you're in the mood for."
+- **13.10 Cross-mode group composition** — pull a Business connection into a "coffee + networking" plan, or surface a Winkly **Event** instead of a venue. Unique to Winkly's single social graph.
+- **13.11 Size cap as a feature** — frame the 8-person cap positively: small enough that the AI can find something everyone enjoys.
+- **13.12 "Plan of the month" / light gamification** — private per-group milestones ("5 plans this year"), no cross-group leaderboards.

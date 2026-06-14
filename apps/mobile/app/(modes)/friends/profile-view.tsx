@@ -309,6 +309,18 @@ export default function FriendsProfileView() {
                   onChat={() => void handleChat()}
                   onRemove={handleRemoveConnection}
                 />
+                <TouchableOpacity
+                  onPress={() =>
+                    router.push({
+                      pathname: "/groups/create-group",
+                      params: { mode: "friends", preselect: targetUserId },
+                    })
+                  }
+                  style={[styles.linkRow, { borderColor: Colors.border, backgroundColor: Colors.card, marginTop: 10 }]}
+                  activeOpacity={0.9}
+                >
+                  <Text style={{ color: Colors.text, fontWeight: "700" }}>Add to a group</Text>
+                </TouchableOpacity>
               </View>
             ) : (
               <ProfileSwipeActions

@@ -42,7 +42,7 @@ As the user fills the form, **active feedback** appears before Submit:
 
 - **Weather warning:** If rain is forecast for the chosen date/location, a "Concierge note" box appears with actions **Postpone a day** | **Prefer indoor**. As of 2026-06 this lives in the **Planner step `ConciergeActivityDetailsStep`** (it reads the `weatherSnapshot` already fetched there): "Postpone a day" shifts the date +1; "Prefer indoor" sets `indoorOutdoor = "indoor"` so the plan request asks for indoor venues. (The legacy copy in `ConciergeRequestForm` was unreachable for Planner opens — that form only renders for chat, non-`usePlanningFlow` entry — so it was removed.)
 - **Constraint conflict** (e.g. partner allergy) and **time logic** (traffic) are backend-driven; response can include `concierge_note` for display. Target latency for client-side weather hint: **&lt;1.5 s** after date/location set.
-- **Proactive pivot (post-confirmation):** Separately, `weather-pivot-cron` re-checks weather ~24h before a *confirmed* plan and, if severe, proposes an indoor alternative surfaced by `WeatherPivotBanner` in the Planner. See §7.
+- **Proactive pivot (post-confirmation):** Separately, `weather-pivot-cron` re-checks weather ~24h before a *confirmed* plan and, if severe, proposes an indoor alternative surfaced by `WeatherPivotBanner` in the Planner. **Confirming the pivot UPDATES the original plan in place** — `pending-plan-confirm` rewrites the existing `planner_items` + `confirmed_events` row (same ids/`event_uid`, new indoor content; original preserved under `meta.weather_pivot`) rather than creating a second Planner entry or calendar event. See §7.
 
 ### Screen C: The Menu Options (Result)
 

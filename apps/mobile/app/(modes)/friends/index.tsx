@@ -33,6 +33,7 @@ import { useModeContext } from "@/providers/ModeContextProvider";
 import {
   blockUser,
   countIncomingFriendsRequests,
+  getSuperConnectsUsedToday,
   recordSwipe,
   reportUser,
   sendFriendsRequest,
@@ -103,6 +104,16 @@ export default function FriendsHome() {
         setSelfPhotoUrl(null);
         setSelfDisplayName(null);
         return;
+      }
+
+      // Persist the daily super-like budget server-side (TB-4.1): derive remaining
+      // from how many super-connects were actually sent today, so reopening the app
+      // can't refill it.
+      try {
+        const usedToday = await getSuperConnectsUsedToday();
+        setSuperLikeRemainingToday(Math.max(0, SUPER_LIKE_PER_DAY - usedToday));
+      } catch {
+        // keep current value on transient errors
       }
 
       const { data: friendSelf } = await supabase
@@ -220,11 +231,13 @@ export default function FriendsHome() {
   };
 
   const applySuperConnect = async (profileId: string) => {
+    setSuperLikeRemainingToday((n) => Math.max(0, n - 1));
     try {
-      setSuperLikeRemainingToday((n) => Math.max(0, n - 1));
       await sendFriendsRequest({ targetUserId: profileId, kind: "super_connect" });
     } catch (e) {
       console.warn("Super connect failed", e);
+      // Roll back the optimistic decrement so a failed send doesn't burn budget.
+      setSuperLikeRemainingToday((n) => Math.min(SUPER_LIKE_PER_DAY, n + 1));
     }
   };
 

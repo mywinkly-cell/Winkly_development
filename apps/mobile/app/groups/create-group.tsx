@@ -16,7 +16,7 @@ import {
   ActivityIndicator,
   Pressable,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { createGroupWithInvites } from "@/lib/groupInvitations";
 import { getPartnersForConcierge } from "@/lib/ai/conciergePartners";
@@ -30,10 +30,15 @@ const MODES: { key: Mode; label: string }[] = [
 
 export default function CreateGroup() {
   const router = useRouter();
+  const { mode: modeParam, preselect } = useLocalSearchParams<{ mode?: Mode; preselect?: string }>();
+  const preselectIds = React.useMemo(
+    () => (typeof preselect === "string" ? preselect.split(",").map((s) => s.trim()).filter(Boolean) : []),
+    [preselect]
+  );
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [mode, setMode] = useState<Mode>("friends");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [mode, setMode] = useState<Mode>((modeParam as Mode) ?? "friends");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(preselectIds));
   const [partners, setPartners] = useState<ConciergePartner[]>([]);
   const [loadingPartners, setLoadingPartners] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -45,7 +50,10 @@ export default function CreateGroup() {
       setPartners(list);
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        list.forEach((p) => next.delete(p.id));
+        // Drop stale selections from a previous mode, but keep any preselected match.
+        list.forEach((p) => {
+          if (!preselectIds.includes(p.id)) next.delete(p.id);
+        });
         return next;
       });
     } catch {
@@ -53,7 +61,7 @@ export default function CreateGroup() {
     } finally {
       setLoadingPartners(false);
     }
-  }, [mode]);
+  }, [mode, preselectIds]);
 
   useEffect(() => {
     loadPartners();

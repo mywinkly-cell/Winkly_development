@@ -72,6 +72,57 @@ export async function createGroupWithInvites(params: {
 }
 
 /**
+ * Invite additional users to an EXISTING group.
+ * Pre-filters out current members and people who already have a pending invite,
+ * and rejects if the invites would exceed the group's max_members cap.
+ */
+export async function inviteUsersToGroup(
+  groupId: string,
+  inviteeUserIds: string[]
+): Promise<{ invited: number; skipped: number }> {
+  const { data: auth } = await supabase.auth.getUser();
+  const me = auth.user?.id;
+  if (!me) throw new Error("Not signed in");
+
+  const unique = [...new Set(inviteeUserIds)].filter((id) => id && id !== me);
+  if (unique.length === 0) return { invited: 0, skipped: 0 };
+
+  const [{ data: grp }, { data: members }, { data: pending }] = await Promise.all([
+    supabase.from("groups").select("max_members").eq("id", groupId).single(),
+    supabase.from("group_members").select("user_id").eq("group_id", groupId),
+    supabase
+      .from("group_invitations")
+      .select("invitee_id")
+      .eq("group_id", groupId)
+      .eq("status", "pending"),
+  ]);
+
+  const memberIds = new Set((members ?? []).map((m: { user_id: string }) => m.user_id));
+  const pendingIds = new Set((pending ?? []).map((p: { invitee_id: string }) => p.invitee_id));
+  const toInvite = unique.filter((id) => !memberIds.has(id) && !pendingIds.has(id));
+  const skipped = unique.length - toInvite.length;
+  if (toInvite.length === 0) return { invited: 0, skipped };
+
+  const cap = (grp?.max_members as number | undefined) ?? 8;
+  // Reserve capacity for current members + outstanding pending invites.
+  const reserved = memberIds.size + pendingIds.size;
+  if (reserved + toInvite.length > cap) {
+    throw new Error("This group is full or would exceed its size limit.");
+  }
+
+  const { error } = await supabase.from("group_invitations").insert(
+    toInvite.map((invitee_id) => ({
+      group_id: groupId,
+      inviter_id: me,
+      invitee_id,
+      status: "pending",
+    }))
+  );
+  if (error) throw new Error(error.message);
+  return { invited: toInvite.length, skipped };
+}
+
+/**
  * List pending group invitations for the current user (invitee).
  */
 export async function getMyPendingGroupInvitations(): Promise<GroupInvitationRow[]> {
@@ -152,6 +203,36 @@ export async function acceptGroupInvite(invitationId: string): Promise<void> {
 
   if (fetchErr || !inv) throw new Error("Invitation not found or already responded");
 
+  // Group size cap (TB-1.3): pre-check for a friendly message; the DB trigger is
+  // the source of truth and will also reject if the group filled up concurrently.
+  const { data: grp } = await supabase
+    .from("groups")
+    .select("max_members")
+    .eq("id", inv.group_id)
+    .single();
+  const cap = (grp?.max_members as number | undefined) ?? 8;
+  const { count: memberCount } = await supabase
+    .from("group_members")
+    .select("user_id", { count: "exact", head: true })
+    .eq("group_id", inv.group_id);
+  if ((memberCount ?? 0) >= cap) {
+    throw new Error("This group is full.");
+  }
+
+  // Add the member first; if the cap trigger rejects, we leave the invite pending.
+  const { error: memberErr } = await supabase.from("group_members").insert({
+    group_id: inv.group_id,
+    user_id: me,
+    role: "member",
+  });
+
+  if (memberErr) {
+    if ((memberErr.message ?? "").includes("GROUP_FULL")) {
+      throw new Error("This group is full.");
+    }
+    throw new Error(memberErr.message);
+  }
+
   const { error: updateErr } = await supabase
     .from("group_invitations")
     .update({ status: "accepted", updated_at: new Date().toISOString() })
@@ -159,14 +240,6 @@ export async function acceptGroupInvite(invitationId: string): Promise<void> {
     .eq("invitee_id", me);
 
   if (updateErr) throw new Error(updateErr.message);
-
-  const { error: memberErr } = await supabase.from("group_members").insert({
-    group_id: inv.group_id,
-    user_id: me,
-    role: "member",
-  });
-
-  if (memberErr) throw new Error(memberErr.message);
 
   await ensureGroupConversation(inv.group_id as string);
 }
