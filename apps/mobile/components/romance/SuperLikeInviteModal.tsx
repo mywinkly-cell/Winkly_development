@@ -189,6 +189,10 @@ export function SuperLikeInviteModal({ visible, targetUserId, targetFirstName, o
     onSend(message);
     onClose();
     setSending(false);
+    Alert.alert(
+      "Super Like sent!",
+      `Your invite was sent to ${targetFirstName}. They'll see it if they swipe right on you.`,
+    );
   };
 
   return (

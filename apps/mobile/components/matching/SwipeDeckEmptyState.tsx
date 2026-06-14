@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
 
 type SwipeDeckMode = "romance" | "friends";
 
@@ -15,6 +15,10 @@ type SwipeDeckEmptyStateProps = {
   mode: SwipeDeckMode;
   /** null while loading the likes / want-to-connect count */
   likesCount: number | null;
+  /** Romance home: current distance filter (km), when known */
+  distanceKm?: number | null;
+  /** Romance home: false when user has never saved custom filters */
+  hasCustomFilters?: boolean;
   onExpandRadius: () => void;
   onOpenDiscover: () => void;
 };
@@ -29,6 +33,9 @@ const MODE_SOFT_BG: Record<SwipeDeckMode, string> = {
   friends: Colors.friends.secondary,
 };
 
+const FALLBACK_TITLE =
+  "You've seen everyone nearby — try expanding your distance filter";
+
 function likesTeaserCopy(mode: SwipeDeckMode, count: number): string {
   const noun = count === 1 ? "person" : "people";
   if (mode === "romance") {
@@ -37,14 +44,35 @@ function likesTeaserCopy(mode: SwipeDeckMode, count: number): string {
   return `${count} ${noun} want to connect`;
 }
 
+function getContextTitle(
+  distanceKm: number | null | undefined,
+  hasCustomFilters: boolean | undefined,
+): string {
+  if (distanceKm != null && distanceKm < 30) {
+    return `Your distance filter is set to ${distanceKm} km — try expanding it to see more people.`;
+  }
+  if (hasCustomFilters === false) {
+    return "You've seen everyone nearby for now — new people join Winkly every day. Check back soon!";
+  }
+  return FALLBACK_TITLE;
+}
+
+function seeWhoLikedLabel(mode: SwipeDeckMode): string {
+  return mode === "romance" ? "See who liked you" : "See who wants to connect";
+}
+
 export function SwipeDeckEmptyState({
   mode,
   likesCount,
+  distanceKm,
+  hasCustomFilters,
   onExpandRadius,
   onOpenDiscover,
 }: SwipeDeckEmptyStateProps) {
   const accent = MODE_ACCENT[mode];
   const softBg = MODE_SOFT_BG[mode];
+  const title = getContextTitle(distanceKm, hasCustomFilters);
+  const emphasizeDiscover = likesCount != null && likesCount > 0;
 
   return (
     <View style={styles.container}>
@@ -52,43 +80,54 @@ export function SwipeDeckEmptyState({
         <Ionicons name="location-outline" size={36} color={accent} />
       </View>
 
-      <Text style={styles.title}>
-        You&apos;ve seen everyone nearby — try expanding your distance filter
-      </Text>
-
-      <Pressable
-        onPress={onExpandRadius}
-        style={({ pressed }) => [
-          styles.primaryBtn,
-          { backgroundColor: accent },
-          pressed && styles.primaryBtnPressed,
-        ]}
-        accessibilityLabel="Expand search radius"
-      >
-        <Ionicons name="resize-outline" size={20} color={Colors.white} />
-        <Text style={styles.primaryBtnText}>Expand search radius</Text>
-      </Pressable>
+      <Text style={styles.title}>{title}</Text>
 
       {likesCount === null ? (
         <View style={styles.teaserLoading}>
           <ActivityIndicator size="small" color={accent} />
         </View>
-      ) : likesCount > 0 ? (
+      ) : emphasizeDiscover ? (
+        <Text style={styles.likesSubtitle}>{likesTeaserCopy(mode, likesCount)}</Text>
+      ) : null}
+
+      {emphasizeDiscover ? (
         <Pressable
           onPress={onOpenDiscover}
-          style={({ pressed }) => [styles.teaserCard, pressed && styles.teaserCardPressed]}
-          accessibilityLabel="See who liked you in Discover"
+          style={({ pressed }) => [
+            styles.primaryBtn,
+            { backgroundColor: accent },
+            pressed && styles.primaryBtnPressed,
+          ]}
+          accessibilityLabel={seeWhoLikedLabel(mode)}
         >
-          <View style={[styles.teaserIconWrap, { backgroundColor: softBg }]}>
-            <Ionicons name="heart" size={20} color={accent} />
-          </View>
-          <View style={styles.teaserTextWrap}>
-            <Text style={styles.teaserTitle}>{likesTeaserCopy(mode, likesCount)}</Text>
-            <Text style={[styles.teaserAction, { color: accent }]}>See in Discover</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={Colors.gray500} />
+          <Ionicons name="heart" size={20} color={Colors.white} />
+          <Text style={styles.primaryBtnText}>{seeWhoLikedLabel(mode)}</Text>
         </Pressable>
       ) : (
+        <Pressable
+          onPress={onExpandRadius}
+          style={({ pressed }) => [
+            styles.primaryBtn,
+            { backgroundColor: accent },
+            pressed && styles.primaryBtnPressed,
+          ]}
+          accessibilityLabel="Expand search radius"
+        >
+          <Ionicons name="resize-outline" size={20} color={Colors.white} />
+          <Text style={styles.primaryBtnText}>Expand search radius</Text>
+        </Pressable>
+      )}
+
+      {emphasizeDiscover ? (
+        <Pressable
+          onPress={onExpandRadius}
+          style={({ pressed }) => [styles.secondaryLink, pressed && styles.secondaryLinkPressed]}
+          accessibilityLabel="Expand search radius"
+        >
+          <Text style={[styles.secondaryLinkText, { color: accent }]}>Expand search radius</Text>
+          <Ionicons name="chevron-forward" size={18} color={accent} />
+        </Pressable>
+      ) : likesCount === null ? null : (
         <Pressable
           onPress={onOpenDiscover}
           style={({ pressed }) => [styles.discoverLink, pressed && styles.discoverLinkPressed]}
@@ -125,7 +164,14 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.heading,
     color: Colors.textPrimary,
     textAlign: "center",
-    marginBottom: Layout.spacing.xl,
+    marginBottom: Layout.spacing.md,
+    maxWidth: 320,
+  },
+  likesSubtitle: {
+    ...Typography.body,
+    color: Colors.gray700,
+    textAlign: "center",
+    marginBottom: Layout.spacing.lg,
     maxWidth: 320,
   },
   primaryBtn: {
@@ -138,7 +184,7 @@ const styles = StyleSheet.create({
     borderRadius: Layout.radii.card,
     minHeight: 48,
     minWidth: 240,
-    marginBottom: Layout.spacing.xl,
+    marginBottom: Layout.spacing.md,
   },
   primaryBtnPressed: {
     opacity: 0.88,
@@ -148,47 +194,24 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.heading,
     color: Colors.white,
   },
-  teaserLoading: {
-    minHeight: 72,
-    justifyContent: "center",
-  },
-  teaserCard: {
+  secondaryLink: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    width: "100%",
-    maxWidth: 340,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    ...Shadow.card,
-    shadowOpacity: 0.06,
+    gap: 4,
+    paddingVertical: 8,
+    marginBottom: Layout.spacing.sm,
   },
-  teaserCardPressed: {
-    opacity: 0.92,
+  secondaryLinkPressed: {
+    opacity: 0.75,
   },
-  teaserIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  teaserTextWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  teaserTitle: {
-    ...Typography.button,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
-  },
-  teaserAction: {
+  secondaryLinkText: {
     ...Typography.caption,
     fontWeight: "600",
+  },
+  teaserLoading: {
+    minHeight: 32,
+    justifyContent: "center",
+    marginBottom: Layout.spacing.lg,
   },
   discoverLink: {
     flexDirection: "row",

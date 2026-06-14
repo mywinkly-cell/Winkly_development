@@ -34,10 +34,11 @@ import { hasAnyAIAccess } from "@/lib/ai/aiFeatureGate";
 import { supabase } from "@/lib/supabase";
 import { SuperLikeInviteModal } from "@/components/romance/SuperLikeInviteModal";
 import { blockUser, recordSwipe, reportUser } from "@/lib/matching/actions";
-import { buildRomanceSuperLikeIcebreaker } from "@/lib/matching/romanceIcebreaker";
+import { buildRomanceSuperLikeIcebreaker, buildRomanceSuperLikeIcebreakerAI } from "@/lib/matching/romanceIcebreaker";
 import { fetchRomanceSwipeDeckProfiles } from "@/lib/discover/romanceSwipeDeck";
 import { keyboardAvoidingProps } from "@/lib/ui/keyboardAvoiding";
 import { fetchRomanceLikesReceivedCount } from "@/lib/discover/likesReceivedCount";
+import { getRomanceFilters, hasSavedRomanceFilters } from "@/lib/filters/romanceFiltersStorage";
 import { updateMyLocationOnAppOpen } from "@/lib/location/updateLocation";
 import {
   acceptRomanceChatInvite,
@@ -69,6 +70,7 @@ type Profile = {
   /** Subset of chipItems shared with the viewer — highlighted on the card. */
   highlightChips?: string[];
   photoUrl: string;
+  photoUrls?: string[];
   /** Rounded, privacy-safe distance label from the server (e.g. "~3 km away"). */
   distanceLabel?: string | null;
   /** Pre-match chat invite — shown first on Home with envelope badge. */
@@ -76,6 +78,11 @@ type Profile = {
   conversationId?: string;
   invitePreviewMessage?: string | null;
 };
+
+function resolveProfilePhotoUrls(profile: Pick<Profile, "photoUrl" | "photoUrls">): string[] {
+  if (profile.photoUrls?.length) return profile.photoUrls;
+  return profile.photoUrl ? [profile.photoUrl] : [];
+}
 
 type MatchState = {
   visible: boolean;
@@ -93,6 +100,7 @@ export default function RomanceHome() {
   const [deckLoading, setDeckLoading] = useState(true);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
   const [selfProfile, setSelfProfile] = useState<RomanceProfile | null>(null);
   const [selfPhotoUrl, setSelfPhotoUrl] = useState<string | null>(null);
@@ -109,7 +117,13 @@ export default function RomanceHome() {
   const [intentModalVisible, setIntentModalVisible] = useState(false);
   const [superLikeInviteModalVisible, setSuperLikeInviteModalVisible] = useState(false);
   const [intentMessage, setIntentMessage] = useState("");
+  const [suggestedIcebreaker, setSuggestedIcebreaker] = useState("");
+  const icebreakerProfileIdRef = useRef<string | null>(null);
   const [likesReceivedCount, setLikesReceivedCount] = useState<number | null>(null);
+  const [emptyDeckDistanceKm, setEmptyDeckDistanceKm] = useState<number | null>(null);
+  const [emptyDeckHasCustomFilters, setEmptyDeckHasCustomFilters] = useState<boolean | undefined>(
+    undefined,
+  );
 
   const cardAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const pendingIntentMessage = useRef<string | undefined>(undefined);
@@ -177,7 +191,9 @@ export default function RomanceHome() {
         fetchRomanceSwipeDeckProfiles(uid, selfForDeck),
       ]);
       const pendingProfiles: Profile[] = pendingInvites.map((inv) => {
-        const photos = inv.romance_photos.length ? inv.romance_photos : inv.core_photos;
+        const rawPhotos = inv.romance_photos.length ? inv.romance_photos : inv.core_photos;
+        const photoUrls = rawPhotos.filter((p): p is string => !!p && p.trim() !== "").slice(0, 6);
+        const photoUrl = photoUrls[0] ?? "";
         return {
           id: inv.id,
           name: formatRomanceInviteName(inv),
@@ -185,7 +201,8 @@ export default function RomanceHome() {
           city: inv.city ?? "",
           occupation: inv.occupation,
           chipItems: inv.super_like ? ["Super like", "New message"] : ["New message"],
-          photoUrl: photos[0] ?? "",
+          photoUrl,
+          photoUrls: photoUrls.length ? photoUrls : photoUrl ? [photoUrl] : [],
           isPendingInvite: true,
           conversationId: inv.conversation_id,
           invitePreviewMessage: inv.preview_message,
@@ -225,20 +242,40 @@ export default function RomanceHome() {
   );
 
   const currentProfile = profiles[currentIndex];
+  const currentPhotoUrls = currentProfile ? resolveProfilePhotoUrls(currentProfile) : [];
+
+  useEffect(() => {
+    setCurrentPhotoIndex(0);
+  }, [currentIndex]);
 
   useEffect(() => {
     if (deckLoading || currentProfile) return;
     let active = true;
     setLikesReceivedCount(null);
+    setEmptyDeckDistanceKm(null);
+    setEmptyDeckHasCustomFilters(undefined);
     (async () => {
       try {
-        const { data: userData } = await supabase.auth.getUser();
+        const [{ data: userData }, filters, hasCustom] = await Promise.all([
+          supabase.auth.getUser(),
+          getRomanceFilters(),
+          hasSavedRomanceFilters(),
+        ]);
+        if (!active) return;
+        setEmptyDeckDistanceKm(filters.distanceKm);
+        setEmptyDeckHasCustomFilters(hasCustom);
         const uid = userData?.user?.id;
-        if (!uid || !active) return;
+        if (!uid) {
+          setLikesReceivedCount(0);
+          return;
+        }
         const count = await fetchRomanceLikesReceivedCount(uid);
         if (active) setLikesReceivedCount(count);
       } catch {
-        if (active) setLikesReceivedCount(0);
+        if (active) {
+          setLikesReceivedCount(0);
+          setEmptyDeckHasCustomFilters(false);
+        }
       }
     })();
     return () => {
@@ -477,10 +514,29 @@ export default function RomanceHome() {
     });
   };
 
+  const rotate = cardAnim.x.interpolate({
+    inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
+    outputRange: ["-10deg", "0deg", "10deg"],
+    extrapolate: "clamp",
+  });
+
+  const likeOpacity = cardAnim.x.interpolate({
+    inputRange: [0, SWIPE_THRESHOLD / 2],
+    outputRange: [0, 1],
+    extrapolate: "clamp",
+  });
+
+  const nopeOpacity = cardAnim.x.interpolate({
+    inputRange: [-SWIPE_THRESHOLD / 2, 0],
+    outputRange: [1, 0],
+    extrapolate: "clamp",
+  });
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, { dx, dy }) =>
+        Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 4,
       onPanResponderRelease: (_, gestureState) => {
         const { dx, dy } = gestureState;
         const isTap = Math.abs(dx) < 20 && Math.abs(dy) < 20;
@@ -547,8 +603,39 @@ export default function RomanceHome() {
       );
       return;
     }
+    const fallback = buildRomanceSuperLikeIcebreaker(
+      selfProfile
+        ? { interests: selfProfile.interests, city: selfProfile.city }
+        : null,
+      {
+        name: currentProfile.name,
+        chipItems: currentProfile.chipItems,
+        city: currentProfile.city,
+      },
+    );
+    setSuggestedIcebreaker(fallback);
     setIntentMessage("");
+    icebreakerProfileIdRef.current = currentProfile.id;
     setIntentModalVisible(true);
+
+    if (!showAiHints) return;
+
+    const profileId = currentProfile.id;
+    void buildRomanceSuperLikeIcebreakerAI(
+      selfProfile
+        ? { interests: selfProfile.interests, city: selfProfile.city }
+        : null,
+      {
+        name: currentProfile.name,
+        chipItems: currentProfile.chipItems,
+        city: currentProfile.city,
+      },
+      profileId,
+    ).then((aiOpener) => {
+      if (aiOpener && icebreakerProfileIdRef.current === profileId) {
+        setSuggestedIcebreaker(aiOpener);
+      }
+    });
   };
 
   const sendIntent = (message?: string) => {
@@ -578,6 +665,8 @@ export default function RomanceHome() {
         <SwipeDeckEmptyState
           mode="romance"
           likesCount={likesReceivedCount}
+          distanceKm={emptyDeckDistanceKm}
+          hasCustomFilters={emptyDeckHasCustomFilters}
           onExpandRadius={() => router.push("/(modes)/romance/filters")}
           onOpenDiscover={() => router.push("/(modes)/romance/discover")}
         />
@@ -626,15 +715,62 @@ export default function RomanceHome() {
                     transform: [
                       { translateX: cardAnim.x },
                       { translateY: cardAnim.y },
+                      { rotate },
                     ],
                   },
                 ]}
               >
+                <Animated.View
+                  pointerEvents="none"
+                  style={[styles.swipeStamp, styles.swipeStampNope, { opacity: nopeOpacity }]}
+                >
+                  <Text style={styles.swipeStampTextNope}>NOPE</Text>
+                </Animated.View>
+                <Animated.View
+                  pointerEvents="none"
+                  style={[styles.swipeStamp, styles.swipeStampLike, { opacity: likeOpacity }]}
+                >
+                  <Text style={styles.swipeStampTextLike}>LIKE</Text>
+                </Animated.View>
+
                 <View style={styles.mediaArea}>
                   <Image
-                    source={{ uri: currentProfile.photoUrl }}
+                    source={{ uri: currentPhotoUrls[currentPhotoIndex] ?? currentProfile.photoUrl }}
                     style={[styles.cardImage, { borderTopLeftRadius: CARD_RADIUS, borderTopRightRadius: CARD_RADIUS }]}
                     resizeMode="cover"
+                  />
+                  {currentPhotoUrls.length > 1 && (
+                    <View style={styles.photoDotsRow} pointerEvents="none">
+                      {currentPhotoUrls.map((_, index) => (
+                        <View
+                          key={index}
+                          style={[
+                            styles.photoDot,
+                            index === currentPhotoIndex && styles.photoDotActive,
+                          ]}
+                        />
+                      ))}
+                    </View>
+                  )}
+                  <Pressable
+                    style={styles.mediaTapLeft}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setCurrentPhotoIndex((index) => Math.max(0, index - 1));
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Previous photo"
+                  />
+                  <Pressable
+                    style={styles.mediaTapRight}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setCurrentPhotoIndex((index) =>
+                        Math.min(currentPhotoUrls.length - 1, index + 1),
+                      );
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Next photo"
                   />
                 </View>
 
@@ -764,7 +900,7 @@ export default function RomanceHome() {
                   </Text>
                   <Pressable
                     style={styles.icebreakerChip}
-                    onPress={() => setIntentMessage(intentAiIcebreaker)}
+                    onPress={() => setIntentMessage(suggestedIcebreaker || intentAiIcebreaker)}
                     accessibilityRole="button"
                     accessibilityLabel="Use suggested opener"
                   >
@@ -903,10 +1039,81 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.gray200,
     overflow: "hidden",
+    position: "relative",
+  },
+  photoDotsRow: {
+    position: "absolute",
+    top: 10,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+    zIndex: 2,
+  },
+  photoDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.white,
+    opacity: 0.45,
+  },
+  photoDotActive: {
+    opacity: 1,
+  },
+  mediaTapLeft: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: "50%",
+    zIndex: 1,
+  },
+  mediaTapRight: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: "50%",
+    zIndex: 1,
   },
   cardImage: {
     width: "100%",
     height: "100%",
+  },
+  swipeStamp: {
+    position: "absolute",
+    top: 36,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderWidth: 3,
+    borderRadius: 6,
+    zIndex: 3,
+  },
+  swipeStampNope: {
+    left: 24,
+    transform: [{ rotate: "-15deg" }],
+    borderColor: "#E53935",
+  },
+  swipeStampLike: {
+    right: 24,
+    transform: [{ rotate: "15deg" }],
+    borderColor: Colors.romance.primary,
+  },
+  swipeStampTextNope: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 28,
+    fontWeight: "800",
+    letterSpacing: 2,
+    color: "#E53935",
+  },
+  swipeStampTextLike: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 28,
+    fontWeight: "800",
+    letterSpacing: 2,
+    color: Colors.romance.primary,
   },
   cardMenuBtn: {
     position: "absolute",

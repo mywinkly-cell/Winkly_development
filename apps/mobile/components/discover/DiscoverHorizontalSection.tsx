@@ -9,6 +9,7 @@ import {
   Text,
   Image,
   TouchableOpacity,
+  Pressable,
   ScrollView,
   StyleSheet,
 } from "react-native";
@@ -54,6 +55,10 @@ export function DiscoverHorizontalSection({
 }: Props) {
   const [upgradeVisible, setUpgradeVisible] = useState(false);
 
+  const blurredCount = items.filter((_, index) => isBlurred(index, variant, canViewFull)).length;
+  const showLikedYouUpgradeBanner =
+    variant === "liked_you" && !canViewFull && blurredCount > 0;
+
   const openCard = (item: DiscoverProfileItem, index: number) => {
     if (isBlurred(index, variant, canViewFull)) {
       setUpgradeVisible(true);
@@ -98,22 +103,44 @@ export function DiscoverHorizontalSection({
                         <Text style={styles.placeholderEmoji}>{mode === "romance" ? "💖" : "👋"}</Text>
                       </View>
                     )}
-                    {blurred && <BlurView intensity={70} style={StyleSheet.absoluteFill} tint="light" />}
-                    <View style={styles.nameOverlay}>
+                    <View style={styles.nameOverlay} pointerEvents="none">
                       <Text style={styles.nameOverlayText} numberOfLines={1}>
                         {item.name}
                         {item.age != null ? `, ${item.age}` : ""}
                       </Text>
                     </View>
                     {variant === "liked_you" && (
-                      <View style={styles.likeBadge}>
+                      <View style={styles.likeBadge} pointerEvents="none">
                         <Text style={styles.likeBadgeText}>💖</Text>
                       </View>
                     )}
+                    {blurred ? (
+                      <BlurView intensity={70} style={StyleSheet.absoluteFill} tint="light" />
+                    ) : null}
                   </View>
                 </TouchableOpacity>
               );
             })}
+
+            {showLikedYouUpgradeBanner ? (
+              <Pressable
+                onPress={() => setUpgradeVisible(true)}
+                style={[
+                  styles.card,
+                  styles.upgradeBanner,
+                  {
+                    backgroundColor:
+                      mode === "romance" ? Colors.romance.secondary : Colors.friends.secondary,
+                  },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Unlock to see ${blurredCount} more profiles`}
+              >
+                <Text style={[styles.upgradeBannerText, { color: primaryColor }]}>
+                  +{blurredCount} more — Unlock to see
+                </Text>
+              </Pressable>
+            ) : null}
           </ScrollView>
         )}
       </View>
@@ -177,4 +204,17 @@ const styles = StyleSheet.create({
   },
   likeBadge: { position: "absolute", top: 8, right: 8 },
   likeBadgeText: { fontSize: 16 },
+  upgradeBanner: {
+    height: CARD_HEIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  upgradeBannerText: {
+    ...Typography.caption,
+    fontFamily: FontFamily.headingBold,
+    fontWeight: "700",
+    textAlign: "center",
+    lineHeight: 18,
+  },
 });

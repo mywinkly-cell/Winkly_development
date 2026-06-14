@@ -39,3 +39,13 @@ export function buildRomanceSuperLikeIcebreaker(
   }
   return `${first}, your vibe clicked — mind if I say hi properly in chat?`;
 }
+
+/** AI-generated Super Like opener via Concierge; null on error or timeout (~4s). */
+export async function buildRomanceSuperLikeIcebreakerAI(
+  self: RomanceIcebreakerSelf | null,
+  target: RomanceIcebreakerTarget | null,
+  partnerUserId: string,
+): Promise<string | null> {
+  const { fetchSuperLikeIcebreakerAI } = await import("@/lib/ai/superLikeIcebreakerClient");
+  return fetchSuperLikeIcebreakerAI({ partnerUserId, self, target });
+}

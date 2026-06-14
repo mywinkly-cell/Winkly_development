@@ -23,6 +23,7 @@ const AI_GATEWAY_TASKS = [
   "concierge",
   "event_suggest",
   "match_agent",
+  "super_like_icebreaker",
   // Strategic Host surfaces (2026)
   "chat_topics",
   "planner_theme_plans",
@@ -221,6 +222,10 @@ export type ConciergeContext = {
   sanitized_requester_persona?: string;
   /** Multi-day trips: inclusive day count (gateway switches planner_theme_plans shape when > 1). */
   num_days?: number;
+  /** Super Like icebreaker: viewer profile signals (interests, city). */
+  self_profile?: { interests?: string[]; city?: string };
+  /** Super Like icebreaker: target profile signals (name, interests, city). */
+  other_profile?: { name?: string; interests?: string[]; city?: string };
 }
 
 /** Context object sent to ai-gateway (must stay in sync with allowlist server-side). */
@@ -270,6 +275,8 @@ function serializeConciergeContextForGateway(context: ConciergeContext) {
     exact_time_hm: context.exact_time_hm,
     sanitized_requester_persona: context.sanitized_requester_persona,
     num_days: context.num_days,
+    self_profile: context.self_profile,
+    other_profile: context.other_profile,
   };
 }
 
@@ -489,6 +496,8 @@ export type ConciergeResponse = {
       no_exact_home_addresses?: boolean;
     };
   };
+  /** Super Like icebreaker (Romance swipe deck). */
+  super_like_icebreaker?: { opener?: string };
 };
 
 function pickMatchAgentFromResponse(data: { match_agent?: unknown }): ConciergeResponse["match_agent"] {
@@ -646,6 +655,10 @@ export async function callConcierge(params: {
     concierge_note: typeof data.concierge_note === "string" ? data.concierge_note : undefined,
     request_id: typeof data.request_id === "string" ? data.request_id : undefined,
     match_agent: pickMatchAgentFromResponse(data),
+    super_like_icebreaker:
+      data.super_like_icebreaker && typeof data.super_like_icebreaker === "object"
+        ? (data.super_like_icebreaker as NonNullable<ConciergeResponse["super_like_icebreaker"]>)
+        : undefined,
   };
   if (cacheKey && !response.error && response.suggestions?.length) {
     optionsCache.set(cacheKey, { data: response, ts: Date.now() });

@@ -24,6 +24,7 @@ export type RomanceSwipeCardProfile = {
   /** Subset of chipItems shared with the viewer — highlighted on the card. */
   highlightChips?: string[];
   photoUrl: string;
+  photoUrls: string[];
   /** Rounded, privacy-safe distance label from the server (e.g. "~3 km away"). */
   distanceLabel?: string | null;
 };
@@ -61,6 +62,17 @@ type FeedRow = {
 };
 
 const DISTANCE_KM_ANY = 999;
+
+function collectPhotoUrls(
+  romancePhotos?: (string | null)[] | null,
+  corePhotos?: (string | null)[] | null,
+): string[] {
+  const romance = (romancePhotos ?? []).filter((p): p is string => !!p && String(p).trim() !== "");
+  const source = romance.length
+    ? romance
+    : (corePhotos ?? []).filter((p): p is string => !!p && String(p).trim() !== "");
+  return source.slice(0, 6);
+}
 
 /**
  * Romance home swipe deck — same feed rules as Discover recommendations (RPC + filters + AI sort).
@@ -176,7 +188,8 @@ export async function fetchRomanceSwipeDeckProfiles(
       : r.interests ?? [];
     const { ordered, shared } = orderSharedFirst(interests, self?.interests);
     const chipItems = ordered.slice(0, 3);
-    const photo = r.romance_photos?.[0] ?? r.core_photos?.[0];
+    const photoUrls = collectPhotoUrls(r.romance_photos, r.core_photos);
+    const photoUrl = photoUrls[0] ?? "https://i.pravatar.cc/400?u=winkly";
     const nm = nameMap.get(r.id);
     return {
       id: r.id,
@@ -190,7 +203,8 @@ export async function fetchRomanceSwipeDeckProfiles(
       occupation: r.occupation ?? null,
       chipItems: chipItems.length ? chipItems : ["Romance"],
       highlightChips: shared,
-      photoUrl: photo ?? "https://i.pravatar.cc/400?u=winkly",
+      photoUrl,
+      photoUrls: photoUrls.length ? photoUrls : [photoUrl],
       distanceLabel: r.distance_label ?? null,
     };
   });
