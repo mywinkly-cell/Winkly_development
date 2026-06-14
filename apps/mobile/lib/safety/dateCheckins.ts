@@ -12,7 +12,26 @@ export type DateSafetyCheckin = {
   checkin_due_at: string | null;
   responded_at: string | null;
   notes: string | null;
+  partner_first_name?: string | null;
+  partner_photo_url?: string | null;
 };
+
+type PartnerProfileRow = {
+  id: string;
+  first_name: string | null;
+  romance_photos: (string | null)[] | null;
+  core_photos: (string | null)[] | null;
+  main_photo_url: string | null;
+};
+
+function partnerPhotoUrlFromProfile(row: PartnerProfileRow | undefined): string | null {
+  if (!row) return null;
+  const romance = row.romance_photos?.find((p) => !!p);
+  if (romance) return romance;
+  const core = row.core_photos?.find((p) => !!p);
+  if (core) return core;
+  return row.main_photo_url ?? null;
+}
 
 export async function listMyDateCheckins(): Promise<DateSafetyCheckin[]> {
   const { data, error } = await supabase
@@ -20,7 +39,38 @@ export async function listMyDateCheckins(): Promise<DateSafetyCheckin[]> {
     .select("*")
     .order("scheduled_at", { ascending: true });
   if (error) throw error;
-  return (data ?? []) as DateSafetyCheckin[];
+
+  const rows = (data ?? []) as DateSafetyCheckin[];
+  const partnerIds = [
+    ...new Set(rows.map((row) => row.partner_user_id).filter((id): id is string => !!id)),
+  ];
+  if (!partnerIds.length) return rows;
+
+  const { data: profiles, error: profileError } = await supabase
+    .from("public_profile_view")
+    .select("id, first_name, romance_photos, core_photos, main_photo_url")
+    .in("id", partnerIds);
+
+  if (profileError) {
+    console.warn("listMyDateCheckins partner profiles", profileError);
+    return rows;
+  }
+
+  const profileById = new Map<string, PartnerProfileRow>();
+  (profiles ?? []).forEach((row) => {
+    profileById.set(row.id as string, row as PartnerProfileRow);
+  });
+
+  return rows.map((row) => {
+    if (!row.partner_user_id) return row;
+    const profile = profileById.get(row.partner_user_id);
+    if (!profile) return row;
+    return {
+      ...row,
+      partner_first_name: profile.first_name ?? null,
+      partner_photo_url: partnerPhotoUrlFromProfile(profile),
+    };
+  });
 }
 
 export async function createDateCheckin(params: {

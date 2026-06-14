@@ -72,6 +72,7 @@ const STRUCTURED_UI_TASKS = new Set<string>([
   "planner_theme_plans",
   "winkly_plan",
   "chat_topics",
+  "super_like_icebreaker",
 ]);
 
 /** Default max output for structured UI tasks (under 400 — app renders precise JSON keys, not prose). */
@@ -130,6 +131,7 @@ const AI_TASKS = new Set<string>([
   "winkly_plan",
   "match_agent",
   "match_bridge",
+  "super_like_icebreaker",
 ]);
 
 const TIER_RANK: Record<SubscriptionTier, number> = { free: 0, super: 1, premium: 2, enterprise: 3 };
@@ -149,6 +151,7 @@ const TASK_MIN_TIER: Record<string, SubscriptionTier> = {
   plan: "super",
   winkly_plan: "super",
   match_agent: "super",
+  super_like_icebreaker: "super",
   concierge: "premium",
   match_bridge: "premium",
 };
@@ -223,7 +226,7 @@ function isPremiumTier(tier: SubscriptionTier): boolean {
 }
 
 function pickAnthropicModel(task: string): string {
-  if (task === "chat_topics") return ANTHROPIC_MODEL_LITE;
+  if (task === "chat_topics" || task === "super_like_icebreaker") return ANTHROPIC_MODEL_LITE;
   if (task === "winkly_plan" || task === "planner_theme_plans") return ANTHROPIC_MODEL_PLAN;
   return ANTHROPIC_MODEL;
 }
@@ -392,6 +395,7 @@ async function fetchWithBackoff(url: string, init: RequestInit, opts: { retries:
 const ALLOWED_MODES = ["romance", "friends", "business", "events"];
 const ALLOWED_TASKS = [
   "rank", "suggest", "summarize", "plan", "concierge", "event_suggest", "match_bridge", "match_agent",
+  "super_like_icebreaker",
   "winkly_plan",
   // Strategic Host surfaces (2026): chat topics + planner theme plans
   "chat_topics",
@@ -428,6 +432,8 @@ const ALLOWLISTED_CONTEXT_KEYS = [
   "weather_forecast",
   /** Multi-day concierge trips: inclusive day count (2–7). */
   "num_days",
+  /** Super Like icebreaker: viewer + target profile signals (interests, city, first name). */
+  "self_profile", "other_profile",
 ];
 
 type AiGatewayRequest = {
@@ -2070,6 +2076,63 @@ function fallbackMatchBridge(
     activity_theme: "coffee",
     disclaimer: "Suggestions are not confirmed reservations. Confirm with the venue and each other.",
   };
+}
+
+const SUPER_LIKE_ICEBREAKER_SYSTEM = `You write one Super Like opener for a dating app (Romance mode).
+Write a single warm, natural sentence (max 200 characters). Use the other person's first name when provided.
+Prefer a shared interest or same city when possible. No emojis. Do not wrap the message in quotes.
+Reply with valid JSON only: {"opener":"..."}`;
+
+function parseSuperLikeOpenerJson(text: string): string | null {
+  try {
+    const j = JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/gi, "").trim()) as { opener?: unknown };
+    if (typeof j.opener === "string" && j.opener.trim()) return j.opener.trim().slice(0, 200);
+  } catch {
+    const t = text.trim();
+    if (t.length > 0 && t.length <= 220) return t.slice(0, 200);
+  }
+  return null;
+}
+
+async function runSuperLikeIcebreakerGemini(
+  geminiKey: string,
+  payload: Record<string, unknown>,
+): Promise<string | null> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(geminiKey)}`;
+  const body = {
+    systemInstruction: { parts: [{ text: SUPER_LIKE_ICEBREAKER_SYSTEM }] },
+    contents: [{ role: "user", parts: [{ text: JSON.stringify(payload) }] }],
+    generationConfig: {
+      maxOutputTokens: capOutputTokens(200),
+      temperature: 0.65,
+      responseMimeType: "application/json",
+    },
+  };
+  const res = await fetchWithBackoff(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }, { retries: 2, baseMs: 500 });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (typeof text !== "string") return null;
+  return parseSuperLikeOpenerJson(text);
+}
+
+async function runSuperLikeIcebreakerAnthropic(
+  anthropicKey: string,
+  payload: Record<string, unknown>,
+): Promise<string | null> {
+  const text = await runAnthropicJson(
+    anthropicKey,
+    SUPER_LIKE_ICEBREAKER_SYSTEM,
+    JSON.stringify(payload),
+    ANTHROPIC_MODEL_LITE,
+    200,
+    0.65,
+  );
+  return text ? parseSuperLikeOpenerJson(text) : null;
 }
 
 async function runMatchBridgeGeminiJson(
@@ -4125,6 +4188,78 @@ serve(async (req) => {
             },
           },
           message: m.agent_message,
+        }),
+        { headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } },
+      );
+    }
+
+    if (task === "super_like_icebreaker") {
+      if (mode !== "romance") {
+        return new Response(JSON.stringify({ error: "super_like_icebreaker requires mode romance" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
+        });
+      }
+      const partnerUserIdSl = scrubbedSafeContext.partner_user_id as string | undefined;
+      if (!partnerUserIdSl || partnerUserIdSl === user.id) {
+        return new Response(JSON.stringify({ error: "partner_user_id required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
+        });
+      }
+
+      const selfFromClient =
+        scrubbedSafeContext.self_profile && typeof scrubbedSafeContext.self_profile === "object"
+          ? (scrubbedSafeContext.self_profile as Record<string, unknown>)
+          : {};
+      const otherFromClient =
+        scrubbedSafeContext.other_profile && typeof scrubbedSafeContext.other_profile === "object"
+          ? (scrubbedSafeContext.other_profile as Record<string, unknown>)
+          : {};
+
+      const profileCtxSl = await getConciergeProfileContext(supabase, user.id, "romance", partnerUserIdSl);
+      const slPayload: Record<string, unknown> = {
+        self_profile: {
+          interests: selfFromClient.interests ?? profileCtxSl.primary.interests ?? profileCtxSl.primary.activity_preferences,
+          city: selfFromClient.city ?? profileCtxSl.primary.city,
+        },
+        other_profile: {
+          name: otherFromClient.name,
+          interests: otherFromClient.interests ?? profileCtxSl.partner?.interests,
+          city: otherFromClient.city ?? profileCtxSl.partner?.city,
+        },
+      };
+
+      const insSl = await supabase.from("ai_requests").insert({
+        user_id: user.id,
+        mode,
+        task,
+      }).select("id").single();
+      const requestIdSl = !insSl.error ? (insSl.data as { id?: string } | null)?.id ?? null : null;
+
+      const anthropicKeySl = Deno.env.get("ANTHROPIC_API_KEY");
+      const geminiKeySl = Deno.env.get("GEMINI_API_KEY");
+
+      let openerSl: string | null = null;
+      if (geminiKeySl) {
+        openerSl = await runSuperLikeIcebreakerGemini(geminiKeySl, slPayload);
+      }
+      if (!openerSl && anthropicKeySl) {
+        openerSl = await runSuperLikeIcebreakerAnthropic(anthropicKeySl, slPayload);
+      }
+
+      if (!openerSl) {
+        return new Response(JSON.stringify({ error: "Could not generate opener" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          super_like_icebreaker: { opener: openerSl },
+          message: openerSl,
+          request_id: requestIdSl,
         }),
         { headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } },
       );

@@ -504,7 +504,9 @@ export default function RomanceFiltersScreen() {
             </View>
           </View>
           <Text style={styles.sectionHint}>
-            Use AI to surface people who fit you better. (We&apos;ll develop this feature soon.)
+            AI matching re-ranks your feed using behavioral signals — how people you connect with tend
+            to interact, not just shared interests. Turning this off uses a simpler, interest-based
+            order.
           </Text>
 
           {HAS_AI_MATCHING ? (

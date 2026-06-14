@@ -565,6 +565,38 @@ export default function ChatView({
     mergeIncomingMessage,
   ]);
 
+  const hasMatchBridgeCta = useMemo(
+    () =>
+      messages.some((m) => {
+        if (m.message_type !== "cta") return false;
+        try {
+          return (JSON.parse(m.content) as { type?: string }).type === "match_bridge";
+        } catch {
+          return false;
+        }
+      }),
+    [messages],
+  );
+
+  const messagesOnlyCtasOrEmpty =
+    messages.length === 0 || messages.every((m) => m.message_type === "cta");
+
+  const wantMatchBridge =
+    (matchBridgeParam === "1" ||
+      matchBridgeParam === "true" ||
+      (conversation?.dm_source === "match" && isRomance && isDm && messages.length === 0)) &&
+    !!meId &&
+    !!otherUser &&
+    isRomance &&
+    isDm &&
+    !loading;
+
+  const bridgeLoading =
+    (matchBridgeOnceRef.current || wantMatchBridge) &&
+    !matchBridgeHandled &&
+    messagesOnlyCtasOrEmpty &&
+    !hasMatchBridgeCta;
+
   /** Default happy path: after Match Bridge runs (or romance match with no bridge), auto-post Match Agent CTA once. Friends: cold-start connection DM. */
   useEffect(() => {
     if (!meId || !otherUser || !isDm || loading) return;
@@ -2277,6 +2309,16 @@ export default function ChatView({
             renderItem={renderMessage}
             inverted
             contentContainerStyle={{ paddingVertical: 10 }}
+            ListFooterComponent={
+              bridgeLoading ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 12 }}>
+                  <ActivityIndicator size="small" color={Colors.romance.primary} />
+                  <Text style={{ fontSize: 13, color: Colors.gray500 }}>
+                    Getting your first date idea ready…
+                  </Text>
+                </View>
+              ) : null
+            }
             ListEmptyComponent={
               !messagesLoadError ? (
                 <Text style={styles.emptyHistory}>
