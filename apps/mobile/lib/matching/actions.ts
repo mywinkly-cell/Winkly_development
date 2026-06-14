@@ -85,6 +85,25 @@ export async function sendFriendsRequest(params: {
   if (error) throw error;
 }
 
+/**
+ * Number of super-connects the current user has sent today (UTC-day window).
+ * Used to persist the daily super-like budget server-side so it can't be reset
+ * by simply reopening the app (TB-4.1).
+ */
+export async function getSuperConnectsUsedToday(): Promise<number> {
+  const uid = await requireUserId();
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const { count, error } = await supabase
+    .from("friends_requests")
+    .select("*", { count: "exact", head: true })
+    .eq("requester_id", uid)
+    .eq("kind", "super_connect")
+    .gte("created_at", start.toISOString());
+  if (error) return 0;
+  return count ?? 0;
+}
+
 export type IncomingFriendsRequestRow = {
   requester_id: string;
   kind: FriendsRequestKind;

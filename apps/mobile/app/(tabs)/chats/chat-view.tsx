@@ -103,6 +103,14 @@ import {
   type PlannerThemePlanOption,
   type StrategicHostTopic,
 } from "@/lib/ai/strategicHost";
+import {
+  setGroupVibe,
+  getGroupVibeSnapshot,
+  formatVibeSnapshotForPrompt,
+  type GroupVibeMood,
+} from "@/lib/groups/groupsApi";
+import { GroupVibeSheet } from "@/components/chats/GroupVibeSheet";
+import { GroupPlanConsensusCard } from "@/components/chats/GroupPlanConsensusCard";
 
 /** Not a navigable route — only imported by `app/chats/[conversationId].tsx`. */
 export const unstable_settings = { href: null };
@@ -228,6 +236,8 @@ export default function ChatView({
   const [strategicLoading, setStrategicLoading] = useState(false);
   const [strategicSelectedTopic, setStrategicSelectedTopic] = useState<StrategicHostTopic | null>(null);
   const [strategicPlanOptions, setStrategicPlanOptions] = useState<PlannerThemePlanOption[] | null>(null);
+  const [showVibeSheet, setShowVibeSheet] = useState(false);
+  const [groupVibeText, setGroupVibeText] = useState<string | null>(null);
   const [matchContext, setMatchContext] = useState<RomanceMatchContext | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
   const inputRef = useRef<TextInput>(null);
@@ -378,6 +388,15 @@ export default function ChatView({
     !!conversation &&
     !conversation.related_event_id &&
     (conversationMode === "romance" || conversationMode === "friends") &&
+    hasAnyAIAccess(modeContext.subscription_tier ?? "free");
+
+  // Group AI planning (TB-2.1): the Strategic Host pipeline already fans out to
+  // every participant's profiles_mode, so group chats can plan together.
+  const showGroupPlanningCard =
+    isGroup &&
+    !!conversation &&
+    !conversation.related_event_id &&
+    ["friends", "business"].includes(conversationMode) &&
     hasAnyAIAccess(modeContext.subscription_tier ?? "free");
 
   // Winkly differentiator: curated date ideas at the top of a new match chat.
@@ -694,6 +713,64 @@ export default function ChatView({
     });
   }, [otherUser, isDm, conversationMode, convId, router]);
 
+  // TB-2.5: weather + location aggregation for groups — use the majority city
+  // among members (fallback: requester's city). When members are spread across
+  // cities, we note it so the AI's weather/venue reasoning is unambiguous.
+  const groupCityInfo = useMemo(() => {
+    const cities = participants
+      .map((p) => (typeof p.city === "string" ? p.city.trim() : ""))
+      .filter(Boolean);
+    if (cities.length === 0) return { city: null as string | null, note: null as string | null };
+    const counts: Record<string, number> = {};
+    for (const c of cities) counts[c] = (counts[c] ?? 0) + 1;
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const top = sorted[0][0];
+    const distinct = sorted.length;
+    const note =
+      distinct > 1 ? `Note: most of the group is in ${top}; plan around ${top}.` : null;
+    return { city: top, note };
+  }, [participants]);
+
+  const resolvePlanningCity = useCallback((): string | null => {
+    if (isGroup && groupCityInfo.city) return groupCityInfo.city;
+    return (
+      (participants.find((p) => p.id === meId)?.city ?? participants.find((p) => p.id !== meId)?.city ?? null) || null
+    );
+  }, [isGroup, groupCityInfo.city, participants, meId]);
+
+  // Combine the live vibe snapshot with the city note for the prompt.
+  const composedGroupVibe = useCallback((): string | undefined => {
+    const parts = [groupVibeText, isGroup ? groupCityInfo.note : null].filter(Boolean) as string[];
+    return parts.length ? parts.join(" ") : undefined;
+  }, [groupVibeText, isGroup, groupCityInfo.note]);
+
+  // Group planning entry: gather a quick Vibe Check first (non-blocking — anyone
+  // who hasn't responded is simply skipped), then open the Strategic Host.
+  const openGroupPlanning = useCallback(() => {
+    if (!showGroupPlanningCard) return;
+    setShowVibeSheet(true);
+  }, [showGroupPlanningCard]);
+
+  const proceedAfterVibe = useCallback(
+    async (picked?: { mood: GroupVibeMood; energy?: number | null; note?: string | null }) => {
+      try {
+        if (picked) {
+          await setGroupVibe({ conversationId: convId, mood: picked.mood, energy: picked.energy, note: picked.note });
+        }
+        const snap = await getGroupVibeSnapshot(convId);
+        setGroupVibeText(formatVibeSnapshotForPrompt(snap));
+      } catch {
+        // vibe is best-effort; proceed regardless
+      } finally {
+        setShowVibeSheet(false);
+        openStrategicHost();
+      }
+    },
+    // openStrategicHost is declared below; it's stable via useCallback
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [convId]
+  );
+
   const openStrategicHost = useCallback(async () => {
     if (!meId || !conversation || !participants.length) return;
     if (!["romance", "friends", "business"].includes(conversationMode)) return;
@@ -703,14 +780,13 @@ export default function ChatView({
     setStrategicSelectedTopic(null);
     setStrategicPlanOptions(null);
     try {
-      const city =
-        (participants.find((p) => p.id === meId)?.city ?? participants.find((p) => p.id !== meId)?.city ?? null) ||
-        null;
+      const city = resolvePlanningCity();
       const topics = await getChatStrategicHostTopics({
         mode: conversationMode as "romance" | "friends" | "business",
         participantUserIds: participants.map((p) => p.id),
         city: city ?? undefined,
         conversationId: convId,
+        groupVibe: composedGroupVibe(),
       });
       setStrategicTopics(topics);
     } catch (e) {
@@ -719,14 +795,12 @@ export default function ChatView({
     } finally {
       setStrategicLoading(false);
     }
-  }, [meId, conversation, participants, conversationMode]);
+  }, [meId, conversation, participants, conversationMode, convId, resolvePlanningCity, composedGroupVibe]);
 
   const loadStructuredPlansForTopic = useCallback(async (topic: StrategicHostTopic) => {
     if (!meId || !conversation) return;
     if (!["romance", "friends", "business"].includes(conversationMode)) return;
-    const city =
-      (participants.find((p) => p.id === meId)?.city ?? participants.find((p) => p.id !== meId)?.city ?? null) ||
-      null;
+    const city = resolvePlanningCity();
     setStrategicLoading(true);
     try {
       const dt = new Date(Date.now() + 48 * 3600_000);
@@ -738,6 +812,7 @@ export default function ChatView({
         participantUserIds: participants.map((p) => p.id),
         city: city ?? undefined,
         dateTimeIso: dt.toISOString(),
+        groupVibe: composedGroupVibe(),
       });
       setStrategicPlanOptions(plans.slice(0, 2));
     } catch (e) {
@@ -745,13 +820,11 @@ export default function ChatView({
     } finally {
       setStrategicLoading(false);
     }
-  }, [meId, conversation, conversationMode, participants, convId]);
+  }, [meId, conversation, conversationMode, participants, convId, resolvePlanningCity, composedGroupVibe]);
 
   const draftPendingPlanFromStructuredOption = useCallback(async (opt: PlannerThemePlanOption) => {
     if (!meId || !conversation) return;
-    const city =
-      (participants.find((p) => p.id === meId)?.city ?? participants.find((p) => p.id !== meId)?.city ?? null) ||
-      null;
+    const city = resolvePlanningCity();
     setStrategicLoading(true);
     try {
       const dt = new Date(Date.now() + 48 * 3600_000);
@@ -765,6 +838,7 @@ export default function ChatView({
           activity_hint: opt.title,
           participant_user_ids: participants.map((p) => p.id),
           conversation_id: convId,
+          group_vibe: composedGroupVibe(),
         },
       });
       const payload = JSON.stringify({
@@ -782,7 +856,7 @@ export default function ChatView({
     } finally {
       setStrategicLoading(false);
     }
-  }, [meId, conversation, conversationMode, participants, convId, mergeIncomingMessage]);
+  }, [meId, conversation, conversationMode, participants, convId, mergeIncomingMessage, resolvePlanningCity, composedGroupVibe]);
 
   const openConciergeStaleNudge = useCallback(() => {
     if (!otherUser) return;
@@ -1508,6 +1582,17 @@ export default function ChatView({
                     const pendingPlanId = typeof p.pending_plan_id === "string" ? p.pending_plan_id : null;
                     const status = pendingPlanId ? pendingPlanStatusMap[pendingPlanId] : undefined;
                     const imInvitee = !mine;
+                    // Group plans get the consensus card: per-option reactions +
+                    // host-confirm once an option has more 👍 than 👎 (TB-2.6).
+                    if (isGroup && pendingPlanId && Array.isArray(p.plan_options) && p.plan_options.length >= 1) {
+                      return (
+                        <GroupPlanConsensusCard
+                          pendingPlanId={pendingPlanId}
+                          options={p.plan_options as Parameters<typeof GroupPlanConsensusCard>[0]["options"]}
+                          isHost={mine}
+                        />
+                      );
+                    }
                     const dateStr =
                       typeof p.date_time === "string" && p.date_time
                         ? new Date(p.date_time).toLocaleString(undefined, {
@@ -2461,6 +2546,18 @@ export default function ChatView({
                 <Text style={styles.attachLabel}>Topics</Text>
               </Pressable>
             ) : null}
+            {showGroupPlanningCard ? (
+              <Pressable
+                style={styles.attachItem}
+                onPress={() => {
+                  setShowAttachMenu(false);
+                  openGroupPlanning();
+                }}
+              >
+                <Ionicons name="people-circle-outline" size={26} color={Colors.primaryViolet} />
+                <Text style={styles.attachLabel}>Plan with group</Text>
+              </Pressable>
+            ) : null}
           </View>
         </ChatAttachmentSheet>
         </>
@@ -2472,6 +2569,13 @@ export default function ChatView({
           </View>
         ) : null}
       </KeyboardAvoidingView>
+
+      <GroupVibeSheet
+        visible={showVibeSheet}
+        onClose={() => setShowVibeSheet(false)}
+        onSubmit={(picked) => void proceedAfterVibe(picked)}
+        onSkip={() => void proceedAfterVibe()}
+      />
     </SafeScreenView>
   );
 }

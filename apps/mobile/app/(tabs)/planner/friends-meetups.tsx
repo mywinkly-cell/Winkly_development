@@ -1,51 +1,92 @@
 // apps/mobile/app/planner/friends-meetups.tsx
 // Winkly – Planner: Friends Meetups
 
-import React, { useMemo, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert, StyleSheet } from "react-native";
-import { useRouter } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, ActivityIndicator, RefreshControl } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { supabase } from "@/lib/supabase";
+import { getGroupMeetups, type GroupMeetup } from "@/lib/access/planner";
 
-type Meetup = { id: string; title: string; timeLabel: string; type: "activity" | "group" | "1-1" };
+function formatTimeLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, {
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function FriendsMeetups() {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [items, setItems] = useState<GroupMeetup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const items: Meetup[] = useMemo(
-    () => [
-      { id: "f1", title: "Reggaeton class", timeLabel: "Wed • 19:00", type: "activity" },
-      { id: "f2", title: "Brunch with new friend", timeLabel: "Sat • 11:30", type: "1-1" },
-      { id: "f3", title: "Hiking group meetup", timeLabel: "Sun • 09:00", type: "group" },
-    ],
-    []
+  const load = useCallback(async () => {
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const me = auth.user?.id;
+      if (!me) {
+        setItems([]);
+        return;
+      }
+      setItems(await getGroupMeetups(me, "friends"));
+    } catch {
+      // keep prior
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
   );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return items;
-    return items.filter((x) => x.title.toLowerCase().includes(q));
+    return items.filter((x) => (x.title ?? "").toLowerCase().includes(q));
   }, [items, query]);
-
-  const onAdd = () => Alert.alert("Add meetup", "Placeholder. Next: create form + Supabase insert.");
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              load();
+            }}
+          />
+        }
+      >
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
             <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Friends meetups</Text>
-          <TouchableOpacity onPress={onAdd} style={styles.actionBtn} activeOpacity={0.9}>
-            <Text style={styles.actionText}>Add</Text>
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: "/groups", params: { mode: "friends" } })}
+            style={styles.actionBtn}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.actionText}>Groups</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.title}>Your social plans</Text>
-          <Text style={styles.subtitle}>Hangouts, activities, and group meetups in Friends mode.</Text>
+          <Text style={styles.title}>Your group plans</Text>
+          <Text style={styles.subtitle}>Confirmed group meetups in Friends mode (2+ people).</Text>
 
           <TextInput
             value={query}
@@ -56,34 +97,28 @@ export default function FriendsMeetups() {
           />
         </View>
 
-        {filtered.map((it) => (
-          <View key={it.id} style={styles.itemCard}>
-            <View style={styles.itemTop}>
-              <Text style={styles.itemTitle}>{it.title}</Text>
-              <Text style={styles.badge}>{it.type}</Text>
-            </View>
-            <Text style={styles.itemSub}>{it.timeLabel}</Text>
-
-            <View style={styles.rowActions}>
-              <TouchableOpacity
-                onPress={() => Alert.alert("Open", "Placeholder for details.")}
-                style={styles.secondaryBtn}
-                activeOpacity={0.9}
-              >
-                <Text style={styles.secondaryText}>Details</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => Alert.alert("Invite", "Placeholder for invite flow.")}
-                style={styles.primaryBtn}
-                activeOpacity={0.9}
-              >
-                <Text style={styles.primaryText}>Invite</Text>
-              </TouchableOpacity>
-            </View>
+        {loading ? (
+          <ActivityIndicator size="small" color={Colors.primaryViolet} style={{ marginTop: 24 }} />
+        ) : filtered.length === 0 ? (
+          <View style={styles.itemCard}>
+            <Text style={styles.itemSub}>
+              No group meetups yet. Plan one from a group chat with “Plan with group”, and it will show up here once
+              confirmed.
+            </Text>
           </View>
-        ))}
-
-        <Text style={styles.note}>Next: connect to groups + invitations.</Text>
+        ) : (
+          filtered.map((it) => (
+            <View key={it.id} style={styles.itemCard}>
+              <View style={styles.itemTop}>
+                <Text style={styles.itemTitle} numberOfLines={1}>
+                  {it.title}
+                </Text>
+                <Text style={styles.badge}>{it.participant_count} people</Text>
+              </View>
+              <Text style={styles.itemSub}>{formatTimeLabel(it.starts_at)}</Text>
+            </View>
+          ))
+        )}
       </ScrollView>
     </View>
   );

@@ -36,6 +36,8 @@ export type WinklyPlanOption = {
   character_label: string;
   title: string;
   why_this_fits: string;
+  /** Group planning (≥3 participants): "why this works for everyone" bullets. */
+  group_fit_notes?: string[];
   itinerary: { time: string; description: string }[];
   venue: {
     name: string;
@@ -82,6 +84,10 @@ export async function callWinklyPlan(params: {
         weather_snapshot: context.weather_snapshot,
         partner_user_id: context.partner_user_id,
         participant_user_ids: context.participant_user_ids,
+        // Forwarded so the gateway can scope the plan to this conversation's
+        // members and link the resulting pending_plan to the group chat.
+        conversation_id: context.conversation_id,
+        group_vibe: context.group_vibe,
         app_language: context.app_language ?? getAppLanguageCode(),
       },
     }),
@@ -149,7 +155,10 @@ export async function dismissWeatherPivot(pendingPlanId: string): Promise<boolea
   return !error;
 }
 
-export async function confirmPendingPlan(pendingPlanId: string): Promise<PendingPlanConfirmResponse> {
+export async function confirmPendingPlan(
+  pendingPlanId: string,
+  opts?: { asHost?: boolean; optionId?: "A" | "B" }
+): Promise<PendingPlanConfirmResponse> {
   if (!SUPABASE_URL) throw new Error("Missing Supabase URL");
 
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -159,13 +168,61 @@ export async function confirmPendingPlan(pendingPlanId: string): Promise<Pending
   const res = await fetch(url, {
     method: "POST",
     headers: aiGatewayHeaders(session.access_token),
-    body: JSON.stringify({ pending_plan_id: pendingPlanId }),
+    body: JSON.stringify({
+      pending_plan_id: pendingPlanId,
+      ...(opts?.asHost ? { as_host: true } : {}),
+      ...(opts?.optionId ? { option_id: opts.optionId } : {}),
+    }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error((typeof data?.error === "string" ? data.error : undefined) ?? `Request failed: ${res.status}`);
   }
   return data as PendingPlanConfirmResponse;
+}
+
+export type PendingPlanReaction = "up" | "maybe" | "down";
+
+/** Per-option reaction counts: { A: { up, maybe, down }, B: {...} } plus the current user's choice. */
+export type PendingPlanReactionState = {
+  counts: Record<string, { up: number; maybe: number; down: number }>;
+  mine: Record<string, PendingPlanReaction>;
+};
+
+/** Upsert the current user's reaction to a specific A/B option of a group plan. */
+export async function setPendingPlanReaction(
+  pendingPlanId: string,
+  optionId: "A" | "B",
+  reaction: PendingPlanReaction
+): Promise<void> {
+  const { data: auth } = await supabase.auth.getUser();
+  const me = auth.user?.id;
+  if (!me) throw new Error("Not signed in");
+  const { error } = await supabase
+    .from("pending_plan_reactions")
+    .upsert(
+      { pending_plan_id: pendingPlanId, user_id: me, option_id: optionId, reaction },
+      { onConflict: "pending_plan_id,user_id,option_id" }
+    );
+  if (error) throw new Error(error.message);
+}
+
+/** Read aggregated reaction counts (and the current user's reactions) for a plan. */
+export async function getPendingPlanReactions(pendingPlanId: string): Promise<PendingPlanReactionState> {
+  const { data: auth } = await supabase.auth.getUser();
+  const me = auth.user?.id ?? null;
+  const state: PendingPlanReactionState = { counts: {}, mine: {} };
+  const { data, error } = await supabase
+    .from("pending_plan_reactions")
+    .select("user_id, option_id, reaction")
+    .eq("pending_plan_id", pendingPlanId);
+  if (error || !data) return state;
+  for (const row of data as { user_id: string; option_id: string; reaction: PendingPlanReaction }[]) {
+    if (!state.counts[row.option_id]) state.counts[row.option_id] = { up: 0, maybe: 0, down: 0 };
+    state.counts[row.option_id][row.reaction] += 1;
+    if (me && row.user_id === me) state.mine[row.option_id] = row.reaction;
+  }
+  return state;
 }
 
 /** Allowlisted context for concierge/plan (no raw chat, no PII beyond what's needed). */
@@ -249,6 +306,8 @@ export type ConciergeContext = {
   selected_date_time?: string;
   /** Planner theme plans: optional forecast text for indoor/outdoor hinting. */
   weather_forecast?: string;
+  /** Group "Vibe Check": aggregated mood/energy/notes prose for group AI planning. */
+  group_vibe?: string;
   /** OpenTable/Resy discovery URLs + disclaimer — not confirmed bookings. */
   booking_context?: Record<string, unknown>;
   /**

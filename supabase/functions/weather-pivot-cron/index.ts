@@ -166,12 +166,19 @@ serve(async (req) => {
         const pivotId = (ins.data as { id?: string } | null)?.id;
         const conversationId = typeof r.conversation_id === "string" ? r.conversation_id : null;
         if (pivotId && conversationId) {
-          // Push a pivot proposal into the chat (DB-first notification).
+          // Push a pivot proposal into the chat (DB-first notification). Renders as a plain
+          // system bubble (no tap handling for this message_type), so the copy points the user
+          // to the Planner rather than implying the bubble itself is interactive.
+          const dateLabel = new Date(dateTime).toLocaleDateString("en-US", {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+          });
           await supabase.from("messages").insert({
             conversation_id: conversationId,
             sender_id: r.created_by,
             message_type: "system",
-            content: "Weather alert: I suggested an indoor pivot. Tap to review and confirm the updated plan.",
+            content: `Weather alert: we found an indoor alternative for ${dateLabel} — check your Planner to review it.`,
             metadata: { kind: "weather_pivot_proposal", pivot_pending_plan_id: pivotId, pivot_of: r.id, severity, city, date },
           }).then(() => {}).catch(() => {});
         }
