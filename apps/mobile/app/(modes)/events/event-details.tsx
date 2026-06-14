@@ -291,7 +291,7 @@ export default function EventDetails() {
     if (!event) return;
     try {
       Haptics.selectionAsync();
-      const url = `https://winkly.app/events/${event.id}`;
+      const url = `https://mywinkly.de/events/${event.id}`;
       const cityPart = event.city ? fmtLoc(event.city) : "";
       const message = `${event.title}\n${cityPart} ${event.venue_name ?? ""}\n${formatDateTime(event.start_at)}\n\nJoin on Winkly: ${url}`;
       await Share.share({

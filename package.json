@@ -18,6 +18,7 @@
     "mobile:lint": "npm run -w apps/mobile lint",
     "mobile:typecheck": "npm run -w apps/mobile typecheck",
     "mobile:test": "npm run -w apps/mobile test",
+    "test": "npm run mobile:test",
     "mobile:test:e2e": "npm run -w apps/mobile test:e2e",
     "mobile:test:e2e:ios": "npm run -w apps/mobile test:e2e:ios",
     "mobile:test:e2e:android": "npm run -w apps/mobile test:e2e:android",

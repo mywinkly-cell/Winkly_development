@@ -18,9 +18,12 @@ import {
   Animated,
 } from "react-native";
 import { GestureDetector, Gesture } from "react-native-gesture-handler";
+import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
+import { useModeContext } from "@/providers/ModeContextProvider";
+import { canUseAIFeature } from "@/lib/ai/aiFeatureGate";
 import {
   buildOriginContext,
   type ConciergeContext,
@@ -129,6 +132,11 @@ export function ConciergePlanningFlow({
 }: ConciergePlanningFlowProps) {
   const { i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
+  const router = useRouter();
+  const modeContext = useModeContext();
+  const tier = modeContext.subscription_tier ?? "free";
+  /** Premium unlocks the full 3-option Experience Menu (task "concierge") via Chat assist. */
+  const hasFullConcierge = canUseAIFeature(tier, "concierge");
   /** Planner "All" scope: grouped catalogue; chosen category sets planning mode for the rest of the flow. */
   const genericCategoryCatalog = source_screen === "planner" && plannerScope === "all";
   const [effectiveMode, setEffectiveMode] = useState<Mode>(mode);
@@ -1060,6 +1068,29 @@ export function ConciergePlanningFlow({
                   </View>
                 );
               })}
+              <View style={styles.conciergeUpsell}>
+                <View style={styles.conciergeUpsellHeader}>
+                  <Ionicons name="sparkles-outline" size={16} color={Colors.primaryViolet} />
+                  <Text style={styles.conciergeUpsellTitle}>
+                    {hasFullConcierge ? "Want even more depth?" : "Unlock the full Experience Menu"}
+                  </Text>
+                </View>
+                <Text style={styles.conciergeUpsellBody}>
+                  {hasFullConcierge
+                    ? "Open Winkly AI inside any chat for the full 3-option concierge — deeper “why it fits your DNA”, per-step tips and logistics."
+                    : "Premium gives you 3 curated options with deeper “why it fits your DNA”, concierge tips and logistics. Ask Winkly AI in any chat."}
+                </Text>
+                {!hasFullConcierge ? (
+                  <TouchableOpacity
+                    style={styles.conciergeUpsellBtn}
+                    onPress={() => { Haptics.selectionAsync(); router.push("/account/subscription"); }}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={styles.conciergeUpsellBtnText}>See Premium</Text>
+                    <Ionicons name="arrow-forward" size={16} color={Colors.white} />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
             </GestureScrollView>
           ) : suggestions && suggestions.length > 0 ? (
             <GestureScrollView style={styles.optionsScroll} contentContainerStyle={styles.optionsContent}>
@@ -1430,6 +1461,28 @@ const styles = StyleSheet.create({
     borderColor: Colors.gray200,
   },
   tryDifferentBtnText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "700" },
+  conciergeUpsell: {
+    backgroundColor: Colors.primaryViolet + "12",
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 4,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.primaryViolet + "33",
+  },
+  conciergeUpsellHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
+  conciergeUpsellTitle: { ...Typography.caption, fontWeight: "800", color: Colors.primaryViolet },
+  conciergeUpsellBody: { ...Typography.caption, color: Colors.gray600, marginBottom: 12 },
+  conciergeUpsellBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: Colors.primaryViolet,
+    borderRadius: 12,
+    paddingVertical: 11,
+  },
+  conciergeUpsellBtnText: { ...Typography.button, color: Colors.white },
   planCard: {
     backgroundColor: Colors.white,
     borderRadius: 20,

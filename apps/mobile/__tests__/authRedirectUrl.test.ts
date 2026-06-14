@@ -26,7 +26,7 @@ describe("authRedirectUrl helpers", () => {
   });
 
   it("usesHttpsAuthRedirect is true for https redirect", () => {
-    process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL = "https://winkly.app/auth/";
+    process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL = "https://mywinkly.de/auth/";
     __resetEnvCache();
     expect(usesHttpsAuthRedirect()).toBe(true);
   });
@@ -38,7 +38,7 @@ describe("authRedirectUrl helpers", () => {
   });
 
   it("validateAuthRedirectStateFromUrl rejects mismatched state", async () => {
-    process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL = "https://winkly.app/auth/";
+    process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL = "https://mywinkly.de/auth/";
     __resetEnvCache();
     await AsyncStorage.setItem("winkly_pending_auth_state", "expected");
     await expect(
@@ -47,7 +47,7 @@ describe("authRedirectUrl helpers", () => {
   });
 
   it("validateAuthRedirectStateFromUrl clears pending state on match", async () => {
-    process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL = "https://winkly.app/auth/";
+    process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL = "https://mywinkly.de/auth/";
     __resetEnvCache();
     await AsyncStorage.setItem("winkly_pending_auth_state", "signed");
     await expect(validateAuthRedirectStateFromUrl("winkly://callback?winkly_state=signed")).resolves.toBe(true);
@@ -55,7 +55,7 @@ describe("authRedirectUrl helpers", () => {
   });
 
   it("getEmailRedirectTo appends minted winkly_state for https redirect", async () => {
-    process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL = "https://winkly.app/auth/";
+    process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL = "https://mywinkly.de/auth/";
     process.env.EXPO_PUBLIC_SUPABASE_URL = "https://test-project.supabase.co";
     __resetEnvCache();
     httpGet.mockResolvedValue({ state: "minted-state" });

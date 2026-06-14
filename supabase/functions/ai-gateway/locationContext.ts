@@ -129,7 +129,7 @@ async function fetchOsmHints(input: {
   try {
     const q = encodeURIComponent(`${input.query} ${input.city} ${input.country ?? ""}`.trim().slice(0, 200));
     const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=4`, {
-      headers: { "User-Agent": "WinklyApp/1.0 (ai-gateway; https://winkly.app)" },
+      headers: { "User-Agent": "WinklyApp/1.0 (ai-gateway; https://mywinkly.de)" },
     });
     const arr = await res.json() as Array<{ display_name?: string; lat?: string; lon?: string }>;
     return (arr ?? []).slice(0, 4).map((r) => {

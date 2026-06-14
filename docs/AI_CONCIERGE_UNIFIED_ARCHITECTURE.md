@@ -1,8 +1,10 @@
 # AI Concierge — Unified Architecture
 
-**Last updated:** 2026-02-22
+**Last updated:** 2026-06-14
 
 This document defines the **AI Concierge Unified Architecture**: the bridge between static User DNA (onboarding), Sub-Mode Context (Romance, Friends, Business, Events), and Real-Time World Data (weather, maps, business availability). It aligns with the existing **AI_CONCIERGE_SPEC.md** and mobile implementation.
+
+> **Reality check (2026-06):** The Planner and chat "Plan together" surfaces use the 7-step **`ConciergePlanningFlow`** → task **`planner_theme_plans`** → **2 decisive A/B options** (Super+). The full **3-option** Experience Menu is the Premium chat-assist `concierge` task only (`ConciergeRequestForm`). The Planner results step carries an in-flow upsell to the deeper concierge. AI copy is localized via `app_language`.
 
 ---
 
@@ -38,17 +40,23 @@ When the user opens "Ask Winkly AI" from the **Planner** (or "Winkly AI for Chat
 
 As the user fills the form, **active feedback** appears before Submit:
 
-- **Weather warning:** If rain is forecast for the chosen date/location, a "Concierge note" box appears: *"Note: [date] is forecast for rain in [city]. Consider indoor options or another day."* with actions: **Postpone a day** | **Change activity** (e.g. add "indoor" to prompt).
+- **Weather warning:** If rain is forecast for the chosen date/location, a "Concierge note" box appears with actions **Postpone a day** | **Prefer indoor**. As of 2026-06 this lives in the **Planner step `ConciergeActivityDetailsStep`** (it reads the `weatherSnapshot` already fetched there): "Postpone a day" shifts the date +1; "Prefer indoor" sets `indoorOutdoor = "indoor"` so the plan request asks for indoor venues. (The legacy copy in `ConciergeRequestForm` was unreachable for Planner opens — that form only renders for chat, non-`usePlanningFlow` entry — so it was removed.)
 - **Constraint conflict** (e.g. partner allergy) and **time logic** (traffic) are backend-driven; response can include `concierge_note` for display. Target latency for client-side weather hint: **&lt;1.5 s** after date/location set.
+- **Proactive pivot (post-confirmation):** Separately, `weather-pivot-cron` re-checks weather ~24h before a *confirmed* plan and, if severe, proposes an indoor alternative surfaced by `WeatherPivotBanner` in the Planner. See §7.
 
 ### Screen C: The Menu Options (Result)
 
-After Submit, the AI returns **2–3 Menu Cards**. Each card includes:
+The number of cards depends on the surface (see the reality-check note above):
+
+- **Planner / "Plan together"** (`planner_theme_plans`, Super+): **2 decisive cards (A/B)** — Maps-verified venue, `why_this_fits`, itinerary, weather note — plus an in-flow **Premium upsell** to the full menu.
+- **Chat assist** ("Winkly AI for Chats", `concierge`, Premium): the full **3-card Experience Menu**.
+
+Each card includes:
 
 - **Title** (option_name / narrative)
 - **Why it fits your DNA** (why_this_fits / logic_bridge)
 - **Itinerary / schedule** (itinerary steps or schedule array)
-- **Travel time, price tier** (logistics, price_indicator)
+- **Travel time, price tier** (logistics, price_indicator — chat-assist `concierge` shape only)
 - **Send selection** → Add to planner and optionally **Invite [Partner]** (ConciergeConfirmStep: "Send selection & invite …" / "Add to planner").
 - **Correct details** → Refinement: chips ("Make it cheaper", "Earlier time", "More relaxed", "Different cuisine") or free text; re-submit with `refinement_feedback` and `previous_options` for delta logic.
 
@@ -84,13 +92,14 @@ Client sends `origin_context` (e.g. `Planner_Romance`, `Planner_Events`) and `so
 - **origin_context:** `Planner_[Romance|Friends|Business|Events|All]` or `Chat_1:1_[Mode]` / `Chat_[Mode]`.
 - **users:** Inferred from session + `partner_user_id` (gateway fetches profiles).
 - **intent:** `user_prompt` / `activity_hint`, `city`, `date_from` / `date_to`, `budget_tier`, `weather_snapshot`, `refinement_feedback`, `previous_options`.
+- **app_language:** App UI language code (e.g. `de`); allowlisted so AI copy is returned in the user's language (default English).
 
 Real-time triggers (weather, traffic, business_partners) are handled by the gateway (tools: get_weather, get_winkly_events, get_planner_items); client may send pre-fetched `weather_snapshot` to avoid extra round-trips.
 
 ### Response
 
 - **message:** Human-readable summary.
-- **suggestions:** 2–3 ExperienceOption (option_name, why_this_fits, itinerary/schedule, logistics, price_indicator, business_link).
+- **suggestions / plan_options:** Chat-assist `concierge` returns **3** `ExperienceOption` (option_name, why_this_fits, itinerary/schedule, logistics, price_indicator, business_link). Planner `planner_theme_plans` returns **2** `plan_options` (A/B: title, why_this_fits, itinerary, venue, weather_note) — no `logistics`/`concierge_tip`.
 - **concierge_note:** Optional real-time advisory (e.g. constraint conflict, time logic) for the hint layer.
 
 ### Conflict & logic resolution (gateway)
@@ -108,7 +117,8 @@ Real-time triggers (weather, traffic, business_partners) are handled by the gate
 |--------|------|
 | **Plan with AI** | Opens the intelligent form (Planner header Spark). |
 | **Get chat suggestions** | Same form from Chats; chat-focused copy and optional details. |
-| **Postpone** / **Change activity** | Shown in Real-Time Advisory when weather/conflict detected. |
+| **Postpone a day** / **Prefer indoor** | Shown in the Planner step (`ConciergeActivityDetailsStep`) when rain is forecast for the chosen date/location. |
+| **Use indoor plan** / **Keep original** | `WeatherPivotBanner` in the Planner, when `weather-pivot-cron` proposes an indoor pivot for a confirmed plan. |
 | **Send selection** / **Add to planner** | ConciergeConfirmStep primary CTA; optional "Invite [Partner]". |
 | **Correct details** | Refinement chips or free text; re-submit with refinement_feedback + previous_options. |
 
@@ -116,8 +126,10 @@ Real-time triggers (weather, traffic, business_partners) are handled by the gate
 
 ## 7. Implementation References
 
-- **Client:** `lib/ai/conciergeClient.ts` (`buildOriginContext`, `ConciergeContext.origin_context`, `ConciergeResponse.concierge_note`).
-- **Form:** `components/ai/ConciergeRequestForm.tsx` (mode label, activity chips, real-time advisory box, location placeholder, refinement placeholder).
+- **Client:** `lib/ai/conciergeClient.ts` (`buildOriginContext`, `ConciergeContext` incl. `app_language`, `getPendingWeatherPivots` / `dismissWeatherPivot`, `ConciergeResponse.concierge_note`).
+- **Planner flow:** `components/ai/ConciergePlanningFlow.tsx` (7-step flow → `planner_theme_plans`, 2 A/B cards, Premium upsell).
+- **Planner step / weather advisory:** `components/ai/ConciergeActivityDetailsStep.tsx` (Weather row + Postpone a day / Prefer indoor).
+- **Chat assist form:** `components/ai/ConciergeRequestForm.tsx` (chat-only; mode label, activity chips, refinement placeholder).
+- **Weather pivot:** `supabase/functions/weather-pivot-cron/index.ts` + `migrations/20260625120000_weather_pivot_cron_schedule.sql` + `components/planner/WeatherPivotBanner.tsx`.
 - **Confirm step:** `components/ai/ConciergeConfirmStep.tsx` ("Why it fits your DNA", Correct details refinement, Send selection).
-- **Planner modal:** `app/planner/index.tsx` (refinement state, previous_options, onCorrectDetails).
 - **Spec:** `docs/AI_CONCIERGE_SPEC.md` (constraint intersection, persona, menu schema, business priority).

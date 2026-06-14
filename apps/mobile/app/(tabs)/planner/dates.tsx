@@ -327,7 +327,8 @@ export default function PlannerDates() {
         <View style={styles.card}>
           <Text style={styles.title}>Upcoming dates & safety</Text>
           <Text style={styles.subtitle}>
-            Your confirmed plans with matches, plus safety check-ins before in-person meetups.
+            Confirmed plans with matches (accepted in chat). Pending date invites stay in your
+            match conversations until someone accepts.
           </Text>
 
           <TextInput
@@ -343,14 +344,19 @@ export default function PlannerDates() {
           <ActivityIndicator style={{ marginTop: 24 }} color={Colors.primaryViolet} />
         ) : (
           <>
-            <Text style={styles.sectionTitle}>Planned dates</Text>
+            <Text style={styles.sectionTitle}>Confirmed dates</Text>
+            <Text style={styles.sectionHint}>
+              Only shows dates you&apos;ve accepted (or sent and the other person accepted). Proposals
+              waiting on a reply appear in chat, not here.
+            </Text>
 
             {showPlannedEmpty ? (
               <View style={styles.emptyState}>
                 <Ionicons name="calendar-outline" size={40} color={Colors.gray400} />
-                <Text style={styles.emptyTitle}>No dates planned yet</Text>
+                <Text style={styles.emptyTitle}>No confirmed dates yet</Text>
                 <Text style={styles.emptySubtitle}>
-                  Match with someone and use the AI planner in chat to arrange your first date.
+                  When you or a match accepts a date invite in chat, it will show up here. Open a
+                  match conversation to propose or respond to plans.
                 </Text>
               </View>
             ) : showSearchEmpty ? (
@@ -522,7 +528,13 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.6,
     marginTop: 8,
+    marginBottom: 4,
+  },
+  sectionHint: {
+    ...Typography.caption,
+    color: Colors.gray500,
     marginBottom: 10,
+    lineHeight: 18,
   },
   itemCard: {
     backgroundColor: "#FFF",

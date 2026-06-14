@@ -1,11 +1,11 @@
 /**
  * Verify legal URLs return 200 and expected Winkly content.
  * Usage:
- *   node scripts/verify-links.mjs                  # production winkly.app
+ *   node scripts/verify-links.mjs                  # production mywinkly.de
  *   node scripts/verify-links.mjs --base http://localhost:4173
  */
 
-const DEFAULT_BASE = "https://winkly.app";
+const DEFAULT_BASE = "https://mywinkly.de";
 
 const CHECKS = [
   { path: "/terms", mustInclude: ["Winkly Technologies", "Germany"] },
@@ -13,6 +13,7 @@ const CHECKS = [
   { path: "/privacy#cookies", mustInclude: ["Cookies", "PostHog"] },
   { path: "/community", mustInclude: ["Community Guidelines", "respectful"] },
   { path: "/imprint", mustInclude: ["Impressum", "Winkly Technologies"] },
+  { path: "/auth", mustInclude: ["winkly://callback", "winkly_state"] },
 ];
 
 function parseArgs() {

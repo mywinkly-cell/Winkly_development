@@ -16,7 +16,7 @@ Winkly Technologies UG (haftungsbeschränkt)
 {{company.postalCode}} {{company.city}}, {{company.country}}
 
 **Contact:**  
-For privacy requests and questions: use **General settings → Support & legal → Contact Support** in the app, or email **support@winkly.app** (or the address shown in the app).
+For privacy requests and questions: use **General settings → Support & legal → Contact Support** in the app, or email **customer-care@mywinkly.de** (or the address shown in the app).
 
 ---
 
@@ -172,7 +172,7 @@ Winkly is primarily a mobile app. We do not use advertising cookies and we do **
 
 ### 11.3 Website
 
-If you visit **winkly.app**, our hosting provider may process standard server logs (e.g. IP address, browser type) for security and operation. We do not use third-party advertising trackers on our legal pages.
+If you visit **mywinkly.de**, our hosting provider may process standard server logs (e.g. IP address, browser type) for security and operation. We do not use third-party advertising trackers on our legal pages.
 
 For more on analytics data, see section 2.4 above. For legal entity details, see our [Imprint](/imprint).
 
@@ -183,7 +183,7 @@ For more on analytics data, see section 2.4 above. For legal entity details, see
 For any privacy-related questions or to exercise your rights:
 
 - In the app: **General settings → Support & legal → Contact Support**
-- Email: **support@winkly.app** (or the address shown in the app)
+- Email: **customer-care@mywinkly.de** (or the address shown in the app)
 
 ---
 
