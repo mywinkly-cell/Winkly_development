@@ -76,7 +76,9 @@ serve(async (req) => {
   const cors = corsHeaders(req);
   const secret = Deno.env.get("CRON_SECRET") ?? "";
   const got = req.headers.get("x-cron-secret") ?? "";
-  if (secret && got !== secret) {
+  // Fail closed: a missing CRON_SECRET must reject (not bypass) — this function
+  // runs with the service-role key. Matches notify-fanout's secret check.
+  if (!secret || got !== secret) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },

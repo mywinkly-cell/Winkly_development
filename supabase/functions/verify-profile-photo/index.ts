@@ -87,12 +87,15 @@ serve(async (req) => {
   let provider = "none";
   let raw: Record<string, unknown> = {};
 
+  // Storage paths (non-http) are selfie objects in the PRIVATE verification-selfies
+  // bucket; the service-role client reads them despite RLS. Profile photos are
+  // passed as public https URLs and take the fetch branch above.
   async function downloadBytes(pathOrUrl: string): Promise<Uint8Array> {
     if (pathOrUrl.startsWith("http")) {
       const r = await fetch(pathOrUrl);
       return new Uint8Array(await r.arrayBuffer());
     }
-    const bucket = "user-photos";
+    const bucket = "verification-selfies";
     const { data, error } = await admin.storage.from(bucket).download(pathOrUrl);
     if (error || !data) throw new Error(error?.message ?? "download failed");
     return new Uint8Array(await data.arrayBuffer());
