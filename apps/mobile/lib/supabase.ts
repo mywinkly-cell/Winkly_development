@@ -1,9 +1,9 @@
 // apps/mobile/lib/supabase.ts
 import "react-native-url-polyfill/auto";
 import { Platform } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import { assertOnline } from "@/lib/network/connectivity";
+import { secureSessionStorage } from "@/lib/auth/secureSessionStorage";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -38,7 +38,9 @@ const customFetch: typeof fetch = async (input, init) => {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: { fetch: customFetch },
   auth: {
-    storage: AsyncStorage,
+    // Tokens are stored in the iOS Keychain / Android Keystore (encrypted at rest)
+    // rather than plaintext AsyncStorage. See lib/auth/secureSessionStorage.ts.
+    storage: secureSessionStorage,
 
     // ✅ REQUIRED for React Native
     persistSession: true,

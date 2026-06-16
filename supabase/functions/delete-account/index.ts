@@ -8,7 +8,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, withCorsEmpty, withCorsJson } from "../_shared/cors.ts";
 
-const BUCKETS = ["user-photos", "user-videos", "business-logos"];
+const BUCKETS = ["user-photos", "user-videos", "business-logos", "verification-selfies"];
 
 /** Collect all object paths under prefix (one level of subfolders: userId/mode/file). */
 async function listPathsInBucket(

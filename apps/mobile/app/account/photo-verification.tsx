@@ -57,9 +57,12 @@ export default function PhotoVerificationScreen() {
       }
 
       const filename = `verification_${Date.now()}.jpg`;
-      const filePath = `${user.id}/verification/${filename}`;
+      // Selfie is uploaded to the PRIVATE verification-selfies bucket (owner-only RLS).
+      // It is never rendered in the app — only compared server-side by the
+      // verify-profile-photo Edge Function (service role).
+      const filePath = `${user.id}/${filename}`;
       const { error: upErr } = await supabase.storage
-        .from("user-photos")
+        .from("verification-selfies")
         .upload(filePath, decode(shot.assets[0].base64), { contentType: "image/jpeg", upsert: true });
       if (upErr) throw upErr;
 

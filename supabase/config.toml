@@ -128,6 +128,14 @@ public = true
 file_size_limit = "50MiB"
 allowed_mime_types = ["image/jpeg", "image/png", "image/webp"]
 
+# Private bucket for photo-verification selfies (sensitive). Not publicly readable;
+# only the owner and the service-role Edge Function can access objects.
+# Mirrors supabase/migrations/20260627120000_verification_selfies_private_bucket.sql.
+[storage.buckets.verification-selfies]
+public = false
+file_size_limit = "10MiB"
+allowed_mime_types = ["image/jpeg", "image/png", "image/webp"]
+
 [auth]
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
