@@ -1149,12 +1149,12 @@ export default function ChatView({
   }, [handleSend, replyTo]);
 
   const onSendImages = useCallback(async () => {
-    if (!meId) return;
-    const attachments = await pickImages(meId);
+    if (!meId || !convId) return;
+    const attachments = await pickImages(convId, meId);
     if (attachments.length > 0) {
       await handleSend(attachments, replyTo?.id);
     }
-  }, [meId, handleSend, replyTo]);
+  }, [meId, convId, handleSend, replyTo]);
 
   const onSendVoice = useCallback(
     async (uri: string, durationMs: number) => {
@@ -1173,7 +1173,7 @@ export default function ChatView({
       });
       setReplyTo(null);
       try {
-        const att = await uploadChatVoiceFromUri(meId, uri);
+        const att = await uploadChatVoiceFromUri(convId, meId, uri);
         if (!att) {
           markOptimisticFailed(clientId);
           return;
@@ -1589,7 +1589,7 @@ export default function ChatView({
                         <GroupPlanConsensusCard
                           pendingPlanId={pendingPlanId}
                           options={p.plan_options as Parameters<typeof GroupPlanConsensusCard>[0]["options"]}
-                          isHost={mine}
+                          isHost={!!mine}
                         />
                       );
                     }

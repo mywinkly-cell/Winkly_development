@@ -136,6 +136,14 @@ public = false
 file_size_limit = "10MiB"
 allowed_mime_types = ["image/jpeg", "image/png", "image/webp"]
 
+# Private bucket for chat media (images + voice notes). Not publicly readable;
+# only members of the conversation can read, via short-lived signed URLs.
+# Mirrors supabase/migrations/20260628120000_chat_media_private_bucket.sql.
+[storage.buckets.chat-media]
+public = false
+file_size_limit = "50MiB"
+allowed_mime_types = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "video/mp4", "video/quicktime", "audio/mp4", "audio/mpeg", "audio/aac", "audio/x-m4a"]
+
 [auth]
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used

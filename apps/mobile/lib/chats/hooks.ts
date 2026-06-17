@@ -8,6 +8,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "@/lib/supabase";
 import type { AppMode, Conversation, ConversationMember, Message, UserMini } from "./types";
 import { normalizeMessageRow } from "./normalizeMessage";
+import { hydrateChatMediaUrls } from "./chatMedia";
 
 /** Fetch conversations for current user, filtered by mode */
 export function useConversations(mode: AppMode | "all") {
@@ -142,8 +143,10 @@ export function useMessages(conversationId: string | null, pageSize = 50) {
         const { data: rows, error: err } = await q;
         if (err) throw err;
 
-        const list = (rows ?? []) as Message[];
-        if (list.length < pageSize) setHasMore(false);
+        const raw = (rows ?? []) as Message[];
+        if (raw.length < pageSize) setHasMore(false);
+        // Resolve private chat-media paths → short-lived signed URLs for display.
+        const list = await hydrateChatMediaUrls(raw);
 
         setMessages((prev) => {
           const next = [...list].reverse();
@@ -185,12 +188,15 @@ export function useMessages(conversationId: string | null, pageSize = 50) {
    * Merge one row from realtime or sendMessage — dedupes by id, reconciles any
    * matching optimistic bubble (by client_id), and keeps chronological order.
    */
-  const mergeIncomingMessage = useCallback((raw: Record<string, unknown> | Message) => {
+  const mergeIncomingMessage = useCallback(async (raw: Record<string, unknown> | Message) => {
     const normalized = normalizeMessageRow(raw);
+    // Resolve any private chat-media path → signed URL before showing the bubble.
+    const [hydrated] = await hydrateChatMediaUrls([normalized]);
+    const msg = hydrated ?? normalized;
     setMessages((prev) => {
-      const incomingClientId = normalized.client_id ?? null;
+      const incomingClientId = msg.client_id ?? null;
       // Already have the authoritative row.
-      if (prev.some((m) => m.id === normalized.id)) {
+      if (prev.some((m) => m.id === msg.id)) {
         // Still drop a now-superseded optimistic bubble for the same client_id.
         if (incomingClientId && prev.some((m) => (m.pending || m.failed) && m.client_id === incomingClientId)) {
           return prev.filter((m) => !((m.pending || m.failed) && m.client_id === incomingClientId));
@@ -201,7 +207,7 @@ export function useMessages(conversationId: string | null, pageSize = 50) {
       const withoutOptimistic = incomingClientId
         ? prev.filter((m) => !((m.pending || m.failed) && m.client_id === incomingClientId))
         : prev;
-      const next = [...withoutOptimistic, normalized];
+      const next = [...withoutOptimistic, msg];
       next.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       return next;
     });

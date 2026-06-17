@@ -14,9 +14,10 @@ These were implemented in the repo and just need to ship:
 - [x] **Cron endpoint fails closed** — `weather-pivot-cron` now rejects when `CRON_SECRET` is unset (`supabase/functions/weather-pivot-cron/index.ts`). → Still set `CRON_SECRET` in prod (see §1).
 - [x] **Auth session encrypted at rest** — the Supabase session (access + refresh tokens) is stored in the iOS Keychain / Android Keystore via `apps/mobile/lib/auth/secureSessionStorage.ts` instead of plaintext AsyncStorage.
 - [x] **Verification selfies moved to a private bucket** — `verification-selfies` (private, owner-only RLS). Migration `supabase/migrations/20260627120000_verification_selfies_private_bucket.sql`. → Run `supabase db push` to prod so the bucket exists.
+- [x] **Chat media moved to a private bucket** — chat images + voice notes now live in the private `chat-media` bucket (membership-scoped RLS), rendered via short-lived signed URLs (`apps/mobile/lib/chats/chatMedia.ts`, hydrated in `lib/chats/hooks.ts`). Migration `supabase/migrations/20260628120000_chat_media_private_bucket.sql`. → Run `supabase db push`; QA image/voice send+receive on a device.
 - [x] **Web security headers** added to `website/vercel.json` and `auth-redirect/vercel.json` (HSTS, X-Frame-Options, Referrer-Policy, Permissions-Policy). → Redeploy both Vercel sites.
 
-> ⚠️ **Still open in code (scoped follow-up):** chat images are stored in the **public** `user-photos` bucket and rendered via `getPublicUrl()` across many screens. Moving them to a private/signed-URL bucket is a coordinated change to `apps/mobile/lib/uploadMedia.ts` (upload) + every render site + a signed-URL helper. Tracked, not yet done.
+> ℹ️ **By design:** profile/discovery photos remain in the **public** `user-photos`/`user-videos` buckets — they're shown to many users in feeds and must stay directly renderable. Only *conversation* media and verification selfies are private.
 
 ---
 
