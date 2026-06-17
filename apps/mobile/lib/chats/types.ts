@@ -94,7 +94,18 @@ export interface Message {
 
 export interface MessageAttachment {
   type: "image" | "video" | "audio" | "file" | "gif";
+  /**
+   * Display URL. For public/external media (GIFs, legacy attachments) this is a
+   * stable URL. For private chat media (see `path`) it is a short-lived signed
+   * URL resolved at fetch time and may be empty until hydrated.
+   */
   url: string;
+  /**
+   * Storage path in the private `chat-media` bucket (`{userId}/{conversationId}/{file}`).
+   * When present, `url` is a signed URL minted from this path on read; the path is
+   * the durable reference persisted on the message. Absent for GIFs/legacy media.
+   */
+  path?: string;
   name?: string;
   size?: number;
 }

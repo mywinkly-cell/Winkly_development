@@ -14,6 +14,7 @@ import { Alert } from "react-native";
 import { decode } from "base64-arraybuffer";
 import { validatePickerAsset, validateMediaForUpload } from "@/lib/mediaValidation";
 import { CACHE_CONTROL_IMMUTABLE } from "@/lib/images/cdnImage";
+import { CHAT_MEDIA_BUCKET, signChatMediaPath } from "@/lib/chats/chatMedia";
 
 /**
  * pickAndUploadPhoto
@@ -129,8 +130,15 @@ export async function pickAndUploadVideo(userId: string, mode: string) {
   }
 }
 
-/** Chat: pick and upload one or multiple images. Returns attachment array. */
-export async function pickAndUploadChatImages(userId: string): Promise<{ type: "image"; url: string }[]> {
+/**
+ * Chat: pick and upload one or multiple images to the PRIVATE chat-media bucket.
+ * Returns attachments carrying the durable storage `path`; `url` is a signed URL
+ * minted for immediate optimistic display (the chat re-signs on read).
+ */
+export async function pickAndUploadChatImages(
+  conversationId: string,
+  userId: string
+): Promise<{ type: "image"; url: string; path: string }[]> {
   try {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
@@ -147,7 +155,7 @@ export async function pickAndUploadChatImages(userId: string): Promise<{ type: "
 
     if (result.canceled || !result.assets?.length) return [];
 
-    const attachments: { type: "image"; url: string }[] = [];
+    const attachments: { type: "image"; url: string; path: string }[] = [];
 
     for (const asset of result.assets) {
       if (!asset.base64) continue;
@@ -160,10 +168,12 @@ export async function pickAndUploadChatImages(userId: string): Promise<{ type: "
       }
 
       const filename = `${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
-      const filePath = `${userId}/chat/${filename}`;
+      // Path: {userId}/{conversationId}/{file} — owner-scoped writes + GDPR erasure
+      // by `{userId}/` prefix; reads gated on conversation membership (RLS).
+      const filePath = `${userId}/${conversationId}/${filename}`;
 
       const { error } = await supabase.storage
-        .from("user-photos")
+        .from(CHAT_MEDIA_BUCKET)
         .upload(filePath, decode(asset.base64), {
           contentType: "image/jpeg",
           cacheControl: CACHE_CONTROL_IMMUTABLE,
@@ -175,8 +185,7 @@ export async function pickAndUploadChatImages(userId: string): Promise<{ type: "
         continue;
       }
 
-      const { data } = supabase.storage.from("user-photos").getPublicUrl(filePath);
-      attachments.push({ type: "image", url: data.publicUrl });
+      attachments.push({ type: "image", path: filePath, url: await signChatMediaPath(filePath) });
     }
 
     return attachments;
@@ -268,11 +277,16 @@ export async function uploadLocalVideos(
   return out;
 }
 
-/** Chat voice note: upload local recording (m4a) to shared bucket, return audio attachment. */
+/**
+ * Chat voice note: upload local recording (m4a) to the PRIVATE chat-media bucket.
+ * Returns an attachment carrying the durable storage `path`; `url` is a signed URL
+ * for immediate playback (the chat re-signs on read).
+ */
 export async function uploadChatVoiceFromUri(
+  conversationId: string,
   userId: string,
   fileUri: string
-): Promise<{ type: "audio"; url: string; name?: string } | null> {
+): Promise<{ type: "audio"; url: string; path: string; name?: string } | null> {
   try {
     const check = await validateMediaForUpload({ uri: fileUri, kind: "audio", mimeType: "audio/mp4" });
     if (!check.ok) {
@@ -281,15 +295,14 @@ export async function uploadChatVoiceFromUri(
     }
     const response = await fetch(fileUri);
     const blob = await response.blob();
-    const path = `${userId}/chat/voice_${Date.now()}.m4a`;
-    const { error } = await supabase.storage.from("user-videos").upload(path, blob, {
+    const path = `${userId}/${conversationId}/voice_${Date.now()}.m4a`;
+    const { error } = await supabase.storage.from(CHAT_MEDIA_BUCKET).upload(path, blob, {
       contentType: "audio/mp4",
       cacheControl: CACHE_CONTROL_IMMUTABLE,
       upsert: true,
     });
     if (error) throw error;
-    const { data } = supabase.storage.from("user-videos").getPublicUrl(path);
-    return { type: "audio", url: data.publicUrl, name: "Voice message" };
+    return { type: "audio", path, url: await signChatMediaPath(path), name: "Voice message" };
   } catch (err: unknown) {
     Alert.alert("Upload failed", err instanceof Error ? err.message : "Could not send voice message.");
     return null;
