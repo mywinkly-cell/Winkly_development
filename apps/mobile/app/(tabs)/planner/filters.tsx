@@ -1,22 +1,52 @@
 // apps/mobile/app/planner/filters.tsx
 // Winkly – Planner: Filters (affects suggestions + planner lists)
-// Safe UI: stores state locally only (no persistence yet)
+// Persists to device (AsyncStorage via lib/planner/preferences); applied in the planner index.
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Switch, Alert, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
+import {
+  getPlannerPreferences,
+  savePlannerPreferences,
+  DEFAULT_PLANNER_PREFERENCES,
+} from "@/lib/planner/preferences";
 
 export default function PlannerFilters() {
   const router = useRouter();
 
-  const [onlyUpcoming, setOnlyUpcoming] = useState(true);
-  const [showCompleted, setShowCompleted] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState(true);
+  const [onlyUpcoming, setOnlyUpcoming] = useState(DEFAULT_PLANNER_PREFERENCES.onlyUpcoming);
+  const [showCompleted, setShowCompleted] = useState(DEFAULT_PLANNER_PREFERENCES.showCompleted);
+  const [aiSuggestions, setAiSuggestions] = useState(DEFAULT_PLANNER_PREFERENCES.aiSuggestions);
+  const [saving, setSaving] = useState(false);
 
-  const save = () => Alert.alert("Saved", "Placeholder. Next: persist to Supabase user settings.");
+  useEffect(() => {
+    let active = true;
+    void getPlannerPreferences().then((p) => {
+      if (!active) return;
+      setOnlyUpcoming(p.onlyUpcoming);
+      setShowCompleted(p.showCompleted);
+      setAiSuggestions(p.aiSuggestions);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await savePlannerPreferences({ onlyUpcoming, showCompleted, aiSuggestions });
+      router.back();
+    } catch {
+      Alert.alert("Couldn't save", "Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <View style={styles.screen}>
@@ -26,8 +56,8 @@ export default function PlannerFilters() {
             <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Filters</Text>
-          <TouchableOpacity onPress={save} style={styles.actionBtn} activeOpacity={0.9}>
-            <Text style={styles.actionText}>Save</Text>
+          <TouchableOpacity onPress={() => void save()} disabled={saving} style={styles.actionBtn} activeOpacity={0.9}>
+            <Text style={styles.actionText}>{saving ? "Saving…" : "Save"}</Text>
           </TouchableOpacity>
         </View>
 
@@ -85,7 +115,7 @@ export default function PlannerFilters() {
           </View>
         </View>
 
-        <Text style={styles.note}>Next: persist settings to Supabase and apply filters globally.</Text>
+        <Text style={styles.note}>Saved on this device and applied to your planner lists.</Text>
       </ScrollView>
     </View>
   );

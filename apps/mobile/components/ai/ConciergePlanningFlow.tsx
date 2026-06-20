@@ -134,7 +134,7 @@ export function ConciergePlanningFlow({
   const appLanguage = i18n?.language ?? "en";
   const router = useRouter();
   const modeContext = useModeContext();
-  const tier = modeContext.subscription_tier ?? "free";
+  const tier = modeContext.context.subscription_tier ?? "free";
   /** Premium unlocks the full 3-option Experience Menu (task "concierge") via Chat assist. */
   const hasFullConcierge = canUseAIFeature(tier, "concierge");
   /** Planner "All" scope: grouped catalogue; chosen category sets planning mode for the rest of the flow. */

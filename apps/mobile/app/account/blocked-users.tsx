@@ -3,10 +3,11 @@
 // List of blocked profiles; unblock with confirmation
 // ────────────────────────────────────────────────
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
+  Image,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -18,23 +19,63 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
+import { supabase } from "@/lib/supabase";
+import { unblockUser } from "@/lib/chats";
+import { getOtherUserCoreFields, modeDisplayName } from "@/lib/profile/otherUserCore";
+
+type BlockedRow = { id: string; name: string; photoUrl: string | null };
 
 export default function BlockedUsers() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [blocked, setBlocked] = useState<{ id: string; name: string }[]>([]);
+  const [blocked, setBlocked] = useState<BlockedRow[]>([]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (!uid) {
+        setBlocked([]);
+        return;
+      }
+      const { data: rows, error } = await supabase
+        .from("user_blocks")
+        .select("blocked_id, created_at")
+        .eq("blocker_id", uid)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+
+      const ids = (rows ?? []).map((r) => (r as { blocked_id: string }).blocked_id);
+      const profiles = await Promise.all(
+        ids.map(async (id): Promise<BlockedRow> => {
+          const core = await getOtherUserCoreFields(id).catch(() => null);
+          const name = core
+            ? modeDisplayName(
+                {
+                  first_name: core.first_name,
+                  last_name: core.last_name,
+                  show_full_name: core.show_full_name,
+                },
+                "friends",
+                "Blocked user"
+              )
+            : "Blocked user";
+          return { id, name, photoUrl: core?.core_photos?.[0] ?? null };
+        })
+      );
+      setBlocked(profiles);
+    } catch (e) {
+      if (__DEV__) console.warn("[blocked-users] load failed", e);
+      setBlocked([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
-        // Placeholder: no blocked_users table yet; show empty state
-        setBlocked([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+    void load();
+  }, [load]);
 
   const handleUnblock = (id: string, name: string) => {
     Haptics.selectionAsync();
@@ -45,9 +86,16 @@ export default function BlockedUsers() {
         { text: "Cancel", style: "cancel" },
         {
           text: "Unblock",
-          onPress: () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            setBlocked((prev) => prev.filter((b) => b.id !== id));
+          onPress: async () => {
+            try {
+              await unblockUser(id);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              setBlocked((prev) => prev.filter((b) => b.id !== id));
+            } catch (e) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              Alert.alert("Error", "Could not unblock. Please try again.");
+              if (__DEV__) console.warn("[blocked-users] unblock failed", e);
+            }
           },
         },
       ]
@@ -80,9 +128,13 @@ export default function BlockedUsers() {
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {blocked.map((user) => (
             <View key={user.id} style={styles.row}>
-              <View style={styles.avatarPlaceholder}>
-                <Ionicons name="person" size={24} color={Colors.gray400} />
-              </View>
+              {user.photoUrl ? (
+                <Image source={{ uri: user.photoUrl }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Ionicons name="person" size={24} color={Colors.gray400} />
+                </View>
+              )}
               <View style={styles.rowContent}>
                 <Text style={styles.rowName}>{user.name}</Text>
                 <Text style={styles.rowHint}>Blocked</Text>
@@ -151,6 +203,13 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: Layout.radii.card,
     marginBottom: 12,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 14,
+    backgroundColor: Colors.gray200,
   },
   avatarPlaceholder: {
     width: 48,

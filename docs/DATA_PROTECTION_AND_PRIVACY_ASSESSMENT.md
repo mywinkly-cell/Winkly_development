@@ -150,7 +150,7 @@ We do **not** sell personal data. We do not use profile or message content for a
 ## 9. Terms and Privacy Policy
 
 - **Terms of Service:** See `docs/TERMS_OF_SERVICE.md`. Covers acceptance, use rules, account, subscription, IP, AI use, liability, governing law (e.g. Germany/EEA), and reference to Privacy Policy.
-- **Privacy Policy:** See `docs/PRIVACY_POLICY.md`. Covers controller identity, data we collect, purposes, legal basis, retention, rights, international transfers, security, and contact. Both should be hosted at `https://winkly.app/terms` and `https://winkly.app/privacy` and linked from the app (General settings → Support & legal → Legal).
+- **Privacy Policy:** See `docs/PRIVACY_POLICY.md`. Covers controller identity, data we collect, purposes, legal basis, retention, rights, international transfers, security, and contact. Both should be hosted at `https://mywinkly.de/terms` and `https://mywinkly.de/privacy` and linked from the app (General settings → Support & legal → Legal).
 - **First-use acceptance:** On first app use, users must accept Terms of Service and Cookie use on a dedicated screen before sign-up or sign-in; acceptance is stored locally. Users can always access Terms, Privacy, Cookies, Data protection, and Imprint via General settings → Support & legal → Legal.
 
 ---

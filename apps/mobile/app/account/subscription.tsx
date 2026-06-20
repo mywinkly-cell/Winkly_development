@@ -19,6 +19,7 @@ import {
   openManageSubscriptions,
   type SubscriptionStatus,
 } from "@/lib/integrations/payments";
+import { trialDaysRemaining } from "@/lib/billing/subscriptionTier";
 import type { SubscriptionTier } from "@/types";
 
 const PLAN_COPY: Record<
@@ -110,14 +111,29 @@ export default function Subscription() {
           ) : (
             <>
               <View style={styles.planBox}>
-                <Text style={styles.planName}>{currentCopy.label}</Text>
+                <Text style={styles.planName}>
+                  {currentCopy.label}
+                  {status?.isOnTrial ? " (Trial)" : ""}
+                </Text>
                 <Text style={styles.planText}>{currentCopy.description}</Text>
                 {status?.activeUntil ? (
                   <Text style={styles.activeUntil}>
-                    Active until {new Date(status.activeUntil).toLocaleDateString()}
+                    {status.isOnTrial ? "Trial ends" : "Active until"}{" "}
+                    {new Date(status.activeUntil).toLocaleDateString()}
                   </Text>
                 ) : null}
               </View>
+
+              {status?.isOnTrial ? (
+                <View style={styles.trialBanner}>
+                  <Ionicons name="sparkles-outline" size={18} color={Colors.primaryViolet} />
+                  <Text style={styles.trialText}>
+                    Your free Premium trial — {trialDaysRemaining(status.activeUntil)} day
+                    {trialDaysRemaining(status.activeUntil) === 1 ? "" : "s"} left. Subscribe to keep full
+                    AI and concierge, or continue on Free (limited AI) when it ends.
+                  </Text>
+                </View>
+              ) : null}
 
               {!status?.isBillingConfigured ? (
                 <View style={styles.comingSoonBanner}>
@@ -134,7 +150,9 @@ export default function Subscription() {
 
               {UPGRADE_TIERS.map((tier) => {
                 const copy = PLAN_COPY[tier];
-                const isCurrent = current === tier;
+                // During the trial the user holds no paid plan yet, so keep both
+                // upgrade options actionable (promote them) rather than "Current".
+                const isCurrent = !status?.isOnTrial && current === tier;
                 const disabled = isCurrent || !status?.isBillingConfigured || purchasing !== null;
                 return (
                   <View key={tier} style={styles.planOption}>
@@ -242,6 +260,17 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   comingSoonText: { ...Typography.caption, color: Colors.gray700, flex: 1, lineHeight: 18 },
+
+  trialBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#F3ECFB",
+    borderRadius: Layout.radii.control,
+    padding: 12,
+    marginBottom: 12,
+  },
+  trialText: { ...Typography.caption, color: Colors.primaryViolet, flex: 1, lineHeight: 18 },
 
   notice: {
     ...Typography.caption,

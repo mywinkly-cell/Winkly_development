@@ -101,7 +101,7 @@ export default function InviteToGroup() {
         p_limit: 200,
       });
       if (error) throw error;
-      const matchedIds = [...new Set((matches ?? []).map((r: { user_id: string }) => r.user_id))].filter(
+      const matchedIds = [...new Set(((matches ?? []) as { user_id: string }[]).map((r) => r.user_id))].filter(
         (id) => !memberIds.has(id)
       );
       if (matchedIds.length === 0) {

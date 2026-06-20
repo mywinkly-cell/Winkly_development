@@ -86,10 +86,15 @@ export async function blockUser(blockedId: string) {
   const uid = auth.user?.id;
   if (!uid) throw new Error("Not signed in");
 
-  const { error } = await supabase.from("user_blocks").insert({
-    blocker_id: uid,
-    blocked_id: blockedId,
-  });
+  // Idempotent: re-blocking an already-blocked user must not error on the
+  // UNIQUE (blocker_id, blocked_id) constraint.
+  const { error } = await supabase.from("user_blocks").upsert(
+    {
+      blocker_id: uid,
+      blocked_id: blockedId,
+    },
+    { onConflict: "blocker_id,blocked_id" }
+  );
   if (error) throw error;
 }
 
@@ -139,12 +144,16 @@ export async function reportUser(reportedId: string, reason: string, details?: s
   const uid = auth.user?.id;
   if (!uid) throw new Error("Not signed in");
 
-  const { error } = await supabase.from("user_reports").insert({
-    reporter_id: uid,
-    reported_id: reportedId,
-    reason,
-    details,
-  });
+  // Idempotent: UNIQUE (reporter_id, reported_id) — re-reporting updates the row.
+  const { error } = await supabase.from("user_reports").upsert(
+    {
+      reporter_id: uid,
+      reported_id: reportedId,
+      reason,
+      details,
+    },
+    { onConflict: "reporter_id,reported_id" }
+  );
   if (error) throw error;
 }
 
@@ -153,12 +162,16 @@ export async function reportMessage(messageId: string, reason: string, details?:
   const uid = auth.user?.id;
   if (!uid) throw new Error("Not signed in");
 
-  const { error } = await supabase.from("message_reports").insert({
-    message_id: messageId,
-    reporter_id: uid,
-    reason,
-    details,
-  });
+  // Idempotent: UNIQUE (message_id, reporter_id) — re-reporting updates the row.
+  const { error } = await supabase.from("message_reports").upsert(
+    {
+      message_id: messageId,
+      reporter_id: uid,
+      reason,
+      details,
+    },
+    { onConflict: "message_id,reporter_id" }
+  );
   if (error) throw error;
 }
 

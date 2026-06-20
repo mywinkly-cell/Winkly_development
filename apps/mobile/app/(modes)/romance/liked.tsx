@@ -167,11 +167,11 @@ export default function RomanceLiked() {
     const other: RomanceProfile = {
       id: item.id,
       first_name: item.first_name,
-      age: item.age,
-      city: item.city,
-      interests: item.interests,
-      languages: item.languages,
-      compatibility: item.compatibility,
+      age: item.age ?? undefined,
+      city: item.city ?? undefined,
+      interests: item.interests ?? undefined,
+      languages: item.languages ?? undefined,
+      compatibility: item.compatibility ?? undefined,
     };
 
     const score = computeCompatibilityScore({ self, other });
@@ -259,11 +259,11 @@ export default function RomanceLiked() {
     const other: RomanceProfile = {
       id: item.id,
       first_name: item.first_name,
-      age: item.age,
-      city: item.city,
-      interests: item.interests,
-      languages: item.languages,
-      compatibility: item.compatibility,
+      age: item.age ?? undefined,
+      city: item.city ?? undefined,
+      interests: item.interests ?? undefined,
+      languages: item.languages ?? undefined,
+      compatibility: item.compatibility ?? undefined,
     };
 
     const score = computeCompatibilityScore({ self, other });

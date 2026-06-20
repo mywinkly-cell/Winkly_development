@@ -22,7 +22,12 @@ export type ActiveModeContext = {
   active_mode: Mode | null;
   active_persona_id: string | null;
   permissions: Mode[];
+  /** Effective tier to enforce now (paid → new-user trial → free). */
   subscription_tier: SubscriptionTier;
+  /** True when `subscription_tier === "premium"` comes from the new-user trial. */
+  is_on_trial?: boolean;
+  /** ISO end of the new-user trial (when on trial), else null. */
+  trial_ends_at?: string | null;
 };
 
 export type ModePermissions = {

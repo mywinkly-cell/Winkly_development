@@ -9,9 +9,9 @@
 
 - **App:** Expo SDK 54, React Native 0.81, expo-router 6; Romance, Friends, Business, Events modes; Planner; Chats (1:1 + group); Discover; AI concierge; i18n (26 languages).
 - **Backend:** Supabase (Auth, Postgres, RLS, Edge Functions: auth-redirect, ai-gateway, delete-account, get-nearby-external-events).
-- **Legal:** Terms and Privacy Policy written in `docs/`; need to be **hosted** at winkly.app (terms, privacy, community).
+- **Legal:** Terms and Privacy Policy written in `docs/`; need to be **hosted** at mywinkly.de (terms, privacy, community).
 - **Build:** EAS configured (`eas.json`: development, preview [APK], production [AAB]); `app.config.js` has placeholder `projectId` until `eas init`.
-- **Known gaps:** Data export not implemented; profile verification is placeholder; Terms/Privacy/Community must be live at winkly.app; EAS project not yet initialized for production.
+- **Known gaps:** Data export not implemented; profile verification is placeholder; Terms/Privacy/Community must be live at mywinkly.de; EAS project not yet initialized for production.
 
 ---
 
@@ -31,8 +31,8 @@
 
 | Step | Action | Done? |
 |------|--------|-------|
-| 1.2.1 | **Host legal pages** at live URLs (e.g. winkly.app): Terms (`docs/TERMS_OF_SERVICE.md` → `/terms`), Privacy (`docs/PRIVACY_POLICY.md` → `/privacy`), optional Community (`/community`). | ☐ |
-| 1.2.2 | Confirm in-app links (General settings → Support & legal → Legal) open: `https://winkly.app/terms`, `https://winkly.app/privacy`, `https://winkly.app/community`, and Contact (e.g. support@winkly.app). | ☐ |
+| 1.2.1 | **Host legal pages** at live URLs (e.g. mywinkly.de): Terms (`docs/TERMS_OF_SERVICE.md` → `/terms`), Privacy (`docs/PRIVACY_POLICY.md` → `/privacy`), optional Community (`/community`). | ☐ |
+| 1.2.2 | Confirm in-app links (General settings → Support & legal → Legal) open: `https://mywinkly.de/terms`, `https://mywinkly.de/privacy`, `https://mywinkly.de/community`, and Contact (e.g. support@mywinkly.de). | ☐ |
 | 1.2.3 | Ensure sign-up / intro flows reference Terms and Privacy Policy. | ☐ |
 
 ### 1.3 EAS and app identity
@@ -126,7 +126,7 @@
 
 | Step | Action | Done? |
 |------|--------|-------|
-| 4.2.1 | **Privacy policy:** URL to hosted policy (e.g. https://winkly.app/privacy). | ☐ |
+| 4.2.1 | **Privacy policy:** URL to hosted policy (e.g. https://mywinkly.de/privacy). | ☐ |
 | 4.2.2 | **App access:** Provide test credentials or state “All functionality available without login” if applicable. | ☐ |
 | 4.2.3 | **Ads:** Declare “No” if no ads. | ☐ |
 | 4.2.4 | **Content rating:** Complete questionnaire (e.g. IARC); submit and get rating. | ☐ |
@@ -172,7 +172,7 @@
 
 | Step | Action | Done? |
 |------|--------|-------|
-| 5.2.1 | Ensure **winkly.app** (or main domain) has: landing page, /terms, /privacy, /community, contact/support. | ☐ |
+| 5.2.1 | Ensure **mywinkly.de** (or main domain) has: landing page, /terms, /privacy, /community, contact/support. | ☐ |
 | 5.2.2 | Add **Play Store badge/link** and optional “Download on Google Play” CTA on landing. | ☐ |
 
 ### 5.3 Marketing and awareness
