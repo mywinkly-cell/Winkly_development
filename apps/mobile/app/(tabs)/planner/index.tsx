@@ -29,6 +29,11 @@ import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/toke
 import { supabase } from "@/lib/supabase";
 import { getSavedIdeas } from "@/lib/ai/conciergeStorage";
 import {
+  getPlannerPreferences,
+  DEFAULT_PLANNER_PREFERENCES,
+  type PlannerPreferences,
+} from "@/lib/planner/preferences";
+import {
   getProactiveSuggestion,
   getWeeklyWeekendSuggestion,
   shouldShowProactiveSuggestion,
@@ -386,6 +391,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   const [suggestionForDetail, setSuggestionForDetail] = useState<ProactiveSuggestion | null>(null);
   const [weeklySuggestion, setWeeklySuggestion] = useState<WeeklyWeekendSuggestion | null>(null);
   const [showWeeklyCard, setShowWeeklyCard] = useState(false);
+  const [plannerPrefs, setPlannerPrefs] = useState<PlannerPreferences>(DEFAULT_PLANNER_PREFERENCES);
 
   useEffect(() => {
     setSelectedMonthDay(null);
@@ -398,6 +404,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   useFocusEffect(
     useCallback(() => {
       getSavedIdeas().then((ideas) => setSavedIdeasCount(ideas.length));
+      void getPlannerPreferences().then(setPlannerPrefs);
       void scheduleSaturdayPlannerNudgeIfNeeded();
       (async () => {
         if (activeTab === "archive") return;
@@ -635,13 +642,18 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
           const arch = it.archivedAt ? new Date(it.archivedAt) : null;
           return arch && arch >= cutoff;
         })
-      : itemsState.filter((it) => it.status === "active" && (activeTab === "all" || it.source === activeTab));
+      : itemsState.filter(
+          (it) =>
+            (it.status === "active" ||
+              (plannerPrefs.showCompleted && it.status === "archived")) &&
+            (activeTab === "all" || it.source === activeTab)
+        );
 
     if (topic !== "All topics") {
       list = list.filter((it) => it.topic === topic);
     }
 
-    if (!isArchiveTab && !isPastContext) {
+    if (!isArchiveTab && !isPastContext && plannerPrefs.onlyUpcoming) {
       list = list.filter((it) => {
         const d = parseItemDate(it.dateStr);
         if (isNaN(d.getTime())) return false;
@@ -659,7 +671,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
           ? b.sortKey - a.sortKey
           : a.sortKey - b.sortKey
     );
-  }, [activeTab, timeRange, topic, itemsState, listSortOrder, isPastContext, todayStart]);
+  }, [activeTab, timeRange, topic, itemsState, listSortOrder, isPastContext, todayStart, plannerPrefs]);
 
   const activePlannerCount = useMemo(
     () => itemsState.filter((it) => it.status === "active").length,
@@ -667,7 +679,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   );
 
   const showConciergePromoCard =
-    !embedded && activeTab !== "archive" && overviewMode === "list" && activePlannerCount === 0;
+    !embedded && activeTab !== "archive" && overviewMode === "list" && activePlannerCount === 0 && plannerPrefs.aiSuggestions;
 
   const today = todayStart;
 
@@ -844,14 +856,14 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         showsVerticalScrollIndicator={false}
       >
         {activeTab !== "archive" && <WeatherPivotBanner />}
-        {activeTab !== "archive" && showWeeklyCard && weeklySuggestion && (
+        {activeTab !== "archive" && plannerPrefs.aiSuggestions && showWeeklyCard && weeklySuggestion && (
           <WeeklyWeekendCard
             suggestion={weeklySuggestion}
             onViewPlans={openConcierge}
             onDismiss={handleWeeklyDismiss}
           />
         )}
-        {activeTab !== "archive" && showProactiveCard && proactiveSuggestion && (
+        {activeTab !== "archive" && plannerPrefs.aiSuggestions && showProactiveCard && proactiveSuggestion && (
           <ProactiveSuggestionCard
             suggestion={proactiveSuggestion}
             accentColor={TAB_CONFIG.find((t) => t.key === activeTab)?.accent ?? Colors.primaryViolet}

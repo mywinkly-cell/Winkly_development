@@ -47,8 +47,6 @@ export const Routes = {
   // Planner
   planner: "/planner" as const,
   plannerDates: "/planner/dates" as const,
-  plannerEvents: "/planner/events" as const,
-  plannerBusinessMeetings: "/planner/business-meetings" as const,
   plannerFriendsMeetups: "/planner/friends-meetups" as const,
   plannerInvitations: "/planner/invitations" as const,
   plannerFilters: "/planner/filters" as const,

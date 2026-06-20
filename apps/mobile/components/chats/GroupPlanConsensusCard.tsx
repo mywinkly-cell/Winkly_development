@@ -76,7 +76,12 @@ export function GroupPlanConsensusCard({
     setState((prev) => {
       const counts = { ...prev.counts };
       const mine = { ...prev.mine };
-      const c = { up: 0, maybe: 0, down: 0, ...(counts[optionId] ?? {}) };
+      const prevCounts = counts[optionId];
+      const c: Record<PendingPlanReaction, number> = {
+        up: prevCounts?.up ?? 0,
+        maybe: prevCounts?.maybe ?? 0,
+        down: prevCounts?.down ?? 0,
+      };
       const prevMine = mine[optionId];
       if (prevMine && prevMine !== reaction) c[prevMine] = Math.max(0, c[prevMine] - 1);
       if (prevMine !== reaction) c[reaction] += 1;

@@ -1,6 +1,6 @@
 # Subscription Tiers & AI Access
 
-**Last updated:** 2026-06-10
+**Last updated:** 2026-06-20
 
 This document defines Winkly subscription tiers (Free, Super, Premium), how AI is gated per tier, the **Winkly AI Spark** icon behaviour, and what you need to do to activate the AI agent.
 
@@ -15,6 +15,14 @@ This document defines Winkly subscription tiers (Free, Super, Premium), how AI i
 | **Premium** | Users who want the full “5-star” experience | Everything in Super, plus **full AI and concierge**: full concierge service (weather checks, postpone/indoor suggestions, trip planning, routes, coordination), and full AI matching/suggestions everywhere the Spark appears. **Server-side:** Premium/Enterprise requests use **Anthropic Claude** as the primary LLM when `ANTHROPIC_API_KEY` is configured (Gemini/OpenAI as fallbacks). |
 
 **Enterprise** (future): For business accounts or teams; can map to Premium-level AI or custom limits.
+
+### New-user Premium trial
+
+Every new user starts on a **3-day Premium trial**, granted at signup via `users.trial_ends_at` (migration `20260628130000_premium_trial.sql`). During the trial the **effective tier is Premium** (full AI + concierge). When it ends, the user reverts to **Free** (3 AI plans/day + planning ideas) unless they hold a paid plan. The subscription screen promotes both paid plans (Super and Premium) during and after the trial.
+
+The effective tier — **active paid plan → trial → Free** — is computed identically on the client (`computeEffectiveTier` in `lib/billing/subscriptionTier.ts`, applied in `ModeContextProvider`) and the server (`effectiveTierFromRow` in `supabase/functions/ai-gateway/index.ts`), so AI gating can't be bypassed and reverts by time alone (no downgrade job, no mutation of `subscription_tier`).
+
+> Charging is not wired yet: `purchase()` returns `not_configured` and `isBillingConfigured` is false until Play Billing / RevenueCat is integrated. The trial and tier enforcement work regardless; the upgrade buttons show a "coming soon — no charges yet" state until then.
 
 ---
 

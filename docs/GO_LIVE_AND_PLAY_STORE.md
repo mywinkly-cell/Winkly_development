@@ -43,11 +43,11 @@ Checklist to **activate** the app (production-ready backend + build) and **publi
 ### 1.5 Legal and support
 
 - [ ] **Update `website/legal-entity.json`** with registered address, managing director, Handelsregister, and VAT ID (required for Impressum).
-- [ ] **Deploy legal site** from `website/` to **winkly.app** (Vercel: root directory `website`; see `website/README.md`). **Important:** the domain may currently serve unrelated content — replace with this build.
-- [ ] **Privacy policy** URL (required for Play and for many auth providers). Source: `docs/PRIVACY_POLICY.md` → `https://winkly.app/privacy`.
-- [ ] **Terms of service** URL (required before submission). Source: `docs/TERMS_OF_SERVICE.md` → `https://winkly.app/terms`.
-- [ ] **Imprint** URL (required for Germany): `https://winkly.app/imprint`.
-- [ ] **Community guidelines**: `https://winkly.app/community`.
+- [ ] **Deploy legal site** from `website/` to **mywinkly.de** (Vercel: root directory `website`; see `website/README.md`). **Important:** the domain may currently serve unrelated content — replace with this build.
+- [ ] **Privacy policy** URL (required for Play and for many auth providers). Source: `docs/PRIVACY_POLICY.md` → `https://mywinkly.de/privacy`.
+- [ ] **Terms of service** URL (required before submission). Source: `docs/TERMS_OF_SERVICE.md` → `https://mywinkly.de/terms`.
+- [ ] **Imprint** URL (required for Germany): `https://mywinkly.de/imprint`.
+- [ ] **Community guidelines**: `https://mywinkly.de/community`.
 - [ ] Verify built pages (no domain needed): `npm run website:verify`. After deploy: `npm run website:verify:live`.
 - [ ] Point account/legal screens to these URLs (see `app/account/legal.tsx`). For GDPR/EEA, ensure the Privacy Policy is live before launch.
 - [ ] **Play Store Data safety:** complete form using **docs/PLAY_STORE_DATA_SAFETY.md** (approximate location, photos, messages, PostHog analytics; no ads; data not sold).

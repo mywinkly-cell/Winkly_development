@@ -12,7 +12,7 @@
 |----------|--------|
 | **Does your app collect or share user data?** | Yes — collects data |
 | **Is all collected data encrypted in transit?** | Yes (HTTPS/TLS) |
-| **Do you provide a way for users to request deletion?** | Yes — in-app account deletion + support@winkly.app |
+| **Do you provide a way for users to request deletion?** | Yes — in-app account deletion + support@mywinkly.de |
 | **Does the app contain ads?** | **No** |
 | **Is data sold to third parties?** | **No** |
 
@@ -111,14 +111,14 @@ In Play Console, for each collected data type, indicate sharing only where proce
 ## 4. Security practices
 
 - Data encrypted **in transit** (HTTPS/TLS).
-- Users can **request account deletion** in-app (General settings → Account & Identity → Delete account) and via support@winkly.app.
-- Privacy policy URL: **https://winkly.app/privacy**
+- Users can **request account deletion** in-app (General settings → Account & Identity → Delete account) and via support@mywinkly.de.
+- Privacy policy URL: **https://mywinkly.de/privacy**
 
 ---
 
 ## 5. Play Console walkthrough checklist
 
-1. **Privacy policy URL:** `https://winkly.app/privacy`
+1. **Privacy policy URL:** `https://mywinkly.de/privacy`
 2. **Ads:** No, app does not contain ads.
 3. **Data collection:** Yes.
 4. For each data type in §1, mark **Collected**, purposes (**App functionality**, **Analytics** where applicable), **Optional/Required** as noted.
@@ -127,7 +127,7 @@ In Play Console, for each collected data type, indicate sharing only where proce
 7. **Messages:** Collected, app functionality.
 8. **App interactions (analytics):** Collected, analytics, optional (consent-gated).
 9. Confirm answers match live Privacy Policy after deploy.
-10. Run `npm run website:verify` from repo root after deploying `website/` to winkly.app.
+10. Run `npm run website:verify` from repo root after deploying `website/` to mywinkly.de.
 
 ---
 
@@ -143,4 +143,4 @@ In Play Console, for each collected data type, indicate sharing only where proce
 
 ---
 
-*Internal reference only. Public commitments are in `docs/PRIVACY_POLICY.md` and hosted pages at winkly.app.*
+*Internal reference only. Public commitments are in `docs/PRIVACY_POLICY.md` and hosted pages at mywinkly.de.*

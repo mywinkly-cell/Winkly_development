@@ -359,18 +359,44 @@ async function rateLimitOrThrow(params: {
   return { ok: true };
 }
 
+/**
+ * Effective tier to enforce server-side: active paid plan → new-user Premium
+ * trial → free. Mirrors computeEffectiveTier in
+ * apps/mobile/lib/billing/subscriptionTier.ts — keep the two in sync.
+ */
+function effectiveTierFromRow(
+  row: { subscription_tier?: string | null; premium_until?: string | null; trial_ends_at?: string | null } | null,
+): SubscriptionTier {
+  const now = Date.now();
+  const raw = String(row?.subscription_tier ?? "").toLowerCase();
+  const paid: SubscriptionTier =
+    raw === "super" || raw === "premium" || raw === "enterprise" ? (raw as SubscriptionTier) : "free";
+  if (paid !== "free") {
+    const pu = row?.premium_until ? Date.parse(row.premium_until) : NaN;
+    if (!Number.isFinite(pu) || pu > now) return paid; // no expiry recorded → active
+  }
+  const te = row?.trial_ends_at ? Date.parse(row.trial_ends_at) : NaN;
+  if (Number.isFinite(te) && te > now) return "premium"; // new-user trial
+  return "free";
+}
+
 async function getSubscriptionTier(
   supabase: ReturnType<typeof createClient>,
   userId: string
 ): Promise<SubscriptionTier> {
-  // Redis cache (short TTL)
+  // Redis cache (short TTL). Trial expiry is therefore eventually consistent
+  // server-side (≤ cache TTL); the client recomputes the tier in real time.
   const cacheKey = `tier:${userId}`;
   const cached = await redisGetJson<{ tier?: SubscriptionTier }>(cacheKey);
   if (cached?.tier) return cached.tier;
-  const { data } = await supabase.from("users").select("subscription_tier").eq("id", userId).maybeSingle();
-  const tier = (data as { subscription_tier?: string } | null)?.subscription_tier;
-  const out: SubscriptionTier =
-    tier === "super" || tier === "premium" || tier === "enterprise" ? (tier as SubscriptionTier) : "free";
+  const { data } = await supabase
+    .from("users")
+    .select("subscription_tier, premium_until, trial_ends_at")
+    .eq("id", userId)
+    .maybeSingle();
+  const out = effectiveTierFromRow(
+    data as { subscription_tier?: string | null; premium_until?: string | null; trial_ends_at?: string | null } | null,
+  );
   await redisSetJson(cacheKey, { tier: out }, 300).catch(() => {});
   return out;
 }

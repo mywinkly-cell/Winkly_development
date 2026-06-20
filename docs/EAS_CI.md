@@ -143,7 +143,7 @@ This uploads to **TestFlight** (iOS internal) and the **Google Play internal tra
 
 Apple credentials are managed in EAS (not GitHub). **One-time interactive setup** (cannot run inside CI):
 
-1. Create the app in [App Store Connect](https://appstoreconnect.apple.com) for bundle id `com.winkly.app` (if it does not exist yet).
+1. Create the app in [App Store Connect](https://appstoreconnect.apple.com) for bundle id `com.mywinkly.de` (if it does not exist yet).
 2. From a **local terminal** (not Cursor agent — prompts need stdin):
 
 ```bash

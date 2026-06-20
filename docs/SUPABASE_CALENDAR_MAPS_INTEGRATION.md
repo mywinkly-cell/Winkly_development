@@ -26,8 +26,8 @@ To sync planner items with the user’s **Google Calendar** account (not just th
 2. Enable **Google Calendar API**.
 3. Create OAuth 2.0 credentials:
    - **Web application** – for Supabase Edge Function redirect.
-   - **iOS** (bundle ID `com.winkly.app`) – for in-app OAuth.
-   - **Android** (package `com.winkly.app`, SHA-1 of signing key) – for in-app OAuth.
+   - **iOS** (bundle ID `com.mywinkly.de`) – for in-app OAuth.
+   - **Android** (package `com.mywinkly.de`, SHA-1 of signing key) – for in-app OAuth.
 4. Add authorized redirect URIs:
    - Supabase: `https://<project-ref>.supabase.co/auth/v1/callback` (if using Supabase Auth for Google).
    - Or your Edge Function URL for OAuth callbacks.

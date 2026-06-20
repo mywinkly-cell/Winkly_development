@@ -5,7 +5,8 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "./AuthProvider";
-import { reconcileActiveMode, resolvePermissions, resolveSubscriptionTier } from "@/lib/mode/permissions";
+import { reconcileActiveMode, resolvePermissions } from "@/lib/mode/permissions";
+import { computeEffectiveTier } from "@/lib/billing/subscriptionTier";
 import { trackModeSelected } from "@/lib/analytics/events";
 import type { ActiveModeContext, AccountType, Mode } from "@/types";
 
@@ -16,6 +17,8 @@ const defaultContext: ActiveModeContext = {
   active_persona_id: null,
   permissions: ["events"],
   subscription_tier: "free",
+  is_on_trial: false,
+  trial_ends_at: null,
 };
 
 const ModeContext = createContext<{
@@ -41,7 +44,10 @@ function isAuthError(err: unknown): boolean {
 }
 
 /** DB-derived authz fields (everything except the local-only active_mode/persona). */
-type LoadedContextData = Pick<ActiveModeContext, "account_type" | "permissions" | "subscription_tier">;
+type LoadedContextData = Pick<
+  ActiveModeContext,
+  "account_type" | "permissions" | "subscription_tier" | "is_on_trial" | "trial_ends_at"
+>;
 
 /**
  * Short-lived, module-level cache of the authz context keyed by user id.
@@ -67,6 +73,8 @@ export function ModeContextProvider({ children }: { children: React.ReactNode })
       account_type: data.account_type,
       permissions: data.permissions,
       subscription_tier: data.subscription_tier,
+      is_on_trial: data.is_on_trial,
+      trial_ends_at: data.trial_ends_at,
       active_mode: reconcileActiveMode(prev.active_mode, data.permissions),
       active_persona_id: prev.active_persona_id,
     }));
@@ -82,9 +90,15 @@ export function ModeContextProvider({ children }: { children: React.ReactNode })
         // (migration 20250216000001_subscription_tier.sql), so we select it directly.
         const { data: userRow, error: userErr } = await supabase
           .from("users")
-          .select("account_type, is_premium, subscription_tier")
+          .select("account_type, is_premium, subscription_tier, premium_until, trial_ends_at")
           .eq("id", userId)
-          .maybeSingle<{ account_type?: string; is_premium?: boolean; subscription_tier?: string }>();
+          .maybeSingle<{
+            account_type?: string;
+            is_premium?: boolean;
+            subscription_tier?: string;
+            premium_until?: string | null;
+            trial_ends_at?: string | null;
+          }>();
 
         if (userErr && isAuthError(userErr)) return { status: "authError" };
         if (userErr) {
@@ -104,15 +118,26 @@ export function ModeContextProvider({ children }: { children: React.ReactNode })
         }
         const permissions = resolvePermissions(at, subProfileModes);
 
-        // subscription_tier comes from the DB. If the row is missing entirely
-        // (no users record yet), fall back to is_premium -> premium | free.
-        const subscription_tier = resolveSubscriptionTier({
+        // Effective tier: active paid plan → new-user Premium trial → free.
+        // (Mirrors effectiveTierFromRow in the ai-gateway for server-side gating.)
+        const eff = computeEffectiveTier({
           tierFromDb: userRow?.subscription_tier,
           isPremium: userRow?.is_premium,
+          premiumUntil: userRow?.premium_until,
+          trialEndsAt: userRow?.trial_ends_at,
           isDev: __DEV__,
         });
 
-        return { status: "ok", data: { account_type: at, permissions, subscription_tier } };
+        return {
+          status: "ok",
+          data: {
+            account_type: at,
+            permissions,
+            subscription_tier: eff.tier,
+            is_on_trial: eff.isOnTrial,
+            trial_ends_at: eff.trialEndsAt,
+          },
+        };
       } catch (e) {
         if (isAuthError(e)) return { status: "authError" };
         console.warn("ModeContext load error", e);
