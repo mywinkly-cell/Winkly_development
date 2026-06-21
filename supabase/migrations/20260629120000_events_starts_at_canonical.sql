@@ -34,6 +34,9 @@ END $$;
 
 -- 2. Re-create the concierge matcher against starts_at so already-applied environments stay
 --    consistent after start_at is dropped. Body mirrors 20260406120000 verbatim except the column.
+-- DROP required: CREATE OR REPLACE cannot rename OUT columns (start_at -> starts_at).
+DROP FUNCTION IF EXISTS public.match_events_for_concierge(text, text, timestamptz, timestamptz, int);
+
 CREATE OR REPLACE FUNCTION public.match_events_for_concierge(
   p_search text,
   p_city text,
