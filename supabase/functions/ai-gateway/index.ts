@@ -985,7 +985,7 @@ async function geocodeCity(city: string): Promise<{ lat: number; lng: number } |
   return { lat: results[0].latitude, lng: results[0].longitude };
 }
 
-/** DB column is start_at (see mobile events screens); legacy DBs may use starts_at — try start_at first. */
+/** Canonical DB column is starts_at (events table canonicalized); un-migrated legacy DBs may use start_at — try starts_at first. */
 async function getWinklyEvents(supabase: ReturnType<typeof createClient>, options: {
   mode?: string;
   dateFrom?: string;
@@ -993,23 +993,23 @@ async function getWinklyEvents(supabase: ReturnType<typeof createClient>, option
   limit?: number;
 }): Promise<string> {
   const lim = options.limit ?? 10;
-  const sel = "id, title, description, location, city, category, tags, start_at, end_at, mode, visibility, price_eur";
-  let query = supabase.from("events").select(sel).order("start_at", { ascending: true }).limit(lim);
+  const sel = "id, title, description, location, city, category, tags, starts_at, end_at, mode, visibility, price_eur";
+  let query = supabase.from("events").select(sel).order("starts_at", { ascending: true }).limit(lim);
   if (options.mode) query = query.eq("mode", options.mode);
   if (options.dateFrom) {
     const s = options.dateFrom.includes("T") ? options.dateFrom : `${options.dateFrom}T00:00:00.000Z`;
-    query = query.gte("start_at", s);
+    query = query.gte("starts_at", s);
   }
   if (options.dateTo) {
     const e = options.dateTo.includes("T") ? options.dateTo : `${options.dateTo}T23:59:59.999Z`;
-    query = query.lte("start_at", e);
+    query = query.lte("starts_at", e);
   }
   let { data, error } = await query;
-  if (error?.message?.includes("column") && error.message.includes("start_at")) {
-    let q2 = supabase.from("events").select("id, title, description, location, starts_at, ends_at, mode, visibility").order("starts_at", { ascending: true }).limit(lim);
+  if (error?.message?.includes("column") && error.message.includes("starts_at")) {
+    let q2 = supabase.from("events").select("id, title, description, location, start_at, ends_at, mode, visibility").order("start_at", { ascending: true }).limit(lim);
     if (options.mode) q2 = q2.eq("mode", options.mode);
-    if (options.dateFrom) q2 = q2.gte("starts_at", options.dateFrom);
-    if (options.dateTo) q2 = q2.lte("starts_at", options.dateTo);
+    if (options.dateFrom) q2 = q2.gte("start_at", options.dateFrom);
+    if (options.dateTo) q2 = q2.lte("start_at", options.dateTo);
     const r2 = await q2;
     data = r2.data;
     error = r2.error;
@@ -1438,27 +1438,27 @@ async function prefetchMatchingWinklyEvents(
     keywords,
   });
 
-  const sel = "id, title, description, location, city, category, tags, start_at, end_at, mode, visibility, price_eur";
-  let query = supabase.from("events").select(sel).order("start_at", { ascending: true }).limit(100);
+  const sel = "id, title, description, location, city, category, tags, starts_at, end_at, mode, visibility, price_eur";
+  let query = supabase.from("events").select(sel).order("starts_at", { ascending: true }).limit(100);
 
   if (dateFrom) {
     const s = dateFrom.includes("T") ? dateFrom : `${dateFrom}T00:00:00.000Z`;
-    query = query.gte("start_at", s);
+    query = query.gte("starts_at", s);
   } else {
-    query = query.gte("start_at", new Date().toISOString());
+    query = query.gte("starts_at", new Date().toISOString());
   }
   if (dateTo) {
     const e = dateTo.includes("T") ? dateTo : `${dateTo}T23:59:59.999Z`;
-    query = query.lte("start_at", e);
+    query = query.lte("starts_at", e);
   }
 
   let { data, error } = await query;
-  if (error?.message?.includes("column") && error.message.includes("start_at")) {
-    const selLegacy = "id, title, description, location, city, venue_name, category, tags, starts_at, ends_at, mode, visibility, price_eur";
-    let q2 = supabase.from("events").select(selLegacy).order("starts_at", { ascending: true }).limit(100);
-    if (dateFrom) q2 = q2.gte("starts_at", dateFrom.includes("T") ? dateFrom : `${dateFrom}T00:00:00.000Z`);
-    else q2 = q2.gte("starts_at", new Date().toISOString());
-    if (dateTo) q2 = q2.lte("starts_at", dateTo.includes("T") ? dateTo : `${dateTo}T23:59:59.999Z`);
+  if (error?.message?.includes("column") && error.message.includes("starts_at")) {
+    const selLegacy = "id, title, description, location, city, venue_name, category, tags, start_at, ends_at, mode, visibility, price_eur";
+    let q2 = supabase.from("events").select(selLegacy).order("start_at", { ascending: true }).limit(100);
+    if (dateFrom) q2 = q2.gte("start_at", dateFrom.includes("T") ? dateFrom : `${dateFrom}T00:00:00.000Z`);
+    else q2 = q2.gte("start_at", new Date().toISOString());
+    if (dateTo) q2 = q2.lte("start_at", dateTo.includes("T") ? dateTo : `${dateTo}T23:59:59.999Z`);
     const r2 = await q2;
     data = r2.data;
     error = r2.error;
