@@ -20,7 +20,7 @@ type EventRow = {
   title: string;
   city: string | null;
   venue_name: string | null;
-  start_at: string;
+  starts_at: string;
   end_at: string | null;
   cover_url: string | null;
   category: string | null;
@@ -83,11 +83,11 @@ export default function EventsDiscover() {
       const from = nextPage * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      // Default: show upcoming first (start_at ascending)
+      // Default: show upcoming first (starts_at ascending)
       const { data, error } = await supabase
         .from("events")
-        .select("id,title,city,venue_name,start_at,end_at,cover_url,category,tags,price_eur,capacity,visibility,created_at")
-        .order("start_at", { ascending: true })
+        .select("id,title,city,venue_name,starts_at,end_at,cover_url,category,tags,price_eur,capacity,visibility,created_at")
+        .order("starts_at", { ascending: true })
         .range(from, to);
 
       if (error) {
@@ -264,7 +264,7 @@ export default function EventsDiscover() {
                     </Text>
 
                     <Text style={{ color: Colors.mutedText, marginTop: 4 }} numberOfLines={1}>
-                      {formatDateTime(e.start_at)}
+                      {formatDateTime(e.starts_at)}
                       {e.city ? ` · ${fmtLoc(e.city)}` : ""}
                       {e.venue_name ? ` · ${e.venue_name}` : ""}
                     </Text>

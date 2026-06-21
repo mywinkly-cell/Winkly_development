@@ -165,7 +165,7 @@ BEGIN
   END IF;
 
   -- ── 6. Event chat — Jazz Night ───────────────────────────────────────────
-  INSERT INTO public.events (id, created_by, title, description, city, start_at, visibility, mode)
+  INSERT INTO public.events (id, created_by, title, description, city, starts_at, visibility, mode)
   VALUES (
     v_event_id, v_kate, 'Jazz Night', 'Live jazz at the Kulturzentrum',
     'Munich', '2026-06-12 20:30:00+02', 'public', 'events'

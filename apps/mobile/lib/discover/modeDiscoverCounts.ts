@@ -30,7 +30,7 @@ export async function fetchModeDiscoverCounts(userId: string): Promise<ModeDisco
     supabase
       .from("events")
       .select("id", { count: "exact", head: true })
-      .gte("start_at", new Date().toISOString()),
+      .gte("starts_at", new Date().toISOString()),
   ]);
 
   if (!romanceRes.error && Array.isArray(romanceRes.data)) {

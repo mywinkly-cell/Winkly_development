@@ -7,14 +7,14 @@ export async function getEventsForUser(userId: string, limit = 50) {
   const { data, error } = await supabase
     .from("events")
     .select("*")
-    .order("start_at", { ascending: true })
+    .order("starts_at", { ascending: true })
     .limit(limit);
 
   if (error) return [];
   return data ?? [];
 }
 
-/** Get events in date range (for filtering by day/week/month). Uses start_at or starts_at. */
+/** Get events in date range (for filtering by day/week/month). Uses canonical column starts_at. */
 export async function getEventsInRange(opts: {
   from: string; // ISO
   to: string;   // ISO
@@ -22,7 +22,7 @@ export async function getEventsInRange(opts: {
   limit?: number;
 }) {
   const { from, to, category, limit = 100 } = opts;
-  const col = "start_at"; // remaining_tables uses start_at; schema may use starts_at
+  const col = "starts_at"; // canonical: events table was created with starts_at
   let query = supabase
     .from("events")
     .select("*")
