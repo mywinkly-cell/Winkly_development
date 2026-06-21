@@ -25,7 +25,7 @@ type EventRow = {
   description: string | null;
   city: string | null;
   venue_name: string | null;
-  start_at: string;
+  starts_at: string;
   end_at: string | null;
   cover_url: string | null;
   category: string | null;
@@ -90,7 +90,7 @@ export default function EventDetails() {
       const { data, error } = await supabase
         .from("events")
         .select(
-          "id,created_by,title,description,city,venue_name,start_at,end_at,cover_url,category,tags,capacity,price_eur,visibility,created_at"
+          "id,created_by,title,description,city,venue_name,starts_at,end_at,cover_url,category,tags,capacity,price_eur,visibility,created_at"
         )
         .eq("id", eventId)
         .maybeSingle();
@@ -293,7 +293,7 @@ export default function EventDetails() {
       Haptics.selectionAsync();
       const url = `https://mywinkly.de/events/${event.id}`;
       const cityPart = event.city ? fmtLoc(event.city) : "";
-      const message = `${event.title}\n${cityPart} ${event.venue_name ?? ""}\n${formatDateTime(event.start_at)}\n\nJoin on Winkly: ${url}`;
+      const message = `${event.title}\n${cityPart} ${event.venue_name ?? ""}\n${formatDateTime(event.starts_at)}\n\nJoin on Winkly: ${url}`;
       await Share.share({
         message,
         title: event.title,
@@ -403,7 +403,7 @@ export default function EventDetails() {
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: Colors.text, fontWeight: "900", fontSize: 20 }}>{event.title}</Text>
                   <Text style={{ color: Colors.mutedText, marginTop: 8 }}>
-                    {formatDateTime(event.start_at)}
+                    {formatDateTime(event.starts_at)}
                     {event.end_at ? ` – ${formatDateTime(event.end_at)}` : ""}
                   </Text>
                   <Text style={{ color: Colors.mutedText, marginTop: 6 }}>

@@ -31,9 +31,9 @@ import { getDeviceCoordsIfPermitted } from "@/lib/location/deviceLocation";
 import { supabase } from "@/lib/supabase";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 
-// Map DB event row to EventCardItem (supports start_at or starts_at)
+// Map DB event row to EventCardItem (canonical starts_at; tolerates legacy start_at)
 function winklyRowToCard(row: Record<string, unknown>): EventCardItem {
-  const startAt = (row.start_at ?? row.starts_at) as string;
+  const startAt = (row.starts_at ?? row.start_at) as string;
   const endAt = (row.end_at ?? row.ends_at) as string | null;
   const imageUrl = (row.cover_url ?? row.cover_image_uri ?? row.cover_url) as string | null;
   return {
@@ -100,7 +100,7 @@ export default function EventsHome() {
   const fetchEvents = useCallback(async (reset?: boolean) => {
     if (reset) setLoading(true);
     try {
-      const col = "start_at";
+      const col = "starts_at";
       let query = supabase
         .from("events")
         .select("*")
