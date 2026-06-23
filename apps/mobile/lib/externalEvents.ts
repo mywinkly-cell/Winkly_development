@@ -1,5 +1,5 @@
 /**
- * External events (Meetup, Eventbrite) — add to planner, fetch nearby (with retry + graceful fallback).
+ * External events (Ticketmaster, Meetup, Eventbrite) — add to planner, fetch nearby (with retry + graceful fallback).
  * See docs/EXTERNAL_EVENTS_AND_FILTERING.md
  */
 
@@ -80,7 +80,7 @@ async function fetchWithTimeout(
 }
 
 /**
- * Fetch nearby external events (Meetup, Eventbrite) from the Edge Function, with retry + timeout.
+ * Fetch nearby external events (Ticketmaster, Meetup, Eventbrite) from the Edge Function, with retry + timeout.
  *
  * Graceful degradation: transient failures (network error, timeout, 5xx) are retried once, then
  * reported as "unavailable" with an empty list so the UI can fall back to Winkly-only without

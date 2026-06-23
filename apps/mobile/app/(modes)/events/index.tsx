@@ -1,6 +1,6 @@
 // ────────────────────────────────────────────────
 // Winkly Events Mode – Home Screen
-// Discover: filter by day/week/month + category; Winkly events + external (Meetup, Eventbrite).
+// Discover: filter by day/week/month + category; Winkly events + external (Ticketmaster, Meetup, Eventbrite).
 // Category strips: Music & Dancing, Nightlife, Performing Arts, Dating & Networking, Hobbies, Business, Food & Drink.
 // See docs/EXTERNAL_EVENTS_AND_FILTERING.md
 // ────────────────────────────────────────────────
@@ -118,7 +118,7 @@ export default function EventsHome() {
     }
   }, [from, to, category]);
 
-  // External events (Meetup / Eventbrite) via Edge Function. Best-effort only:
+  // External events (Ticketmaster / Meetup / Eventbrite) via Edge Function. Best-effort only:
   // needs device location (no prompt) and degrades to Winkly-only if APIs are unavailable.
   const fetchExternalEvents = useCallback(async () => {
     setExternalStatus("loading");
@@ -209,7 +209,7 @@ export default function EventsHome() {
           Discover Events
         </Text>
         <Text style={{ ...Typography.body, color: Colors.gray700, marginBottom: 16 }}>
-          Explore what&apos;s happening — on Winkly and from Meetup, Eventbrite and more. Add to your planner or open the link to get tickets.
+          Explore what&apos;s happening — on Winkly and from Ticketmaster, Meetup and more. Add to your planner or open the link to get tickets.
         </Text>
 
         {/* ─── Filter: Time range + Date ─── */}
@@ -321,9 +321,9 @@ export default function EventsHome() {
               </ScrollView>
             </View>
 
-            {/* Nearby on Meetup & Eventbrite — degrades gracefully if external APIs are unavailable */}
+            {/* Nearby external events — degrades gracefully if external APIs are unavailable */}
             <View style={{ marginBottom: 24 }}>
-              <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 12 }}>Nearby on Meetup &amp; Eventbrite</Text>
+              <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 12 }}>Nearby on Ticketmaster &amp; more</Text>
               {externalStatus === "loading" ? (
                 <ActivityIndicator size="small" color={Colors.events.primary} style={{ marginVertical: 12, alignSelf: "flex-start" }} />
               ) : filteredExternal.length > 0 ? (
@@ -336,8 +336,8 @@ export default function EventsHome() {
                 <View style={{ padding: 16, backgroundColor: Colors.gray100, borderRadius: Layout.radii.card }}>
                   <Text style={{ ...Typography.caption, color: Colors.gray600 }}>
                     {externalStatus === "unavailable"
-                      ? "We couldn't reach Meetup or Eventbrite right now. Showing Winkly events — pull to refresh to try again."
-                      : "No nearby events from Meetup or Eventbrite for this period. Browse Winkly events above."}
+                      ? "We couldn't reach our event providers right now. Showing Winkly events — pull to refresh to try again."
+                      : "No nearby events from our event providers for this period. Browse Winkly events above."}
                   </Text>
                 </View>
               )}
