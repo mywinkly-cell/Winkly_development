@@ -102,6 +102,11 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.winkly.app",
+      // Universal Links: https://mywinkly.de/app/* opens the app. Requires the
+      // apple-app-site-association file hosted at https://mywinkly.de/.well-known/
+      // (see website/public/.well-known/ + docs/DEEP_LINKING.md). Scoped to /app so the
+      // legal pages and the /auth email bridge keep opening in the browser.
+      associatedDomains: ["applinks:mywinkly.de"],
       infoPlist: {
         CFBundleDisplayName: "Winkly",
         ITSAppUsesNonExemptEncryption: false,
@@ -136,6 +141,23 @@ module.exports = {
         "READ_CALENDAR",
         "WRITE_CALENDAR",
         "READ_CONTACTS"
+      ],
+      // Android App Links: https://mywinkly.de/app/* opens the app. autoVerify checks
+      // https://mywinkly.de/.well-known/assetlinks.json against the app's signing cert
+      // (see docs/DEEP_LINKING.md). Scoped to /app so the website + /auth bridge stay in-browser.
+      intentFilters: [
+        {
+          action: "VIEW",
+          autoVerify: true,
+          data: [
+            {
+              scheme: "https",
+              host: "mywinkly.de",
+              pathPrefix: "/app"
+            }
+          ],
+          category: ["BROWSABLE", "DEFAULT"]
+        }
       ]
     },
 

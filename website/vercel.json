@@ -5,6 +5,19 @@
   "cleanUrls": true,
   "headers": [
     {
+      "comment": "Deep-link association files must be served as application/json. The AASA file has no extension, so Vercel won't infer the type — force it here.",
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" }
+      ]
+    },
+    {
+      "source": "/.well-known/assetlinks.json",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
