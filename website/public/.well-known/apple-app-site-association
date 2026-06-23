@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["REPLACE_WITH_APPLE_TEAM_ID.com.winkly.app"],
+        "components": [
+          {
+            "/": "/app/*",
+            "comment": "Open the Winkly app for Universal Links under /app/"
+          }
+        ]
+      }
+    ]
+  }
+}

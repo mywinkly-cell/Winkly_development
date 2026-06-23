@@ -8,6 +8,7 @@ const ROOT = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(ROOT, "..");
 const DOCS = path.join(REPO_ROOT, "docs");
 const DIST = path.join(ROOT, "dist");
+const PUBLIC = path.join(ROOT, "public");
 
 const PAGES = [
   { slug: "terms", source: "TERMS_OF_SERVICE.md", title: "Terms of Service" },
@@ -202,6 +203,17 @@ function buildLanding() {
   fs.writeFileSync(path.join(DIST, "index.html"), wrapPage({ title: "Legal", bodyHtml: body }), "utf8");
 }
 
+/**
+ * Copy website/public/** verbatim into dist — e.g. .well-known/ deep-link association
+ * files (apple-app-site-association, assetlinks.json). Runs after page generation so
+ * nothing clobbers them. dist is git-ignored and rebuilt on every Vercel deploy.
+ */
+function copyStaticAssets() {
+  if (!fs.existsSync(PUBLIC)) return;
+  fs.cpSync(PUBLIC, DIST, { recursive: true });
+  console.log(`Copied static assets from ${PUBLIC} → ${DIST}`);
+}
+
 function build() {
   if (fs.existsSync(DIST)) {
     fs.rmSync(DIST, { recursive: true, force: true });
@@ -225,6 +237,7 @@ function build() {
 
   buildLanding();
   buildAuthRedirect();
+  copyStaticAssets();
   console.log(`Built ${PAGES.length + 2} pages → ${DIST}`);
 }
 

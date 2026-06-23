@@ -51,6 +51,39 @@ function main() {
     }
   }
 
+  // Deep-link association files (copied from website/public/.well-known by build.mjs).
+  // Missing files are a hard failure; unfilled placeholders are a warning (deploy-time todo).
+  const wellKnown = [
+    {
+      file: ".well-known/apple-app-site-association",
+      mustInclude: ["applinks", "com.winkly.app"],
+      placeholder: "REPLACE_WITH_APPLE_TEAM_ID",
+    },
+    {
+      file: ".well-known/assetlinks.json",
+      mustInclude: ["handle_all_urls", "com.winkly.app"],
+      placeholder: "REPLACE_WITH_ANDROID_SHA256_FINGERPRINT",
+    },
+  ];
+  for (const wk of wellKnown) {
+    const wkPath = path.join(DIST, wk.file);
+    if (!fs.existsSync(wkPath)) {
+      failed += 1;
+      console.log(`✗ /${wk.file} → missing (build.mjs should copy website/public/${wk.file})`);
+      continue;
+    }
+    const text = fs.readFileSync(wkPath, "utf8");
+    const missing = wk.mustInclude.filter((s) => !text.includes(s));
+    console.log(`${missing.length ? "✗" : "✓"} /${wk.file}`);
+    if (missing.length) {
+      failed += 1;
+      console.log(`    Missing content: ${missing.join(", ")}`);
+    }
+    if (text.includes(wk.placeholder)) {
+      console.log(`    ⚠ still has placeholder ${wk.placeholder} — fill before enabling deep links (see docs/DEEP_LINKING.md).`);
+    }
+  }
+
   const entityPath = path.join(DIST, "..", "legal-entity.json");
   if (fs.existsSync(entityPath)) {
     const entity = JSON.parse(fs.readFileSync(entityPath, "utf8"));
