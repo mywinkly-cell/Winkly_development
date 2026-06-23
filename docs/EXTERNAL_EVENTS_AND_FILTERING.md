@@ -1,14 +1,14 @@
-# External Events (Meetup, Eventbrite) & Events Filtering
+# External Events (Ticketmaster, Meetup, Eventbrite) & Events Filtering
 
-**Last updated:** 2026-02-23
+**Last updated:** 2026-06-23
 
-This doc covers: (1) showing events from external platforms (Meetup, Eventbrite) on the Events home when Winkly has few native events; (2) Events filtering (day/week/month, category).
+This doc covers: (1) showing events from external platforms (Ticketmaster — primary; Meetup, Eventbrite — optional) on the Events home when Winkly has few native events; (2) Events filtering (day/week/month, category).
 
 ---
 
 ## 1. Why external events on the Events home
 
-- **Cold start**: At launch there are few or no events created on Winkly. Showing events from [Meetup](https://www.meetup.com/) and [Eventbrite](https://www.eventbrite.com/) gives users something to discover immediately.
+- **Cold start**: At launch there are few or no events created on Winkly. Showing events from [Ticketmaster](https://www.ticketmaster.com/), [Meetup](https://www.meetup.com/) and [Eventbrite](https://www.eventbrite.com/) gives users something to discover immediately.
 - **Winkly as orchestrator**: Users find an event on Winkly, add it to the Planner, share with others — without leaving the app for discovery. Booking/tickets still happen on the source site (link out); later you can add booking flows if needed.
 - **Business promotion later**: Once you have business partners and promoted events, show those first in each category, then Winkly-created events, then external (so order is: promoted → Winkly → external).
 
@@ -27,19 +27,22 @@ For each external event we show (and store when “Add to planner”):
 | Time        | Start (and optionally end) |
 | Location    | Venue name + city/address |
 | Link        | URL to event page (user opens to register/buy ticket) |
-| Platform    | `meetup` \| `eventbrite` (for attribution and “Add to planner” meta) |
+| Platform    | `ticketmaster` \| `meetup` \| `eventbrite` (for attribution and “Add to planner” meta) |
 
-No ticket purchase through Winkly at first; user taps the link to go to Meetup/Eventbrite.
+No ticket purchase through Winkly at first; user taps the link to go to the source platform.
 
 ---
 
 ## 3. APIs (high level)
 
-- **Meetup**  
+- **Ticketmaster (primary)**  
+  [Discovery API v2](https://developer.ticketmaster.com/products-and-docs/apis/discovery-api/v2/): `GET /discovery/v2/events.json` with `geoPoint` (geohash of lat/lon), `radius` + `unit=km`, optional `keyword`, and `startDateTime`/`endDateTime` (ISO-8601, no millis). Auth: free `apikey` query param. Results in `_embedded.events[]` → map venue, dates, images, attractions. Set `TICKETMASTER_API_KEY` in Supabase secrets.
+
+- **Meetup** (optional)  
   [GraphQL API](https://www.meetup.com/api/schema/): `findLocation` (lat/lon), `keywordSearch` for events. Auth: Bearer token. You can search by location and radius (e.g. ~30 km) and map results to your card shape.
 
-- **Eventbrite**  
-  [Platform API](https://www.eventbrite.com/platform/api): search by `location.address` and `location.within` (e.g. `"30km"` or city + radius). No lat/lon in response; use address for “location” and link for “link”. Auth: OAuth or private token.
+- **Eventbrite** (optional)  
+  [Platform API](https://www.eventbrite.com/platform/api): search by `location.address` and `location.within` (e.g. `"30km"` or city + radius). No lat/lon in response; use address for “location” and link for “link”. Auth: OAuth or private token. **Note:** Eventbrite's public event-search endpoint and Meetup's open API are both restricted/paid today, so Ticketmaster is the recommended default.
 
 **Reasonable approach:**  
 - Backend (Supabase Edge Function or similar) gets user location (lat/lng or city from profile/session).  
@@ -76,7 +79,7 @@ On the Events home:
   - `source_mode`: `events`
   - `title`, `description`, `starts_at`, `ends_at`, `meta`:
     - `meta.external_url`: link to Meetup/Eventbrite
-    - `meta.external_platform`: `meetup` | `eventbrite`
+    - `meta.external_platform`: `ticketmaster` | `meetup` | `eventbrite`
     - `meta.external_id`: optional id on the platform
     - `meta.location`, `meta.image_url`, `meta.host_name` for display
 - So the Planner shows it like any other event and user can open the link from there.

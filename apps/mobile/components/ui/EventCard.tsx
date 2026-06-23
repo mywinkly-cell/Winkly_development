@@ -21,7 +21,7 @@ export type EventCardItem = {
   hostName?: string | null;
   /** If set, event is from external platform; tap card opens link. */
   externalUrl?: string | null;
-  externalPlatform?: "meetup" | "eventbrite" | null;
+  externalPlatform?: "ticketmaster" | "meetup" | "eventbrite" | null;
   category?: string | null;
   /** Winkly event id for navigation to event details */
   winklyEventId?: string | null;
@@ -32,6 +32,12 @@ type Props = {
   onAddToPlanner?: (item: EventCardItem) => void;
   onPress?: (item: EventCardItem) => void;
   compact?: boolean;
+};
+
+const EXTERNAL_PLATFORM_LABELS: Record<"ticketmaster" | "meetup" | "eventbrite", string> = {
+  ticketmaster: "Ticketmaster",
+  meetup: "Meetup",
+  eventbrite: "Eventbrite",
 };
 
 function formatDate(iso: string) {
@@ -69,7 +75,7 @@ export function EventCard({ item, onAddToPlanner, onPress, compact }: Props) {
         )}
         {item.externalPlatform && (
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>From {item.externalPlatform === "meetup" ? "Meetup" : "Eventbrite"}</Text>
+            <Text style={styles.badgeText}>From {EXTERNAL_PLATFORM_LABELS[item.externalPlatform]}</Text>
           </View>
         )}
       </View>

@@ -1,5 +1,7 @@
-// get-nearby-external-events — Fetch events from Meetup, Eventbrite within radius of user location.
-// Set MEETUP_API_KEY and/or EVENTBRITE_PRIVATE_TOKEN in Supabase Edge Function secrets.
+// get-nearby-external-events — Fetch events from Ticketmaster, Meetup, Eventbrite within radius of user location.
+// Set TICKETMASTER_API_KEY (primary; free Discovery API key) and optionally MEETUP_API_KEY /
+// EVENTBRITE_PRIVATE_TOKEN in Supabase Edge Function secrets. Each provider is best-effort and only
+// runs when its key is present; the function degrades to whatever providers are configured.
 // See docs/EXTERNAL_EVENTS_AND_FILTERING.md
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -16,7 +18,7 @@ type ExternalEvent = {
   venueName?: string | null;
   hostName?: string | null;
   externalUrl?: string | null;
-  externalPlatform: "meetup" | "eventbrite";
+  externalPlatform: "ticketmaster" | "meetup" | "eventbrite";
   category?: string | null;
 };
 
@@ -28,6 +30,117 @@ type Body = {
   from?: string | null;
   to?: string | null;
 };
+
+/** Encode lat/lon to a geohash for Ticketmaster's `geoPoint` param (replaces the deprecated `latlong`). */
+function encodeGeohash(lat: number, lon: number, precision = 9): string {
+  const BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz";
+  let idx = 0;
+  let bit = 0;
+  let evenBit = true;
+  let geohash = "";
+  let latMin = -90, latMax = 90, lonMin = -180, lonMax = 180;
+  while (geohash.length < precision) {
+    if (evenBit) {
+      const lonMid = (lonMin + lonMax) / 2;
+      if (lon >= lonMid) { idx = idx * 2 + 1; lonMin = lonMid; } else { idx = idx * 2; lonMax = lonMid; }
+    } else {
+      const latMid = (latMin + latMax) / 2;
+      if (lat >= latMid) { idx = idx * 2 + 1; latMin = latMid; } else { idx = idx * 2; latMax = latMid; }
+    }
+    evenBit = !evenBit;
+    if (++bit === 5) { geohash += BASE32[idx]; bit = 0; idx = 0; }
+  }
+  return geohash;
+}
+
+/** Ticketmaster requires ISO-8601 with no milliseconds: YYYY-MM-DDTHH:mm:ssZ. */
+function toTicketmasterDateTime(iso: string): string | undefined {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+/** Pick a reasonably sized 16:9 image from a Ticketmaster event's images array. */
+function pickTicketmasterImage(images: Array<{ url?: string; width?: number; ratio?: string }> | undefined): string | null {
+  if (!Array.isArray(images) || images.length === 0) return null;
+  const usable = images.filter((i) => typeof i?.url === "string");
+  if (usable.length === 0) return null;
+  const wide = usable.filter((i) => i.ratio === "16_9");
+  const pool = (wide.length ? wide : usable).slice().sort((a, b) => (b.width ?? 0) - (a.width ?? 0));
+  // Prefer a card-sized image (<= 1024px wide) over the largest hero, fall back to the largest.
+  const pick = pool.find((i) => (i.width ?? 0) <= 1024) ?? pool[0];
+  return pick?.url ?? null;
+}
+
+/** Fetch events from the Ticketmaster Discovery API v2. Requires TICKETMASTER_API_KEY (free dev key). */
+async function fetchTicketmasterEvents(
+  apiKey: string,
+  lat: number,
+  lon: number,
+  radiusKm: number,
+  category: string | null,
+  from: string | null,
+  to: string | null
+): Promise<ExternalEvent[]> {
+  try {
+    const url = new URL("https://app.ticketmaster.com/discovery/v2/events.json");
+    url.searchParams.set("apikey", apiKey);
+    url.searchParams.set("geoPoint", encodeGeohash(lat, lon, 9));
+    url.searchParams.set("radius", String(Math.max(1, Math.round(radiusKm))));
+    url.searchParams.set("unit", "km");
+    url.searchParams.set("size", "20");
+    url.searchParams.set("sort", "date,asc");
+    if (category && category.trim()) url.searchParams.set("keyword", category.trim());
+    const start = toTicketmasterDateTime(from ?? new Date().toISOString());
+    if (start) url.searchParams.set("startDateTime", start);
+    if (to) {
+      const end = toTicketmasterDateTime(to);
+      if (end) url.searchParams.set("endDateTime", end);
+    }
+
+    const res = await fetch(url.toString());
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const events = data?._embedded?.events ?? [];
+    const out: ExternalEvent[] = [];
+
+    for (const ev of events) {
+      if (!ev?.id) continue;
+      const venue = ev._embedded?.venues?.[0] ?? {};
+      const cityName = venue.city?.name ?? null;
+      const line1 = venue.address?.line1 ?? null;
+      const loc = [cityName, line1].filter(Boolean).join(", ") || venue.name || null;
+      const startDateTime = ev.dates?.start?.dateTime
+        ?? (ev.dates?.start?.localDate
+          ? `${ev.dates.start.localDate}T${ev.dates.start.localTime ?? "00:00:00"}Z`
+          : null);
+      const segment = ev.classifications?.[0]?.segment?.name ?? null;
+
+      out.push({
+        id: `ticketmaster_${ev.id}`,
+        title: ev.name ?? "Event",
+        description:
+          typeof ev.info === "string" ? ev.info.slice(0, 500)
+          : typeof ev.pleaseNote === "string" ? ev.pleaseNote.slice(0, 500)
+          : null,
+        imageUrl: pickTicketmasterImage(ev.images),
+        startAt: startDateTime ?? new Date().toISOString(),
+        endAt: ev.dates?.end?.dateTime ?? null,
+        location: loc,
+        venueName: venue.name ?? null,
+        hostName: ev._embedded?.attractions?.[0]?.name ?? null,
+        externalUrl: ev.url ?? null,
+        externalPlatform: "ticketmaster",
+        category: category ?? segment ?? null,
+      });
+    }
+    return out;
+  } catch (err) {
+    console.error("Ticketmaster fetch error:", err);
+    return [];
+  }
+}
 
 /** Reverse geocode lat/lng to display address (for Eventbrite which uses address string). Rate limit: 1 req/sec for Nominatim. */
 async function reverseGeocode(lat: number, lon: number): Promise<string> {
@@ -227,10 +340,24 @@ serve(async (req) => {
       });
     }
 
+    const ticketmasterKey = Deno.env.get("TICKETMASTER_API_KEY");
     const meetupKey = Deno.env.get("MEETUP_API_KEY");
     const eventbriteToken = Deno.env.get("EVENTBRITE_PRIVATE_TOKEN");
 
     const allEvents: ExternalEvent[] = [];
+
+    if (ticketmasterKey) {
+      const ticketmasterEvents = await fetchTicketmasterEvents(
+        ticketmasterKey,
+        latitude,
+        longitude,
+        radius_km,
+        category ?? null,
+        from ?? null,
+        to ?? null
+      );
+      allEvents.push(...ticketmasterEvents);
+    }
 
     if (meetupKey) {
       const meetupEvents = await fetchMeetupEvents(
