@@ -15,15 +15,18 @@ export type WeeklyWeekendCardProps = {
   suggestion: WeeklyWeekendSuggestion;
   onViewPlans: () => void;
   onDismiss: () => void;
+  /** When deep-linked from the Spark nudge, draw a subtle accent ring to mark the landing. */
+  highlighted?: boolean;
 };
 
 export function WeeklyWeekendCard({
   suggestion,
   onViewPlans,
   onDismiss,
+  highlighted = false,
 }: WeeklyWeekendCardProps) {
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, highlighted && styles.cardHighlighted]}>
       <View style={styles.header}>
         <View style={styles.badge}>
           <SparklesIcon size={18} color={Colors.primaryViolet} />
@@ -73,6 +76,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 12,
     elevation: 3,
+  },
+  cardHighlighted: {
+    borderColor: Colors.primaryViolet,
+    borderWidth: 1.5,
+    shadowColor: Colors.primaryViolet,
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    elevation: 6,
   },
   header: {
     flexDirection: "row",

@@ -4,7 +4,7 @@
 // Tab bar: All | Dates | Meet-ups | Business | Events | Archive
 // Content: Planned activities per active tab, filterable
 
-import React, { useState, useMemo, useCallback, useEffect, forwardRef, useImperativeHandle } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import {
   View,
   Text,
@@ -17,10 +17,11 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Image,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useRouter, useFocusEffect } from "expo-router";
+import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -50,6 +51,15 @@ import {
 import { ProactiveSuggestionCard } from "@/components/planner/ProactiveSuggestionCard";
 import { ProactiveSuggestionDetailModal } from "@/components/planner/ProactiveSuggestionDetailModal";
 import { WeeklyWeekendCard } from "@/components/planner/WeeklyWeekendCard";
+import {
+  markWeeklySparkSeen,
+  getCurrentWeeklySpark,
+  WEEKLY_SPARK_FOCUS_PARAM,
+  WEEKLY_SPARK_FOCUS_VALUE,
+  type WeeklySpark,
+  type WeeklySparkPlan,
+} from "@/lib/ai/weeklySpark";
+import { WeeklySparkSection } from "@/components/planner/WeeklySparkSection";
 import { WeatherPivotBanner } from "@/components/planner/WeatherPivotBanner";
 import { EventParticipantCard } from "@/components/ui/EventParticipantCard";
 import { PlannerHeader } from "@/components/layout/PlannerHeader";
@@ -359,6 +369,10 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   const fmtLocationLine = useFormatLocationDisplay();
   const insets = useSafeAreaInsets();
   const filterModalBottomPadding = BOTTOM_BAR_HEIGHT + insets.bottom;
+  // Deep-link from the mode-selection Spark nudge: focus + reveal the Spark section.
+  const sparkParams = useLocalSearchParams<{ spark?: string }>();
+  const focusSpark = sparkParams[WEEKLY_SPARK_FOCUS_PARAM] === WEEKLY_SPARK_FOCUS_VALUE;
+  const scrollRef = useRef<ScrollView>(null);
   const [itemsState, setItemsState] = useState<PlannerItem[]>(() =>
     INITIAL_ITEMS.map((it) => ({ ...it, status: "active" as const }))
   );
@@ -391,6 +405,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   const [suggestionForDetail, setSuggestionForDetail] = useState<ProactiveSuggestion | null>(null);
   const [weeklySuggestion, setWeeklySuggestion] = useState<WeeklyWeekendSuggestion | null>(null);
   const [showWeeklyCard, setShowWeeklyCard] = useState(false);
+  const [weeklySpark, setWeeklySpark] = useState<WeeklySpark | null>(null);
   const [plannerPrefs, setPlannerPrefs] = useState<PlannerPreferences>(DEFAULT_PLANNER_PREFERENCES);
 
   useEffect(() => {
@@ -406,6 +421,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
       getSavedIdeas().then((ideas) => setSavedIdeasCount(ideas.length));
       void getPlannerPreferences().then(setPlannerPrefs);
       void scheduleSaturdayPlannerNudgeIfNeeded();
+      void getCurrentWeeklySpark().then(setWeeklySpark);
       (async () => {
         if (activeTab === "archive") return;
         const [showProactive, weeklyDismissed] = await Promise.all([
@@ -419,6 +435,9 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
           setShowWeeklyCard(true);
           setProactiveSuggestion(null);
           setShowProactiveCard(false);
+          // The Spark is on screen now — mark it seen so the mode-selection nudge
+          // stops showing for this week (never cries wolf once viewed).
+          void markWeeklySparkSeen();
         } else if (showProactive) {
           const raw = getProactiveSuggestion(activeTab as PlannerTabKey);
           const suggestion = await enrichProactiveSuggestion(raw, activeTab as PlannerTabKey);
@@ -435,6 +454,14 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
       })();
     }, [activeTab])
   );
+
+  // Deep-linked from the Spark nudge: scroll the Spark card into view and mark seen.
+  useEffect(() => {
+    if (!focusSpark) return;
+    void markWeeklySparkSeen();
+    const id = requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: true }));
+    return () => cancelAnimationFrame(id);
+  }, [focusSpark]);
 
   useEffect(() => {
     (async () => {
@@ -528,6 +555,37 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     await dismissWeeklyWeekend();
     setShowWeeklyCard(false);
     setWeeklySuggestion(null);
+  }, []);
+
+  // Spark CTAs reuse the existing concierge invite/plan flow: SOLO → activity step ("Add to my
+  // plan"); DATE/MEETUP → social step (invite someone/friends). This is the viral loop entry.
+  const openConciergeForSparkPlan = useCallback((plan: WeeklySparkPlan) => {
+    Haptics.selectionAsync();
+    const mode = plan.slot === "date" ? "romance" : plan.slot === "meetup" ? "friends" : "all";
+    const step = plan.slot === "solo" ? "activity" : "social";
+    const sourceTab = plan.slot === "date" ? "dates" : plan.slot === "meetup" ? "meetups" : "all";
+    router.push({
+      pathname: "/concierge",
+      params: {
+        source_screen: "planner",
+        mode,
+        source_planner_tab: sourceTab,
+        initial_step: step,
+        proactive_activity_label: plan.placeName ?? plan.title,
+      },
+    });
+  }, [router]);
+
+  // Tap a Spark card → open its verified booking link, else a Maps view of the verified place.
+  const openSparkPlanDetails = useCallback((plan: WeeklySparkPlan) => {
+    const url =
+      plan.bookingUrl ??
+      (plan.placeLat != null && plan.placeLng != null
+        ? `https://www.google.com/maps/search/?api=1&query=${plan.placeLat},${plan.placeLng}`
+        : plan.placeName
+          ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(plan.placeName)}`
+          : null);
+    if (url) void Linking.openURL(url).catch(() => {});
   }, []);
 
   useImperativeHandle(ref, () => ({ openFilter: onFiltersPress, openConcierge }), [onFiltersPress, openConcierge]);
@@ -851,14 +909,29 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
 
         {/* MAIN CONTENT */}
         <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + filterModalBottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Real Weekly Spark — intentionally NOT gated on plannerPrefs.aiSuggestions so it stays
+            coupled with the (un-gated) mode-selection nudge / Planner-tab badge: the nudge can never
+            point at an empty section. The heuristic cards below remain gated by the AI-suggestions pref. */}
+        {activeTab !== "archive" && weeklySpark && weeklySpark.plans.length > 0 && (
+          <WeeklySparkSection
+            spark={weeklySpark}
+            locale={appLocale}
+            highlighted={focusSpark}
+            onPrimary={openConciergeForSparkPlan}
+            onOpenPlan={openSparkPlanDetails}
+            onSeen={() => setWeeklySpark((s) => (s ? { ...s, seenAt: new Date().toISOString() } : s))}
+          />
+        )}
         {activeTab !== "archive" && <WeatherPivotBanner />}
         {activeTab !== "archive" && plannerPrefs.aiSuggestions && showWeeklyCard && weeklySuggestion && (
           <WeeklyWeekendCard
             suggestion={weeklySuggestion}
+            highlighted={focusSpark}
             onViewPlans={openConcierge}
             onDismiss={handleWeeklyDismiss}
           />
