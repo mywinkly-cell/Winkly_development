@@ -180,6 +180,11 @@ GRANT SELECT ON public.weekly_sparks      TO authenticated;
 GRANT UPDATE (seen_at) ON public.weekly_sparks TO authenticated;
 GRANT SELECT ON public.weekly_spark_plans TO authenticated;
 
+-- Ensure users.status exists on drifted DBs (original schema defines it, but older
+-- environments created via CREATE TABLE IF NOT EXISTS may lack the column).
+ALTER TABLE public.users
+  ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- weekly_spark_active_users — service-role batch reader for the cron.
 -- Returns one row per ACTIVE user (users.status='active') who can be planned for
