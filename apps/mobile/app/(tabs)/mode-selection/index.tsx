@@ -39,6 +39,12 @@ import {
   formatModeDiscoverCount,
   type ModeDiscoverCounts,
 } from "@/lib/discover/modeDiscoverCounts";
+import { WeeklySparkNudge } from "@/components/mode/WeeklySparkNudge";
+import {
+  hasUnseenWeeklySpark,
+  WEEKLY_SPARK_FOCUS_PARAM,
+  WEEKLY_SPARK_FOCUS_VALUE,
+} from "@/lib/ai/weeklySpark";
 import type { Mode } from "@/types";
 
 type ModeKey = Mode;
@@ -88,6 +94,7 @@ export default function ModeSelectionIndex() {
   const [enteringMode, setEnteringMode] = useState<ModeKey | null>(null);
   const [discoverCounts, setDiscoverCounts] = useState<ModeDiscoverCounts>({});
   const [skippedMode, setSkippedMode] = useState<SkippedOnboardingMode | null>(null);
+  const [showSparkNudge, setShowSparkNudge] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -152,6 +159,8 @@ export default function ModeSelectionIndex() {
       // Force authz permissions to re-sync at the mode gateway so a newly
       // completed sub-profile is reflected before the user enters a mode.
       void refresh();
+      // Re-check on every focus so the nudge disappears once the Spark is seen.
+      void hasUnseenWeeklySpark().then(setShowSparkNudge);
     }, [load, refresh, resetMode, context.active_mode])
   );
 
@@ -275,6 +284,20 @@ export default function ModeSelectionIndex() {
               {SKIPPED_MODE_BANNER[skippedMode].cta} →
             </Text>
           </Pressable>
+        ) : null}
+
+        {/* Additive Spark nudge — pulls toward the Planner only when an unseen weekly
+            Spark exists. The mode grid below stays primary and unchanged. */}
+        {showSparkNudge ? (
+          <WeeklySparkNudge
+            testID="weekly-spark-nudge"
+            onPress={() => {
+              router.push({
+                pathname: "/(tabs)/planner",
+                params: { [WEEKLY_SPARK_FOCUS_PARAM]: WEEKLY_SPARK_FOCUS_VALUE },
+              });
+            }}
+          />
         ) : null}
 
         <Text

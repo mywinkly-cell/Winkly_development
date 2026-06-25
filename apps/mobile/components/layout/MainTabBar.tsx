@@ -1,6 +1,6 @@
 // MainTabBar — Global hub tabs: Modes | Chats | Planner (expo-router Tabs)
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { View, Text, Pressable } from "react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import * as Haptics from "expo-haptics";
@@ -8,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { hasUnseenWeeklySpark } from "@/lib/ai/weeklySpark";
 
 export function MainTabBar({ state, navigation }: BottomTabBarProps) {
   const { t, i18n } = useTranslation();
@@ -26,6 +27,15 @@ export function MainTabBar({ state, navigation }: BottomTabBarProps) {
   const inactiveColor = Colors.gray500;
   const barHeight = Layout.bottomBarHeight + insets.bottom;
   const paddingBottom = 16 + insets.bottom;
+
+  // Unseen Weekly Spark → dot on the Planner tab. Re-checks when the active tab changes so it
+  // clears once the user opens the Planner (the Spark section sets weekly_sparks.seen_at).
+  const [hasUnseenSpark, setHasUnseenSpark] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void hasUnseenWeeklySpark().then((v) => { if (!cancelled) setHasUnseenSpark(v); });
+    return () => { cancelled = true; };
+  }, [state.index]);
 
   return (
     <View
@@ -54,6 +64,7 @@ export function MainTabBar({ state, navigation }: BottomTabBarProps) {
         const focused = state.index === index;
         const color = focused ? activeColor : inactiveColor;
         const iconName = focused ? config.activeIcon : config.icon;
+        const showSparkDot = config.name === "planner" && hasUnseenSpark;
 
         return (
           <Pressable
@@ -70,11 +81,28 @@ export function MainTabBar({ state, navigation }: BottomTabBarProps) {
               }
             }}
             style={{ alignItems: "center", justifyContent: "center", minWidth: 48, minHeight: 48 }}
-            accessibilityLabel={config.label}
+            accessibilityLabel={showSparkDot ? `${config.label}, ${t("weeklySpark.newBadgeA11y")}` : config.label}
             accessibilityRole="button"
             accessibilityState={{ selected: focused }}
           >
-            <Ionicons name={iconName} size={24} color={color} />
+            <View>
+              <Ionicons name={iconName} size={24} color={color} />
+              {showSparkDot && (
+                <View
+                  style={{
+                    position: "absolute",
+                    top: -2,
+                    right: -6,
+                    width: 9,
+                    height: 9,
+                    borderRadius: 4.5,
+                    backgroundColor: Colors.primaryViolet,
+                    borderWidth: 1.5,
+                    borderColor: Colors.white,
+                  }}
+                />
+              )}
+            </View>
             <Text style={[Typography.caption, { marginTop: 4, color }]}>{config.label}</Text>
           </Pressable>
         );

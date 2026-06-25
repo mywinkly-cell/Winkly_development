@@ -10,6 +10,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
+import { resolveVerifiedPlace } from "../_shared/verifiedPlace.ts";
 import {
   buildLocationContextInjection,
   formatSystemContextBlock,
@@ -3553,63 +3554,36 @@ async function generateWinklyPlan(params: {
     };
   }
 
-  // Maps grounding (cost control)
+  // Maps grounding (cost control) — now via the shared verified_places cache (single source of
+  // truth with weekly-spark-cron): one resolve does Text Search → Place Details and persists the row.
   // - none: do not call Places
-  // - textsearch: use a single Places Text Search to ground venue name/address/link (no details)
-  // - verify: Text Search + Place Details for booking_url (final phase)
+  // - textsearch / verify: resolve one real place; verify also surfaces a verified booking_url.
+  // Without a key, resolveVerifiedPlace returns null and Gemini still produces venues from world knowledge.
   const mapsKey = Deno.env.get("GOOGLE_PLACES_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY");
   const ideaForSearch = userIdea || profiles.map((p) => (Array.isArray(p.interests) ? p.interests.slice(0, 2).join(", ") : "")).filter(Boolean).join(", ") || "date night";
   const query = `${ideaForSearch} in ${[city, country].filter(Boolean).join(", ")}`.slice(0, 220);
-  let placeCandidate: { name?: string; formatted_address?: string; place_id?: string } | null = null;
-  if (maps_grounding !== "none" && mapsKey) {
-    try {
-      const url =
-        `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${encodeURIComponent(mapsKey)}`;
-      const res = await fetch(url);
-      const data = await res.json() as { status?: string; results?: Array<Record<string, unknown>> };
-      if (data.status === "OK" && Array.isArray(data.results) && data.results.length > 0) {
-        const r0 = data.results[0];
-        placeCandidate = {
-          name: typeof r0.name === "string" ? r0.name : undefined,
-          formatted_address: typeof r0.formatted_address === "string" ? r0.formatted_address : undefined,
-          place_id: typeof r0.place_id === "string" ? r0.place_id : undefined,
-        };
-      }
-    } catch {
-      placeCandidate = null;
-    }
-  }
 
-  // Grounded venue payload (Text Search). Optional: when GOOGLE_PLACES_API_KEY is set, Gemini can be
-  // aligned to a verified place + optional booking_url; without a key, Gemini still produces venues from world knowledge.
-  const verifiedVenue =
-    placeCandidate?.name && placeCandidate.place_id
-      ? {
-        name: placeCandidate.name,
-        address: placeCandidate.formatted_address ?? "",
-        google_maps_link: `https://www.google.com/maps/place/?q=place_id:${placeCandidate.place_id}`,
-      }
-      : null;
-  const verifiedPlaceId = placeCandidate?.place_id && verifiedVenue ? placeCandidate.place_id : null;
-
-  // Hallucination guardrail: Only provide a booking_url that is verified via Maps/Places.
-  // If no verified link exists, booking_url must be null.
+  let verifiedVenue: { name: string; address: string; google_maps_link: string } | null = null;
+  let verifiedPlaceId: string | null = null;
+  // Hallucination guardrail: booking_url is only a Places-verified link, and only in verify mode.
   let verifiedBookingUrl: string | null = null;
-  if (maps_grounding === "verify" && mapsKey && verifiedPlaceId) {
-    try {
-      const fields = encodeURIComponent("website,url");
-      const url =
-        `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(verifiedPlaceId)}&fields=${fields}&key=${encodeURIComponent(mapsKey)}`;
-      const res = await fetch(url);
-      const data = await res.json() as { status?: string; result?: { website?: unknown; url?: unknown } };
-      if (data.status === "OK" && data.result) {
-        const website = typeof data.result.website === "string" ? data.result.website.trim() : "";
-        const mapsUrl = typeof data.result.url === "string" ? data.result.url.trim() : "";
-        const pick = website || mapsUrl;
-        if (pick && /^https?:\/\//i.test(pick)) verifiedBookingUrl = pick.slice(0, 600);
+  if (maps_grounding !== "none" && mapsKey) {
+    const place = await resolveVerifiedPlace(supabase, { query, placesKey: mapsKey });
+    if (place && place.name && place.place_id) {
+      verifiedPlaceId = place.place_id;
+      verifiedVenue = {
+        name: place.name,
+        address: place.formatted_address ?? "",
+        google_maps_link: place.google_maps_url ?? `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
+      };
+      if (maps_grounding === "verify") {
+        const pick = (place.website && /^https?:\/\//i.test(place.website))
+          ? place.website
+          : (place.google_maps_url && /^https?:\/\//i.test(place.google_maps_url))
+            ? place.google_maps_url
+            : null;
+        if (pick) verifiedBookingUrl = pick.slice(0, 600);
       }
-    } catch {
-      verifiedBookingUrl = null;
     }
   }
 
