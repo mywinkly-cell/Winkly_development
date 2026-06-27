@@ -71,6 +71,10 @@ import {
   getPlannerInvitationsForUser,
 } from "@/lib/plannerInvitations";
 import { callWinklyPlan, confirmPendingPlan } from "@/lib/ai/conciergeClient";
+import {
+  buildRomanceFirstDateOptions,
+  type RomanceFirstDateOption,
+} from "@/lib/ai/romanceFirstDateProposal";
 import type { Mode } from "@/types";
 import { useModeContext } from "@/providers";
 import { hasAnyAIAccess } from "@/lib/ai/aiFeatureGate";
@@ -111,6 +115,7 @@ import {
 } from "@/lib/groups/groupsApi";
 import { GroupVibeSheet } from "@/components/chats/GroupVibeSheet";
 import { GroupPlanConsensusCard } from "@/components/chats/GroupPlanConsensusCard";
+import { FitReasonLine, resolveFitReason } from "@/components/ai/FitReasonLine";
 
 /** Not a navigable route — only imported by `app/chats/[conversationId].tsx`. */
 export const unstable_settings = { href: null };
@@ -229,6 +234,9 @@ export default function ChatView({
   const [matchBridgeHandled, setMatchBridgeHandled] = useState(false);
   const matchBridgeOnceRef = useRef(false);
   const matchAgentAutoOnceRef = useRef(false);
+  // Proactive "ready date on first open" for fresh romance matches.
+  const proactiveProposalOnceRef = useRef(false);
+  const [proactiveProposalLoading, setProactiveProposalLoading] = useState(false);
   const [staleNudgeVisible, setStaleNudgeVisible] = useState(false);
   const [staleNudgeHint, setStaleNudgeHint] = useState<string | null>(null);
   const [showStrategicHost, setShowStrategicHost] = useState(false);
@@ -416,6 +424,14 @@ export default function ChatView({
     [messages]
   );
 
+  // Fresh romance match with AI access → present ONE ready-made date proposal
+  // (place + time + why) as an Accept/Swap card instead of the match-bridge /
+  // match-agent cold-start cards. Free tier (no AI) keeps the existing bridge path.
+  const proactiveRomanceProposalEligible =
+    isRomanceDm &&
+    conversation?.dm_source === "match" &&
+    hasAnyAIAccess(modeContext.subscription_tier ?? "free");
+
   const showDateIdeas =
     isRomanceDm && !dateIdeasDismissed && !hasProposedDate && messages.length <= 12 && dateIdeas.length > 0;
 
@@ -531,6 +547,8 @@ export default function ChatView({
   }, [showChatExperienceCard, meId, otherUser?.id, fetchChatExperienceSuggestion]);
 
   useEffect(() => {
+    // The proactive first-date proposal replaces the bridge card for eligible matches.
+    if (proactiveRomanceProposalEligible) return;
     const fromQuery = matchBridgeParam === "1" || matchBridgeParam === "true";
     const fromMatchDm =
       conversation?.dm_source === "match" && isRomance && isDm && messages.length === 0;
@@ -582,6 +600,7 @@ export default function ChatView({
     matchBridgeHandled,
     convId,
     mergeIncomingMessage,
+    proactiveRomanceProposalEligible,
   ]);
 
   const hasMatchBridgeCta = useMemo(
@@ -601,6 +620,7 @@ export default function ChatView({
     messages.length === 0 || messages.every((m) => m.message_type === "cta");
 
   const wantMatchBridge =
+    !proactiveRomanceProposalEligible &&
     (matchBridgeParam === "1" ||
       matchBridgeParam === "true" ||
       (conversation?.dm_source === "match" && isRomance && isDm && messages.length === 0)) &&
@@ -638,6 +658,8 @@ export default function ChatView({
 
     if (conversationMode === "romance") {
       if (!isRomance || conversation?.dm_source !== "match") return;
+      // Eligible fresh matches get the single proactive first-date proposal instead.
+      if (proactiveRomanceProposalEligible) return;
       if (!matchBridgeHandled) return;
       if (!onlyCtasOrEmpty) return;
     } else {
@@ -681,6 +703,7 @@ export default function ChatView({
     convId,
     mergeIncomingMessage,
     modeContext.subscription_tier,
+    proactiveRomanceProposalEligible,
   ]);
 
   const openConciergeFromChat = useCallback(() => {
@@ -737,6 +760,141 @@ export default function ChatView({
       (participants.find((p) => p.id === meId)?.city ?? participants.find((p) => p.id !== meId)?.city ?? null) || null
     );
   }, [isGroup, groupCityInfo.city, participants, meId]);
+
+  // Post a concrete first-date proposal as a planner-invite CTA. The primary option
+  // becomes a real planner invite (visible to BOTH sides via planner_participants +
+  // RLS); the alternate rides along so "Swap" can re-propose without another AI call.
+  const postFirstDateProposal = useCallback(
+    async (options: RomanceFirstDateOption[]) => {
+      if (!meId || !otherUser || !convId || options.length === 0) return;
+      const primary = options[0];
+      const swap = options[1] ?? null;
+      const { planner_item_id, planner_invitation_id } = await createPlannerInvite(
+        meId,
+        otherUser.id,
+        convId,
+        {
+          title: primary.title,
+          source_mode: "romance",
+          starts_at: primary.starts_at,
+          ends_at: primary.ends_at ?? undefined,
+          activity: primary.activity,
+          location: primary.location || undefined,
+          place: primary.place || undefined,
+        }
+      );
+      const ctaPayload = JSON.stringify({
+        type: "planner_invite",
+        planner_item_id,
+        planner_invitation_id,
+        title: primary.title,
+        activity: primary.activity,
+        location: primary.location,
+        place: primary.place,
+        starts_at: primary.starts_at,
+        ends_at: primary.ends_at,
+        source_mode: "romance",
+        // First-date proposal extras: human "why" + the alternate for Swap.
+        why: primary.why,
+        proactive: true,
+        swap_option: swap,
+      });
+      const inserted = await sendMessage(convId, meId, ctaPayload, [], { messageType: "cta" });
+      mergeIncomingMessage(inserted);
+      setInvitationStatusMap((prev) => ({ ...prev, [planner_invitation_id]: "pending" }));
+    },
+    [meId, otherUser, convId, mergeIncomingMessage]
+  );
+
+  // First open of a fresh romance match: build one ready date (AI, curated fallback)
+  // and post it once. Guarded by hasProposedDate so realtime sync between the two
+  // clients does not create duplicate proposals.
+  useEffect(() => {
+    if (!proactiveRomanceProposalEligible) return;
+    if (!meId || !otherUser || loading) return;
+    if (hasProposedDate || hasConversationMessage) return;
+    if (conversation?.created_at) {
+      const ageMs = Date.now() - new Date(conversation.created_at).getTime();
+      if (ageMs > 24 * 60 * 60 * 1000) return;
+    }
+    if (proactiveProposalOnceRef.current) return;
+    proactiveProposalOnceRef.current = true;
+    let cancelled = false;
+    (async () => {
+      setProactiveProposalLoading(true);
+      try {
+        const options = await buildRomanceFirstDateOptions({
+          meId,
+          partnerUserId: otherUser.id,
+          city: resolvePlanningCity(),
+        });
+        if (cancelled) return;
+        await postFirstDateProposal(options);
+      } catch {
+        // Allow a later retry (e.g. transient send failure).
+        proactiveProposalOnceRef.current = false;
+      } finally {
+        if (!cancelled) setProactiveProposalLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    proactiveRomanceProposalEligible,
+    meId,
+    otherUser?.id,
+    loading,
+    hasProposedDate,
+    hasConversationMessage,
+    conversation?.created_at,
+    resolvePlanningCity,
+    postFirstDateProposal,
+  ]);
+
+  // "Swap" on a first-date proposal: decline the current invite (best-effort) and
+  // re-propose the alternate option, with the previous option carried back as the
+  // new swap so the two options can ping-pong.
+  const onSwapProposal = useCallback(
+    async (p: {
+      planner_invitation_id?: string;
+      title?: string;
+      activity?: string;
+      location?: string | null;
+      place?: string | null;
+      starts_at?: string;
+      ends_at?: string | null;
+      why?: string;
+      swap_option?: RomanceFirstDateOption | null;
+    }) => {
+      if (!meId || !otherUser || !convId) return;
+      const alt = p.swap_option;
+      if (!alt) return;
+      try {
+        if (p.planner_invitation_id && invitationStatusMap[p.planner_invitation_id] === "pending") {
+          try {
+            await declinePlannerInvite(p.planner_invitation_id);
+            setInvitationStatusMap((prev) => ({ ...prev, [p.planner_invitation_id!]: "declined" }));
+          } catch {
+            // The proposer (non-invitee) can't decline — fine, just re-propose.
+          }
+        }
+        const priorAsSwap: RomanceFirstDateOption = {
+          title: p.title ?? "Date",
+          place: p.place ?? null,
+          location: p.location ?? null,
+          starts_at: p.starts_at ?? new Date().toISOString(),
+          ends_at: p.ends_at ?? null,
+          activity: p.activity ?? "Date",
+          why: p.why ?? "",
+        };
+        await postFirstDateProposal([alt, priorAsSwap]);
+      } catch (e) {
+        Alert.alert("Swap", e instanceof Error ? e.message : "Could not swap — try again.");
+      }
+    },
+    [meId, otherUser, convId, invitationStatusMap, postFirstDateProposal]
+  );
 
   // Combine the live vibe snapshot with the city note for the prompt.
   const composedGroupVibe = useCallback((): string | undefined => {
@@ -1544,6 +1702,11 @@ export default function ChatView({
                             {timeCap ? ` · ${timeCap}` : ""}
                           </Text>
                         ) : null}
+                        <FitReasonLine
+                          reason={resolveFitReason(draft)}
+                          accentColor={accentMa}
+                          style={{ marginBottom: 10 }}
+                        />
                         {privacyLine ? (
                           <Text style={{ fontSize: 11, color: Colors.gray600, marginBottom: 10 }}>{privacyLine}</Text>
                         ) : null}
@@ -1673,6 +1836,12 @@ export default function ChatView({
                   if (p.type === "planner_invite") {
                     const status = invitationStatusMap[p.planner_invitation_id];
                     const imInvitee = !mine;
+                    // A proactive first-date proposal renders as a clean Accept / Swap
+                    // card (place + time + why); regular invites keep Decline / Reschedule.
+                    const isProactive = !!p.proactive;
+                    const canSwap = isProactive && !!p.swap_option;
+                    const whyLine =
+                      typeof p.why === "string" && p.why.trim() ? p.why.trim() : resolveFitReason(p);
                     const dateStr = p.starts_at
                       ? new Date(p.starts_at).toLocaleString(undefined, {
                           weekday: "short",
@@ -1684,6 +1853,19 @@ export default function ChatView({
                       : "";
                     const locationLine =
                       [p.place, p.location ? fmtLocationLine(String(p.location)) : ""].filter(Boolean).join(" • ") || null;
+                    const acceptInvite = () => {
+                      acceptPlannerInvite(p.planner_invitation_id).then((result) => {
+                        setInvitationStatusMap((prev) => ({ ...prev, [p.planner_invitation_id]: "accepted" }));
+                        refetch();
+                        if (result.source_mode === "romance") {
+                          void requestDateSafetyPrompt({
+                            plannerItemId: result.planner_item_id,
+                            partnerUserId: result.partner_user_id,
+                            scheduledAt: result.starts_at,
+                          });
+                        }
+                      });
+                    };
                     return (
                       <View
                         style={{
@@ -1695,14 +1877,41 @@ export default function ChatView({
                           minWidth: 220,
                         }}
                       >
+                        {isProactive ? (
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                            <SparklesIcon size={14} color={accentColor} />
+                            <Text style={{ fontSize: 11, fontWeight: "800", color: accentColor }}>
+                              Your ready date
+                            </Text>
+                          </View>
+                        ) : null}
                         <Text style={{ fontWeight: "600", fontSize: 15, marginBottom: 4 }}>{p.title}</Text>
                         {dateStr ? (
                           <Text style={{ fontSize: 13, color: Colors.gray700, marginBottom: 2 }}>{dateStr}</Text>
                         ) : null}
                         {locationLine ? (
-                          <Text style={{ fontSize: 13, color: Colors.gray600, marginBottom: 10 }}>{locationLine}</Text>
+                          <Text style={{ fontSize: 13, color: Colors.gray600, marginBottom: whyLine ? 8 : 10 }}>{locationLine}</Text>
                         ) : null}
-                        {imInvitee && status === "pending" && (
+                        {whyLine ? (
+                          <FitReasonLine reason={whyLine} accentColor={accentColor} style={{ marginBottom: 10 }} />
+                        ) : null}
+                        {imInvitee && status === "pending" && canSwap && (
+                          <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+                            <Pressable
+                              onPress={() => onSwapProposal(p)}
+                              style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: Colors.gray100, borderRadius: 10 }}
+                            >
+                              <Text style={{ fontSize: 13, fontWeight: "600" }}>Swap</Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={acceptInvite}
+                              style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: accentColor, borderRadius: 10 }}
+                            >
+                              <Text style={{ fontSize: 13, fontWeight: "600", color: Colors.accentYellow }}>Accept</Text>
+                            </Pressable>
+                          </View>
+                        )}
+                        {imInvitee && status === "pending" && !canSwap && (
                           <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
                             <Pressable
                               onPress={() => {
@@ -1727,25 +1936,18 @@ export default function ChatView({
                               <Text style={{ fontSize: 13, fontWeight: "600" }}>Reschedule</Text>
                             </Pressable>
                             <Pressable
-                              onPress={() => {
-                                acceptPlannerInvite(p.planner_invitation_id).then((result) => {
-                                  setInvitationStatusMap((prev) => ({ ...prev, [p.planner_invitation_id]: "accepted" }));
-                                  refetch();
-                                  if (result.source_mode === "romance") {
-                                    void requestDateSafetyPrompt({
-                                      plannerItemId: result.planner_item_id,
-                                      partnerUserId: result.partner_user_id,
-                                      scheduledAt: result.starts_at,
-                                    });
-                                  }
-                                });
-                              }}
+                              onPress={acceptInvite}
                               style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: accentColor, borderRadius: 10 }}
                             >
                               <Text style={{ fontSize: 13, fontWeight: "600", color: Colors.accentYellow }}>Accept</Text>
                             </Pressable>
                           </View>
                         )}
+                        {!imInvitee && isProactive && !status ? (
+                          <Text style={{ fontSize: 12, color: Colors.gray600, marginTop: 4 }}>
+                            Sent — they can Accept or Swap.
+                          </Text>
+                        ) : null}
                         {imInvitee && status === "accepted" && (
                           <Text style={{ fontSize: 12, color: Colors.successGreen, marginTop: 4 }}>You accepted</Text>
                         )}
@@ -1956,6 +2158,8 @@ export default function ChatView({
       matchAgentApprovalStage,
       onMatchAgentApprove,
       handleRetrySend,
+      isGroup,
+      onSwapProposal,
     ]
   );
 
@@ -2309,9 +2513,7 @@ export default function ChatView({
                         <Text style={{ fontSize: 12, color: Colors.gray600, lineHeight: 17, marginBottom: 8 }}>
                           {[p.venue.name, p.venue.address].filter(Boolean).join(" • ")}
                         </Text>
-                        <Text style={{ fontSize: 12, color: Colors.gray600, lineHeight: 17 }}>
-                          {p.why_this_fits}
-                        </Text>
+                        <FitReasonLine reason={resolveFitReason(p)} />
                         <Text style={{ marginTop: 10, fontSize: 12, fontWeight: "800", color: Colors.primaryViolet }}>
                           Draft pending plan →
                         </Text>
@@ -2395,7 +2597,7 @@ export default function ChatView({
             inverted
             contentContainerStyle={{ paddingVertical: 10 }}
             ListFooterComponent={
-              bridgeLoading ? (
+              bridgeLoading || proactiveProposalLoading ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 12 }}>
                   <ActivityIndicator size="small" color={Colors.romance.primary} />
                   <Text style={{ fontSize: 13, color: Colors.gray500 }}>

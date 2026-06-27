@@ -494,6 +494,8 @@ type WinklyPlanOptionOut = {
   option_id: "A" | "B";
   character_label: string;
   title: string;
+  /** Canonical "Why this fits you" line — one sentence citing a concrete personal signal. Rendered as the card subtitle. */
+  fit_reason: string;
   why_this_fits: string;
   /** Group planning (≥3 participants): per-person "why this works for everyone" bullets. */
   group_fit_notes?: string[];
@@ -532,6 +534,7 @@ type PlannerThemePlansOutput = {
     option_id: "A" | "B";
     character_label: string;
     title: string;
+    fit_reason: string;
     why_this_fits: string;
     group_fit_notes?: string[];
     itinerary: Array<{ time: string; description: string }>;
@@ -986,7 +989,7 @@ async function geocodeCity(city: string): Promise<{ lat: number; lng: number } |
   return { lat: results[0].latitude, lng: results[0].longitude };
 }
 
-/** Canonical DB column is starts_at (events table canonicalized); un-migrated legacy DBs may use start_at — try starts_at first. */
+/** Events are canonicalized to starts_at / ends_at (see migration 20260701120000_events_ends_at_canonical_and_plan_validation). */
 async function getWinklyEvents(supabase: ReturnType<typeof createClient>, options: {
   mode?: string;
   dateFrom?: string;
@@ -994,7 +997,7 @@ async function getWinklyEvents(supabase: ReturnType<typeof createClient>, option
   limit?: number;
 }): Promise<string> {
   const lim = options.limit ?? 10;
-  const sel = "id, title, description, location, city, category, tags, starts_at, end_at, mode, visibility, price_eur";
+  const sel = "id, title, description, location, city, category, tags, starts_at, ends_at, mode, visibility, price_eur";
   let query = supabase.from("events").select(sel).order("starts_at", { ascending: true }).limit(lim);
   if (options.mode) query = query.eq("mode", options.mode);
   if (options.dateFrom) {
@@ -1005,16 +1008,7 @@ async function getWinklyEvents(supabase: ReturnType<typeof createClient>, option
     const e = options.dateTo.includes("T") ? options.dateTo : `${options.dateTo}T23:59:59.999Z`;
     query = query.lte("starts_at", e);
   }
-  let { data, error } = await query;
-  if (error?.message?.includes("column") && error.message.includes("starts_at")) {
-    let q2 = supabase.from("events").select("id, title, description, location, start_at, ends_at, mode, visibility").order("start_at", { ascending: true }).limit(lim);
-    if (options.mode) q2 = q2.eq("mode", options.mode);
-    if (options.dateFrom) q2 = q2.gte("start_at", options.dateFrom);
-    if (options.dateTo) q2 = q2.lte("start_at", options.dateTo);
-    const r2 = await q2;
-    data = r2.data;
-    error = r2.error;
-  }
+  const { data, error } = await query;
   if (error) return JSON.stringify({ error: error.message });
   return JSON.stringify(data ?? []);
 }
@@ -1439,7 +1433,7 @@ async function prefetchMatchingWinklyEvents(
     keywords,
   });
 
-  const sel = "id, title, description, location, city, category, tags, starts_at, end_at, mode, visibility, price_eur";
+  const sel = "id, title, description, location, city, category, tags, starts_at, ends_at, mode, visibility, price_eur";
   let query = supabase.from("events").select(sel).order("starts_at", { ascending: true }).limit(100);
 
   if (dateFrom) {
@@ -1453,17 +1447,7 @@ async function prefetchMatchingWinklyEvents(
     query = query.lte("starts_at", e);
   }
 
-  let { data, error } = await query;
-  if (error?.message?.includes("column") && error.message.includes("starts_at")) {
-    const selLegacy = "id, title, description, location, city, venue_name, category, tags, start_at, ends_at, mode, visibility, price_eur";
-    let q2 = supabase.from("events").select(selLegacy).order("start_at", { ascending: true }).limit(100);
-    if (dateFrom) q2 = q2.gte("start_at", dateFrom.includes("T") ? dateFrom : `${dateFrom}T00:00:00.000Z`);
-    else q2 = q2.gte("start_at", new Date().toISOString());
-    if (dateTo) q2 = q2.lte("start_at", dateTo.includes("T") ? dateTo : `${dateTo}T23:59:59.999Z`);
-    const r2 = await q2;
-    data = r2.data;
-    error = r2.error;
-  }
+  const { data, error } = await query;
   const trgmRows = await trgmPromise;
 
   if (error) {
@@ -1623,16 +1607,18 @@ Context-aware behavior (use source_screen and source_planner_tab from Context to
 - source_screen=planner, source_planner_tab=events: Same for Events (source_mode=events). Analyze saved events; suggest events (Winkly first via get_winkly_events), or plan something event-like (concerts, workshops) and add to planner.
 - source_screen=chats or absent: Be helpful for general planning; use mode from Context. If user_prompt or activity_hint is provided, treat it as the main request and adapt. If weather_snapshot is provided, use it to tailor suggestions (e.g. indoor if rain) instead of calling get_weather for that same slot.
 
-Output format: You MUST respond with valid JSON only — no markdown, no preamble, no conversational filler. Keep every string value SHORT (option_name ≤80 chars, why_this_fits/logic_bridge ≤120 chars, itinerary steps ≤60 chars). The app renders UI from precise keys, not prose. Prefer the DETAILED shape. Exactly 3 items in "options". Put Winkly options FIRST. For Winkly events include "source": "winkly_event" and "winkly_event_id".
+Output format: You MUST respond with valid JSON only — no markdown, no preamble, no conversational filler. Keep every string value SHORT (option_name ≤80 chars, fit_reason/why_this_fits/logic_bridge ≤120 chars, itinerary steps ≤60 chars). The app renders UI from precise keys, not prose. Prefer the DETAILED shape. Exactly 3 items in "options". Put Winkly options FIRST. For Winkly events include "source": "winkly_event" and "winkly_event_id".
 
-Minimal shape (allowed): {"options":[{"option_name":"...","why_this_fits":"...","schedule":["7:00 PM - Activity",...],"business_link":"...","weather_note":"...","price_indicator":"€|€€|€€€"}]}
+EVERY option MUST include a fit_reason: ONE short sentence, addressed to the user, naming at least one CONCRETE personal signal from their data — a shared interest, their city/neighbourhood, their budget band, a language in common, or an open-hours/timing match. Never generic ("great spot!", "you'll love it"). This is the card's headline "why this fits you" reason.
 
-Detailed shape (preferred): {"options":[{"option_id":"opt_1","option_name":"...","source":"winkly_event","winkly_event_id":"<uuid>","narrative":"The Core Match","logic_bridge":"One sentence why this fits their DNA.","itinerary":[...],"schedule":["18:00 - ..."],"logistics":{...},"business_link":"...","weather_note":"...","price_indicator":"€€"}]}
+Minimal shape (allowed): {"options":[{"option_name":"...","fit_reason":"...","why_this_fits":"...","schedule":["7:00 PM - Activity",...],"business_link":"...","weather_note":"...","price_indicator":"€|€€|€€€"}]}
+
+Detailed shape (preferred): {"options":[{"option_id":"opt_1","option_name":"...","source":"winkly_event","winkly_event_id":"<uuid>","narrative":"The Core Match","fit_reason":"One sentence citing a concrete personal signal (interest/city/budget/language/hours).","logic_bridge":"One sentence why this fits their DNA.","itinerary":[...],"schedule":["18:00 - ..."],"logistics":{...},"business_link":"...","weather_note":"...","price_indicator":"€€"}]}
 
 If you call tools first, after the final turn return this JSON.`;
 
 /** Variant B: more concise, more "vibe" language — for A/B test (add-to-planner rate, satisfaction). */
-const CONCIERGE_SYSTEM_PROMPT_B = `You are Winkly's Concierge. Ultra-brief JSON only — short strings, no prose. Use profiles + [SYSTEM_CONTEXT] location hints. Safety → context → DNA. Prefer Winkly supply; EXTERNAL_PLACE_HINTS = POI hints only. Exactly 3 terse "options". Put Winkly first. Shape: {"options":[{"option_id":"opt_1","option_name":"...","logic_bridge":"≤120 chars","itinerary":[{"time":"18:00","activity":"..."}],"price_indicator":"€€"}]}.`;
+const CONCIERGE_SYSTEM_PROMPT_B = `You are Winkly's Concierge. Ultra-brief JSON only — short strings, no prose. Use profiles + [SYSTEM_CONTEXT] location hints. Safety → context → DNA. Prefer Winkly supply; EXTERNAL_PLACE_HINTS = POI hints only. Exactly 3 terse "options". Put Winkly first. EVERY option needs fit_reason: one short sentence naming a CONCRETE personal signal (shared interest, their city/neighbourhood, budget band, language in common, or open-hours match) — never generic. Shape: {"options":[{"option_id":"opt_1","option_name":"...","fit_reason":"≤120 chars, cites a personal signal","logic_bridge":"≤120 chars","itinerary":[{"time":"18:00","activity":"..."}],"price_indicator":"€€"}]}.`;
 
 function getSystemPrompt(variant: "A" | "B"): string {
   return variant === "B" ? CONCIERGE_SYSTEM_PROMPT_B : CONCIERGE_SYSTEM_PROMPT;
@@ -1679,6 +1665,25 @@ function parseConciergeOptions(text: string): unknown[] | null {
     }
   }
   return null;
+}
+
+/**
+ * Guarantee every concierge option carries a fit_reason — the canonical "why this
+ * fits you" subtitle the app renders on each option card. When the model omitted
+ * it, backfill from the option's own fields (why_this_fits → logic_bridge →
+ * narrative) so the UI always has a concrete reason; if none exist, leave it absent
+ * and let the client show its graceful fallback.
+ */
+function withConciergeFitReason(options: unknown[]): unknown[] {
+  const pick = (v: unknown): string | undefined =>
+    typeof v === "string" && v.trim() ? v.trim() : undefined;
+  return options.map((opt) => {
+    if (!opt || typeof opt !== "object") return opt;
+    const o = opt as Record<string, unknown>;
+    if (pick(o.fit_reason)) return o;
+    const reason = pick(o.why_this_fits) ?? pick(o.logic_bridge) ?? pick(o.narrative);
+    return reason ? { ...o, fit_reason: reason } : o;
+  });
 }
 
 /** Match Bridge — JSON payload returned to the app (CTA + planner confirm). */
@@ -1806,6 +1811,8 @@ Think in steps and put a short summary in "chain":
 - weather_note: e.g. rain → pivoted to indoor.
 
 Pick ONE primary venue from PLACES_CANDIDATES when possible (use name, rating, place_id). If candidates are weak, set neutral_third_fallback to a safe public option.
+
+mutual_fit_reason MUST be one short sentence naming at least one CONCRETE shared signal from the two profiles — a shared interest, the city/neighbourhood, the budget band, a language in common, or matching free time. Never generic ("great spot!", "you'll both love it"); it is the card's "why this fits you" line.
 
 Respond with valid JSON only:
 {
@@ -2498,7 +2505,7 @@ async function runGeminiWithTools(
 
     const text = part.text?.trim() || "";
     const options = parseConciergeOptions(text);
-    const list = options ?? [];
+    const list = options ? withConciergeFitReason(options) : [];
     const noOptionsReason = list.length === 0 && text ? (text.slice(0, 120).replace(/\n/g, " ").trim() + (text.length > 120 ? "…" : "")) : undefined;
     return { message: text, suggestions: list, no_options_reason: noOptionsReason };
   }
@@ -2658,7 +2665,7 @@ async function runOpenAIWithTools(
 
     const text = delta.content?.trim() || "";
     const options = parseConciergeOptions(text);
-    const list = options ?? [];
+    const list = options ? withConciergeFitReason(options) : [];
     const noOptionsReason = list.length === 0 && text ? (text.slice(0, 120).replace(/\n/g, " ").trim() + (text.length > 120 ? "…" : "")) : undefined;
     return { message: text, suggestions: list, no_options_reason: noOptionsReason };
   }
@@ -2787,7 +2794,7 @@ async function runAnthropicWithTools(
 
     const text = content.find((b): b is Extract<AnthropicContent, { type: "text" }> => b.type === "text")?.text?.trim() ?? "";
     const options = parseConciergeOptions(text);
-    const list = options ?? [];
+    const list = options ? withConciergeFitReason(options) : [];
     const noOptionsReason = list.length === 0 && text ? (text.slice(0, 120).replace(/\n/g, " ").trim() + (text.length > 120 ? "…" : "")) : undefined;
     return { message: text, suggestions: list, no_options_reason: noOptionsReason };
   }
@@ -2980,6 +2987,11 @@ function parseWinklyPlanOutput(
       typeof x.why_this_fits === "string" && x.why_this_fits.trim()
         ? x.why_this_fits.trim()
         : `A strong fit for ${opts?.city ?? "your area"}.`;
+    // Canonical "why this fits you" subtitle — guarantee presence (graceful fallback to why_this_fits).
+    const fit_reason =
+      typeof x.fit_reason === "string" && x.fit_reason.trim()
+        ? x.fit_reason.trim()
+        : why_this_fits;
     let weather_note = typeof x.weather_note === "string" ? x.weather_note.trim() : "";
     if (!weather_note) weather_note = "Check the forecast closer to your date.";
     const duration_minutes = coerceDurationMinutes(x.duration_minutes);
@@ -3021,6 +3033,7 @@ function parseWinklyPlanOutput(
       option_id,
       character_label: character_label.slice(0, 40),
       title: title.slice(0, 140),
+      fit_reason: fit_reason.slice(0, 160),
       why_this_fits: why_this_fits.slice(0, 340),
       ...(group_fit_notes.length ? { group_fit_notes } : {}),
       itinerary,
@@ -3095,6 +3108,7 @@ function noVenueFoundPlan(seedTitle: string): WinklyPlanOutput {
     option_id: id,
     character_label: label,
     title: seedTitle.slice(0, 140) || "Plan",
+    fit_reason: "No suitable venue found.",
     why_this_fits: "No suitable venue found.",
     itinerary: [{ time: "19:30", description: "Pick a different location or broaden constraints and try again." }],
     venue: { name: "No suitable venue found", address: "", google_maps_link: "", estimated_cost: "" },
@@ -3595,7 +3609,8 @@ You will receive: multiple participant profiles (interests, allergies, lifestyle
 Rules:
 - Validate the user's idea against ALL participant constraints.
 - Return exactly two plan options as JSON: { "options": [ {...}, {...} ] }.
-- Keep every string SHORT (title ≤80 chars, why_this_fits ≤120 chars, itinerary descriptions ≤60 chars). JSON only — no prose.
+- Keep every string SHORT (title ≤80 chars, why_this_fits ≤120 chars, fit_reason ≤120 chars, itinerary descriptions ≤60 chars). JSON only — no prose.
+- ALWAYS include fit_reason for EVERY option: ONE short sentence, addressed to the participants, naming at least one CONCRETE personal signal from their data — a shared interest, their shared/neighbourhood city, the budget band, a language in common, or an open-hours/timing match. Never generic ("great spot!", "you'll love it"). This is the card's headline "why this fits you" reason, distinct from the longer why_this_fits.
 - Option A — the bolder, more memorable choice. character_label: pick from ["Bolder pick","Surprising choice","Hidden gem","Local favourite"].
 - Option B — the safer, reliable choice. character_label: pick from ["Classic choice","Safe & solid","Reliable pick","Crowd pleaser"].
 - Use your world knowledge to suggest real, specific venues in the city and country provided (named restaurants, cafés, cultural venues, etc.). Do not invent fake URLs.
@@ -3616,6 +3631,7 @@ Required JSON schema:
       "option_id": "A" | "B",
       "character_label": string,
       "title": string,
+      "fit_reason": string,
       "why_this_fits": string,
       "group_fit_notes"?: string[],
       "itinerary": [{ "time": string, "description": string }],
@@ -3717,6 +3733,7 @@ Required JSON schema:
       option_id: id,
       character_label: label,
       title: title.slice(0, 140),
+      fit_reason: `Matches your brief in ${city}.`,
       why_this_fits: `Matches your brief in ${city}.`,
       itinerary: [
         { time: "18:30", description: `Meet at ${verifiedVenue.name}` },

@@ -177,3 +177,31 @@ export function rankSimilarProfiles(
     .map((c) => ({ ...c, highlightTags: sharedBusinessTags(viewer, c) }));
 }
 
+/** People-specific fallback for a business pick (no concrete signal available). */
+export const BUSINESS_FIT_FALLBACK = "Picked to match your industry, goals, and city.";
+
+/**
+ * Build the "why this fits you" line for a Business "Top 3 for you" pick, citing
+ * the same signals scoreBusinessSimilarity already weighs: a shared tag
+ * (industry/skill/goal) → same city → their networking goal → fallback.
+ * No new ranking — this just names why the existing ranking surfaced them.
+ */
+export function buildBusinessFitReason(
+  viewer: BusinessViewerContext,
+  candidate: BusinessPersonItem
+): string {
+  const shared = (candidate.highlightTags ?? sharedBusinessTags(viewer, candidate)).filter(Boolean);
+  if (shared.length >= 2) return `You share ${shared[0]} and ${shared[1]}.`;
+  if (shared.length === 1) return `You both focus on ${shared[0]}.`;
+
+  const viewerCity = norm(viewer.city ?? viewer.location ?? "");
+  const candLoc = norm(candidate.meta ?? "");
+  if (viewerCity && candLoc && (candLoc.includes(viewerCity) || viewerCity.includes(candLoc))) {
+    return `In your city and open to connecting.`;
+  }
+
+  const goal = candidate.intentGoal?.trim();
+  if (goal) return `They're looking for ${goal} — worth a hello.`;
+  return BUSINESS_FIT_FALLBACK;
+}
+

@@ -14,6 +14,9 @@ import { ModeHeader } from "@/components/layout/ModeHeader";
 import { EventsBottomNav } from "@/components/layout/EventsBottomNav";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
+import { DiscoverModeToggle, type DiscoverViewMode } from "@/components/discover/DiscoverModeToggle";
+import { TopPicksSection } from "@/components/discover/TopPicksSection";
+import { buildEventTopPicks, type EventTopPick } from "@/lib/discover/eventTopPicks";
 
 type EventRow = {
   id: string;
@@ -21,7 +24,7 @@ type EventRow = {
   city: string | null;
   venue_name: string | null;
   starts_at: string;
-  end_at: string | null;
+  ends_at: string | null;
   cover_url: string | null;
   category: string | null;
   tags: string[] | null;
@@ -55,6 +58,11 @@ export default function EventsDiscover() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  // "Top 3 for you" is the landing state; the full scroll list is a deliberate "See all".
+  const [viewMode, setViewMode] = useState<DiscoverViewMode>("top");
+  const [topPicks, setTopPicks] = useState<EventTopPick[]>([]);
+  const [topLoading, setTopLoading] = useState(true);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items.filter((e) => {
@@ -86,7 +94,7 @@ export default function EventsDiscover() {
       // Default: show upcoming first (starts_at ascending)
       const { data, error } = await supabase
         .from("events")
-        .select("id,title,city,venue_name,starts_at,end_at,cover_url,category,tags,price_eur,capacity,visibility,created_at")
+        .select("id,title,city,venue_name,starts_at,ends_at,cover_url,category,tags,price_eur,capacity,visibility,created_at")
         .order("starts_at", { ascending: true })
         .range(from, to);
 
@@ -110,6 +118,28 @@ export default function EventsDiscover() {
   useEffect(() => {
     fetchEvents({ reset: true });
   }, []);
+
+  // Build the concierge-ranked picks once events are loaded (or when filters change).
+  // Only while in "top" mode so the full-list pagination doesn't trigger gateway calls.
+  useEffect(() => {
+    if (viewMode !== "top" || loading) return;
+    let cancelled = false;
+    setTopLoading(true);
+    buildEventTopPicks({
+      events: items,
+      city: activeCity !== "all" ? activeCity : undefined,
+      category: activeCategory !== "all" ? activeCategory : undefined,
+    })
+      .then((picks) => {
+        if (!cancelled) setTopPicks(picks);
+      })
+      .finally(() => {
+        if (!cancelled) setTopLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [items, activeCity, activeCategory, viewMode, loading]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -154,6 +184,34 @@ export default function EventsDiscover() {
         </View>
       </View>
 
+      <DiscoverModeToggle
+        value={viewMode}
+        onChange={setViewMode}
+        primaryColor={Colors.events.primary}
+        allLabel="All events"
+        allCount={filtered.length}
+      />
+
+      {viewMode === "top" ? (
+        <ScrollView
+          style={styles.list}
+          contentContainerStyle={{ paddingBottom: 32 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.text} />}
+        >
+          <TopPicksSection
+            picks={topPicks}
+            loading={loading || topLoading}
+            primaryColor={Colors.events.primary}
+            subheading="A few events worth your time — picked so you don't have to scroll."
+            emptyText="No events to pick from yet. Tap See all events to browse or create one."
+            placeholderEmoji="🎟️"
+            onPressPick={openDetails}
+            onSeeAll={() => setViewMode("all")}
+            seeAllLabel="See all events"
+          />
+        </ScrollView>
+      ) : (
+        <>
       {/* Search */}
       <View style={styles.searchRow}>
         <View style={[styles.searchBox, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
@@ -295,6 +353,8 @@ export default function EventsDiscover() {
           </View>
         )}
       </ScrollView>
+        </>
+      )}
       </View>
       <EventsBottomNav />
     </View>

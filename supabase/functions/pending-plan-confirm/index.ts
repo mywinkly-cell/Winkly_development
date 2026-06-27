@@ -153,6 +153,18 @@ serve(async (req) => {
       const duration = durationFromPlan ?? durationFromOpt ?? 120;
       const endsAt = addMinutesIso(dt, Math.min(24 * 60, Math.max(30, duration)));
 
+      // Plan-time integrity: a plan that lands on the planner / a calendar must be in the future and
+      // well-formed, otherwise Winkly hands the user a plan that already passed. The DB enforces this too
+      // (trigger enforce_future_plan_time + CHECK, migration 20260701120000); this gives a clear, early
+      // user-facing message instead of a generic constraint error. 5-min grace absorbs clock skew.
+      const startMs = Date.parse(dt);
+      if (!Number.isFinite(startMs) || startMs < Date.now() - 5 * 60 * 1000) {
+        return new Response(
+          JSON.stringify({ error: "This plan's start time is in the past. Ask Winkly to suggest a new time." }),
+          { status: 422, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } },
+        );
+      }
+
       const venue = primary?.venue as Record<string, unknown> | undefined;
       const fromVenue =
         venue && typeof venue === "object"

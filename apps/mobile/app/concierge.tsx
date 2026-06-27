@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors, Typography, FontFamily, HEADER } from "@/constants/tokens";
 import type { ConciergeContext, ExperienceOption } from "@/lib/ai/conciergeClient";
 import { ConciergeRequestForm } from "@/components/ai/ConciergeRequestForm";
+import { FitReasonLine, resolveFitReason } from "@/components/ai/FitReasonLine";
 import { ConciergePlanningFlow } from "@/components/ai/ConciergePlanningFlow";
 import { ConciergeRateLimitCard } from "@/components/ai/ConciergeRateLimitCard";
 import { callConciergeStream, reportConciergeOutcome } from "@/lib/ai/conciergeClient";
@@ -784,7 +785,7 @@ export default function ConciergeScreen() {
                       <Ionicons name="star" size={14} color={Colors.accentYellow} />
                       <Text style={styles.dnaBadgeText}>{originalIndex === 0 ? "Primary pick" : "Backup"}</Text>
                     </View>
-                  ) : (opt.why_this_fits || opt.logic_bridge) ? (
+                  ) : resolveFitReason(opt) ? (
                     <View style={styles.dnaBadge}>
                       <Ionicons name="heart" size={14} color={Colors.primaryViolet} />
                       <Text style={styles.dnaBadgeText}>Picked for you</Text>
@@ -820,7 +821,7 @@ export default function ConciergeScreen() {
                       <Text style={[styles.compareChipText, compareIndices.includes(originalIndex) && styles.compareChipTextActive]}>Compare</Text>
                     </TouchableOpacity>
                   </View>
-                  {opt.why_this_fits ? <Text style={styles.optionWhy} numberOfLines={2}>{String(opt.why_this_fits)}</Text> : null}
+                  <FitReasonLine reason={resolveFitReason(opt)} style={styles.optionFitReason} />
                   {Array.isArray(opt.schedule) && opt.schedule.length > 0 ? (
                     <Text style={styles.optionSchedule} numberOfLines={2}>{opt.schedule.join(" · ")}</Text>
                   ) : null}
@@ -913,9 +914,7 @@ export default function ConciergeScreen() {
             <Text style={styles.backText}>Back to options</Text>
           </TouchableOpacity>
           <Text style={styles.chatConfirmTitle}>{String(chosenOption.option_name || chosenOption.narrative || "Suggestion")}</Text>
-          {(chosenOption.why_this_fits || chosenOption.logic_bridge) && (
-            <Text style={styles.chatConfirmWhy}>{String(chosenOption.why_this_fits || chosenOption.logic_bridge)}</Text>
-          )}
+          <FitReasonLine reason={resolveFitReason(chosenOption)} numberOfLines={3} style={styles.chatConfirmFitReason} />
           <TouchableOpacity style={styles.useSuggestionBtn} onPress={() => chosenOption && setShowFeedbackFor(chosenOption)} activeOpacity={0.9}>
             <Text style={styles.useSuggestionBtnText}>Use this suggestion</Text>
           </TouchableOpacity>
@@ -1517,10 +1516,8 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginBottom: 6,
   },
-  optionWhy: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginBottom: 6,
+  optionFitReason: {
+    marginBottom: 8,
   },
   optionSchedule: {
     ...Typography.caption,
@@ -1550,9 +1547,8 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginBottom: 8,
   },
-  chatConfirmWhy: {
-    ...Typography.body,
-    color: Colors.gray600,
+  chatConfirmFitReason: {
+    marginTop: 4,
     marginBottom: 24,
   },
   useSuggestionBtn: {

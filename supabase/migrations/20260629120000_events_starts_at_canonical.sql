@@ -32,8 +32,10 @@ BEGIN
   -- Case C: only starts_at exists -> nothing to do (canonical already).
 END $$;
 
--- 2. Re-create the concierge matcher against starts_at so already-applied environments stay
+-- 2. Re-create the concierge matcher against starts_at / ends_at so already-applied environments stay
 --    consistent after start_at is dropped. Body mirrors 20260406120000 verbatim except the column.
+--    (The end-column drift end_at -> ends_at is reconciled separately in 20260701120000; this function
+--    already returns the canonical ends_at so it survives that later drop unchanged.)
 -- DROP required: CREATE OR REPLACE cannot rename OUT columns (start_at -> starts_at).
 DROP FUNCTION IF EXISTS public.match_events_for_concierge(text, text, timestamptz, timestamptz, int);
 
@@ -53,7 +55,7 @@ RETURNS TABLE (
   category text,
   tags text[],
   starts_at timestamptz,
-  end_at timestamptz,
+  ends_at timestamptz,
   mode text,
   visibility text,
   price_eur numeric,
@@ -86,7 +88,7 @@ BEGIN
     e.category,
     e.tags,
     e.starts_at,
-    e.end_at,
+    e.ends_at,
     e.mode::text,
     COALESCE(e.visibility::text, 'public'),
     e.price_eur,

@@ -13,8 +13,9 @@ import {
 import { combinedMatchScore, fetchBehaviorAffinityMap } from "@/lib/matching/behaviorAffinities";
 import { getBlockedUserIdSet } from "@/lib/access/blocks";
 import { getOrCreateDailySectionItems } from "./sectionStorage";
-import { relationshipGoalsFromMeta, sharedCount } from "./metaGoals";
+import { relationshipGoalsFromMeta, sharedCount, sharedItems } from "./metaGoals";
 import { DISCOVER_LIMITS } from "./storage";
+import { buildProfileFitReason, TOP_PICKS_LIMIT, type DiscoverTopPick } from "./topPicks";
 import type { DiscoverProfileItem } from "./types";
 
 type RomanceFeedRow = {
@@ -148,6 +149,30 @@ export async function loadRomanceRecommended(
     items,
     DISCOVER_LIMITS.categoryPerDay,
   );
+}
+
+/**
+ * "Top 3 for you" — the highest-ranked profiles from the EXISTING compatibility
+ * pool (no new ranking), each with a concrete "why this fits you" line built from
+ * the signals the ranking already used (shared interests, shared goals, distance).
+ */
+export async function loadRomanceTopPicks(
+  authedUserId: string,
+  self: RomanceProfile | null,
+  selfInterests: string[],
+  selfGoals: string[],
+  limit: number = TOP_PICKS_LIMIT,
+): Promise<DiscoverTopPick[]> {
+  const pool = await fetchRomanceDiscoverPool(authedUserId, self);
+  return pool.slice(0, limit).map((row) => ({
+    ...romanceRowToItem(row),
+    fitReason: buildProfileFitReason({
+      mode: "romance",
+      sharedInterests: sharedItems(selfInterests, interestsForRow(row)),
+      sharedGoals: sharedItems(selfGoals, relationshipGoalsFromMeta(row.romance_meta)),
+      distanceKm: row.distance_km ?? null,
+    }),
+  }));
 }
 
 export async function loadRomanceSameInterests(

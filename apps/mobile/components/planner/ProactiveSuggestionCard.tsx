@@ -8,6 +8,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
+import { FitReasonLine } from "@/components/ai/FitReasonLine";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import type { ProactiveSuggestion } from "@/lib/ai/proactiveSuggestion";
 
@@ -46,6 +47,7 @@ export function ProactiveSuggestionCard({
 
       <Text style={styles.title}>{suggestion.title}</Text>
       <Text style={styles.subtitle}>{suggestion.subtitle}</Text>
+      <FitReasonLine reason={suggestion.fitReason} accentColor={accentColor} style={styles.fitReason} />
 
       <View style={styles.activities}>
         {suggestion.activities.map((a, i) => (
@@ -119,8 +121,9 @@ const styles = StyleSheet.create({
   subtitle: {
     ...Typography.caption,
     color: Colors.gray600,
-    marginBottom: 12,
+    marginBottom: 8,
   },
+  fitReason: { marginBottom: 12 },
   activities: { marginBottom: 8 },
   activityRow: {
     flexDirection: "row",

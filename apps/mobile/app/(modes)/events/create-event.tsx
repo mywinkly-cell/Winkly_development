@@ -19,7 +19,7 @@ type CreateEventPayload = {
   city: string | null;
   venue_name: string | null;
   starts_at: string; // timestamptz ISO
-  end_at: string | null; // timestamptz ISO
+  ends_at: string | null; // timestamptz ISO
   cover_url: string | null;
 
   category: string | null;
@@ -126,7 +126,7 @@ export default function CreateEvent() {
       city: city.trim() ? city.trim() : null,
       venue_name: venueName.trim() ? venueName.trim() : null,
       starts_at: startAt,
-      end_at: endAt.trim() ? endAt.trim() : null,
+      ends_at: endAt.trim() ? endAt.trim() : null,
       cover_url: coverUrl.trim() ? coverUrl.trim() : null,
 
       category: category.trim() ? category.trim() : null,
@@ -149,7 +149,7 @@ export default function CreateEvent() {
 
       // Expected table: events
       // (id uuid PK, created_by uuid, title text, description text, city text,
-      //  venue_name text, starts_at timestamptz, end_at timestamptz, cover_url text,
+      //  venue_name text, starts_at timestamptz, ends_at timestamptz, cover_url text,
       //  category text, tags text[], capacity int, price_eur numeric, visibility text, created_at timestamptz)
       const { data, error } = await supabase
         .from("events")

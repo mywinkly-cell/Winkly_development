@@ -36,6 +36,8 @@ export type WinklyPlanOption = {
   character_label: string;
   title: string;
   why_this_fits: string;
+  /** Canonical "Why this fits you" line — one sentence citing the user's own signals. Rendered as the card subtitle. */
+  fit_reason?: string;
   /** Group planning (≥3 participants): "why this works for everyone" bullets. */
   group_fit_notes?: string[];
   itinerary: { time: string; description: string }[];
@@ -483,6 +485,8 @@ export type ExperienceOption = {
   narrative?: string;
   logic_bridge?: string;
   why_this_fits?: string;
+  /** Canonical "Why this fits you" line — one sentence citing the user's own signals. Rendered as the card subtitle. */
+  fit_reason?: string;
   /** Detailed: ordered steps with time, activity, concierge_tip. */
   itinerary?: ConciergeItineraryStep[];
   schedule?: string[];
