@@ -10,6 +10,13 @@ export function sharedCount(a: string[], b: string[]): number {
   return a.filter((x) => setB.has(x)).length;
 }
 
+/** The actual shared values (preserving `a`'s order) — used to name signals in a fit reason. */
+export function sharedItems(a: string[], b: string[]): string[] {
+  if (!a.length || !b.length) return [];
+  const setB = new Set(b);
+  return a.filter((x) => setB.has(x));
+}
+
 export function relationshipGoalsFromMeta(meta: unknown): string[] {
   if (!meta || typeof meta !== "object") return [];
   const m = meta as Record<string, unknown>;

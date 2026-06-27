@@ -22,7 +22,16 @@ import { getBlockedUserIdSet } from "@/lib/access/blocks";
 import { getProfilesForMode } from "@/lib/access/profiles";
 import { BusinessBottomNav } from "@/components/layout/BusinessBottomNav";
 import { BusinessDiscoverListCard } from "@/components/business/BusinessDiscoverListCard";
-import { mapProfilesBusinessRow, type BusinessPersonItem } from "@/lib/business/homeFeed";
+import {
+  mapProfilesBusinessRow,
+  buildViewerContext,
+  rankSimilarProfiles,
+  buildBusinessFitReason,
+  type BusinessPersonItem,
+} from "@/lib/business/homeFeed";
+import { DiscoverModeToggle, type DiscoverViewMode } from "@/components/discover/DiscoverModeToggle";
+import { TopPicksSection, type TopPickCard } from "@/components/discover/TopPicksSection";
+import { TOP_PICKS_LIMIT } from "@/lib/discover/topPicks";
 
 type ResultType = "person" | "company" | "service";
 
@@ -59,6 +68,9 @@ export default function BusinessDiscover() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [savedFilters, setSavedFilters] = useState<BusinessFiltersState | null>(null);
 
+  // "Top 3 for you" is the landing state; the full search list is a deliberate "See all".
+  const [viewMode, setViewMode] = useState<DiscoverViewMode>("top");
+
   useEffect(() => {
     getBusinessFilters().then(setSavedFilters);
   }, []);
@@ -86,6 +98,24 @@ export default function BusinessDiscover() {
     if (!savedFilters) return byQueryAndType;
     return applyBusinessFiltersToFeed(byQueryAndType, savedFilters);
   }, [results, query, activeType, savedFilters]);
+
+  // "Top 3 for you": reuse the EXISTING business similarity ranking over the people
+  // already loaded (no new logic), each with a concrete "why this fits you" line.
+  const topPicks = useMemo<TopPickCard[]>(() => {
+    const people = results
+      .filter((r) => r.type === "person" && r.person)
+      .map((r) => r.person as BusinessPersonItem);
+    if (people.length === 0) return [];
+    const viewer = buildViewerContext({ savedFilters: savedFilters ?? undefined });
+    return rankSimilarProfiles(viewer, people, TOP_PICKS_LIMIT).map((p) => ({
+      id: p.id,
+      title: p.name,
+      subtitle: p.subtitle ?? null,
+      photoUrl: p.photoUrl,
+      fitReason: buildBusinessFitReason(viewer, p),
+      badge: null,
+    }));
+  }, [results, savedFilters]);
 
   async function fetchDiscover(opts?: { reset?: boolean }) {
     const reset = !!opts?.reset;
@@ -267,6 +297,32 @@ export default function BusinessDiscover() {
         </TouchableOpacity>
       </View>
 
+      <DiscoverModeToggle
+        value={viewMode}
+        onChange={setViewMode}
+        primaryColor={Colors.business.primary}
+        allLabel="See all"
+        allCount={filtered.length}
+      />
+
+      {viewMode === "top" ? (
+        <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 32 }}>
+          <TopPicksSection
+            picks={topPicks}
+            loading={loading}
+            primaryColor={Colors.business.primary}
+            subheading="A few people worth reaching out to — picked so you don't have to scroll."
+            emptyText="No people to pick from yet. Tap See all to browse the full directory."
+            placeholderEmoji="💼"
+            onPressPick={(id) =>
+              router.push({ pathname: "/(modes)/business/profile-view", params: { user_id: id } })
+            }
+            onSeeAll={() => setViewMode("all")}
+            seeAllLabel="See all"
+          />
+        </ScrollView>
+      ) : (
+        <>
       {/* Search */}
       <View style={styles.searchRow}>
         <View style={[styles.searchBox, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
@@ -424,6 +480,8 @@ export default function BusinessDiscover() {
           </View>
         )}
       </ScrollView>
+        </>
+      )}
       </View>
       <BusinessBottomNav />
     </View>

@@ -76,6 +76,46 @@ export default function GroupsIndex() {
           />
         }
       >
+        <TouchableOpacity
+          onPress={() =>
+            router.push({
+              pathname: "/groups/plan-together",
+              params: { mode: mode === "business" ? "business" : "friends" },
+            })
+          }
+          style={{
+            borderRadius: Layout.radii.card,
+            padding: 16,
+            marginBottom: 12,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+            backgroundColor: Colors.primaryViolet,
+          }}
+          activeOpacity={0.9}
+          accessibilityLabel="Plan something for the group"
+        >
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: "rgba(255,255,255,0.18)",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons name="sparkles" size={20} color="#FFF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ ...Typography.button, color: "#FFF" }}>Plan something for us</Text>
+            <Text style={{ ...Typography.caption, color: "rgba(255,255,255,0.85)", marginTop: 2 }}>
+              Pick a few people — Winkly drafts plan options for the group.
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.85)" />
+        </TouchableOpacity>
+
         <View style={{ flexDirection: "row", gap: 10, marginBottom: 16 }}>
           <TouchableOpacity
             onPress={() => router.push({ pathname: "/groups/create-group", params: { mode } })}
@@ -87,12 +127,14 @@ export default function GroupsIndex() {
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
-              backgroundColor: Colors.primaryViolet,
+              backgroundColor: Colors.gray100,
+              borderWidth: 1,
+              borderColor: Colors.gray200,
             }}
             activeOpacity={0.9}
           >
-            <Ionicons name="add" size={18} color="#FFF" />
-            <Text style={{ ...Typography.button, color: "#FFF" }}>Create a group</Text>
+            <Ionicons name="add" size={18} color={Colors.textPrimary} />
+            <Text style={{ ...Typography.button, color: Colors.textPrimary }}>Create a group</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

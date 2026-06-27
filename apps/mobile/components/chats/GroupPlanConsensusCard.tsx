@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import { Colors, Typography } from "@/constants/tokens";
+import { FitReasonLine, resolveFitReason } from "@/components/ai/FitReasonLine";
 import { supabase } from "@/lib/supabase";
 import {
   confirmPendingPlan,
@@ -15,6 +16,7 @@ type PlanOption = {
   option_id?: string;
   character_label?: string;
   title?: string;
+  fit_reason?: string;
   why_this_fits?: string;
   group_fit_notes?: string[];
   venue?: { name?: string; address?: string };
@@ -127,6 +129,8 @@ export function GroupPlanConsensusCard({
             </Text>
             {opt.venue?.name ? <Text style={styles.optionVenue} numberOfLines={1}>{opt.venue.name}</Text> : null}
 
+            <FitReasonLine reason={resolveFitReason(opt)} style={styles.fitReason} />
+
             {Array.isArray(opt.group_fit_notes) && opt.group_fit_notes.length > 0 ? (
               <View style={styles.fitNotes}>
                 {opt.group_fit_notes.slice(0, 4).map((note, i) => (
@@ -202,6 +206,7 @@ const styles = StyleSheet.create({
   optionTitle: { fontWeight: "700", fontSize: 15, color: Colors.textPrimary, marginTop: 2 },
   optionVenue: { fontSize: 13, color: Colors.gray600, marginTop: 2 },
 
+  fitReason: { marginTop: 8 },
   fitNotes: { marginTop: 8, gap: 4 },
   fitNoteRow: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
   fitNoteText: { flex: 1, fontSize: 12, color: Colors.gray700, lineHeight: 16 },

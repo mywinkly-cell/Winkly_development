@@ -112,11 +112,14 @@ export async function createPlannerInvite(
 
   if (itemError || !item) throw new Error(itemError?.message ?? "Failed to create planner item");
 
-  const { error: partError } = await supabase.from("planner_participants").insert({
-    planner_item_id: item.id,
-    user_id: inviterId,
-    role: "owner",
-  });
+  // Seed participant rows for BOTH sides up front. The invitee gets the lightweight
+  // "invitee" role (upgraded to "attendee" on accept) so the proposed item is readable
+  // by the recipient immediately — RLS allows a participant (and, defensively, an
+  // invitee on the invitation) to SELECT the planner_item.
+  const { error: partError } = await supabase.from("planner_participants").insert([
+    { planner_item_id: item.id, user_id: inviterId, role: "owner" },
+    { planner_item_id: item.id, user_id: inviteeId, role: "invitee" },
+  ]);
   if (partError) throw new Error(partError.message);
 
   const { data: inv, error: invError } = await supabase
@@ -195,11 +198,15 @@ export async function acceptPlannerInvite(invitationId: string): Promise<AcceptP
 
   if (updateErr) throw new Error(updateErr.message);
 
-  const { error: insertErr } = await supabase.from("planner_participants").insert({
-    planner_item_id: inv.planner_item_id,
-    user_id: uid,
-    role: "attendee",
-  });
+  // Upsert: createPlannerInvite already seeds an "invitee" row for the recipient, so
+  // accepting upgrades that row to "attendee" rather than violating the
+  // (planner_item_id, user_id) unique constraint.
+  const { error: insertErr } = await supabase
+    .from("planner_participants")
+    .upsert(
+      { planner_item_id: inv.planner_item_id, user_id: uid, role: "attendee" },
+      { onConflict: "planner_item_id,user_id" }
+    );
   if (insertErr) throw new Error(insertErr.message);
 
   const itemTitle = (itemRow as { title?: string } | null)?.title ?? "your plan";

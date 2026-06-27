@@ -445,6 +445,22 @@ export default function FriendsHome() {
         onFilterPress={() => router.push("/(modes)/friends/filters")}
       />
 
+      <Pressable
+        onPress={() => {
+          Haptics.selectionAsync();
+          router.push({ pathname: "/groups/plan-together", params: { mode: "friends" } });
+        }}
+        style={styles.planBanner}
+        accessibilityLabel="Plan something for a group of friends"
+      >
+        <Ionicons name="sparkles" size={20} color={Colors.friends.primary} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.planBannerTitle}>Plan something for us</Text>
+          <Text style={styles.planBannerSubtitle}>Pick a few friends — get group plan options.</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={Colors.friends.primary} />
+      </Pressable>
+
       {incomingRequestCount > 0 ? (
         <Pressable
           onPress={() => {
@@ -633,6 +649,31 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderWidth: 1,
     borderColor: Colors.friends.primary,
+  },
+  planBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.friends.primary + "55",
+  },
+  planBannerTitle: {
+    ...Typography.button,
+    fontFamily: FontFamily.headingBold,
+    color: Colors.textPrimary,
+  },
+  planBannerSubtitle: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: Colors.gray600,
+    marginTop: 1,
   },
   requestsBannerText: {
     flex: 1,

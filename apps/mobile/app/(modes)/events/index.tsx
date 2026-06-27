@@ -31,11 +31,11 @@ import { getDeviceCoordsIfPermitted } from "@/lib/location/deviceLocation";
 import { supabase } from "@/lib/supabase";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 
-// Map DB event row to EventCardItem (canonical starts_at; tolerates legacy start_at)
+// Map DB event row to EventCardItem (canonical starts_at / ends_at)
 function winklyRowToCard(row: Record<string, unknown>): EventCardItem {
-  const startAt = (row.starts_at ?? row.start_at) as string;
-  const endAt = (row.end_at ?? row.ends_at) as string | null;
-  const imageUrl = (row.cover_url ?? row.cover_image_uri ?? row.cover_url) as string | null;
+  const startAt = row.starts_at as string;
+  const endAt = row.ends_at as string | null;
+  const imageUrl = (row.cover_url ?? row.cover_image_uri) as string | null;
   return {
     id: row.id as string,
     title: (row.title as string) ?? "",

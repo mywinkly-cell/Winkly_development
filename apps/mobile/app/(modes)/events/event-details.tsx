@@ -26,7 +26,7 @@ type EventRow = {
   city: string | null;
   venue_name: string | null;
   starts_at: string;
-  end_at: string | null;
+  ends_at: string | null;
   cover_url: string | null;
   category: string | null;
   tags: string[] | null;
@@ -90,7 +90,7 @@ export default function EventDetails() {
       const { data, error } = await supabase
         .from("events")
         .select(
-          "id,created_by,title,description,city,venue_name,starts_at,end_at,cover_url,category,tags,capacity,price_eur,visibility,created_at"
+          "id,created_by,title,description,city,venue_name,starts_at,ends_at,cover_url,category,tags,capacity,price_eur,visibility,created_at"
         )
         .eq("id", eventId)
         .maybeSingle();
@@ -404,7 +404,7 @@ export default function EventDetails() {
                   <Text style={{ color: Colors.text, fontWeight: "900", fontSize: 20 }}>{event.title}</Text>
                   <Text style={{ color: Colors.mutedText, marginTop: 8 }}>
                     {formatDateTime(event.starts_at)}
-                    {event.end_at ? ` – ${formatDateTime(event.end_at)}` : ""}
+                    {event.ends_at ? ` – ${formatDateTime(event.ends_at)}` : ""}
                   </Text>
                   <Text style={{ color: Colors.mutedText, marginTop: 6 }}>
                     {event.city ? fmtLoc(event.city) : "City"}

@@ -52,6 +52,8 @@ export type PlannerThemePlanOption = {
   character_label: string;
   title: string;
   why_this_fits: string;
+  /** Canonical "Why this fits you" line — one sentence citing the user's own signals. Rendered as the card subtitle. */
+  fit_reason?: string;
   itinerary: Array<{ time: string; description: string }>;
   venue: {
     name: string;

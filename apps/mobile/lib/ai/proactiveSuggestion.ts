@@ -20,6 +20,12 @@ export type ProactiveSuggestion = {
   id: string;
   title: string;
   subtitle: string;
+  /**
+   * "Why this fits you" line — one sentence citing concrete personal signals
+   * (an open calendar slot, someone you've been chatting with, your city/time).
+   * Populated by `enrichProactiveSuggestion`; rendered as the card subtitle.
+   */
+  fitReason?: string;
   activities: string[];
   timeRange: string;
   /** For "View plan" — pre-fill concierge context. */
@@ -410,27 +416,61 @@ export async function enrichProactiveSuggestion(
 
   const [slots, partner] = await Promise.all([getMergedDeviceWhiteSpaceSlots(), fetchRecentDmPartnerHint()]);
 
-  let subtitle = base.subtitle;
+  // Concrete personal signals power the "why this fits you" line — keep the
+  // subtitle as a clean descriptor and route signals into fitReason instead.
+  const signals: string[] = [];
   const sat = pickSaturdaySlotSummary(slots);
   if (sat && (base.datePreset === "weekend" || tab === "all")) {
-    subtitle = `${subtitle} · ${sat} looks open on your calendar.`;
+    signals.push(`${sat} looks open on your calendar`);
   }
 
   let partner_user_id: string | undefined;
   let partner_display_name: string | undefined;
   if (partner && partnerMatchesTab(partner, tab)) {
     const first = partner.displayName.split(/\s+/)[0] ?? partner.displayName;
-    subtitle = `${subtitle} · You’ve been chatting with ${first}.`;
+    signals.push(`you’ve been chatting with ${first}`);
     partner_user_id = partner.userId;
     partner_display_name = partner.displayName;
   }
 
   return {
     ...base,
-    subtitle,
+    fitReason: buildProactiveFitReason(base, signals),
     partner_user_id,
     partner_display_name,
   };
+}
+
+/** Capitalize the first letter (leaves the rest untouched). */
+function upperFirst(s: string): string {
+  return s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+/** Join phrases naturally: "a", "a and b", "a, b and c". */
+function joinNatural(parts: string[]): string {
+  if (parts.length <= 1) return parts[0] ?? "";
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+const DATE_PRESET_LABEL: Record<NonNullable<ProactiveSuggestion["datePreset"]>, string> = {
+  today: "today",
+  tomorrow: "tomorrow",
+  weekend: "this weekend",
+};
+
+/**
+ * A concrete "why this fits you" line for a proactive card: prefer real signals
+ * (open calendar slot, a recent chat partner), else fall back to the user's own
+ * time/activity window. Never generic ("great spot!").
+ */
+function buildProactiveFitReason(base: ProactiveSuggestion, signals: string[]): string {
+  if (signals.length) return `${upperFirst(joinNatural(signals))}.`;
+  const when = base.datePreset ? DATE_PRESET_LABEL[base.datePreset] : null;
+  const activity = base.activityHint ? base.activityHint.toLowerCase() : null;
+  if (when && activity) return `Fits an open ${when} window for ${activity} near you.`;
+  if (when) return `Fits an open ${when} window in your area.`;
+  if (activity) return `Matches the ${activity} you tend to plan near you.`;
+  return `Picked for your ${base.timeRange} window near you.`;
 }
 
 /** One local notification per target Saturday (permission-gated). */

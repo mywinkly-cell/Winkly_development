@@ -1,5 +1,6 @@
 -- Concierge supply: pg_trgm indexes + RPC for fuzzy event matching (title/description/category vs user intent).
--- Requires public.events with starts_at (canonical column). Older drifted DBs may also expose a stray start_at; the column guard below + migration 20260629120000 reconcile this.
+-- Requires public.events with canonical columns starts_at / ends_at. Older drifted DBs may also expose stray
+-- start_at / end_at columns; the column guard below + migrations 20260629120000 (start) and 20260701120000 (end) reconcile this.
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
@@ -42,7 +43,7 @@ RETURNS TABLE (
   category text,
   tags text[],
   starts_at timestamptz,
-  end_at timestamptz,
+  ends_at timestamptz,
   mode text,
   visibility text,
   price_eur numeric,
@@ -75,7 +76,7 @@ BEGIN
     e.category,
     e.tags,
     e.starts_at,
-    e.end_at,
+    e.ends_at,
     e.mode::text,
     COALESCE(e.visibility::text, 'public'),
     e.price_eur,

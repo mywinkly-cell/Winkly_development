@@ -21,6 +21,9 @@ import { romanceLikeProfile, blockUser, reportUser } from "@/lib/chats";
 import { useModeContext } from "@/providers";
 import { DiscoverHorizontalSection } from "@/components/discover/DiscoverHorizontalSection";
 import { DiscoverBusinessOffersSection } from "@/components/business/DiscoverBusinessOffersSection";
+import { DiscoverModeToggle, type DiscoverViewMode } from "@/components/discover/DiscoverModeToggle";
+import { TopPicksSection } from "@/components/discover/TopPicksSection";
+import type { DiscoverTopPick } from "@/lib/discover/topPicks";
 import {
   discoverOpen,
   likedYouLikeBack,
@@ -41,6 +44,7 @@ import {
   loadRomanceRecommended,
   loadRomanceSameGoals,
   loadRomanceSameInterests,
+  loadRomanceTopPicks,
   romanceRowToItem,
 } from "@/lib/discover/romanceDiscoverSections";
 import type { DiscoverProfileItem } from "@/lib/discover/types";
@@ -67,6 +71,10 @@ export default function RomanceDiscover() {
   const [sameGoals, setSameGoals] = useState<DiscoverProfileItem[]>([]);
   const [nearby, setNearby] = useState<DiscoverProfileItem[]>([]);
   const [likesUsedToday, setLikesUsedToday] = useState(0);
+
+  // "Top 3 for you" is the landing state; the full category rows are a deliberate "See all".
+  const [viewMode, setViewMode] = useState<DiscoverViewMode>("top");
+  const [topPicks, setTopPicks] = useState<DiscoverTopPick[]>([]);
 
   const subscriptionTier = context.subscription_tier ?? "free";
   const canViewFull = ["super", "premium", "enterprise"].includes(subscriptionTier);
@@ -122,12 +130,13 @@ export default function RomanceDiscover() {
       ];
       const selfGoals = relationshipGoalsFromMeta(me?.romance_meta);
 
-      const [likedList, recList, interestsList, goalsList, nearbyList] = await Promise.all([
+      const [likedList, recList, interestsList, goalsList, nearbyList, picksList] = await Promise.all([
         loadLikedYou(uid),
         loadRomanceRecommended(uid, self),
         loadRomanceSameInterests(uid, self, selfInterests),
         loadRomanceSameGoals(uid, self, selfGoals),
         loadRomanceNearby(uid, self),
+        loadRomanceTopPicks(uid, self, selfInterests, selfGoals),
       ]);
 
       const filterBlocked = (list: DiscoverProfileItem[]) => list.filter((p) => !blocked.has(p.id));
@@ -137,6 +146,7 @@ export default function RomanceDiscover() {
       setSameInterests(filterBlocked(interestsList));
       setSameGoals(filterBlocked(goalsList));
       setNearby(filterBlocked(nearbyList));
+      setTopPicks(picksList.filter((p) => !blocked.has(p.id)));
 
       const used = await getRecommendationLikesSentToday("romance");
       setLikesUsedToday(used);
@@ -173,6 +183,7 @@ export default function RomanceDiscover() {
     setSameInterests(drop);
     setSameGoals(drop);
     setNearby(drop);
+    setTopPicks((prev) => prev.filter((p) => p.id !== id));
   };
 
   const handleLikeBack = async (item: DiscoverProfileItem) => {
@@ -287,6 +298,8 @@ export default function RomanceDiscover() {
     <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
       <ModeHeader currentMode="romance" />
 
+      <DiscoverModeToggle value={viewMode} onChange={setViewMode} primaryColor={primaryColor} />
+
       <ScrollView
         style={{ flex: 1 }}
         refreshControl={
@@ -294,6 +307,26 @@ export default function RomanceDiscover() {
         }
         contentContainerStyle={{ paddingTop: 8, paddingBottom: 32 }}
       >
+        {viewMode === "top" ? (
+          <TopPicksSection
+            picks={topPicks.map((p) => ({
+              id: p.id,
+              title: p.name,
+              subtitle: p.age != null ? String(p.age) : null,
+              photoUrl: p.photoUrl,
+              fitReason: p.fitReason,
+            }))}
+            loading={false}
+            primaryColor={primaryColor}
+            subheading="Your strongest matches right now — start here instead of scrolling."
+            emptyText="No standout matches yet. Tap See all to browse everyone."
+            placeholderEmoji="💖"
+            onPressPick={(id) => router.push(`/(modes)/romance/profile-view?id=${id}&source=discover`)}
+            onSeeAll={() => setViewMode("all")}
+            seeAllLabel="See all"
+          />
+        ) : (
+          <>
         <DiscoverBusinessOffersSection source="romance_discover" />
 
         <DiscoverHorizontalSection
@@ -345,6 +378,8 @@ export default function RomanceDiscover() {
           canViewFull
           onViewProfile={openProfile}
         />
+          </>
+        )}
       </ScrollView>
 
       <RomanceBottomNav />

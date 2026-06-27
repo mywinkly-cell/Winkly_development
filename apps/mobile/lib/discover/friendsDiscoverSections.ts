@@ -11,8 +11,9 @@ import {
 import { combinedMatchScore, fetchBehaviorAffinityMap } from "@/lib/matching/behaviorAffinities";
 import { getBlockedUserIdSet } from "@/lib/access/blocks";
 import { getOrCreateDailySectionItems } from "./sectionStorage";
-import { meetupGoalsFromMeta, sharedCount } from "./metaGoals";
+import { meetupGoalsFromMeta, sharedCount, sharedItems } from "./metaGoals";
 import { DISCOVER_LIMITS } from "./storage";
+import { buildProfileFitReason, TOP_PICKS_LIMIT, type DiscoverTopPick } from "./topPicks";
 import type { DiscoverProfileItem } from "./types";
 
 type FriendsFeedRow = {
@@ -133,6 +134,32 @@ export async function loadFriendsRecommended(
     items,
     DISCOVER_LIMITS.categoryPerDay,
   );
+}
+
+/**
+ * "Top 3 for you" — the highest-ranked friends from the EXISTING compatibility
+ * pool (no new ranking), each with a concrete "why this fits you" line built from
+ * the signals the ranking already used (shared interests, shared goals, city).
+ */
+export async function loadFriendsTopPicks(
+  authedUserId: string,
+  self: FriendsProfile | null,
+  selfInterests: string[],
+  selfGoals: string[],
+  selfCity?: string | null,
+  limit: number = TOP_PICKS_LIMIT,
+): Promise<DiscoverTopPick[]> {
+  const pool = await fetchFriendsDiscoverPool(authedUserId, self);
+  const cityNorm = selfCity?.trim().toLowerCase() ?? "";
+  return pool.slice(0, limit).map((row) => ({
+    ...friendsRowToItem(row),
+    fitReason: buildProfileFitReason({
+      mode: "friends",
+      sharedInterests: sharedItems(selfInterests, row.interests ?? []),
+      sharedGoals: sharedItems(selfGoals, meetupGoalsFromMeta(row.meta)),
+      sameCity: !!cityNorm && (row.city ?? "").trim().toLowerCase() === cityNorm,
+    }),
+  }));
 }
 
 export async function loadFriendsSameInterests(

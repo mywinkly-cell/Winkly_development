@@ -92,7 +92,7 @@ CREATE POLICY sub_profiles_all ON public.sub_profiles FOR ALL
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 1c. EVENTS (create if missing; required for events_planner_items FK)
---    Column names match app: starts_at, end_at, cover_url, venue_name, category, etc.
+--    Column names match app: starts_at, ends_at, cover_url, venue_name, category, etc.
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS public.events (
   location TEXT,
   venue_name TEXT,
   starts_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  end_at TIMESTAMPTZ,
+  ends_at TIMESTAMPTZ,
   cover_url TEXT,
   cover_image_uri TEXT,
   category TEXT,
@@ -119,11 +119,12 @@ CREATE TABLE IF NOT EXISTS public.events (
 -- Add app-expected columns if table already existed with different schema
 ALTER TABLE public.events ADD COLUMN IF NOT EXISTS city TEXT;
 ALTER TABLE public.events ADD COLUMN IF NOT EXISTS venue_name TEXT;
--- Canonical time column is starts_at (created in 20250130000001_winkly_schema.sql). Earlier revisions of
--- this migration added a stray start_at here, causing two-column drift; 20260629120000 reconciles any
--- environment that already applied that version. Fresh DBs now get starts_at directly (no drift).
+-- Canonical time columns are starts_at / ends_at (created in 20250130000001_winkly_schema.sql).
+-- Earlier revisions of this migration added stray start_at / end_at here, causing two-column drift;
+-- 20260629120000 reconciles the start drift and 20260701120000 reconciles the end drift on any
+-- environment that already applied those versions. Fresh DBs now get starts_at / ends_at directly (no drift).
 ALTER TABLE public.events ADD COLUMN IF NOT EXISTS starts_at TIMESTAMPTZ;
-ALTER TABLE public.events ADD COLUMN IF NOT EXISTS end_at TIMESTAMPTZ;
+ALTER TABLE public.events ADD COLUMN IF NOT EXISTS ends_at TIMESTAMPTZ;
 ALTER TABLE public.events ADD COLUMN IF NOT EXISTS cover_url TEXT;
 ALTER TABLE public.events ADD COLUMN IF NOT EXISTS category TEXT;
 ALTER TABLE public.events ADD COLUMN IF NOT EXISTS tags TEXT[];
