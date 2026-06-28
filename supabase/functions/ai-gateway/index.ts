@@ -919,6 +919,84 @@ async function getParticipantIdsForConversation(params: {
   return ids;
 }
 
+/**
+ * Authorization gate for cross-user AI: returns the subset of `candidateIds` the requester
+ * is allowed to use as co-planners — users they share an ACTIVE conversation with. A DM is
+ * created on a romance match or a mutual follow, so this covers matched / connected users and
+ * group members.
+ *
+ * CRITICAL: the gateway reads profiles + planner items with the service role (RLS bypassed),
+ * so without this check a caller could pass an arbitrary partner_user_id / participant_user_ids
+ * to harvest another user's profile and calendar. Fails CLOSED (returns no co-planners) on any
+ * lookup error.
+ */
+async function authorizedCoPlannerIds(
+  supabase: ReturnType<typeof createClient>,
+  requesterUserId: string,
+  candidateIds: string[],
+): Promise<string[]> {
+  const others = Array.from(
+    new Set(candidateIds.filter((id) => typeof id === "string" && id && id !== requesterUserId)),
+  );
+  if (others.length === 0) return [];
+  try {
+    const { data: myConvs, error: e1 } = await supabase
+      .from("conversation_members")
+      .select("conversation_id")
+      .eq("user_id", requesterUserId)
+      .is("left_at", null)
+      .limit(1000);
+    if (e1) return [];
+    const convIds = Array.from(
+      new Set(
+        (myConvs ?? [])
+          .map((r) => (r as { conversation_id?: string }).conversation_id)
+          .filter((x): x is string => typeof x === "string" && x.length > 0),
+      ),
+    );
+    if (convIds.length === 0) return [];
+    const { data: shared, error: e2 } = await supabase
+      .from("conversation_members")
+      .select("user_id")
+      .in("conversation_id", convIds)
+      .in("user_id", others)
+      .is("left_at", null);
+    if (e2) return [];
+    const allowed = new Set(
+      (shared ?? [])
+        .map((r) => (r as { user_id?: string }).user_id)
+        .filter((x): x is string => typeof x === "string" && x.length > 0),
+    );
+    return others.filter((id) => allowed.has(id));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * True when the requester has an outgoing romance like / super-like toward `targetId`.
+ * This is the relationship that legitimises the PRE-match super-like icebreaker (no DM exists
+ * yet, so conversation membership can't apply); it scopes the server-side partner profile read
+ * to a target the requester has actually acted on. Fails CLOSED.
+ */
+async function requesterHasRomanceLike(
+  supabase: ReturnType<typeof createClient>,
+  requesterUserId: string,
+  targetId: string,
+): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from("romance_likes")
+      .select("id")
+      .eq("liker_id", requesterUserId)
+      .eq("liked_id", targetId)
+      .maybeSingle();
+    return !!data;
+  } catch {
+    return false;
+  }
+}
+
 function hashKeyMaterial(s: string): string {
   // small non-crypto hash for cache keys
   let h = 2166136261;
@@ -3958,6 +4036,41 @@ serve(async (req) => {
       }
     }
 
+    // ── Cross-user authorization gate ────────────────────────────────────────────
+    // The reads below use the service role (RLS bypassed), so any partner_user_id /
+    // participant_user_ids supplied by the client must be authorized here: the requester may
+    // only co-plan with users they share an active conversation with (a DM is created on a
+    // romance match or mutual follow, so this covers matched/connected users + group members).
+    // Unauthorized ids are dropped so no task can harvest another user's profile or planner
+    // data via a forged id; tasks that then require partner_user_id reject with their own 400.
+    // super_like_icebreaker is PRE-match and is gated separately inside its own handler.
+    if (task !== "super_like_icebreaker") {
+      const candidatePartners: string[] = [];
+      if (typeof scrubbedSafeContext.partner_user_id === "string") {
+        candidatePartners.push(scrubbedSafeContext.partner_user_id);
+      }
+      if (Array.isArray(scrubbedSafeContext.participant_user_ids)) {
+        for (const x of scrubbedSafeContext.participant_user_ids) {
+          if (typeof x === "string") candidatePartners.push(x);
+        }
+      }
+      const others = candidatePartners.filter((id) => id && id !== user.id);
+      if (others.length > 0) {
+        const allowedSet = new Set(await authorizedCoPlannerIds(supabase, user.id, others));
+        if (
+          typeof scrubbedSafeContext.partner_user_id === "string" &&
+          !allowedSet.has(scrubbedSafeContext.partner_user_id)
+        ) {
+          delete scrubbedSafeContext.partner_user_id;
+        }
+        if (Array.isArray(scrubbedSafeContext.participant_user_ids)) {
+          scrubbedSafeContext.participant_user_ids = (scrubbedSafeContext.participant_user_ids as unknown[]).filter(
+            (x) => typeof x === "string" && (x === user.id || allowedSet.has(x)),
+          );
+        }
+      }
+    }
+
     if (task === "chat_topics") {
       const rawIds = scrubbedSafeContext.participant_user_ids;
       const ids = Array.isArray(rawIds) ? rawIds.filter((x) => typeof x === "string") as string[] : [];
@@ -4323,7 +4436,16 @@ serve(async (req) => {
           ? (scrubbedSafeContext.other_profile as Record<string, unknown>)
           : {};
 
-      const profileCtxSl = await getConciergeProfileContext(supabase, user.id, "romance", partnerUserIdSl);
+      // Pre-match: only load the target's (discovery-visible) signals server-side when the
+      // requester has actually liked/super-liked them; otherwise rely solely on the client-
+      // supplied other_profile so a forged partner_user_id cannot harvest their profile.
+      const slCanUsePartner = await requesterHasRomanceLike(supabase, user.id, partnerUserIdSl);
+      const profileCtxSl = await getConciergeProfileContext(
+        supabase,
+        user.id,
+        "romance",
+        slCanUsePartner ? partnerUserIdSl : null,
+      );
       const slPayload: Record<string, unknown> = {
         self_profile: {
           interests: selfFromClient.interests ?? profileCtxSl.primary.interests ?? profileCtxSl.primary.activity_preferences,
