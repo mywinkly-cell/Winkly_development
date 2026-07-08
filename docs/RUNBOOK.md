@@ -37,7 +37,7 @@ npx supabase secrets list --project-ref orjccytcmklzcfjgqwwj
 | `OPENAI_API_KEY` | Yes (fallback) | Set on prod ✓ |
 | `UPSTASH_REDIS_REST_URL` | **Yes** | **Missing on prod (2026-06-10)** — copy from dev or create Upstash DB |
 | `UPSTASH_REDIS_REST_TOKEN` | **Yes** | **Missing on prod** — without Redis, burst rate limits are skipped |
-| `GOOGLE_PLACES_API_KEY` | Recommended | **Missing on prod** — venue grounding falls back to OSM Nominatim |
+| `GOOGLE_PLACES_API_KEY` | Recommended | **Set on dev + prod** ✓ (2026-07-04) — venue grounding via Places Text Search |
 | `AUTH_REDIRECT_STATE_SECRET` | Yes | Set on prod ✓ |
 | `MOCK_FACE_MATCH` | Must **not** be set | Not present ✓ |
 | `AI_GATEWAY_DISABLED` | Must **not** be set | Not present ✓ |
@@ -47,8 +47,6 @@ npx supabase secrets list --project-ref orjccytcmklzcfjgqwwj
 ```bash
 npx supabase secrets set UPSTASH_REDIS_REST_URL=https://YOUR.upstash.io --project-ref orjccytcmklzcfjgqwwj
 npx supabase secrets set UPSTASH_REDIS_REST_TOKEN=YOUR_TOKEN --project-ref orjccytcmklzcfjgqwwj
-npx supabase secrets set GOOGLE_PLACES_API_KEY=YOUR_KEY --project-ref orjccytcmklzcfjgqwwj
-npx supabase functions deploy ai-gateway --project-ref orjccytcmklzcfjgqwwj
 ```
 
 Dev project (`gwgjdpqskusuejlwrsnd`) already has Upstash; reuse the same Upstash instance for prod or provision a dedicated prod database.

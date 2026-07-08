@@ -1,6 +1,6 @@
 # API Keys and Environment Variables — Winkly
 
-**Last updated:** 2026-06-10
+**Last updated:** 2026-07-04
 
 This doc lists every API key and env var used by Winkly, where they are used, and **how to set them**. You must set these yourself (in Supabase Dashboard / CLI and in the mobile app `.env`); the app cannot set them for you.
 
@@ -128,19 +128,22 @@ Audit what's set (names only — no values):
 npx supabase secrets list --project-ref orjccytcmklzcfjgqwwj
 ```
 
-| Secret | Status (2026-06-10) | Action if missing |
+| Secret | Status (2026-07-04) | Action if missing |
 |--------|---------------------|-------------------|
 | `OPENAI_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` | **Set** | Required for AI; **Anthropic** is primary for Premium tier |
-| `UPSTASH_REDIS_REST_URL` + `TOKEN` | **Missing** | Copy from dev (`gwgjdpqskusuejlwrsnd`) or create Upstash DB → set both → redeploy `ai-gateway` |
 | `AUTH_REDIRECT_STATE_SECRET` | **Set** | HTTPS email redirect CSRF |
-| `GOOGLE_PLACES_API_KEY` | **Missing** | Enable Places API in Google Cloud → set secret for venue grounding |
-| `CORS_ALLOWED_ORIGINS` | **Not set** | Set `https://orjccytcmklzcfjgqwwj.supabase.co` if testing browser CORS |
-| `WEBHOOK_SECRET` | **Not set** | Required for server push; sync with `private.webhook_config` |
-| `EXPO_ACCESS_TOKEN` | **Not set** | Create at expo.dev → set secret → redeploy push functions |
+| `UPSTASH_REDIS_REST_URL` + `TOKEN` | **Missing** | Copy from dev (`gwgjdpqskusuejlwrsnd`) or create Upstash DB → set both → redeploy `ai-gateway`. Without them, rate limiting **and** all caching silently no-op |
+| `WEBHOOK_SECRET` | **Set** (2026-07-04) | Synced with `private.webhook_config` on prod |
+| `CORS_ALLOWED_ORIGINS` | **Set** | `https://orjccytcmklzcfjgqwwj.supabase.co` |
+| `EXPO_ACCESS_TOKEN` | **Missing** | Create at expo.dev → set secret → redeploy push functions |
+| `EVENTBRITE_PRIVATE_TOKEN` | **Missing** (dev has it) | External events |
+| `POSTHOG_API_KEY` | **Missing** (dev has it) | Server-side analytics |
+| `GOOGLE_PLACES_API_KEY` | **Set** (2026-07-04) | Same key on dev + prod; powers venue grounding in `ai-gateway`, `weather-pivot-cron`, `weekly-spark-cron`. Enable **Places API** (legacy Text Search) in Google Cloud. |
 | `MEETUP_API_KEY` | Optional | External events |
-| `EVENTBRITE_PRIVATE_TOKEN` | **Not set** (dev has it) | External events |
 | `MOCK_FACE_MATCH` | **Not set** ✓ | Must stay unset on production |
 | `AI_GATEWAY_DISABLED` | **Not set** ✓ | Kill switch — see **docs/RUNBOOK.md** §1 |
+
+> **Dev cloud (`gwgjdpqskusuejlwrsnd`) as of 2026-07-04** has Anthropic/Gemini/OpenAI, Upstash, `WEBHOOK_SECRET`, `AUTH_REDIRECT_STATE_SECRET`, `CORS_ALLOWED_ORIGINS`, `EVENTBRITE_PRIVATE_TOKEN`, `POSTHOG_API_KEY`, and **`GOOGLE_PLACES_API_KEY`** set. Still missing: `MEETUP_API_KEY`, `EXPO_ACCESS_TOKEN`. Legacy misnamed secret **`WinklyApp`** — delete it (Dashboard → Edge Functions → Secrets).
 
 **Sync `WEBHOOK_SECRET` with the database** (after setting the Edge Function secret):
 
@@ -168,7 +171,7 @@ Remove any misnamed legacy secrets (e.g. old `WinklyApp` label) from Dashboard �
 | `OPENAI_API_KEY` | `supabase/functions/ai-gateway/index.ts` (fallback when `GEMINI_API_KEY` also set; primary when Gemini unset). |
 | `GEMINI_API_KEY` | `supabase/functions/ai-gateway/index.ts` (primary when set). |
 | `ANTHROPIC_API_KEY` | `supabase/functions/ai-gateway/index.ts` — **primary** for Premium/Enterprise; Gemini/OpenAI fallbacks. |
-| `GOOGLE_PLACES_API_KEY` / `GOOGLE_MAPS_API_KEY` | `supabase/functions/ai-gateway/index.ts` (optional Places Text Search for external venue hints). |
+| `GOOGLE_PLACES_API_KEY` / `GOOGLE_MAPS_API_KEY` | `supabase/functions/ai-gateway/index.ts`, `ai-gateway/locationContext.ts`, `_shared/verifiedPlace.ts`, `weather-pivot-cron/index.ts`, `weekly-spark-cron/index.ts` |
 | `MEETUP_API_KEY` / `EVENTBRITE_PRIVATE_TOKEN` | `supabase/functions/get-nearby-external-events/index.ts` (when implemented) |
 
 ---
@@ -179,13 +182,27 @@ Remove any misnamed legacy secrets (e.g. old `WinklyApp` label) from Dashboard �
 - [ ] **Auth redirect:** If using email verification with redirect, set `EXPO_PUBLIC_AUTH_REDIRECT_URL` and add that URL to Supabase Auth → Redirect URLs.
 - [ ] **PostHog:** Optional. Set `EXPO_PUBLIC_POSTHOG_API_KEY` in `.env` to enable analytics.
 - [ ] **Google / Facebook sign-in:** Optional. Set the OAuth client/app IDs in `.env` and configure Supabase Auth providers.
-- [ ] **AI concierge:** In Supabase, set `ANTHROPIC_API_KEY` for **Premium** Claude routing, and/or `GEMINI_API_KEY` / `OPENAI_API_KEY` (Super uses Gemini first; Premium falls back to them). Deploy `ai-gateway`. Apply migration `20260406120000_concierge_event_trgm_and_rpc.sql` for fuzzy event matching. Optional: `GOOGLE_PLACES_API_KEY` or `GOOGLE_MAPS_API_KEY` for richer **EXTERNAL_PLACE_HINTS**.
+- [ ] **AI concierge:** In Supabase, set `ANTHROPIC_API_KEY` for **Premium** Claude routing, and/or `GEMINI_API_KEY` / `OPENAI_API_KEY` (Super uses Gemini first). Deploy `ai-gateway`. Apply migration `20260406120000_concierge_event_trgm_and_rpc.sql` for fuzzy event matching. **`GOOGLE_PLACES_API_KEY`** (set on dev + prod as of 2026-07-04) powers **EXTERNAL_PLACE_HINTS**, **`[SYSTEM_CONTEXT]`**, chat-topic grounding, and verified venue cache — enable **Places API** (legacy Text Search) in Google Cloud.
 - [ ] **External events (Meetup/Eventbrite):** Optional. Set `MEETUP_API_KEY` and/or `EVENTBRITE_PRIVATE_TOKEN` in Supabase secrets and deploy `get-nearby-external-events`. The Edge Function implements Meetup GraphQL and Eventbrite REST; when keys are set, Events home can show nearby external events.
 - [ ] **Server push:** Set `EXPO_ACCESS_TOKEN` + `WEBHOOK_SECRET` in Supabase secrets; sync `private.webhook_config`; deploy `notify-fanout`. See §3.1.
 - [ ] **Production CORS + Redis:** Set `CORS_ALLOWED_ORIGINS` and `UPSTASH_REDIS_REST_*` for ai-gateway scale/abuse protection.
 - [ ] **Expo Push / EAS:** Linked project `@winkly/winkly` (`5a6f6f9d-5969-4867-9572-5ee50a938066`). Production/preview vars: `npm run eas:sync-production-env` in `apps/mobile` (reads `.env`). Test push on an **EAS build**, not Android Expo Go.
+- [ ] **Android FCM (dev builds):** Download **`google-services.json`** from Firebase (package `com.winkly.app`) into `apps/mobile/`, upload FCM credentials via `eas credentials`, then **rebuild** the dev client. Without this, push registration is skipped gracefully (no crash). See §2.1.
 
 ---
+
+## 2.1 Android push — Firebase / FCM (development builds)
+
+Android **development builds** (not Expo Go) need Firebase Cloud Messaging before `getExpoPushTokenAsync` can succeed.
+
+1. **Firebase Console** → create or open a project → **Add app** → Android → package name **`com.winkly.app`**.
+2. Download **`google-services.json`** and place it at **`apps/mobile/google-services.json`** (git-ignored).
+3. **EAS credentials:** from `apps/mobile`, run `eas credentials` → Android → set up **FCM V1** (upload the Firebase service account JSON when prompted). Or use Expo Dashboard → Project → Credentials.
+4. **Rebuild** the native app (`eas build --profile development --platform android` or local `npx expo prebuild` + run). A JS-only Metro reload is **not** enough — Firebase is baked into the native binary.
+
+When `google-services.json` is missing, `registerForPushNotificationsAndSync` logs a one-time warning and returns without throwing (the app keeps working; server push simply has no device token until you complete the steps above).
+
+Guide: [Expo FCM credentials](https://docs.expo.dev/push-notifications/fcm-credentials/).
 
 ## 6. How to run code without pasting keys in chat
 

@@ -11,10 +11,11 @@ node_modules/
 # Supabase Edge Function secrets (local only)
 supabase/functions/.env
 
-# Real per-environment files (dev/staging/prod) must never be committed
+# Real per-environment files (local / cloud dev / prod) must never be committed
 apps/mobile/.env
 apps/mobile/.env.development
-apps/mobile/.env.staging
+apps/mobile/.env.cloud-development
+apps/mobile/.env.local
 apps/mobile/.env.production
 
 # Certificates & code signing
@@ -27,6 +28,10 @@ apps/mobile/.env.production
 # Google Play service account key for EAS Submit — NEVER commit (see docs/GO_LIVE_AND_PLAY_STORE.md)
 google-service-account.json
 **/google-service-account.json
+
+# Firebase Android config for FCM / Expo Push (download from Firebase Console)
+google-services.json
+**/google-services.json
 
 # OS junk
 .DS_Store

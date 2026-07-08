@@ -19,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { getTermsAndCookiesAccepted, setTermsAndCookiesAccepted } from "@/lib/legalFlags";
+import { LanguageGlobeButton } from "@/components/i18n/LanguageGlobeButton";
 
 const TERMS_URL = "https://mywinkly.de/terms";
 const PRIVACY_URL = "https://mywinkly.de/privacy";
@@ -71,6 +72,13 @@ export default function TermsCookiesScreen() {
 
   return (
     <SafeScreenView style={styles.safe}>
+      <View style={styles.topBar}>
+        <View style={styles.topBarSide} />
+        <Text style={styles.topBarTitle}>Winkly</Text>
+        <View style={[styles.topBarSide, styles.topBarSideEnd]}>
+          <LanguageGlobeButton />
+        </View>
+      </View>
       <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
         <ScrollView
           style={styles.scroll}
@@ -147,6 +155,24 @@ export default function TermsCookiesScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.backgroundMuted },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    ...Layout.topHeaderBar,
+    backgroundColor: Colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.gray200,
+  },
+  topBarSide: { width: 44 },
+  topBarSideEnd: { alignItems: "flex-end" },
+  topBarTitle: {
+    ...Typography.headerWinklyTitle,
+    color: Colors.primaryViolet,
+    fontFamily: FontFamily.headingBold,
+    textAlign: "center",
+  },
   container: { flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24 },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 24 },

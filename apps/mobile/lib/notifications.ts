@@ -52,6 +52,26 @@ function isLikelyEasProjectId(value: unknown): value is string {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
 }
 
+function isFirebaseNotConfiguredError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return (
+    message.includes("FirebaseApp is not initialized") ||
+    message.includes("fcm-credentials")
+  );
+}
+
+let firebaseNotConfiguredWarned = false;
+
+function warnFirebaseNotConfiguredOnce(): void {
+  if (firebaseNotConfiguredWarned) return;
+  firebaseNotConfiguredWarned = true;
+  console.warn(
+    "[notifications] Android push skipped: Firebase/FCM is not configured in this build. " +
+      "Add apps/mobile/google-services.json, rebuild the dev client, and upload FCM credentials to EAS. " +
+      "Guide: https://docs.expo.dev/push-notifications/fcm-credentials/",
+  );
+}
+
 let runtimeInitialized = false;
 
 /** Call once per app boot — foreground presentation defaults. */
@@ -119,47 +139,68 @@ export async function ensureAndroidNotificationChannelAsync(): Promise<void> {
  * Does nothing on simulator / web / missing native module.
  */
 export async function registerForPushNotificationsAndSync(): Promise<string | null> {
-  const mod = await tryImportExpoNotifications();
-  if (!mod) return null;
+  try {
+    const mod = await tryImportExpoNotifications();
+    if (!mod) return null;
 
-  await initializeNotificationsRuntime();
-  await ensureAndroidNotificationChannelAsync();
+    await initializeNotificationsRuntime();
+    await ensureAndroidNotificationChannelAsync();
 
-  if (!Device.isDevice) return null;
+    if (!Device.isDevice) return null;
 
-  const { status: existing } = await mod.getPermissionsAsync();
-  let finalStatus = existing;
-  if (existing !== "granted") {
-    const { status } = await mod.requestPermissionsAsync();
-    finalStatus = status;
+    const { status: existing } = await mod.getPermissionsAsync();
+    let finalStatus = existing;
+    if (existing !== "granted") {
+      const { status } = await mod.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== "granted") return null;
+
+    const rawProjectId =
+      (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId ??
+      Constants.easConfig?.projectId;
+    const projectId = isLikelyEasProjectId(rawProjectId) ? rawProjectId.trim() : undefined;
+
+    let token: string | undefined;
+    try {
+      const tokenRes = await mod.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
+      token = tokenRes.data;
+    } catch (error) {
+      if (isFirebaseNotConfiguredError(error)) {
+        warnFirebaseNotConfiguredOnce();
+      } else {
+        console.warn("[notifications] getExpoPushTokenAsync failed:", error);
+      }
+      return null;
+    }
+
+    const platform =
+      Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "unknown";
+
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth.user?.id;
+    if (uid && token) {
+      const { error } = await supabase.from("user_push_tokens").upsert(
+        {
+          user_id: uid,
+          expo_push_token: token,
+          platform,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,expo_push_token" },
+      );
+      if (error) console.warn("user_push_tokens upsert:", error.message);
+    }
+
+    return token ?? null;
+  } catch (error) {
+    if (isFirebaseNotConfiguredError(error)) {
+      warnFirebaseNotConfiguredOnce();
+    } else {
+      console.warn("[notifications] registerForPushNotificationsAndSync failed:", error);
+    }
+    return null;
   }
-  if (finalStatus !== "granted") return null;
-
-  const rawProjectId =
-    (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId ??
-    Constants.easConfig?.projectId;
-  const projectId = isLikelyEasProjectId(rawProjectId) ? rawProjectId.trim() : undefined;
-  const tokenRes = await mod.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
-  const token = tokenRes.data;
-  const platform =
-    Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "unknown";
-
-  const { data: auth } = await supabase.auth.getUser();
-  const uid = auth.user?.id;
-  if (uid && token) {
-    const { error } = await supabase.from("user_push_tokens").upsert(
-      {
-        user_id: uid,
-        expo_push_token: token,
-        platform,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,expo_push_token" },
-    );
-    if (error) console.warn("user_push_tokens upsert:", error.message);
-  }
-
-  return token ?? null;
 }
 
 export const notifications: NotificationsFacade = {

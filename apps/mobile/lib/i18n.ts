@@ -1,14 +1,13 @@
 /**
  * Winkly i18n — Multi-language support
- * Uses i18next + react-i18next. On first launch, uses device locale when supported; English otherwise.
- * User language override persisted in AsyncStorage.
+ * Uses i18next + react-i18next. Default language is English until the user picks a language
+ * (onboarding globe or Settings → Language). Choice persisted in AsyncStorage.
  */
 
 import i18n from "i18next";
 import type { InitOptions } from "i18next";
 import { initReactI18next } from "react-i18next";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getLocales } from "expo-localization";
 
 const STORAGE_KEY = "winkly_app_language";
 /** Set when the user picks a language (onboarding globe or Settings). */
@@ -91,22 +90,11 @@ export async function setStoredLanguage(code: string): Promise<void> {
   }
 }
 
-/** Map BCP-47 tag (e.g. de-DE) to a supported app language code, or null. */
-function deviceLanguageToSupportedCode(): SupportedLanguageCode | null {
-  const locales = getLocales();
-  for (const locale of locales) {
-    const code = locale.languageCode?.toLowerCase();
-    if (code && SUPPORTED_CODES.includes(code as SupportedLanguageCode)) {
-      return code as SupportedLanguageCode;
-    }
-  }
-  return null;
-}
-
 async function resolveInitialLanguage(): Promise<string> {
+  const explicit = await hasExplicitLanguageChoice();
+  if (!explicit) return DEFAULT_LANGUAGE;
   const stored = await getStoredLanguage();
-  if (stored) return normalizeLanguageCode(stored);
-  return deviceLanguageToSupportedCode() ?? DEFAULT_LANGUAGE;
+  return normalizeLanguageCode(stored ?? DEFAULT_LANGUAGE);
 }
 
 type TranslationModule = Record<string, string> | { default: Record<string, string> };
@@ -176,13 +164,6 @@ let initPromise: Promise<void> | null = null;
 export async function initI18n(): Promise<void> {
   if (initPromise) return initPromise;
   initPromise = (async () => {
-    const stored = await getStoredLanguage();
-    let explicit = await hasExplicitLanguageChoice();
-    // Users who picked a language before the explicit flag existed still have a stored code.
-    if (stored && !explicit) {
-      await setExplicitLanguageChoice(true);
-      explicit = true;
-    }
     const lng = normalizeLanguageCode(await resolveInitialLanguage());
     // No English fallback — show only the active language (avoids EN/UK mix on partial locales).
     const fallbackLng = false;

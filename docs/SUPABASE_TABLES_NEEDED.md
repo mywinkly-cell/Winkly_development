@@ -66,7 +66,7 @@ Then run **`supabase/scripts/verify-setup.sql`** in the SQL Editor.
 ## 4. Checklist for new contributors
 
 1. Clone repo and confirm migrations: `(git ls-files supabase/migrations/*.sql).Count` → **48**.
-2. `supabase db reset` (or `db push` on staging).
+2. `supabase db reset` (or `db push` on the dev cloud).
 3. Run `supabase/scripts/verify-setup.sql`.
 4. Regenerate types: `npx supabase gen types typescript --linked --schema public` → `apps/mobile/types/database.ts`.
 

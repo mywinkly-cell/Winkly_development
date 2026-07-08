@@ -26,6 +26,7 @@ import { getTermsAndCookiesAccepted } from "@/lib/legalFlags";
 import { hasKnownAccount, markHasAccount, recordLastActivity } from "@/lib/lastActivity";
 import { routeAfterAuthentication } from "@/lib/auth/postAuthRouting";
 import { OAuthButtons } from "@/components/auth/OAuthButtons";
+import { LanguageGlobeButton } from "@/components/i18n/LanguageGlobeButton";
 
 export default function Signin() {
   const { t } = useTranslation();
@@ -87,7 +88,9 @@ export default function Signin() {
       <View style={styles.topBar}>
         <View style={styles.topBarSide} />
         <Text style={styles.topBarTitle}>Winkly</Text>
-        <View style={styles.topBarSide} />
+        <View style={[styles.topBarSide, styles.topBarSideEnd]}>
+          <LanguageGlobeButton />
+        </View>
       </View>
 
       <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -184,6 +187,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.gray200,
   },
   topBarSide: { width: 44 },
+  topBarSideEnd: { alignItems: "flex-end" },
   topBarTitle: {
     ...Typography.headerWinklyTitle,
     color: Colors.primaryViolet,
