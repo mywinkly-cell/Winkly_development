@@ -428,14 +428,14 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
       getSavedIdeas().then((ideas) => setSavedIdeasCount(ideas.length));
       void getPlannerPreferences().then(setPlannerPrefs);
       void scheduleSaturdayPlannerNudgeIfNeeded();
-      void getCurrentWeeklySpark().then((spark) => {
+      (async () => {
+        const spark = await getCurrentWeeklySpark();
         setWeeklySpark(spark);
         if (spark?.plans?.length) {
           setWeekendPlans(spark.plans);
           setWeeklySuggestion(buildWeeklyWeekendSuggestion(spark.plans));
         }
-      });
-      (async () => {
+
         if (activeTab === "archive") return;
         const [showProactive, weeklyDismissed] = await Promise.all([
           shouldShowProactiveSuggestion(),
@@ -444,8 +444,6 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         const now = Date.now();
         const inWeekendPeriod = isWeekendIdeasPeriod();
         if (inWeekendPeriod && (weeklyDismissed == null || now > weeklyDismissed)) {
-          const spark = await getCurrentWeeklySpark();
-          setWeeklySpark(spark);
           const plans = spark?.plans ?? [];
           if (plans.length) setWeekendPlans(plans);
           setWeeklySuggestion(buildWeeklyWeekendSuggestion(plans.length ? plans : undefined));
