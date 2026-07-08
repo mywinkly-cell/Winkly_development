@@ -1,4 +1,4 @@
--- Winkly — local/staging seed data
+-- Winkly — local/dev seed data
 --
 -- Loaded automatically by `supabase db reset` (see [db.seed] in config.toml).
 -- NEVER run this against production: it inserts fake auth users with known passwords.

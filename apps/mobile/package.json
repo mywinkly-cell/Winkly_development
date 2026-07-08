@@ -11,7 +11,7 @@
     "start": "expo start --dev-client",
     "start:clear": "expo start -c --dev-client",
     "start:tunnel": "expo start --dev-client --tunnel",
-    "start:go": "expo start",
+    "start:go": "expo start --go",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",

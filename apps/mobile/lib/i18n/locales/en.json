@@ -220,6 +220,9 @@
   "weeklySpark.partnerPick": "Partner pick",
   "weeklySpark.free": "Free",
   "weeklySpark.newBadgeA11y": "new Spark available",
+  "weeklyWeekend.getPlans": "Get weekend plans",
+  "weeklyWeekend.loading": "Preparing your weekend plans…",
+  "weeklyWeekend.empty": "We couldn't load your weekend plans right now. Please try again.",
   "modeSelection.sparkNudge.text": "Choose a mode — or open your Planner, we've picked something for you.",
   "modeSelection.sparkNudge.cta": "Open Planner",
 

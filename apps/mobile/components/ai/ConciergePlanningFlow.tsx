@@ -602,12 +602,27 @@ export function ConciergePlanningFlow({
       onBack();
       return;
     }
+    if (flowStep === "sub_activity") {
+      setFlowStep("intent");
+      return;
+    }
     if (flowStep === "trip_planning") {
       setFlowStep("intent");
       return;
     }
     if (flowStep === "activity") {
-      setFlowStep(activityKey === "trip" ? "trip_planning" : "intent");
+      if (activityKey === "trip") {
+        setFlowStep("trip_planning");
+        return;
+      }
+      const cat =
+        selectedCategory ?? (activityKey ? getActivityCategoryByKey(activityKey) : null);
+      const hasSub = (cat?.subActivities?.length ?? 0) > 0 && activityKey !== "custom";
+      if (hasSub) {
+        setFlowStep("sub_activity");
+        return;
+      }
+      setFlowStep("intent");
       return;
     }
     if (flowStep === "summary") {
@@ -629,7 +644,7 @@ export function ConciergePlanningFlow({
       setChosenIndex(null);
       setFlowStep(showInviteStepBeforePlanner ? "invite" : "suggestions");
     }
-  }, [flowStep, onBack, showInviteStepBeforePlanner, activityKey]);
+  }, [flowStep, onBack, showInviteStepBeforePlanner, activityKey, selectedCategory]);
 
   /** Swipe-back on the header only — avoids fighting vertical ScrollViews in step content. */
   const headerBackSwipe = useMemo(

@@ -57,7 +57,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           loading: false,
         }));
         if (hasAuthenticatedUser(effectiveSession)) {
-          void initializeNotificationsRuntime().then(() => registerForPushNotificationsAndSync());
+          void initializeNotificationsRuntime()
+            .then(() => registerForPushNotificationsAndSync())
+            .catch((err) => console.warn("[notifications] push registration failed:", err));
         } else {
           resetNotificationsRuntime();
         }
@@ -81,7 +83,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setState({ ...deriveAuthState(session), loading: false });
       if (hasAuthenticatedUser(session)) {
-        void initializeNotificationsRuntime().then(() => registerForPushNotificationsAndSync());
+        void initializeNotificationsRuntime()
+          .then(() => registerForPushNotificationsAndSync())
+          .catch((err) => console.warn("[notifications] push registration failed:", err));
       } else {
         resetNotificationsRuntime();
       }

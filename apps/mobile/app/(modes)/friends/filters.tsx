@@ -9,11 +9,10 @@ import {
   Pressable,
   StyleSheet,
   TouchableOpacity,
-  Platform,
   Modal,
 } from "react-native";
-import Slider from "@react-native-community/slider";
-import RangeSlider from "react-native-range-slider-expo";
+import { FilterAgeRangeSlider } from "@/components/filters/FilterAgeRangeSlider";
+import { FilterDistanceSlider } from "@/components/filters/FilterDistanceSlider";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -228,17 +227,16 @@ export default function FriendsFiltersScreen() {
                   <Text style={styles.chipText}>Any</Text>
                 </Pressable>
               </View>
-              <Slider
-                style={styles.slider}
-                minimumValue={DISTANCE_MIN}
-                maximumValue={DISTANCE_MAX}
+              <FilterDistanceSlider
+                min={DISTANCE_MIN}
+                max={DISTANCE_MAX}
                 step={DISTANCE_STEP}
                 value={distanceKm}
-                onValueChange={(v) => setDistanceKm(Math.round(v))}
-                minimumTrackTintColor={Colors.friends.primary}
-                maximumTrackTintColor={Colors.gray300}
-                thumbTintColor={Colors.friends.primary}
-                onSlidingStart={() => Haptics.selectionAsync()}
+                onChange={(v) => {
+                  setDistanceKm(Math.round(v));
+                  Haptics.selectionAsync();
+                }}
+                primaryColor={Colors.friends.primary}
               />
             </>
           )}
@@ -247,33 +245,21 @@ export default function FriendsFiltersScreen() {
           <View style={styles.sliderValueRow}>
             <Text style={styles.sliderValue}>{ageMin} – {ageMax}</Text>
           </View>
-          <View style={styles.rangeSliderWrap}>
-            <RangeSlider
-              min={AGE_MIN_LIMIT}
-              max={AGE_MAX_LIMIT}
-              step={1}
-              initialFromValue={ageMin}
-              initialToValue={ageMax}
-              fromValueOnChange={(v: number) => {
-                const n = Math.round(v);
-                setAgeMin(n);
-                Haptics.selectionAsync();
-              }}
-              toValueOnChange={(v: number) => {
-                const n = Math.round(v);
-                setAgeMax(n);
-                Haptics.selectionAsync();
-              }}
-              fromKnobColor={Colors.friends.primary}
-              toKnobColor={Colors.friends.primary}
-              inRangeBarColor={Colors.friends.primary}
-              outOfRangeBarColor={Colors.gray300}
-              showRangeLabels={false}
-              showValueLabels={false}
-              barHeight={4}
-              knobSize={28}
-            />
-          </View>
+          <FilterAgeRangeSlider
+            min={AGE_MIN_LIMIT}
+            max={AGE_MAX_LIMIT}
+            ageMin={ageMin}
+            ageMax={ageMax}
+            onAgeMinChange={(v) => {
+              setAgeMin(Math.round(v));
+              Haptics.selectionAsync();
+            }}
+            onAgeMaxChange={(v) => {
+              setAgeMax(Math.round(v));
+              Haptics.selectionAsync();
+            }}
+            primaryColor={Colors.friends.primary}
+          />
         </View>
 
         {/* —— Subscription: AI-powered matching —— */}
@@ -611,15 +597,6 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.gray600,
     marginBottom: 4,
-  },
-  slider: {
-    width: "100%",
-    height: Platform.OS === "ios" ? 28 : 40,
-  },
-  rangeSliderWrap: {
-    width: "100%",
-    marginTop: 4,
-    height: Platform.OS === "ios" ? 28 : 40,
   },
   languageDropdownTrigger: {
     flexDirection: "row",

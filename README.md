@@ -108,9 +108,9 @@ npm run ci   # lint + typecheck + test
 
 ---
 
-## EAS secrets (staging / production builds)
+## EAS secrets (preview / production builds)
 
-Do not put production keys in git. Use [Expo environment variables](https://docs.expo.dev/build-reference/variables/) per EAS profile (`development`, `staging`, `production` in `apps/mobile/eas.json`).
+Do not put production keys in git. Use [Expo environment variables](https://docs.expo.dev/build-reference/variables/) per EAS profile (`development`, `preview`, `production` in `apps/mobile/eas.json`).
 
 **Minimum for a build:**
 
@@ -149,10 +149,10 @@ Supabase **Edge Function** secrets (`OPENAI_API_KEY`, `GEMINI_API_KEY`, etc.) ar
 supabase db reset
 ```
 
-**Staging → production:**
+**Dev cloud → production:**
 
 ```bash
-supabase link --project-ref YOUR_STAGING_REF
+supabase link --project-ref YOUR_DEV_REF
 supabase db push
 # verify app + run RLS audit (below), then:
 supabase link --project-ref YOUR_PROD_REF
@@ -193,7 +193,7 @@ Weekly npm updates are configured in [`.github/dependabot.yml`](.github/dependab
 | Command | Description |
 |---------|-------------|
 | `npm start` | Expo dev server |
-| `npm run env:dev` / `env:staging` / `env:prod` | Switch active `.env` |
+| `npm run env:dev` / `env:local` / `env:prod` | Switch active `.env` |
 | `npm run ci` | lint + typecheck + test |
 | `npm run supabase:deploy-auth-redirect` | Deploy auth-redirect function |
 

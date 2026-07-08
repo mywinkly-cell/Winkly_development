@@ -1,5 +1,8 @@
 // app.config.js – Winkly (SDK 54)
 
+const fs = require("fs");
+const path = require("path");
+
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -21,6 +24,11 @@ const easProjectId = isLikelyUuid(process.env.EXPO_PUBLIC_EAS_PROJECT_ID)
   : isLikelyUuid(LINKED_EAS_PROJECT_ID)
     ? LINKED_EAS_PROJECT_ID
     : undefined;
+
+/** Android FCM — present only when you add Firebase google-services.json locally (git-ignored). */
+const androidGoogleServicesFile = fs.existsSync(path.join(__dirname, "google-services.json"))
+  ? "./google-services.json"
+  : undefined;
 
 module.exports = {
   expo: {
@@ -125,6 +133,7 @@ module.exports = {
     android: {
       package: "com.winkly.app",
       label: "Winkly",
+      ...(androidGoogleServicesFile ? { googleServicesFile: androidGoogleServicesFile } : {}),
       adaptiveIcon: {
         foregroundImage: "./assets/icons/winkly-emoji-shadow.png",
         backgroundColor: "#FFFFFF"

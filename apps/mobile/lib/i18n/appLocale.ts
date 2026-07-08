@@ -6,7 +6,7 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "i18next";
-import { normalizeLanguageCode, type SupportedLanguageCode } from "@/lib/i18n";
+import { normalizeLanguageCode, type SupportedLanguageCode } from "../i18n";
 
 /** BCP-47 tags for Intl APIs (better month/day names than bare language codes). */
 const INTL_LOCALE_TAGS: Partial<Record<SupportedLanguageCode, string>> = {
