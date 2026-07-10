@@ -1,6 +1,6 @@
 # EAS Build, Submit & GitHub Actions
 
-**Last updated:** 2026-06-08
+**Last updated:** 2026-07-10
 
 This doc covers Expo Application Services (EAS) profiles, credential storage, and how builds relate to the **two-repo** workflow (`Winkly_development` vs `winkly-production`). See **docs/BRANCHING.md**.
 
@@ -125,10 +125,12 @@ See `docs/BRANCHING.md` for the full protection checklist.
 
 `.github/workflows/eas-submit.yml` triggers on every push to **`Winkly_development` `main`**:
 
-1. Installs dependencies
-2. Authenticates with EAS (`EXPO_TOKEN`)
-3. Writes the Google Play service account JSON (if configured)
-4. Runs `eas build --profile preview --platform all --non-interactive --auto-submit`
+1. Installs dependencies (Node 22, root `package-lock.json` cache)
+2. Verifies `EXPO_TOKEN` is set (fails fast with a clear error if missing)
+3. Authenticates with EAS (`EXPO_TOKEN`)
+4. Writes the Google Play service account JSON (if configured)
+5. Runs **Android** `eas build --profile preview --platform android --non-interactive --auto-submit` (required; retries up to 3× on transient Expo outages)
+6. Runs **iOS** `eas build --profile preview --platform ios` separately (`continue-on-error` until Apple credentials + `ascAppId` are configured; uses `--auto-submit` only when `ascAppId` is present in `eas.json`)
 
 This uploads to **TestFlight** (iOS internal) and the **Google Play internal track** (Android) for **pre-promotion QA**. It does **not** replace the production store build from `winkly-production`.
 
