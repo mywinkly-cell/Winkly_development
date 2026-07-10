@@ -1,68 +1,97 @@
--- Security Advisor lint 0029 — revoke direct /rpc on internal SECURITY DEFINER helpers.
+-- Security Advisor lint 0029 — full lockdown of internal SECURITY DEFINER RPCs.
 --
--- Client-facing RPCs (discover feeds, likes, chats, planner, etc.) intentionally remain
--- callable by `authenticated` and will still appear in the advisor until moved to a
--- private schema or converted to SECURITY INVOKER with equivalent RLS.
+-- Strategy: allowlist the intentional signed-in client /rpc entrypoints (and RLS
+-- policy helpers). Every other public SECURITY DEFINER function loses EXECUTE
+-- from PUBLIC, anon, and authenticated. service_role retains access for edge
+-- functions, cron, and trigger-internal calls.
 --
--- This migration removes PostgREST exposure for:
---   * edge-function / cron entrypoints (service_role only)
---   * romance invite internals (called from romance_like_profile)
---   * legacy / unused RPCs superseded by table writes or newer APIs
---   * typo alias create_derect_chat and legacy create_direct_chat overload
+-- Remaining ~41–44 advisor warnings are expected until those client RPCs move to
+-- SECURITY INVOKER or a private schema.
+--
+-- Migration history note (prod): if MCP applied duplicate versions
+-- (20260710104620 / 20260710104914), repair before db push:
+--   supabase migration repair --status reverted 20260710104620 20260710104914
+--   supabase migration repair --status applied 20260710120000
 
+-- ── 1. Drop legacy / typo RPCs ──────────────────────────────────────────────
+DROP FUNCTION IF EXISTS public.create_derect_chat(uuid, uuid, app_mode, dm_source, uuid);
+DROP FUNCTION IF EXISTS public.create_direct_chat(text, uuid, text);
+-- Dev-only drift overload (legacy chats table); repo uses conversations stack.
+DROP FUNCTION IF EXISTS public.create_event_chat(uuid, text);
+
+-- ── 2. Allowlist sweep ───────────────────────────────────────────────────────
 DO $$
 DECLARE
   r record;
+  v_allowlisted text[] := ARRAY[
+    -- Romance
+    'accept_romance_chat_invite',
+    'decline_romance_chat_invite',
+    'romance_connections',
+    'romance_discover_feed',
+    'romance_discover_feed_geo',
+    'romance_like_profile',
+    'romance_liked_profiles',
+    'romance_likes_received',
+    'romance_new_matches',
+    'romance_pending_chat_invites',
+    -- Friends
+    'friends_accept_request',
+    'friends_decline_request',
+    'friends_discover_feed',
+    'friends_follow_profile',
+    -- Business
+    'business_accept_connection',
+    'business_connect',
+    'business_decline_connection',
+    'business_discover_feed',
+    'business_home_feed',
+    'business_pending_invites_count',
+    'business_profile_for_viewer',
+    -- Events (join/leave defined in 20260710121000)
+    'create_event_chat',
+    'join_event',
+    'leave_event',
+    -- Chats / planner / contacts
+    'create_direct_chat',
+    'conversation_eligible_for_concierge_nudge',
+    'dismiss_concierge_nudge',
+    'ensure_group_conversation',
+    'ensure_group_invite_code',
+    'get_conversation_unread_counts',
+    'join_group_by_code',
+    'mark_messages_delivered',
+    'match_contacts',
+    -- Location
+    'get_my_location_precision',
+    'set_my_location',
+    'set_my_location_precision',
+    -- Analytics / AI cache / connections
+    'record_business_analytics_event',
+    'record_pair_behavior_signal',
+    'remove_mode_connection',
+    'set_cached_ai_plan',
+    -- RLS expression helpers (not direct client RPCs, but authenticated needs EXECUTE)
+    'is_dm_send_allowed',
+    'is_group_member'
+  ];
 BEGIN
   FOR r IN
-    SELECT unnest(ARRAY[
-      -- Edge / cron (service_role only)
-      'public.confirm_pending_plan(uuid)',
-      'public.confirm_pending_plan_host(uuid)',
-      'public.match_events_for_concierge(text, text, timestamp with time zone, timestamp with time zone, integer)',
-      -- Romance invite internals (romance_like_profile only)
-      'public.romance_insert_invite_opener(uuid, uuid, text)',
-      'public.romance_ensure_pending_invite_chat(uuid, uuid, text)',
-      -- Trigger / notify helpers (not client RPCs)
-      'public.create_notification(uuid, text, text, text, jsonb, uuid)',
-      -- Legacy friends RPCs (app uses friends_requests table + friends_accept/decline_request)
-      'public.send_friend_request(uuid, text)',
-      'public.cancel_friend_request(uuid)',
-      'public.respond_friend_request(uuid, text)',
-      'public.unfriend(uuid)',
-      -- Legacy swipe RPC (app uses user_swipes table)
-      'public.romance_record_swipe(uuid, romance_swipe_action, jsonb)',
-      -- In-app notifications inbox uses notifications table directly
-      'public.mark_notification_read(uuid)',
-      'public.mark_all_notifications_read()',
-      -- Search RPCs not wired in mobile (business feeds use business_*_feed)
-      'public.search_users(text, text, integer, integer)',
-      'public.search_users(text, text, integer, integer, text[], text[])',
-      'public.search_friends(text, integer, integer)',
-      'public.search_events(text, integer, integer)',
-      'public.search_companies(text, integer, integer)',
-      'public.search_business_people(text, integer, integer)',
-      -- Orphan helpers (not used in RLS or client)
-      'public.can_access_event_chat(uuid, uuid)',
-      'public.get_event_conversation_id(uuid)',
-      'public.group_member_count(uuid)'
-    ]::text[]) AS signature
+    SELECT p.oid::regprocedure AS signature, p.proname
+    FROM pg_proc p
+    JOIN pg_namespace n ON p.pronamespace = n.oid
+    WHERE n.nspname = 'public'
+      AND p.prosecdef
+      AND has_function_privilege('authenticated', p.oid, 'EXECUTE')
+      AND NOT (p.proname = ANY (v_allowlisted))
   LOOP
-    IF to_regprocedure(r.signature) IS NOT NULL THEN
-      EXECUTE format(
-        'REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon, authenticated',
-        r.signature
-      );
-      EXECUTE format(
-        'GRANT EXECUTE ON FUNCTION %s TO service_role',
-        r.signature
-      );
-    END IF;
+    EXECUTE format(
+      'REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon, authenticated',
+      r.signature
+    );
+    EXECUTE format(
+      'GRANT EXECUTE ON FUNCTION %s TO service_role',
+      r.signature
+    );
   END LOOP;
 END $$;
-
--- Typo alias — mobile uses create_direct_chat (5-arg). Safe to remove.
-DROP FUNCTION IF EXISTS public.create_derect_chat(uuid, uuid, app_mode, dm_source, uuid);
-
--- Legacy 3-arg overload superseded by create_direct_chat(uuid, uuid, app_mode, dm_source, uuid).
-DROP FUNCTION IF EXISTS public.create_direct_chat(text, uuid, text);
