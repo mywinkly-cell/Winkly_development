@@ -28,12 +28,22 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
         working-directory: .
+
+      - name: Verify EXPO_TOKEN
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN GitHub secret is not set. Create one at https://expo.dev/settings/access-tokens and add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
 
       - name: Setup EAS
         uses: expo/expo-github-action@v8
@@ -47,10 +57,52 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: |
           if [ -z "$GOOGLE_SERVICE_ACCOUNT_JSON" ]; then
-            echo "GOOGLE_SERVICE_ACCOUNT_JSON secret not set — Android submit may fail."
+            echo "::warning::GOOGLE_SERVICE_ACCOUNT_JSON secret not set — Android submit may fail."
             exit 0
           fi
           printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > google-service-account.json
 
-      - name: Build and submit (iOS + Android, preview profile)
-        run: eas build --profile preview --platform all --non-interactive --auto-submit
+      - name: Build and submit Android (preview)
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            echo "Android preview build attempt ${attempt}/3..."
+            if eas build --profile preview --platform android --non-interactive --auto-submit; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Transient failure — retrying in 45s..."
+              sleep 45
+            fi
+          done
+          echo "::error::Android preview build failed after 3 attempts."
+          exit 1
+
+      - name: Build and submit iOS (preview)
+        id: ios
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          if ! grep -q 'ascAppId' eas.json; then
+            echo "::warning::iOS auto-submit skipped — add submit.preview.ios.ascAppId to eas.json (App Store Connect numeric app ID)."
+            echo "Attempting iOS build without auto-submit..."
+            for attempt in 1 2 3; do
+              if eas build --profile preview --platform ios --non-interactive; then
+                exit 0
+              fi
+              [ "$attempt" -lt 3 ] && sleep 45
+            done
+            exit 1
+          fi
+          for attempt in 1 2 3; do
+            if eas build --profile preview --platform ios --non-interactive --auto-submit; then
+              exit 0
+            fi
+            [ "$attempt" -lt 3 ] && sleep 45
+          done
+          exit 1
+
+      - name: iOS setup reminder
+        if: steps.ios.outcome == 'failure'
+        run: |
+          echo "::warning::iOS preview build/submit failed. One-time setup: cd apps/mobile && npm run eas:setup-ios-credentials, then add ascAppId to eas.json. Android preview may still have succeeded."
