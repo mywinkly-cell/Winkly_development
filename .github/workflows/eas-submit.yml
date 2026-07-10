@@ -15,31 +15,35 @@ permissions:
   contents: read
 
 jobs:
-  eas-skipped:
-    name: EAS preview (skipped — secrets not configured)
-    if: ${{ secrets.EXPO_TOKEN == '' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Explain skip
-        run: |
-          echo "::notice::EAS preview submit skipped — EXPO_TOKEN is not set in GitHub Actions secrets."
-          echo "1. Create a token at https://expo.dev/settings/access-tokens"
-          echo "2. Add it as EXPO_TOKEN under https://github.com/${{ github.repository }}/settings/secrets/actions"
-          echo "3. Optional: add GOOGLE_SERVICE_ACCOUNT_JSON for Android auto-submit (see docs/EAS_CI.md §6)"
-          echo "CI (lint/typecheck/test) still runs separately in ci.yml."
-
   build-and-submit:
     name: Preview build → TestFlight + Play internal
-    if: ${{ secrets.EXPO_TOKEN != '' }}
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: apps/mobile
     steps:
+      - name: Check EXPO_TOKEN
+        id: token
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::EAS preview submit skipped — EXPO_TOKEN is not set in GitHub Actions secrets."
+            echo "1. Create a token at https://expo.dev/settings/access-tokens"
+            echo "2. Add it as EXPO_TOKEN under https://github.com/${{ github.repository }}/settings/secrets/actions"
+            echo "3. Optional: add GOOGLE_SERVICE_ACCOUNT_JSON for Android auto-submit (see docs/EAS_CI.md §6)"
+            echo "CI (lint/typecheck/test) still runs separately in ci.yml."
+            exit 0
+          fi
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
+        if: steps.token.outputs.configured == 'true'
         uses: actions/checkout@v5
 
       - name: Setup Node
+        if: steps.token.outputs.configured == 'true'
         uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -47,10 +51,12 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
+        if: steps.token.outputs.configured == 'true'
         run: npm ci
         working-directory: .
 
       - name: Setup EAS
+        if: steps.token.outputs.configured == 'true'
         uses: expo/expo-github-action@v8
         with:
           eas-version: latest
@@ -58,6 +64,7 @@ jobs:
           packager: npm
 
       - name: Write Google Play service account key
+        if: steps.token.outputs.configured == 'true'
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: |
@@ -68,6 +75,7 @@ jobs:
           printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > google-service-account.json
 
       - name: Build and submit Android (preview)
+        if: steps.token.outputs.configured == 'true'
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
@@ -84,6 +92,7 @@ jobs:
           exit 1
 
       - name: Build and submit iOS (preview)
+        if: steps.token.outputs.configured == 'true'
         id: ios
         continue-on-error: true
         run: |
@@ -108,6 +117,6 @@ jobs:
           exit 1
 
       - name: iOS setup reminder
-        if: steps.ios.outcome == 'failure'
+        if: steps.token.outputs.configured == 'true' && steps.ios.outcome == 'failure'
         run: |
           echo "::warning::iOS preview build/submit failed. One-time setup: cd apps/mobile && npm run eas:setup-ios-credentials, then add ascAppId to eas.json. Android preview may still have succeeded."
