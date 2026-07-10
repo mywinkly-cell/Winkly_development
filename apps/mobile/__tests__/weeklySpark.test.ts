@@ -33,6 +33,8 @@ jest.mock("@/lib/supabase", () => {
   return { supabase: { from: (table: string) => builderFor(table) } };
 });
 
+// Imports after jest.mock — mocks must hoist above the module under test.
+// eslint-disable-next-line import/first
 import {
   getWeeklySparkWeekKey,
   isWeeklySparkAvailable,

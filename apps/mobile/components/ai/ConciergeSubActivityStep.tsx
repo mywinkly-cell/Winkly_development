@@ -170,7 +170,7 @@ export function ConciergeSubActivityStep({
       <Text style={styles.title} numberOfLines={3}>
         {prompt}
       </Text>
-      <Text style={styles.subtitle}>Pick the vibe — we'll handle the rest</Text>
+      <Text style={styles.subtitle}>Pick the vibe — we&apos;ll handle the rest</Text>
 
       <View style={styles.grid}>
         {regularOptions.map((opt) => {
