@@ -50,25 +50,33 @@ describe("getBusinessOfferDisplayStatus", () => {
 });
 
 describe("isBusinessOfferDashboardVisible", () => {
+  const now = new Date("2026-06-15T12:00:00.000Z").getTime();
+
   it("includes active and scheduled offers", () => {
-    expect(isBusinessOfferDashboardVisible(BASE_OFFER)).toBe(true);
+    expect(isBusinessOfferDashboardVisible(BASE_OFFER, now)).toBe(true);
     expect(
-      isBusinessOfferDashboardVisible({
-        ...BASE_OFFER,
-        valid_from: "2026-06-20T00:00:00.000Z",
-        valid_to: "2026-07-01T00:00:00.000Z",
-      })
+      isBusinessOfferDashboardVisible(
+        {
+          ...BASE_OFFER,
+          valid_from: "2026-06-20T00:00:00.000Z",
+          valid_to: "2026-07-01T00:00:00.000Z",
+        },
+        now
+      )
     ).toBe(true);
   });
 
   it("excludes expired and inactive offers", () => {
     expect(
-      isBusinessOfferDashboardVisible({
-        ...BASE_OFFER,
-        valid_to: "2026-06-01T00:00:00.000Z",
-      })
+      isBusinessOfferDashboardVisible(
+        {
+          ...BASE_OFFER,
+          valid_to: "2026-06-01T00:00:00.000Z",
+        },
+        now
+      )
     ).toBe(false);
-    expect(isBusinessOfferDashboardVisible({ ...BASE_OFFER, is_active: false })).toBe(false);
+    expect(isBusinessOfferDashboardVisible({ ...BASE_OFFER, is_active: false }, now)).toBe(false);
   });
 });
 

@@ -117,6 +117,7 @@ export default function EventsDiscover() {
 
   useEffect(() => {
     fetchEvents({ reset: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only initial fetch
   }, []);
 
   // Build the concierge-ranked picks once events are loaded (or when filters change).

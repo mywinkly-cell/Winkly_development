@@ -68,8 +68,8 @@ export function getBusinessOfferDisplayStatus(
   return "active";
 }
 
-export function isBusinessOfferDashboardVisible(offer: BusinessOfferRow): boolean {
-  const status = getBusinessOfferDisplayStatus(offer);
+export function isBusinessOfferDashboardVisible(offer: BusinessOfferRow, now = Date.now()): boolean {
+  const status = getBusinessOfferDisplayStatus(offer, now);
   return status === "active" || status === "scheduled";
 }
 

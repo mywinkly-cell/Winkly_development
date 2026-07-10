@@ -48,7 +48,7 @@ export default function TermsCookiesScreen() {
       setLoading(false);
       if (accepted) router.replace(next as any);
     });
-  }, [next]);
+  }, [next, router]);
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();

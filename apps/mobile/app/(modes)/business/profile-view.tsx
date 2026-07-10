@@ -38,7 +38,7 @@ import {
 } from "@/lib/profile/publicModeProfile";
 import { ModeProfilePublicView } from "@/components/profile/ModeProfilePublicView";
 import { recordBusinessAnalyticsEvent } from "@/lib/business/analyticsStore";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Colors, Layout } from "@/constants/tokens";
 import type { BusinessConnectionStatus } from "@/types/business";
 
 type BusinessProfile = {
