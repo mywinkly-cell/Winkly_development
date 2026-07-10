@@ -123,16 +123,15 @@ See `docs/BRANCHING.md` for the full protection checklist.
 
 ## 6. GitHub Actions — preview submit (`Winkly_development` only)
 
-`.github/workflows/eas-submit.yml` triggers on every push to **`Winkly_development` `main`**:
+`.github/workflows/eas-submit.yml` triggers on every push to **`Winkly_development` `main`** (when `EXPO_TOKEN` is configured):
 
 1. Installs dependencies (Node 22, root `package-lock.json` cache)
-2. Verifies `EXPO_TOKEN` is set (fails fast with a clear error if missing)
-3. Authenticates with EAS (`EXPO_TOKEN`)
-4. Writes the Google Play service account JSON (if configured)
-5. Runs **Android** `eas build --profile preview --platform android --non-interactive --auto-submit` (required; retries up to 3× on transient Expo outages)
-6. Runs **iOS** `eas build --profile preview --platform ios` separately (`continue-on-error` until Apple credentials + `ascAppId` are configured; uses `--auto-submit` only when `ascAppId` is present in `eas.json`)
+2. Authenticates with EAS (`EXPO_TOKEN`)
+3. Writes the Google Play service account JSON (if configured)
+4. Runs **Android** `eas build --profile preview --platform android --non-interactive --auto-submit` (required; retries up to 3× on transient Expo outages)
+5. Runs **iOS** `eas build --profile preview --platform ios` separately (`continue-on-error` until Apple credentials + `ascAppId` are configured; uses `--auto-submit` only when `ascAppId` is present in `eas.json`)
 
-This uploads to **TestFlight** (iOS internal) and the **Google Play internal track** (Android) for **pre-promotion QA**. It does **not** replace the production store build from `winkly-production`.
+If **`EXPO_TOKEN` is not set**, the workflow **skips** the build job (notice in Actions summary) instead of failing — so `main` stays green while you finish one-time EAS setup. **`ci.yml`** still runs lint/typecheck/test on every push/PR.
 
 ### Required GitHub secrets (`Winkly_development`)
 

@@ -51,6 +51,8 @@ Some checklists use legacy Dashboard names. The app and migrations use these equ
 | `match_contacts` | `20260605120000_swipes_friends_requests_contacts_match.sql` |
 | `join_event` / `leave_event` | `20260710121000_event_join_leave_rpcs.sql` |
 | SECURITY DEFINER allowlist lockdown | `20260710120000_revoke_internal_security_definer_rpc.sql` |
+| Client RPCs → SECURITY INVOKER (lint 0029, screenshot batch) | `20260710140000_client_rpc_security_invoker.sql` |
+| Remaining client RPCs → private DEFINER + public INVOKER wrapper | `20260710150000_security_definer_invoker_wrappers.sql` |
 | `profile_photo_verifications` | `20260405140000_behavior_matching_safety_rich_comms.sql` |
 | Storage buckets | `20260613120000_storage_buckets_policies.sql` |
 
