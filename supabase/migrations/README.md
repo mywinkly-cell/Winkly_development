@@ -1,8 +1,8 @@
 # Winkly — Supabase migrations (source of truth)
 
-**Last updated:** 2026-06-04
+**Last updated:** 2026-07-10
 
-All database schema, RLS, triggers, and RPCs live in this folder. There are **52** timestamped SQL files (run `(git ls-files supabase/migrations/*.sql).Count` — expect 52 on `main`).
+All database schema, RLS, triggers, and RPCs live in this folder. There are **85** timestamped SQL files (run `(Get-ChildItem supabase/migrations/*.sql).Count`).
 
 Fresh environments:
 
@@ -49,6 +49,8 @@ Some checklists use legacy Dashboard names. The app and migrations use these equ
 | `romance_discover_feed` | `20250218100000`, hardened in `20260505220000` |
 | `friends_discover_feed`, `business_discover_feed` | `20260605121000_mode_discover_feeds_rpc.sql` |
 | `match_contacts` | `20260605120000_swipes_friends_requests_contacts_match.sql` |
+| `join_event` / `leave_event` | `20260710121000_event_join_leave_rpcs.sql` |
+| SECURITY DEFINER allowlist lockdown | `20260710120000_revoke_internal_security_definer_rpc.sql` |
 | `profile_photo_verifications` | `20260405140000_behavior_matching_safety_rich_comms.sql` |
 | Storage buckets | `20260613120000_storage_buckets_policies.sql` |
 

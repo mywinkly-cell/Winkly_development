@@ -1,6 +1,9 @@
 -- Event RSVP RPCs used by apps/mobile/app/(modes)/events/event-details.tsx.
 -- Idempotent on dev (replaces manual/dashboard definitions) and adds to prod.
 
+DROP FUNCTION IF EXISTS public.join_event(uuid, text);
+DROP FUNCTION IF EXISTS public.leave_event(uuid);
+
 -- Internal helper — not a client /rpc (revoked from authenticated by 20260710120000).
 CREATE OR REPLACE FUNCTION public.get_event_conversation_id(p_event_id uuid)
 RETURNS uuid
