@@ -55,7 +55,7 @@ Confirmed working in this audit, so they are **not** blockers (and contradict ol
 
 ### P0-1 · Legal entity is all placeholders (Impressum / Play contact)
 - **Evidence:** `website/legal-entity.json` → `streetAddress: "[Registered street address — update … before launch]"`, `postalCode: "[PLZ]"`, `managingDirector`, `registerCourt`, `registerNumber`, `vatId` all bracketed. `docs/IMPRINT.md` & `docs/PRIVACY_POLICY.md` still use `{{company.*}}` tokens.
-- **Why blocking:** German **Impressumspflicht (§5 DDG/TMG)** legally requires a real address, managing director, Handelsregister number, and VAT ID. Google Play requires valid developer/contact details. Shipping with placeholders is a legal exposure and a likely Play rejection.
+- **Why blocking:** German **Impressumspflicht (§ 5 DDG)** legally requires a real address, managing director, Handelsregister number, and VAT ID. Google Play requires valid developer/contact details. Shipping with placeholders is a legal exposure and a likely Play rejection.
 - **Fix:** Fill `legal-entity.json` with real registered data → rebuild website (templates render from it) → redeploy → re-verify the rendered `/imprint`, `/privacy`, `/terms`.
 
 ### P0-2 · Legal site must be deployed and in-app legal URLs must resolve

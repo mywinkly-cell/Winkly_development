@@ -1,0 +1,101 @@
+name: Deploy Edge Functions
+
+# Closes the dev/prod drift gap that left ai-gateway undeployed on production while
+# it worked fine in dev (see docs/RUNBOOK_GO_LIVE.md §1).
+#
+# Push to main            → deploys to the DEV project.
+# Manual "Run workflow"   → choose dev or production explicitly.
+#
+# Requires GitHub secrets:
+#   SUPABASE_ACCESS_TOKEN     personal access token — https://supabase.com/dashboard/account/tokens
+#   SUPABASE_PROJECT_REF_DEV  e.g. gwgjdpqskusuejlwrsnd
+#   SUPABASE_PROJECT_REF_PROD e.g. orjccytcmklzcfjgqwwj
+#
+# This deploys FUNCTION CODE ONLY. Function secrets and database migrations are
+# deliberately not automated — see docs/RUNBOOK_GO_LIVE.md.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/functions/**"
+      - ".github/workflows/deploy-functions.yml"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which Supabase project to deploy to"
+        required: true
+        default: dev
+        type: choice
+        options: [dev, production]
+
+concurrency:
+  group: deploy-functions-${{ github.event.inputs.target || 'dev' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.target || 'dev' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Resolve target project
+        id: target
+        env:
+          ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          REF_DEV: ${{ secrets.SUPABASE_PROJECT_REF_DEV }}
+          REF_PROD: ${{ secrets.SUPABASE_PROJECT_REF_PROD }}
+          TARGET: ${{ github.event.inputs.target || 'dev' }}
+        run: |
+          if [ -z "$ACCESS_TOKEN" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Edge Function deploy skipped — SUPABASE_ACCESS_TOKEN is not set."
+            echo "1. Create a token at https://supabase.com/dashboard/account/tokens"
+            echo "2. Add SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF_DEV and SUPABASE_PROJECT_REF_PROD"
+            echo "   under https://github.com/${{ github.repository }}/settings/secrets/actions"
+            exit 0
+          fi
+
+          if [ "$TARGET" = "production" ]; then
+            REF="$REF_PROD"
+          else
+            REF="$REF_DEV"
+          fi
+
+          if [ -z "$REF" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No project ref configured for target '$TARGET' — skipping."
+            exit 0
+          fi
+
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "Deploying to $TARGET ($REF)"
+
+      - name: Setup Supabase CLI
+        if: steps.target.outputs.configured == 'true'
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy all Edge Functions
+        if: steps.target.outputs.configured == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Deploys every directory under supabase/functions/. Directories prefixed
+          # with "_" (e.g. _shared) are treated as shared code, not as functions.
+          supabase functions deploy --project-ref "${{ steps.target.outputs.ref }}"
+
+      - name: Post-deploy reminder
+        if: steps.target.outputs.configured == 'true'
+        run: |
+          echo "::notice::Functions deployed. Secrets and migrations are NOT handled here."
+          echo "Verify: supabase secrets list --project-ref ${{ steps.target.outputs.ref }}"
+          echo "CRON_SECRET must also exist as a row in private.webhook_config — see docs/RUNBOOK_GO_LIVE.md §4."
