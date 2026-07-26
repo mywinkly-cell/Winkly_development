@@ -1,6 +1,6 @@
 # Winkly legal website (mywinkly.de)
 
-Static site generated from `docs/*.md` for Play Store, GDPR, and TMG (Impressum) compliance.
+Static site generated from `docs/*.md` for Play Store, GDPR, and DDG (Impressum) compliance.
 
 **No host yet?** The site is **build-ready** without hosting. Run `npm run verify` here (or `npm run website:verify` from the repo root) to confirm the generated `dist/` pages are correct. Deploy to **mywinkly.de** when you have a host — see [Deploy](#deploy-vercel) below. Until then, in-app links to `https://mywinkly.de/...` will not resolve; legal text still lives in `docs/` and the built HTML in `website/dist/`.
 

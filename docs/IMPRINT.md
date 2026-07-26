@@ -2,11 +2,11 @@
 
 **Last updated:** 7 June 2026
 
-Information pursuant to § 5 TMG (Telemediengesetz) and § 18 MStV (Medienstaatsvertrag).
+Information pursuant to § 5 DDG (Digitale-Dienste-Gesetz) and § 18 MStV (Medienstaatsvertrag).
 
 ---
 
-## Angaben gemäß § 5 TMG
+## Angaben gemäß § 5 DDG
 
 **Winkly Technologies UG (haftungsbeschränkt)**  
 {{company.streetAddress}}  
