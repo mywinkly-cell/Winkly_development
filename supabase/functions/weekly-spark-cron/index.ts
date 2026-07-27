@@ -26,7 +26,8 @@ import {
   type VerifiedPlace,
 } from "../_shared/verifiedPlace.ts";
 
-const GEMINI_MODEL_PLAN = Deno.env.get("GEMINI_MODEL_PLAN") ?? "gemini-2.0-flash";
+/** Keep in sync with ai-gateway GEMINI_MODEL_PLAN (docs: gemini-2.0 shut down 2026-06-01). */
+const GEMINI_MODEL_PLAN = Deno.env.get("GEMINI_MODEL_PLAN") ?? "gemini-3.5-flash";
 /** Sponsorship rails: OFF at launch. Even when enabled, a sponsored plan must pass the SAME
  *  validation gate as an organic one (sponsorship buys eligibility, not a quality bypass). No
  *  sponsored inventory is wired yet, so the cron emits 100% organic plans regardless of this flag. */
@@ -58,6 +59,15 @@ type UserSignals = {
   interests: string[];
   activityPreferences: string[];
   modes: string[];
+  /**
+   * Places the user explicitly saved and hasn't been to yet. The strongest signal
+   * available — an interest is inferred, a wish is stated. Saved places with a
+   * place_id are tried first when gathering candidates; free-text saves feed the
+   * search queries. Visited and archived entries are excluded so a fulfilled wish
+   * is not suggested again.
+   */
+  wishlistPlaceIds: string[];
+  wishlistTitles: string[];
 };
 
 type SparkCandidatePlan = {
@@ -127,11 +137,11 @@ function nextSlotTime(dow: number, hour: number, minute: number): string {
   return d.toISOString();
 }
 
-/** Candidate start times per slot (next Sat afternoon for solo, Fri evening for date, Sat evening for meetup). */
+/** Candidate start times per slot — spread across the week (not only weekend). */
 function slotTimes(slot: Slot): string[] {
-  if (slot === "solo") return [nextSlotTime(6, 11, 0), nextSlotTime(0, 15, 0)]; // Sat 11:00, Sun 15:00
-  if (slot === "date") return [nextSlotTime(5, 19, 30), nextSlotTime(6, 19, 30)]; // Fri/Sat 19:30
-  return [nextSlotTime(6, 18, 0), nextSlotTime(0, 16, 0)]; // meetup: Sat 18:00, Sun 16:00
+  if (slot === "solo") return [nextSlotTime(3, 11, 0), nextSlotTime(6, 15, 0)]; // Wed 11:00, Sat 15:00
+  if (slot === "date") return [nextSlotTime(2, 19, 30), nextSlotTime(5, 19, 30)]; // Tue/Fri 19:30
+  return [nextSlotTime(4, 18, 0), nextSlotTime(6, 16, 0)]; // meetup: Thu 18:00, Sat 16:00
 }
 
 async function geocodeCity(city: string): Promise<{ lat: number; lng: number } | null> {
@@ -196,7 +206,10 @@ function slotQueries(slot: Slot, s: UserSignals, cityLabel: string): string[] {
   const derived = [...s.interests, ...s.activityPreferences]
     .map((i) => interestToQuery(i, slot))
     .filter((x): x is string => !!x);
-  const merged = [...derived, ...SLOT_SEED_QUERIES[slot]];
+  // Free-text wishlist saves ("that rooftop place in Schwabing") are searched
+  // verbatim and ahead of inferred interests — the user typed them for a reason.
+  const wished = s.wishlistTitles.slice(0, 3).map((t) => t.trim()).filter(Boolean);
+  const merged = [...wished, ...derived, ...SLOT_SEED_QUERIES[slot]];
   const seen = new Set<string>();
   const out: string[] = [];
   for (const q of merged) {
@@ -215,6 +228,23 @@ async function gatherVerifiedCandidates(
 ): Promise<VerifiedPlace[]> {
   const out: VerifiedPlace[] = [];
   const seen = new Set<string>();
+
+  // Saved places first. They still go through resolveVerifiedPlace, so a wish
+  // only becomes a suggestion if the venue is operational, has a real address
+  // and is open at the proposed time — the same gate every other candidate
+  // passes. A wish is a preference, not a licence to skip verification.
+  for (const placeId of params.signals.wishlistPlaceIds) {
+    if (out.length >= params.want) break;
+    if (seen.has(placeId)) continue;
+    seen.add(placeId);
+    const place = await resolveVerifiedPlace(supabase, {
+      placeId,
+      placesKey: params.placesKey,
+      ttlDays: SPARK_TTL_DAYS,
+    });
+    if (place && place.name && place.formatted_address) out.push(place);
+  }
+
   for (const query of slotQueries(params.slot, params.signals, params.cityLabel)) {
     if (out.length >= params.want) break;
     const ids = await searchPlaceIds({ query, placesKey: params.placesKey, limit: 3, queryCache: params.queryCache });
@@ -227,6 +257,44 @@ async function gatherVerifiedCandidates(
     }
   }
   return out;
+}
+
+/**
+ * Unvisited, unarchived wishlist saves for one user.
+ *
+ * Runs with the service role, so it deliberately filters by user_id rather than
+ * relying on RLS. Best-effort: a wishlist read failure must never stop the whole
+ * Spark from generating — the user just gets interest-based suggestions instead.
+ */
+async function fetchWishlistSignals(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<{ placeIds: string[]; titles: string[] }> {
+  try {
+    const { data, error } = await supabase
+      .from("wishlist_items")
+      .select("title, place_id")
+      .eq("user_id", userId)
+      .is("visited_at", null)
+      .is("archived_at", null)
+      .order("updated_at", { ascending: false })
+      .limit(12);
+
+    if (error || !Array.isArray(data)) return { placeIds: [], titles: [] };
+
+    const placeIds: string[] = [];
+    const titles: string[] = [];
+    for (const row of data as Array<{ title?: string; place_id?: string | null }>) {
+      if (typeof row.place_id === "string" && row.place_id.trim()) {
+        placeIds.push(row.place_id.trim());
+      } else if (typeof row.title === "string" && row.title.trim()) {
+        titles.push(row.title.trim());
+      }
+    }
+    return { placeIds: placeIds.slice(0, 6), titles: titles.slice(0, 6) };
+  } catch {
+    return { placeIds: [], titles: [] };
+  }
 }
 
 /** First (candidate, startsAt) pair that passes the venue validation gate, or null. */
@@ -599,6 +667,8 @@ serve(async (req) => {
           .maybeSingle();
         if (existing?.id) { skippedExisting++; continue; }
 
+        const wishlist = await fetchWishlistSignals(supabase, userId);
+
         const signals: UserSignals = {
           userId,
           city: typeof row.city === "string" && row.city.trim() ? row.city.trim() : null,
@@ -608,6 +678,8 @@ serve(async (req) => {
           interests: Array.isArray(row.interests) ? (row.interests as string[]).filter(Boolean) : [],
           activityPreferences: Array.isArray(row.activity_preferences) ? (row.activity_preferences as string[]).filter(Boolean) : [],
           modes: Array.isArray(row.modes) ? (row.modes as string[]).filter(Boolean) : [],
+          wishlistPlaceIds: wishlist.placeIds,
+          wishlistTitles: wishlist.titles,
         };
 
         let plans: SparkCandidatePlan[];

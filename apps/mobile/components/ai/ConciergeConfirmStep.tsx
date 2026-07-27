@@ -12,7 +12,10 @@ import {
   StyleSheet,
   ActivityIndicator,
   Share,
+  Linking,
+  Platform,
 } from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -109,6 +112,19 @@ export type ConciergeConfirmStepProps = {
   onBack: () => void;
   /** When set, show "Correct Details" to refine (e.g. "Make it cheaper", "Earlier time"). Calls with refinement hint. */
   onCorrectDetails?: (refinementHint: string) => void;
+  /** When no partner yet, show an "Invite someone" entry that opens a picker (e.g. Spark solo plans). */
+  onInviteSomeone?: () => void;
+  /** When a partner is set, open the picker again to choose someone else (any mode). */
+  onChangeInvitee?: () => void;
+  /**
+   * Chat / planner mode for this invite. Independent of the plan's original Spark slot —
+   * e.g. a Date spark can invite a friend under Friends mode.
+   */
+  inviteModeOptions?: Array<"romance" | "friends" | "business">;
+  inviteMode?: "romance" | "friends" | "business";
+  onInviteModeChange?: (mode: "romance" | "friends" | "business") => void;
+  /** Allow editing title / date / time / venue before adding (Weekly Spark details). */
+  allowEditDetails?: boolean;
   /** Links thumb feedback to ai_requests.outcome_satisfaction when set. */
   aiRequestId?: string;
   showInlineBack?: boolean;
@@ -128,6 +144,12 @@ export function ConciergeConfirmStep({
   onDone,
   onBack,
   onCorrectDetails,
+  onInviteSomeone,
+  onChangeInvitee,
+  inviteModeOptions,
+  inviteMode,
+  onInviteModeChange,
+  allowEditDetails = false,
   aiRequestId,
   showInlineBack = true,
 }: ConciergeConfirmStepProps) {
@@ -138,12 +160,43 @@ export function ConciergeConfirmStep({
   const [conflictingItems, setConflictingItems] = useState<PlannerItemRow[]>([]);
   const [conflictChecked, setConflictChecked] = useState(false);
   const [addRecurrence, setAddRecurrence] = useState<"once" | "weekly">("once");
+  const [editTitle, setEditTitle] = useState("");
+  const [editDate, setEditDate] = useState(dateForPlan);
+  const [editTimeHm, setEditTimeHm] = useState(exactTimeHm ?? "");
+  const [editPlace, setEditPlace] = useState("");
+  const [editAddress, setEditAddress] = useState("");
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const title =
+  useEffect(() => {
+    setInviteToo(!!partner);
+  }, [partner?.id]);
+
+  const baseTitle =
     structuredPlan?.title ||
     (chosenOption?.option_name as string) ||
     (chosenOption?.narrative as string) ||
     "Plan";
+
+  useEffect(() => {
+    setEditTitle(baseTitle);
+    setEditDate(dateForPlan);
+    const fromItin = structuredPlan?.itinerary?.[0]?.time?.trim() ?? "";
+    const hm =
+      exactTimeHm && /^\d{2}:\d{2}$/.test(exactTimeHm)
+        ? exactTimeHm
+        : (() => {
+            const m = fromItin.match(/(\d{1,2}):(\d{2})/);
+            if (!m) return "";
+            return `${m[1].padStart(2, "0")}:${m[2]}`;
+          })();
+    setEditTimeHm(hm);
+    setEditPlace(structuredPlan?.venue?.name ?? "");
+    setEditAddress(structuredPlan?.venue?.address || locationLineDisplay?.trim() || "");
+  }, [baseTitle, dateForPlan, exactTimeHm, structuredPlan, locationLineDisplay]);
+
+  const title = allowEditDetails ? (editTitle.trim() || baseTitle) : baseTitle;
+  const effectiveDate = allowEditDetails ? editDate : dateForPlan;
+  const effectiveTimeHm = allowEditDetails && /^\d{2}:\d{2}$/.test(editTimeHm) ? editTimeHm : exactTimeHm;
   const why =
     structuredPlan?.why_this_fits ||
     (chosenOption?.why_this_fits as string) ||
@@ -190,9 +243,9 @@ export function ConciergeConfirmStep({
           option_name: structuredPlan.title,
           itinerary: structuredItinerary.map((s) => ({ time: s.time, activity: s.description })),
         };
-        ranges = [buildStartsEnds(dateForPlan, pseudo, exactTimeHm)];
+        ranges = [buildStartsEnds(effectiveDate, pseudo, effectiveTimeHm)];
       } else {
-        ranges = [buildStartsEnds(dateForPlan, chosenOption as ExperienceOption, exactTimeHm)];
+        ranges = [buildStartsEnds(effectiveDate, chosenOption as ExperienceOption, effectiveTimeHm)];
       }
 
       const items = await getPlannerItems(meId, undefined, 100);
@@ -212,7 +265,7 @@ export function ConciergeConfirmStep({
     return () => {
       cancelled = true;
     };
-  }, [dateForPlan, chosenOption, structuredPlan, exactTimeHm]);
+  }, [effectiveDate, chosenOption, structuredPlan, effectiveTimeHm, tripDays, structuredItinerary]);
 
   const handleAddToPlanner = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -237,28 +290,32 @@ export function ConciergeConfirmStep({
           option_name: structuredPlan.title,
           itinerary: structuredItinerary.map((s) => ({ time: s.time, activity: s.description })),
         };
-        const se = buildStartsEnds(dateForPlan, pseudo, exactTimeHm);
+        const se = buildStartsEnds(effectiveDate, pseudo, effectiveTimeHm);
         starts_at = se.starts_at;
         ends_at = se.ends_at;
       } else {
-        const se = buildStartsEnds(dateForPlan, chosenOption as ExperienceOption, exactTimeHm);
+        const se = buildStartsEnds(effectiveDate, chosenOption as ExperienceOption, effectiveTimeHm);
         starts_at = se.starts_at;
         ends_at = se.ends_at;
       }
 
-      const activity = structuredPlan?.title || (chosenOption?.option_name as string) || title;
-      const place = structuredPlan?.venue?.name
-        ? structuredPlan.venue.name
-        : (chosenOption as { place?: string })?.place ??
-          (chosenOption as { venue_name?: string })?.venue_name ??
-          (chosenOption?.option_name as string) ??
-          (chosenOption?.narrative as string) ??
-          undefined;
-      const location = structuredPlan?.venue?.address
-        ? structuredPlan.venue.address
-        : locationLineDisplay?.trim()
-          ? locationLineDisplay.trim()
-          : undefined;
+      const activity = title;
+      const place = allowEditDetails
+        ? (editPlace.trim() || structuredPlan?.venue?.name || undefined)
+        : structuredPlan?.venue?.name
+          ? structuredPlan.venue.name
+          : (chosenOption as { place?: string })?.place ??
+            (chosenOption as { venue_name?: string })?.venue_name ??
+            (chosenOption?.option_name as string) ??
+            (chosenOption?.narrative as string) ??
+            undefined;
+      const location = allowEditDetails
+        ? (editAddress.trim() || locationLineDisplay?.trim() || undefined)
+        : structuredPlan?.venue?.address
+          ? structuredPlan.venue.address
+          : locationLineDisplay?.trim()
+            ? locationLineDisplay.trim()
+            : undefined;
       const conciergeMeta: Record<string, unknown> = {
         from_concierge: true,
         ...(aiRequestId ? { ai_request_id: aiRequestId } : {}),
@@ -320,27 +377,10 @@ export function ConciergeConfirmStep({
 
       if (inviteToo && partner) {
         const conversationId = await createDirectChat(partner.id, mode, "invite", meId);
-        // New flow: create pending plan + require both to confirm before finalizing into Planner.
-        const baseCtx = contextForPendingPlan ?? { mode };
-        const planRes = await callWinklyPlan({
-          context: {
-            ...baseCtx,
-            mode,
-            date_from: starts_at,
-            budget_amount: (baseCtx as { budget_amount?: number }).budget_amount,
-            budget_currency: (baseCtx as { budget_currency?: string }).budget_currency,
-            weather_snapshot: (baseCtx as ConciergeContext).weather_snapshot,
-            participant_user_ids: [meId, partner.id],
-            partner_user_id: partner.id,
-            // Use the chosen option as the "idea" seed.
-            user_prompt: String(structuredPlan?.title ?? chosenOption?.option_name ?? title ?? "Plan"),
-            activity_hint: String(structuredPlan?.title ?? chosenOption?.option_name ?? title ?? "Plan"),
-          },
-        });
-
-        const pendingPlanId = planRes.pending_plan_id;
-        if (!pendingPlanId) {
-          // Fallback to legacy planner invitation when plan storage isn't available yet.
+        // Locked-in plans (Weekly Sparks / theme confirm) already have venue + time —
+        // invite that exact plan. Open-ended concierge still regenerates via winkly_plan.
+        const hasLockedPlan = !!structuredPlan?.venue?.name || allowEditDetails;
+        if (hasLockedPlan) {
           const { planner_item_id, planner_invitation_id } = await createPlannerInvite(
             meId,
             partner.id,
@@ -361,18 +401,57 @@ export function ConciergeConfirmStep({
           });
           await sendMessage(conversationId, meId, ctaPayload, [], { messageType: "cta" });
         } else {
-          const wp: WinklyPlanOption = planRes.options?.[1] ?? planRes.options?.[0];
-          const ctaPayload = JSON.stringify({
-            type: "pending_plan",
-            pending_plan_id: pendingPlanId,
-            source_mode: mode,
-            topic: wp.title,
-            date_time: starts_at,
-            duration: wp.duration_minutes,
-            location_details: { name: wp.venue.name, address: wp.venue.address, google_maps_link: wp.venue.google_maps_link },
-            logic_reasoning: wp.why_this_fits,
+          const baseCtx = contextForPendingPlan ?? { mode };
+          const planRes = await callWinklyPlan({
+            context: {
+              ...baseCtx,
+              mode,
+              date_from: starts_at,
+              budget_amount: (baseCtx as { budget_amount?: number }).budget_amount,
+              budget_currency: (baseCtx as { budget_currency?: string }).budget_currency,
+              weather_snapshot: (baseCtx as ConciergeContext).weather_snapshot,
+              participant_user_ids: [meId, partner.id],
+              partner_user_id: partner.id,
+              user_prompt: String(chosenOption?.option_name ?? title ?? "Plan"),
+              activity_hint: String(chosenOption?.option_name ?? title ?? "Plan"),
+            },
           });
-          await sendMessage(conversationId, meId, ctaPayload, [], { messageType: "cta" });
+
+          const pendingPlanId = planRes.pending_plan_id;
+          if (!pendingPlanId) {
+            const { planner_item_id, planner_invitation_id } = await createPlannerInvite(
+              meId,
+              partner.id,
+              conversationId,
+              payload
+            );
+            const ctaPayload = JSON.stringify({
+              type: "planner_invite",
+              planner_item_id,
+              planner_invitation_id,
+              title,
+              activity: payload.activity,
+              location: payload.location ?? null,
+              place: payload.place ?? null,
+              starts_at,
+              ends_at,
+              source_mode: mode,
+            });
+            await sendMessage(conversationId, meId, ctaPayload, [], { messageType: "cta" });
+          } else {
+            const wp: WinklyPlanOption = planRes.options?.[1] ?? planRes.options?.[0];
+            const ctaPayload = JSON.stringify({
+              type: "pending_plan",
+              pending_plan_id: pendingPlanId,
+              source_mode: mode,
+              topic: wp.title,
+              date_time: starts_at,
+              duration: wp.duration_minutes,
+              location_details: { name: wp.venue.name, address: wp.venue.address, google_maps_link: wp.venue.google_maps_link },
+              logic_reasoning: wp.why_this_fits,
+            });
+            await sendMessage(conversationId, meId, ctaPayload, [], { messageType: "cta" });
+          }
         }
       } else if (addRecurrence === "weekly") {
         const weeks = [0, 1, 2, 3];
@@ -384,7 +463,7 @@ export function ConciergeConfirmStep({
               : [{ activity: title }],
           } as ExperienceOption));
         for (const weekOffset of weeks) {
-          const startDate = new Date(dateForPlan);
+          const startDate = new Date(effectiveDate);
           startDate.setDate(startDate.getDate() + weekOffset * 7);
           const { starts_at: s, ends_at: e } = buildStartsEnds(startDate, recurrenceSeed);
           await createPlannerItemForSelf(meId, {
@@ -433,16 +512,128 @@ export function ConciergeConfirmStep({
       {showInlineBack ? (
         <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={22} color={Colors.primaryViolet} />
-          <Text style={styles.backText}>Back to options</Text>
+          <Text style={styles.backText}>{allowEditDetails ? "Close" : "Back to options"}</Text>
         </TouchableOpacity>
       ) : null}
 
-      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.title}>{allowEditDetails ? "Plan details" : title}</Text>
+      {allowEditDetails ? (
+        <View style={styles.editBlock}>
+          <Text style={styles.editLabel}>Title</Text>
+          <TextInput
+            style={styles.editInput}
+            value={editTitle}
+            onChangeText={setEditTitle}
+            placeholder="Plan title"
+            placeholderTextColor={Colors.gray500}
+          />
+          <Text style={styles.editLabel}>Date</Text>
+          <TouchableOpacity
+            style={styles.editInput}
+            onPress={() => { Haptics.selectionAsync(); setShowDatePicker(true); }}
+          >
+            <Text style={styles.editInputText}>
+              {editDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+            </Text>
+          </TouchableOpacity>
+          {showDatePicker ? (
+            <DateTimePicker
+              value={editDate}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={(_, d) => {
+                if (Platform.OS !== "ios") setShowDatePicker(false);
+                if (d) setEditDate(d);
+              }}
+            />
+          ) : null}
+          {Platform.OS === "ios" && showDatePicker ? (
+            <TouchableOpacity onPress={() => setShowDatePicker(false)} style={styles.editDoneBtn}>
+              <Text style={styles.editDoneText}>Done</Text>
+            </TouchableOpacity>
+          ) : null}
+          <Text style={styles.editLabel}>Time (HH:mm)</Text>
+          <TextInput
+            style={styles.editInput}
+            value={editTimeHm}
+            onChangeText={setEditTimeHm}
+            placeholder="19:30"
+            placeholderTextColor={Colors.gray500}
+            keyboardType="numbers-and-punctuation"
+          />
+          <Text style={styles.editLabel}>Venue</Text>
+          <TextInput
+            style={styles.editInput}
+            value={editPlace}
+            onChangeText={setEditPlace}
+            placeholder="Place name"
+            placeholderTextColor={Colors.gray500}
+          />
+          <Text style={styles.editLabel}>Address</Text>
+          <TextInput
+            style={styles.editInput}
+            value={editAddress}
+            onChangeText={setEditAddress}
+            placeholder="Street, city"
+            placeholderTextColor={Colors.gray500}
+          />
+          {(structuredPlan?.venue?.google_maps_link || editPlace.trim() || editAddress.trim()) ? (
+            <TouchableOpacity
+              style={styles.mapsBtnInline}
+              onPress={() => {
+                Haptics.selectionAsync();
+                const q = [editPlace.trim(), editAddress.trim()].filter(Boolean).join(", ");
+                const venueChanged =
+                  editPlace.trim() !== (structuredPlan?.venue?.name ?? "").trim() ||
+                  editAddress.trim() !== (structuredPlan?.venue?.address ?? locationLineDisplay?.trim() ?? "").trim();
+                const url = venueChanged
+                  ? (q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : null)
+                  : structuredPlan?.venue?.google_maps_link?.trim() ||
+                    (q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : null);
+                if (url) void Linking.openURL(url).catch(() => {});
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Open in Maps"
+              activeOpacity={0.85}
+            >
+              <Ionicons name="map-outline" size={18} color={Colors.primaryViolet} />
+              <Text style={styles.mapsBtnText}>Open in Maps</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
       {why ? (
         <>
           <Text style={styles.whyLabel}>Why it fits your DNA</Text>
           <Text style={styles.why} numberOfLines={5}>{why}</Text>
         </>
+      ) : null}
+      {!allowEditDetails && structuredPlan?.venue?.name ? (
+        <View style={styles.venueBlock}>
+          <View style={styles.venueTextCol}>
+            <Text style={styles.venueName} numberOfLines={2}>{structuredPlan.venue.name}</Text>
+            {structuredPlan.venue.address ? (
+              <Text style={styles.venueAddress} numberOfLines={3}>{structuredPlan.venue.address}</Text>
+            ) : locationLineDisplay?.trim() ? (
+              <Text style={styles.venueAddress} numberOfLines={2}>{locationLineDisplay.trim()}</Text>
+            ) : null}
+          </View>
+          {structuredPlan.venue.google_maps_link ? (
+            <TouchableOpacity
+              style={styles.mapsBtn}
+              onPress={() => {
+                Haptics.selectionAsync();
+                void Linking.openURL(structuredPlan.venue.google_maps_link).catch(() => {});
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Open in Maps"
+              activeOpacity={0.85}
+            >
+              <Ionicons name="map-outline" size={18} color={Colors.primaryViolet} />
+              <Text style={styles.mapsBtnText}>Maps</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       ) : null}
       {tripDays?.length ? (
         <View style={styles.tripTimeline}>
@@ -476,16 +667,20 @@ export function ConciergeConfirmStep({
         style={styles.sharePlanBtn}
         onPress={() => {
           Haptics.selectionAsync();
-          const dateStr = dateForPlan.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+          const dateStr = effectiveDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
           const placeLine =
-            structuredPlan?.venue?.name ??
-            (chosenOption as { place?: string } | undefined)?.place ??
-            (chosenOption?.option_name as string) ??
-            (chosenOption?.narrative as string) ??
+            (allowEditDetails ? editPlace : structuredPlan?.venue?.name) ||
+            (chosenOption as { place?: string } | undefined)?.place ||
+            (chosenOption?.option_name as string) ||
+            (chosenOption?.narrative as string) ||
+            "";
+          const addressLine =
+            (allowEditDetails ? editAddress.trim() : structuredPlan?.venue?.address?.trim()) ||
+            locationLineDisplay?.trim() ||
             "";
           const msg = [
             title,
-            locationLineDisplay?.trim() ? `Location: ${locationLineDisplay.trim()}` : "",
+            addressLine ? `Location: ${addressLine}` : "",
             dateStr,
             schedule.length ? schedule.join(" · ") : "",
             placeLine ? `Venue: ${placeLine}` : "",
@@ -501,19 +696,72 @@ export function ConciergeConfirmStep({
       </TouchableOpacity>
 
       {partner && (
-        <TouchableOpacity
-          style={styles.inviteToggle}
-          onPress={() => { Haptics.selectionAsync(); setInviteToo((v) => !v); }}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name={inviteToo ? "checkbox" : "square-outline"}
-            size={24}
-            color={inviteToo ? Colors.primaryViolet : Colors.gray500}
-          />
-          <Text style={styles.inviteToggleText}>Invite {partner.displayName} to this plan</Text>
-        </TouchableOpacity>
+        <View style={styles.invitePartnerBlock}>
+          <TouchableOpacity
+            style={styles.inviteToggle}
+            onPress={() => { Haptics.selectionAsync(); setInviteToo((v) => !v); }}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={inviteToo ? "checkbox" : "square-outline"}
+              size={24}
+              color={inviteToo ? Colors.primaryViolet : Colors.gray500}
+            />
+            <Text style={styles.inviteToggleText}>Invite {partner.displayName} to this plan</Text>
+          </TouchableOpacity>
+
+          {onChangeInvitee ? (
+            <TouchableOpacity
+              style={styles.changeInviteeBtn}
+              onPress={() => { Haptics.selectionAsync(); onChangeInvitee(); }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.changeInviteeText}>Choose someone else</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {inviteToo && inviteModeOptions && inviteModeOptions.length > 0 && onInviteModeChange ? (
+            <View style={styles.inviteModeSection}>
+              <Text style={styles.inviteModeLabel}>Send as</Text>
+              <Text style={styles.inviteModeHint}>
+                Pick the mode for the chat and planner tab — independent of how this plan was suggested.
+              </Text>
+              <View style={styles.inviteModeRow}>
+                {inviteModeOptions.map((m) => {
+                  const label =
+                    m === "romance" ? "Romance" : m === "friends" ? "Friends" : "Business";
+                  const active = inviteMode === m;
+                  return (
+                    <TouchableOpacity
+                      key={m}
+                      style={[styles.inviteModeChip, active && styles.inviteModeChipActive]}
+                      onPress={() => { Haptics.selectionAsync(); onInviteModeChange(m); }}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[styles.inviteModeChipText, active && styles.inviteModeChipTextActive]}>
+                        {label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+        </View>
       )}
+
+      {!partner && onInviteSomeone ? (
+        <TouchableOpacity
+          style={styles.inviteSomeoneBtn}
+          onPress={() => { Haptics.selectionAsync(); onInviteSomeone(); }}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+        >
+          <Ionicons name="person-add-outline" size={20} color={Colors.primaryViolet} />
+          <Text style={styles.inviteSomeoneBtnText}>Invite someone</Text>
+          <Ionicons name="chevron-forward" size={18} color={Colors.gray400} />
+        </TouchableOpacity>
+      ) : null}
 
       {!partner && !tripDays?.length ? (
         <View style={styles.recurrenceSection}>
@@ -646,6 +894,39 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginBottom: 8,
   },
+  editBlock: { gap: 6, marginBottom: 16 },
+  editLabel: {
+    ...Typography.caption,
+    fontWeight: "700",
+    color: Colors.gray600,
+    marginTop: 4,
+  },
+  editInput: {
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    ...Typography.body,
+    color: Colors.textPrimary,
+    backgroundColor: Colors.white,
+  },
+  editInputText: { ...Typography.body, color: Colors.textPrimary },
+  mapsBtnInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: Colors.gray100,
+    borderWidth: 1,
+    borderColor: Colors.primaryViolet + "40",
+  },
+  editDoneBtn: { alignSelf: "flex-end", paddingVertical: 6, paddingHorizontal: 10 },
+  editDoneText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "700" },
   whyLabel: {
     ...Typography.caption,
     color: Colors.gray500,
@@ -656,6 +937,42 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.gray600,
     marginBottom: 12,
+  },
+  venueBlock: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.gray100,
+  },
+  venueTextCol: { flex: 1, gap: 2 },
+  venueName: {
+    ...Typography.body,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+  },
+  venueAddress: {
+    ...Typography.caption,
+    color: Colors.gray600,
+  },
+  mapsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.primaryViolet + "40",
+  },
+  mapsBtnText: {
+    ...Typography.caption,
+    fontWeight: "700",
+    color: Colors.primaryViolet,
   },
   correctDetailsSection: {
     marginBottom: 16,
@@ -754,15 +1071,69 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginBottom: 4,
   },
+  invitePartnerBlock: { marginBottom: 16, gap: 10 },
   inviteToggle: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginBottom: 16,
   },
   inviteToggleText: {
     ...Typography.body,
     color: Colors.textPrimary,
+    flex: 1,
+  },
+  changeInviteeBtn: { paddingVertical: 4, paddingLeft: 34 },
+  changeInviteeText: {
+    ...Typography.caption,
+    color: Colors.primaryViolet,
+    fontWeight: "600",
+  },
+  inviteModeSection: { gap: 6, paddingLeft: 2 },
+  inviteModeLabel: {
+    ...Typography.caption,
+    fontWeight: "700",
+    color: Colors.gray700,
+  },
+  inviteModeHint: {
+    ...Typography.caption,
+    color: Colors.gray500,
+    marginBottom: 4,
+  },
+  inviteModeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  inviteModeChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    backgroundColor: Colors.gray100,
+  },
+  inviteModeChipActive: {
+    borderColor: Colors.primaryViolet,
+    backgroundColor: Colors.primaryViolet + "18",
+  },
+  inviteModeChipText: {
+    ...Typography.caption,
+    fontWeight: "600",
+    color: Colors.gray700,
+  },
+  inviteModeChipTextActive: { color: Colors.primaryViolet },
+  inviteSomeoneBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primaryViolet + "55",
+    backgroundColor: Colors.primaryViolet + "10",
+  },
+  inviteSomeoneBtnText: {
+    ...Typography.body,
+    fontWeight: "600",
+    color: Colors.primaryViolet,
     flex: 1,
   },
   recurrenceSection: { marginBottom: 16 },

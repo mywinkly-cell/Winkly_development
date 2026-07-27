@@ -4,11 +4,6 @@
 // jest allows them inside the hoisted factory.
 const mockCalls: { table: string; method: string; args: unknown[] }[] = [];
 const mockResultQueue: { data: unknown; error: unknown }[] = [];
-const mockIsWeekendIdeasPeriod = jest.fn<boolean, []>();
-
-jest.mock("@/lib/ai/proactiveSuggestion", () => ({
-  isWeekendIdeasPeriod: () => mockIsWeekendIdeasPeriod(),
-}));
 
 jest.mock("@/lib/supabase", () => {
   const builderFor = (table: string) => {
@@ -42,6 +37,8 @@ import {
   markWeeklySparkSeen,
   getCurrentWeeklySpark,
   distanceKm,
+  localityFromAddress,
+  sparkVenueDisplayLine,
   WEEKLY_SPARK_LABEL_KEY,
   WEEKLY_SPARK_FOCUS_PARAM,
   WEEKLY_SPARK_FOCUS_VALUE,
@@ -58,8 +55,6 @@ describe("weeklySpark", () => {
   beforeEach(() => {
     mockCalls.length = 0;
     mockResultQueue.length = 0;
-    mockIsWeekendIdeasPeriod.mockReset();
-    mockIsWeekendIdeasPeriod.mockReturnValue(false);
   });
 
   describe("getWeeklySparkWeekKey", () => {
@@ -87,11 +82,8 @@ describe("weeklySpark", () => {
   });
 
   describe("isWeeklySparkAvailable", () => {
-    it("mirrors the weekend-ideas window", () => {
-      mockIsWeekendIdeasPeriod.mockReturnValue(true);
+    it("is always true (Sparks cover the whole week)", () => {
       expect(isWeeklySparkAvailable()).toBe(true);
-      mockIsWeekendIdeasPeriod.mockReturnValue(false);
-      expect(isWeeklySparkAvailable()).toBe(false);
     });
   });
 
@@ -178,6 +170,10 @@ describe("weeklySpark", () => {
             sponsored: true,
             external_ref: null,
             sponsor: { disclosure_label: "Partner pick" },
+            place: {
+              formatted_address: "Marienplatz 1, 80331 München, Germany",
+              google_maps_url: "https://maps.google.com/?cid=1",
+            },
           },
         ],
         error: null,
@@ -190,9 +186,27 @@ describe("weeklySpark", () => {
       const plan = spark!.plans[0];
       expect(plan.slot).toBe("date");
       expect(plan.placeName).toBe("Test Wine Bar");
+      expect(plan.placeAddress).toBe("Marienplatz 1, 80331 München, Germany");
+      expect(plan.googleMapsUrl).toBe("https://maps.google.com/?cid=1");
       expect(plan.approxPriceCents).toBe(2000);
       expect(plan.sponsored).toBe(true);
       expect(plan.sponsorDisclosureLabel).toBe("Partner pick");
+    });
+  });
+
+  describe("localityFromAddress / sparkVenueDisplayLine", () => {
+    it("extracts the city from a Places formatted_address", () => {
+      expect(localityFromAddress("Dachauer Str. 12, 82140 Olching, Germany")).toBe("Olching");
+      expect(localityFromAddress("Marienplatz 1, 80331 München, Germany")).toBe("München");
+    });
+
+    it("shows venue · city on the card when the city is not in the name", () => {
+      expect(
+        sparkVenueDisplayLine({
+          placeName: "Test Wine Bar",
+          placeAddress: "Marienplatz 1, 80331 München, Germany",
+        }),
+      ).toBe("Test Wine Bar · München");
     });
   });
 

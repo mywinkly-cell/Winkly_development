@@ -26,6 +26,7 @@ import { ConciergeRequestForm } from "@/components/ai/ConciergeRequestForm";
 import { FitReasonLine, resolveFitReason } from "@/components/ai/FitReasonLine";
 import { ConciergePlanningFlow } from "@/components/ai/ConciergePlanningFlow";
 import { ConciergeRateLimitCard } from "@/components/ai/ConciergeRateLimitCard";
+import { CommunityPlansSection } from "@/components/ai/CommunityPlansSection";
 import { callConciergeStream, reportConciergeOutcome } from "@/lib/ai/conciergeClient";
 import { getMergedDeviceWhiteSpaceSlots, formatCalendarWhiteSpaceForGateway } from "@/lib/integrations/calendarWhiteSpace";
 import { buildBookingContextForAi } from "@/lib/integrations/bookingLinks";
@@ -770,6 +771,15 @@ export default function ConciergeScreen() {
       {step === "options" && suggestions && suggestions.length > 0 && (
         <ScrollView style={styles.optionsScroll} contentContainerStyle={styles.optionsContent} showsVerticalScrollIndicator={false}>
           {message ? <Text style={styles.optionsIntro}>{message}</Text> : null}
+          {/* Plans other members ran and rated, for this city + activity. Renders
+              nothing until at least one rated plan exists, so it stays invisible
+              until there is real experience behind it. */}
+          <CommunityPlansSection
+            city={(lastSubmittedContext.current?.city ?? defaultCity ?? "").split(",")[0]?.trim() || undefined}
+            mode={mode}
+            theme={lastSubmittedContext.current?.theme ?? lastSubmittedContext.current?.activity_hint}
+            numDays={lastSubmittedContext.current?.num_days ?? 1}
+          />
           {sortedOptionsWithIndex.map(({ opt, originalIndex }) => {
             const mapQuery = [opt.option_name ?? opt.narrative, (opt as { place?: string }).place, lastSubmittedContext.current?.city].filter(Boolean).join(", ");
             return (

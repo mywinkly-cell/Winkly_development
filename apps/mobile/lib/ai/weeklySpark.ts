@@ -15,7 +15,6 @@
  */
 
 import { supabase } from "@/lib/supabase";
-import { isWeekendIdeasPeriod } from "@/lib/ai/proactiveSuggestion";
 
 export type SparkSlot = "solo" | "date" | "meetup";
 export type SparkSource = "ai" | "winkly_event" | "sponsored";
@@ -45,6 +44,10 @@ export type WeeklySparkPlan = {
   fitReason: string;
   placeId: string | null;
   placeName: string | null;
+  /** Places formatted_address (includes city) from verified_places when place_id is set. */
+  placeAddress: string | null;
+  /** Official Google Maps URL from verified_places when available. */
+  googleMapsUrl: string | null;
   placeLat: number | null;
   placeLng: number | null;
   startsAt: string | null;
@@ -58,6 +61,46 @@ export type WeeklySparkPlan = {
   sponsorDisclosureLabel: string | null;
   externalRef: string | null;
 };
+
+type PlaceEmbed =
+  | { formatted_address?: string | null; google_maps_url?: string | null }
+  | { formatted_address?: string | null; google_maps_url?: string | null }[]
+  | null;
+
+function placeEmbed(embed: PlaceEmbed): { address: string | null; mapsUrl: string | null } {
+  if (!embed) return { address: null, mapsUrl: null };
+  const row = Array.isArray(embed) ? embed[0] : embed;
+  return {
+    address: str(row?.formatted_address ?? null),
+    mapsUrl: str(row?.google_maps_url ?? null),
+  };
+}
+
+/**
+ * City / locality label from a Places formatted_address (e.g. "…, 82140 Olching, Germany" → "Olching").
+ * Used on Spark cards so nearby towns (Olching vs München) are visible before opening details.
+ */
+export function localityFromAddress(address: string | null | undefined): string | null {
+  if (!address?.trim()) return null;
+  const parts = address.split(",").map((p) => p.trim()).filter(Boolean);
+  if (parts.length === 0) return null;
+  if (parts.length >= 2) {
+    const cityish = parts[parts.length - 2].replace(/^\d{4,5}\s+/, "").trim();
+    if (cityish) return cityish;
+  }
+  return parts[parts.length - 1] || null;
+}
+
+/** Card meta line: venue name plus city when the city is not already in the name. */
+export function sparkVenueDisplayLine(plan: Pick<WeeklySparkPlan, "placeName" | "placeAddress">): string | null {
+  const name = plan.placeName?.trim() || null;
+  const city = localityFromAddress(plan.placeAddress);
+  if (name && city && !name.toLowerCase().includes(city.toLowerCase())) {
+    return `${name} · ${city}`;
+  }
+  if (name) return name;
+  return city ?? plan.placeAddress?.trim() ?? null;
+}
 
 export type WeeklySpark = {
   id: string;
@@ -80,9 +123,9 @@ export function getWeeklySparkWeekKey(now: Date = new Date()): string {
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
-/** True when the weekend-ideas window is open (legacy helper retained for callers/analytics). */
+/** Weekly Sparks are available all week (not only Thu–Sun). */
 export function isWeeklySparkAvailable(): boolean {
-  return isWeekendIdeasPeriod();
+  return true;
 }
 
 type SponsorEmbed = { disclosure_label?: string | null } | { disclosure_label?: string | null }[] | null;
@@ -102,6 +145,7 @@ function str(v: unknown): string | null {
 }
 
 function mapPlanRow(row: Record<string, unknown>): WeeklySparkPlan {
+  const place = placeEmbed(row.place as PlaceEmbed);
   return {
     id: String(row.id),
     slot: (row.slot as SparkSlot) ?? "solo",
@@ -110,6 +154,8 @@ function mapPlanRow(row: Record<string, unknown>): WeeklySparkPlan {
     fitReason: typeof row.fit_reason === "string" ? row.fit_reason : "",
     placeId: str(row.place_id),
     placeName: str(row.place_name),
+    placeAddress: place.address,
+    googleMapsUrl: place.mapsUrl,
     placeLat: num(row.place_lat),
     placeLng: num(row.place_lng),
     startsAt: str(row.starts_at),
@@ -148,7 +194,7 @@ export async function getCurrentWeeklySpark(): Promise<WeeklySpark | null> {
   const { data: planRows } = await supabase
     .from("weekly_spark_plans")
     .select(
-      "id, slot, rank, title, fit_reason, place_id, place_name, place_lat, place_lng, starts_at, ends_at, approx_price_cents, currency, booking_url, source, sponsored, external_ref, sponsor:spark_sponsors(disclosure_label)",
+      "id, slot, rank, title, fit_reason, place_id, place_name, place_lat, place_lng, starts_at, ends_at, approx_price_cents, currency, booking_url, source, sponsored, external_ref, sponsor:spark_sponsors(disclosure_label), place:verified_places(formatted_address, google_maps_url)",
     )
     .eq("spark_id", s.id)
     .order("rank", { ascending: true });

@@ -1,5 +1,5 @@
 // PlannerHeader — Used on every Planner screen only
-// Left: Filter | Center: Winkly | Right: Winkly AI Spark (concierge) only.
+// Left: Filter | Center: Winkly | Right: Weekly Sparks (+ optional AI concierge).
 // Settings live only at Mode Selection (General settings) to avoid overwhelming users.
 
 import React from "react";
@@ -9,16 +9,25 @@ import { getModeHubFromPathname, plannerRoutes } from "@/lib/navigation/modeHub"
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Layout, Shadow, Typography, FontFamily, HEADER } from "@/constants/tokens";
-import { WinklyAISpark } from "@/components/ui/WinklyAISpark";
+import { SparklesIcon, WinklyAISpark } from "@/components/ui/WinklyAISpark";
 
 type PlannerHeaderProps = {
   /** Open filter modal (e.g. standalone planner); if not set, navigates to /planner */
   onFilterPress?: () => void;
-  /** When user taps Spark and has concierge access, open the "Ask AI" flow (e.g. modal). Only used on hub. */
+  /** Show / reopen This week's Sparks (3 cards). */
+  onWeeklySparkPress?: () => void;
+  /** When Sparks section is visible — accents the header spark button. */
+  weeklySparkActive?: boolean;
+  /** When user taps AI Spark and has concierge access, open the "Ask AI" flow. */
   onAIPress?: () => void;
 };
 
-export function PlannerHeader({ onFilterPress, onAIPress }: PlannerHeaderProps) {
+export function PlannerHeader({
+  onFilterPress,
+  onWeeklySparkPress,
+  weeklySparkActive = false,
+  onAIPress,
+}: PlannerHeaderProps) {
   const router = useRouter();
   const plannerHub = getModeHubFromPathname(usePathname() ?? "");
 
@@ -45,6 +54,23 @@ export function PlannerHeader({ onFilterPress, onAIPress }: PlannerHeaderProps) 
         <Text style={styles.centerTitle}>Winkly</Text>
       </View>
       <View style={styles.rightRow}>
+        {onWeeklySparkPress != null ? (
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.selectionAsync();
+              onWeeklySparkPress();
+            }}
+            style={[styles.iconBtn, weeklySparkActive && styles.iconBtnActive]}
+            activeOpacity={0.8}
+            accessibilityLabel={weeklySparkActive ? "Hide weekly Sparks" : "Show weekly Sparks"}
+            accessibilityState={{ selected: weeklySparkActive }}
+          >
+            <SparklesIcon
+              size={HEADER.iconSize}
+              color={weeklySparkActive ? Colors.white : Colors.primaryViolet}
+            />
+          </TouchableOpacity>
+        ) : null}
         {onAIPress != null ? (
           <View style={styles.aiButton3D}>
             <WinklyAISpark
@@ -55,9 +81,9 @@ export function PlannerHeader({ onFilterPress, onAIPress }: PlannerHeaderProps) 
               accessibilityLabel="Winkly AI Agent"
             />
           </View>
-        ) : (
+        ) : onWeeklySparkPress == null ? (
           <View style={styles.placeholder} />
-        )}
+        ) : null}
       </View>
     </View>
   );
@@ -79,6 +105,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    minWidth: HEADER.buttonSize,
+    justifyContent: "flex-end",
   },
   aiButton3D: {
     width: HEADER.buttonSize,
@@ -110,6 +138,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 4,
+  },
+  iconBtnActive: {
+    backgroundColor: Colors.primaryViolet,
   },
   placeholder: {
     width: HEADER.buttonSize,

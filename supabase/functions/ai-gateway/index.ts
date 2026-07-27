@@ -21,13 +21,14 @@ import {
 /**
  * Gemini model routing — defaults use real Generative Language API model IDs.
  * Override via Supabase secrets: GEMINI_MODEL, GEMINI_MODEL_LITE, GEMINI_MODEL_TOPICS, GEMINI_MODEL_PLAN.
+ * Keep defaults in sync with docs/API_KEYS_AND_ENV.md (gemini-2.0-* shut down 2026-06-01).
  */
-const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.0-flash";
-const GEMINI_MODEL_LITE = Deno.env.get("GEMINI_MODEL_LITE") ?? "gemini-2.0-flash-lite";
+const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash";
+const GEMINI_MODEL_LITE = Deno.env.get("GEMINI_MODEL_LITE") ?? "gemini-3.1-flash-lite";
 
 // Model routing (cost optimization)
-const GEMINI_MODEL_TOPICS = Deno.env.get("GEMINI_MODEL_TOPICS") ?? "gemini-2.0-flash-lite";
-const GEMINI_MODEL_PLAN = Deno.env.get("GEMINI_MODEL_PLAN") ?? "gemini-2.0-flash";
+const GEMINI_MODEL_TOPICS = Deno.env.get("GEMINI_MODEL_TOPICS") ?? "gemini-3.1-flash-lite";
+const GEMINI_MODEL_PLAN = Deno.env.get("GEMINI_MODEL_PLAN") ?? "gemini-3.5-flash";
 
 /** Anthropic (Claude) — primary for Premium/Enterprise. Override via Supabase secrets. */
 const ANTHROPIC_MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-sonnet-4-20250514";
@@ -2986,6 +2987,16 @@ function mapsSearchUrlForVenue(venueName: string, city?: string, country?: strin
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q).replace(/%20/g, "+")}`;
 }
 
+/** Append city when the model/Places address omits it so option cards show where the venue is. */
+function ensureAddressIncludesCity(address: string, city?: string): string {
+  const addr = address.trim();
+  const c = typeof city === "string" ? city.trim() : "";
+  if (!c) return addr.slice(0, 180);
+  if (!addr) return c.slice(0, 180);
+  if (addr.toLowerCase().includes(c.toLowerCase())) return addr.slice(0, 180);
+  return `${addr}, ${c}`.slice(0, 180);
+}
+
 function isNoVenueFallbackPlan(plan: WinklyPlanOutput | null | undefined): boolean {
   if (!plan?.options?.length) return true;
   return plan.options.every((o) => o.venue?.name === "No suitable venue found");
@@ -3074,7 +3085,10 @@ function parseWinklyPlanOutput(
     if (!weather_note) weather_note = "Check the forecast closer to your date.";
     const duration_minutes = coerceDurationMinutes(x.duration_minutes);
 
-    const vaddr = typeof venue.address === "string" ? venue.address.trim() : "";
+    const vaddr = ensureAddressIncludesCity(
+      typeof venue.address === "string" ? venue.address.trim() : "",
+      opts?.city,
+    );
     let vmap = typeof venue.google_maps_link === "string" ? venue.google_maps_link.trim() : "";
     let estimated_cost = typeof venue.estimated_cost === "string" ? venue.estimated_cost.trim() : "";
     if (!vmap) vmap = mapsSearchUrlForVenue(vname, opts?.city, opts?.country);
@@ -3272,10 +3286,73 @@ function slotSummaryFromUnknown(s: unknown): string {
   return (summary || title || activity).slice(0, 500);
 }
 
+/** Build the A/B option cards the client expects from a multi-day trip payload. */
+function winklyPlanFromMultiDay(params: {
+  topic: string;
+  location: { name: string; address: string; google_maps_link: string };
+  weatherNote: string;
+  whyFits: string;
+  tripDays: PlannerTripDayOut[];
+  numDays: number;
+  city?: string;
+  country?: string;
+}): WinklyPlanOutput {
+  const venueName = params.location.name.slice(0, 120) || "Trip hub";
+  const maps =
+    params.location.google_maps_link.slice(0, 600) ||
+    mapsSearchUrlForVenue(venueName, params.city, params.country);
+  const venue = {
+    name: venueName,
+    address: params.location.address.slice(0, 180),
+    google_maps_link: maps,
+    estimated_cost: "Varies",
+  };
+  const itinerary = params.tripDays
+    .flatMap((d) => {
+      const rows: Array<{ time: string; description: string }> = [
+        { time: `Day ${d.day} AM`, description: d.morning.summary.slice(0, 220) },
+        { time: `Day ${d.day} PM`, description: d.afternoon.summary.slice(0, 220) },
+      ];
+      if (d.evening?.summary) {
+        rows.push({ time: `Day ${d.day} Eve`, description: d.evening.summary.slice(0, 220) });
+      }
+      return rows;
+    })
+    .filter((r) => r.description)
+    .slice(0, 10);
+  const duration = Math.min(24 * 60 * 7, Math.max(180, params.numDays * 8 * 60));
+  const fit =
+    params.whyFits.trim().slice(0, 340) ||
+    `A ${params.numDays}-day itinerary centered on ${venueName}.`;
+  const weather =
+    params.weatherNote.trim().slice(0, 220) || "Check the forecast closer to your date.";
+  const titleBase = params.topic.trim().slice(0, 120) || `${params.numDays}-day trip`;
+  const mk = (id: "A" | "B", label: string, title: string): WinklyPlanOptionOut => ({
+    option_id: id,
+    character_label: label,
+    title: title.slice(0, 140),
+    fit_reason: fit.slice(0, 160),
+    why_this_fits: fit,
+    itinerary: itinerary.length
+      ? itinerary
+      : [{ time: "10:00", description: `Start exploring around ${venueName}` }],
+    venue,
+    weather_note: weather,
+    duration_minutes: duration,
+  });
+  return {
+    options: [
+      mk("A", "Bolder pick", titleBase),
+      mk("B", "Reliable pick", titleBase.length < 120 ? `${titleBase} — classic` : titleBase),
+    ],
+  };
+}
+
 function parseMultiDayPlannerOutput(
   text: string,
   numDays: number,
   startIsoDate: string,
+  opts?: { city?: string; country?: string },
 ): { plan: WinklyPlanOutput; trip_days: PlannerTripDayOut[] } | null {
   let raw = text.trim();
   const codeBlock = raw.match(/^```(?:json)?\s*([\s\S]*?)```$/);
@@ -3284,16 +3361,23 @@ function parseMultiDayPlannerOutput(
   try {
     obj = JSON.parse(raw);
   } catch {
-    return null;
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        obj = JSON.parse(raw.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    } else {
+      return null;
+    }
   }
   if (!obj || typeof obj !== "object") return null;
   const o = obj as Record<string, unknown>;
   const topic = typeof o.topic === "string" ? o.topic.trim() : "";
   const weather_context = typeof o.weather_context === "string" ? o.weather_context.trim() : "";
   const logic_reasoning = typeof o.logic_reasoning === "string" ? o.logic_reasoning.trim() : "";
-  const booking_links = Array.isArray(o.booking_links)
-    ? o.booking_links.filter((x) => typeof x === "string").map((s) => s.trim()).filter(Boolean).slice(0, 6)
-    : [];
   const ld = o.location_details;
   let location_details: { name: string; address: string; google_maps_link: string } | null = null;
   if (ld && typeof ld === "object") {
@@ -3304,8 +3388,17 @@ function parseMultiDayPlannerOutput(
     if (name) location_details = { name, address, google_maps_link: link };
   }
   const daysRaw = o.days;
-  if (!topic || !weather_context || !logic_reasoning || !location_details || !Array.isArray(daysRaw)) {
+  // Require a topic + at least one day; weather/logic/location can be soft-filled.
+  if (!topic || !Array.isArray(daysRaw) || daysRaw.length === 0) {
     return null;
+  }
+  if (!location_details) {
+    const cityLabel = [opts?.city, opts?.country].filter(Boolean).join(", ") || "your area";
+    location_details = {
+      name: cityLabel,
+      address: "",
+      google_maps_link: mapsSearchUrlForVenue(cityLabel),
+    };
   }
 
   const padDate = (idx: number): string => {
@@ -3345,17 +3438,17 @@ function parseMultiDayPlannerOutput(
     trip_days.push(day);
   }
 
-  const date_time = `${startIsoDate.slice(0, 10)}T10:00:00.000Z`;
-  const planLegacy = {
-    topic: topic.slice(0, 120),
-    date_time,
-    duration: Math.min(24 * 60 * 7, Math.max(180, numDays * 8 * 60)),
-    location_details,
-    weather_context: weather_context.slice(0, 400),
-    booking_links,
-    logic_reasoning: logic_reasoning.slice(0, 600),
-  };
-  return { plan: planLegacy as unknown as WinklyPlanOutput, trip_days };
+  const plan = winklyPlanFromMultiDay({
+    topic,
+    location: location_details,
+    weatherNote: weather_context || "Check the forecast closer to your trip.",
+    whyFits: logic_reasoning || `A ${numDays}-day plan around ${location_details.name}.`,
+    tripDays: trip_days,
+    numDays,
+    city: opts?.city,
+    country: opts?.country,
+  });
+  return { plan, trip_days };
 }
 
 async function runMultiDayWinklyGemini(params: {
@@ -3415,24 +3508,55 @@ Return JSON only:
 
   const url =
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_PLAN}:generateContent?key=${encodeURIComponent(params.geminiKey)}`;
+  // A multi-day trip must emit two options × N days of itinerary in one JSON document.
+  // The flat planner_theme_plans budget (PLAN_OPTIONS_MAX_TOKENS, default 1200) is sized
+  // for a single day, so anything longer truncates mid-JSON — and because
+  // responseMimeType is application/json, a truncated body fails to parse and falls
+  // through to noVenueFoundPlan(), surfacing as a generic 503. Scale with the trip
+  // length, still clamped by AI_LIMITS.maxOutputTokens (raise AI_MAX_OUTPUT_TOKENS if
+  // long trips still truncate).
+  const multiDayMaxTokens = capOutputTokens(
+    resolveMaxTokens("planner_theme_plans") * Math.max(1, Math.min(7, params.numDays)),
+  );
   const body = {
     systemInstruction: { parts: [{ text: SYSTEM }] },
     contents: [{ role: "user", parts: [{ text: JSON.stringify(payload) }] }],
     generationConfig: {
-      maxOutputTokens: resolveMaxTokens("planner_theme_plans"),
+      maxOutputTokens: multiDayMaxTokens,
       temperature: 0.45,
       responseMimeType: "application/json",
     },
   };
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    console.error(
+      "[ai-gateway] multi-day plan: Gemini !ok" +
+        ` status=${res.status} model=${GEMINI_MODEL_PLAN} num_days=${params.numDays}` +
+        ` body=${errBody.slice(0, 400)}`,
+    );
     const seed = noVenueFoundPlan(params.userIdea.slice(0, 120) || "Trip");
     return { plan: seed, trip_days: [] };
   }
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  const parsed = typeof text === "string" ? parseMultiDayPlannerOutput(text, params.numDays, startIso) : null;
+  const parsed = typeof text === "string"
+    ? parseMultiDayPlannerOutput(text, params.numDays, startIso, {
+      city: params.city,
+      country: params.country,
+    })
+    : null;
   if (!parsed) {
+    // finishReason === "MAX_TOKENS" here means the budget above is still too small.
+    const finishReason = data.candidates?.[0]?.finishReason ?? "unknown";
+    const promptFeedback = data.promptFeedback ? JSON.stringify(data.promptFeedback).slice(0, 200) : "none";
+    console.error(
+      "[ai-gateway] multi-day plan: unparseable Gemini output" +
+        ` finishReason=${finishReason} num_days=${params.numDays}` +
+        ` maxOutputTokens=${multiDayMaxTokens} textChars=${typeof text === "string" ? text.length : -1}` +
+        ` promptFeedback=${promptFeedback}` +
+        ` tail=${typeof text === "string" ? JSON.stringify(text.slice(-200)) : "n/a"}`,
+    );
     const seed = noVenueFoundPlan(params.userIdea.slice(0, 120) || "Trip");
     return { plan: seed, trip_days: [] };
   }
@@ -3574,19 +3698,7 @@ async function generateWinklyPlan(params: {
   const planRequestText = (params.planRequestText ?? userIdea).trim();
 
   const multiReq = params.multiDay;
-  if (multiReq && multiReq.num_days > 1) {
-    if (!geminiKey) {
-      const fallback = noVenueFoundPlan(planSeedTitle);
-      return {
-        plan: fallback,
-        trip_days: [],
-        pending_plan_id: null,
-        provider: "fallback",
-        location_id: null,
-        booking_url: null,
-        participants: ensureRequester,
-      };
-    }
+  if (multiReq && multiReq.num_days > 1 && geminiKey) {
     const mdOut = await runMultiDayWinklyGemini({
       geminiKey,
       profiles: profiles as unknown as Array<Record<string, unknown>>,
@@ -3601,37 +3713,47 @@ async function generateWinklyPlan(params: {
       numDays: Math.min(7, Math.max(2, Math.round(multiReq.num_days))),
       mode: input.mode,
     });
-    let pendingPlanId: string | null = null;
-    if (persistDraft) {
-      try {
-        const planJsonEnvelope = {
-          ...(mdOut.plan as unknown as Record<string, unknown>),
-          date_time: dt,
-          city,
-          country: country ?? null,
-        };
-        const ins = await supabase.from("pending_plans").insert({
-          created_by: requesterUserId,
-          source_mode: input.mode,
-          participant_ids: ensureRequester,
-          conversation_id: conversationId ?? null,
-          plan_json: planJsonEnvelope,
-          status: "pending",
-        }).select("id").single();
-        if (!ins.error && ins.data) pendingPlanId = (ins.data as { id: string }).id;
-      } catch {
-        pendingPlanId = null;
+    if (!isNoVenueFallbackPlan(mdOut.plan)) {
+      let pendingPlanId: string | null = null;
+      if (persistDraft) {
+        try {
+          const planJsonEnvelope = {
+            options: mdOut.plan.options,
+            ...(mdOut.trip_days.length ? { trip_days: mdOut.trip_days } : {}),
+            date_time: dt,
+            city,
+            country: country ?? null,
+          };
+          const ins = await supabase.from("pending_plans").insert({
+            created_by: requesterUserId,
+            source_mode: input.mode,
+            participant_ids: ensureRequester,
+            conversation_id: conversationId ?? null,
+            plan_json: planJsonEnvelope,
+            status: "pending",
+          }).select("id").single();
+          if (!ins.error && ins.data) pendingPlanId = (ins.data as { id: string }).id;
+        } catch {
+          pendingPlanId = null;
+        }
       }
+      return {
+        plan: mdOut.plan,
+        trip_days: mdOut.trip_days.length ? mdOut.trip_days : undefined,
+        pending_plan_id: pendingPlanId,
+        provider: "gemini",
+        location_id: null,
+        booking_url: null,
+        participants: ensureRequester,
+      };
     }
-    return {
-      plan: mdOut.plan,
-      trip_days: mdOut.trip_days.length ? mdOut.trip_days : undefined,
-      pending_plan_id: pendingPlanId,
-      provider: "gemini",
-      location_id: null,
-      booking_url: null,
-      participants: ensureRequester,
-    };
+    // Multi-day Gemini failed — continue into the single-day A/B path (Places + OpenAI fallbacks).
+    console.warn("[ai-gateway] multi-day Gemini failed — falling back to single-day plan path", {
+      city,
+      numDays: multiReq.num_days,
+    });
+  } else if (multiReq && multiReq.num_days > 1 && !geminiKey) {
+    console.warn("[ai-gateway] multi-day requested without GEMINI_API_KEY — using single-day path");
   }
 
   if (!geminiKey && !useAnthropicPlan && !openaiKey) {
@@ -3665,7 +3787,7 @@ async function generateWinklyPlan(params: {
       verifiedPlaceId = place.place_id;
       verifiedVenue = {
         name: place.name,
-        address: place.formatted_address ?? "",
+        address: ensureAddressIncludesCity(place.formatted_address ?? "", city),
         google_maps_link: place.google_maps_url ?? `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
       };
       if (maps_grounding === "verify") {
@@ -4244,8 +4366,8 @@ serve(async (req) => {
       // Group vibe is part of the key so a fresh Vibe Check produces fresh plans.
       const groupVibeForKey = typeof scrubbedSafeContext.group_vibe === "string" ? scrubbedSafeContext.group_vibe : "";
       const semKey =
-        // v4: higher plan token budget; skip caching fallback plans
-        `sc:planner_theme_plans:v4:${mode}:${normalizeTag(city)}:${normalizeTag(theme)}:${dateTime.slice(0, 10)}:${tripNumDays}:${hashKeyMaterial(participantIds.slice().sort().join(",") + "|" + groupVibeForKey)}`;
+        // v5: do not serve Places-stub fallbacks from cache (v4 cached those for 24h)
+        `sc:planner_theme_plans:v5:${mode}:${normalizeTag(city)}:${normalizeTag(theme)}:${dateTime.slice(0, 10)}:${tripNumDays}:${hashKeyMaterial(participantIds.slice().sort().join(",") + "|" + groupVibeForKey)}`;
       const cached = await redisGetJson<PlannerThemePlansOutput>(semKey);
       const cachedOptions = cached?.plan_options ?? [];
       if (
@@ -4313,7 +4435,8 @@ serve(async (req) => {
         })),
       };
 
-      if (!isNoVenueFallbackPlan(out.plan)) {
+      // Only cache real model output — Places/synthetic "fallback" stubs must not poison the 24h cache.
+      if (!isNoVenueFallbackPlan(out.plan) && out.provider !== "fallback") {
         await redisSetJson(semKey, response, 86400).catch(() => {});
       }
 

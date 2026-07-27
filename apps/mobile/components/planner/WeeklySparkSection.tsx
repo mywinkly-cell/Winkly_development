@@ -1,8 +1,6 @@
 /**
- * Weekly Spark section — the 3 verified plans (solo/date/meetup) at the very top of the Planner.
- * Renders one WeeklySparkCard per slot. On first appearance it marks the Spark seen (clears the
- * Planner-tab badge + mode-selection nudge). Distance is computed locally from the device's
- * coordinates (no permission prompt) against each plan's verified place coordinates.
+ * Weekly Spark section — the 3 verified plans at the top of the Planner.
+ * CTA: View the plan → full details.
  */
 
 import React, { useEffect, useState } from "react";
@@ -22,15 +20,9 @@ import { WeeklySparkCard } from "@/components/planner/WeeklySparkCard";
 
 export type WeeklySparkSectionProps = {
   spark: WeeklySpark;
-  /** Locale tag for date/number formatting (e.g. "de-DE"). */
   locale?: string;
-  /** Primary CTA per plan: SOLO add-to-plan; DATE/MEETUP invite. */
-  onPrimary: (plan: WeeklySparkPlan) => void;
-  /** Open a plan's details (maps / booking). */
-  onOpenPlan?: (plan: WeeklySparkPlan) => void;
-  /** Called once after the section marks the Spark seen (lets the parent refresh badge state). */
+  onViewPlan: (plan: WeeklySparkPlan) => void;
   onSeen?: () => void;
-  /** Subtle accent ring when deep-linked from the Spark nudge. */
   highlighted?: boolean;
 };
 
@@ -45,15 +37,13 @@ const SLOT_ORDER: Record<SparkSlot, number> = { solo: 0, date: 1, meetup: 2 };
 export function WeeklySparkSection({
   spark,
   locale = "en",
-  onPrimary,
-  onOpenPlan,
+  onViewPlan,
   onSeen,
   highlighted = false,
 }: WeeklySparkSectionProps) {
   const { t } = useTranslation();
   const [origin, setOrigin] = useState<{ latitude: number; longitude: number } | null>(null);
 
-  // Mark the Spark seen the first time it's shown (clears the badge / nudge).
   useEffect(() => {
     if (spark.seenAt) return;
     let cancelled = false;
@@ -63,7 +53,6 @@ export function WeeklySparkSection({
     return () => { cancelled = true; };
   }, [spark.id, spark.seenAt, onSeen]);
 
-  // Best-effort device coords for distance — never prompts; null when unavailable.
   useEffect(() => {
     let cancelled = false;
     void getDeviceCoordsIfPermitted().then((coords) => {
@@ -97,8 +86,7 @@ export function WeeklySparkSection({
             accentColor={SLOT_ACCENT[plan.slot]}
             distanceKm={dist}
             locale={locale}
-            onPrimary={onPrimary}
-            onOpen={onOpenPlan}
+            onViewPlan={onViewPlan}
           />
         );
       })}

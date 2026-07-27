@@ -181,8 +181,10 @@ export function ConciergePlanningFlow({
   const [noOptionsReason, setNoOptionsReason] = useState<string | null>(null);
   const lastContextRef = useRef<ConciergeContext | null>(null);
   const [lastRequestId, setLastRequestId] = useState<string | undefined>(undefined);
-  const [invitePickerChoice, setInvitePickerChoice] = useState<"matches" | "friends" | "contacts" | null>(null);
+  const [invitePickerChoice, setInvitePickerChoice] = useState<"matches" | "friends" | "business" | "contacts" | null>(null);
   const [invitePickerFromStep, setInvitePickerFromStep] = useState<"social" | "invite">("invite");
+  /** Mode for createDirectChat / planner when inviting — follows invite source, not only planning mode. */
+  const [partnerInviteMode, setPartnerInviteMode] = useState<"romance" | "friends" | "business" | null>(null);
   const [contactsQuery, setContactsQuery] = useState("");
   const [contactsResults, setContactsResults] = useState<ConciergePartner[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
@@ -206,9 +208,29 @@ export function ConciergePlanningFlow({
   }, [mode, genericCategoryCatalog]);
 
   useEffect(() => {
+    if (!invitePickerChoice || invitePickerChoice === "contacts") return;
+    const mode: Mode =
+      invitePickerChoice === "matches"
+        ? "romance"
+        : invitePickerChoice === "business"
+          ? "business"
+          : "friends";
+    let cancelled = false;
+    setPartners([]);
+    void getPartnersForConcierge(mode).then((list) => {
+      if (!cancelled) setPartners(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [invitePickerChoice]);
+
+  // Also keep a default list for the current planning mode (social step suggestions).
+  useEffect(() => {
     if (effectiveMode === "events") return;
+    if (invitePickerChoice) return; // picker effect owns the list while open
     getPartnersForConcierge(effectiveMode).then(setPartners);
-  }, [effectiveMode]);
+  }, [effectiveMode, invitePickerChoice]);
 
   useEffect(() => {
     if (genericCategoryCatalog) {
@@ -1254,12 +1276,12 @@ export function ConciergePlanningFlow({
             <View style={styles.pickerHeader}>
               <Text style={styles.pickerTitle}>
                 {invitePickerChoice === "matches"
-                  ? "Choose a match"
+                  ? "Choose a romance match"
                   : invitePickerChoice === "friends"
-                    ? effectiveMode === "business"
+                    ? "Choose a friend"
+                    : invitePickerChoice === "business"
                       ? "Choose a business contact"
-                      : "Choose a friend"
-                    : "Choose a contact"}
+                      : "Choose a contact"}
               </Text>
               <TouchableOpacity onPress={() => setInvitePickerChoice(null)} hitSlop={12}>
                 <Ionicons name="close" size={24} color={Colors.gray600} />
@@ -1294,6 +1316,7 @@ export function ConciergePlanningFlow({
                         Haptics.selectionAsync();
                         setPartnerId(p.id);
                         setPartnerDisplayName(p.displayName);
+                        setPartnerInviteMode("friends");
                         setInvitePickerChoice(null);
                         setContactsQuery("");
                         setFlowStep(invitePickerFromStep === "invite" ? "add_to_planner" : "summary");
@@ -1317,6 +1340,13 @@ export function ConciergePlanningFlow({
                       Haptics.selectionAsync();
                       setPartnerId(p.id);
                       setPartnerDisplayName(p.displayName);
+                      setPartnerInviteMode(
+                        invitePickerChoice === "matches"
+                          ? "romance"
+                          : invitePickerChoice === "business"
+                            ? "business"
+                            : "friends",
+                      );
                       setInvitePickerChoice(null);
                       setFlowStep(invitePickerFromStep === "invite" ? "add_to_planner" : "summary");
                     }}
@@ -1341,7 +1371,11 @@ export function ConciergePlanningFlow({
           dateForPlan={details.date ?? new Date(lastDateRef.current)}
           locationLineDisplay={locationLineDisplay || undefined}
           exactTimeHm={details.singleDay !== false ? details.exactTimeHm : undefined}
-          mode={effectiveMode}
+          mode={
+            partnerId && partnerInviteMode
+              ? partnerInviteMode
+              : effectiveMode
+          }
           contextForPendingPlan={lastContextRef.current}
           aiRequestId={lastRequestId}
           onDone={onClose}
@@ -1350,6 +1384,34 @@ export function ConciergePlanningFlow({
             setFlowStep(showInviteStepBeforePlanner ? "invite" : "suggestions");
           }}
           onCorrectDetails={handleCorrectDetails}
+          onInviteSomeone={
+            partnerId
+              ? undefined
+              : () => {
+                  Haptics.selectionAsync();
+                  setFlowStep("invite");
+                }
+          }
+          onChangeInvitee={
+            partnerId
+              ? () => {
+                  Haptics.selectionAsync();
+                  setPartnerId(null);
+                  setPartnerDisplayName(null);
+                  setPartnerInviteMode(null);
+                  setFlowStep("invite");
+                }
+              : undefined
+          }
+          inviteModeOptions={partnerId ? ["romance", "friends", "business"] : undefined}
+          inviteMode={partnerInviteMode ?? undefined}
+          onInviteModeChange={
+            partnerId
+              ? (m) => {
+                  setPartnerInviteMode(m);
+                }
+              : undefined
+          }
           showInlineBack={false}
         />
       )}

@@ -1,11 +1,6 @@
 /**
- * Weekly Spark card — one verified, ready-to-go plan (solo/date/meetup) at the top of the Planner.
- * Marked with the spark icon + the shared label constant. fit_reason is the hero subtitle; place,
- * time, distance and price come from the verified plan data (never the model's guess).
- *
- * Per-slot primary CTA (the viral loop): SOLO "Add to my plan"; DATE "Invite someone";
- * MEETUP "Invite friends". Supports source='sponsored' with a clear disclosure label (rails OFF
- * at launch — see config/flags#SPARK_SPONSORED_ENABLED).
+ * Weekly Spark card — one verified, ready-to-go plan at the top of the Planner.
+ * CTA is always "View the plan" → full details (invite, edit fields, add to planner).
  */
 
 import React from "react";
@@ -15,32 +10,23 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { Colors, Typography } from "@/constants/tokens";
-import { WEEKLY_SPARK_LABEL_KEY, type WeeklySparkPlan, type SparkSlot } from "@/lib/ai/weeklySpark";
+import {
+  WEEKLY_SPARK_LABEL_KEY,
+  sparkVenueDisplayLine,
+  type WeeklySparkPlan,
+  type SparkSlot,
+} from "@/lib/ai/weeklySpark";
 
 export type WeeklySparkCardProps = {
   plan: WeeklySparkPlan;
-  /** Accent for the card border/badge/CTA (per-slot mode color). */
+  /** Accent for the card border/badge/CTA (per-slot or per-mode color). */
   accentColor?: string;
   /** Distance user→venue in km (computed by the section from device coords); null/undefined hides it. */
   distanceKm?: number | null;
   /** Locale tag for date/number formatting (e.g. "de-DE"). */
   locale?: string;
-  /** Primary CTA: SOLO add-to-plan; DATE/MEETUP invite. */
-  onPrimary: (plan: WeeklySparkPlan) => void;
-  /** Tap the title/venue to open details (maps / booking). */
-  onOpen?: (plan: WeeklySparkPlan) => void;
-};
-
-const CTA_KEY: Record<SparkSlot, string> = {
-  solo: "weeklySpark.addToMyPlan",
-  date: "weeklySpark.inviteSomeone",
-  meetup: "weeklySpark.inviteFriends",
-};
-
-const CTA_ICON: Record<SparkSlot, keyof typeof Ionicons.glyphMap> = {
-  solo: "add",
-  date: "person-add-outline",
-  meetup: "people-outline",
+  /** Opens full plan details (invite / edit / add to planner). */
+  onViewPlan: (plan: WeeklySparkPlan) => void;
 };
 
 const SLOT_KEY: Record<SparkSlot, string> = {
@@ -82,8 +68,7 @@ export function WeeklySparkCard({
   accentColor = Colors.primaryViolet,
   distanceKm,
   locale = "en",
-  onPrimary,
-  onOpen,
+  onViewPlan,
 }: WeeklySparkCardProps) {
   const { t } = useTranslation();
   const when = formatWhen(plan.startsAt, locale);
@@ -95,6 +80,12 @@ export function WeeklySparkCard({
         : t("common.kmAwayN", { count: Math.round(distanceKm) })
       : null;
   const disclosure = plan.sponsored ? plan.sponsorDisclosureLabel ?? t("weeklySpark.partnerPick") : null;
+  const venueLine = sparkVenueDisplayLine(plan);
+
+  const open = () => {
+    Haptics.selectionAsync();
+    onViewPlan(plan);
+  };
 
   return (
     <View style={[styles.card, { borderLeftColor: accentColor }]}>
@@ -118,20 +109,15 @@ export function WeeklySparkCard({
         </View>
       </View>
 
-      <TouchableOpacity
-        activeOpacity={onOpen ? 0.85 : 1}
-        onPress={() => { if (onOpen) { Haptics.selectionAsync(); onOpen(plan); } }}
-        accessibilityRole={onOpen ? "button" : undefined}
-      >
+      <TouchableOpacity activeOpacity={0.85} onPress={open} accessibilityRole="button">
         <Text style={styles.title}>{plan.title}</Text>
-        {/* fit_reason is the hero subtitle (the honest, personal "why this"). */}
         <Text style={styles.fitReason}>{plan.fitReason}</Text>
 
         <View style={styles.metaWrap}>
-          {plan.placeName && (
+          {venueLine && (
             <View style={styles.metaRow}>
               <Ionicons name="location-outline" size={15} color={Colors.gray500} />
-              <Text style={styles.metaText} numberOfLines={1}>{plan.placeName}</Text>
+              <Text style={styles.metaText} numberOfLines={2}>{venueLine}</Text>
             </View>
           )}
           <View style={styles.metaRowGroup}>
@@ -159,12 +145,12 @@ export function WeeklySparkCard({
 
       <TouchableOpacity
         style={[styles.primaryBtn, { backgroundColor: accentColor }]}
-        onPress={() => { Haptics.selectionAsync(); onPrimary(plan); }}
+        onPress={open}
         activeOpacity={0.9}
         accessibilityRole="button"
       >
-        <Ionicons name={CTA_ICON[plan.slot]} size={18} color={Colors.white} />
-        <Text style={styles.primaryBtnText}>{t(CTA_KEY[plan.slot])}</Text>
+        <Ionicons name="eye-outline" size={18} color={Colors.white} />
+        <Text style={styles.primaryBtnText}>{t("weeklySpark.viewPlan")}</Text>
       </TouchableOpacity>
     </View>
   );
