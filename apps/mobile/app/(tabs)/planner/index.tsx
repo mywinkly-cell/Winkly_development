@@ -17,7 +17,6 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Image,
-  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -39,15 +38,18 @@ import {
   shouldShowProactiveSuggestion,
   dismissSuggestion,
   dismissWeeklyWeekend,
-  isWeekendIdeasPeriod,
   getWeeklyWeekendDismissedUntil,
+  clearWeeklySparkDismissed,
   enrichProactiveSuggestion,
   scheduleSaturdayPlannerNudgeIfNeeded,
   type ProactiveSuggestion,
-  type WeeklyWeekendSuggestion,
   type PlannerTabKey,
 } from "@/lib/ai/proactiveSuggestion";
-import { buildWeeklyWeekendSuggestion, fetchWeekendPlansFallback } from "@/lib/ai/weekendIdeasPlans";
+import {
+  buildWeeklyWeekendSuggestion,
+  fetchWeeklySparkPlansForContext,
+  plannerTabToSparkContext,
+} from "@/lib/ai/weekendIdeasPlans";
 import { useDefaultLocation } from "@/lib/ai/useDefaultCity";
 import { ProactiveSuggestionCard } from "@/components/planner/ProactiveSuggestionCard";
 import { ProactiveSuggestionDetailModal } from "@/components/planner/ProactiveSuggestionDetailModal";
@@ -61,6 +63,7 @@ import {
   type WeeklySparkPlan,
 } from "@/lib/ai/weeklySpark";
 import { WeatherPivotBanner } from "@/components/planner/WeatherPivotBanner";
+import { PlanRatingSection } from "@/components/planner/PlanRatingSection";
 import { EventParticipantCard } from "@/components/ui/EventParticipantCard";
 import { PlannerHeader } from "@/components/layout/PlannerHeader";
 import { EventReminderModal } from "@/components/planner/EventReminderModal";
@@ -353,16 +356,22 @@ type PlannerIndexProps = {
   embedded?: boolean;
   /** Initial tab when opened from a mode (e.g. Romance → dates, Friends → meetups). */
   initialTab?: TabKey;
+  /** Notify parent headers when Weekly Sparks show/hide (embedded mode planners). */
+  onWeeklySparkVisibilityChange?: (visible: boolean) => void;
 };
 
 export type PlannerIndexHandle = {
   openFilter: () => void;
   openConcierge: () => void;
+  /** Show / reopen This week's Sparks (clears dismiss). */
+  openWeeklySparks: () => void;
+  /** Hide Sparks (same as card dismiss). */
+  hideWeeklySparks: () => void;
 };
 
 const BOTTOM_BAR_HEIGHT = Layout.bottomBarHeight ?? 76;
 
-const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function PlannerIndex({ embedded, initialTab }, ref) {
+const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function PlannerIndex({ embedded, initialTab, onWeeklySparkVisibilityChange }, ref) {
   const router = useRouter();
   const { t } = useTranslation();
   const appLocale = useAppLocaleTag();
@@ -373,6 +382,10 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   const sparkParams = useLocalSearchParams<{ spark?: string }>();
   const focusSpark = sparkParams[WEEKLY_SPARK_FOCUS_PARAM] === WEEKLY_SPARK_FOCUS_VALUE;
   const scrollRef = useRef<ScrollView>(null);
+  /** Bumped when Sparks are force-shown so a stale focus-effect can't re-hide them. */
+  const sparkRevealGenRef = useRef(0);
+  /** Bumped on each Sparks fetch so stale tab/city responses are ignored. */
+  const weekendPlansLoadGenRef = useRef(0);
   const [itemsState, setItemsState] = useState<PlannerItem[]>(() =>
     INITIAL_ITEMS.map((it) => ({ ...it, status: "active" as const }))
   );
@@ -403,10 +416,9 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   const [showProactiveCard, setShowProactiveCard] = useState(false);
   const [suggestionDetailModalVisible, setSuggestionDetailModalVisible] = useState(false);
   const [suggestionForDetail, setSuggestionForDetail] = useState<ProactiveSuggestion | null>(null);
-  const [weeklySuggestion, setWeeklySuggestion] = useState<WeeklyWeekendSuggestion | null>(null);
+  const [weeklySuggestion, setWeeklySuggestion] = useState<ReturnType<typeof buildWeeklyWeekendSuggestion> | null>(null);
   const [showWeeklyCard, setShowWeeklyCard] = useState(false);
   const [weeklySpark, setWeeklySpark] = useState<WeeklySpark | null>(null);
-  const [weekendExpanded, setWeekendExpanded] = useState(false);
   const [weekendPlans, setWeekendPlans] = useState<WeeklySparkPlan[]>([]);
   const [weekendPlansLoading, setWeekendPlansLoading] = useState(false);
   const [weekendPlansError, setWeekendPlansError] = useState(false);
@@ -426,53 +438,92 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   useFocusEffect(
     useCallback(() => {
       getSavedIdeas().then((ideas) => setSavedIdeasCount(ideas.length));
-      void getPlannerPreferences().then(setPlannerPrefs);
       void scheduleSaturdayPlannerNudgeIfNeeded();
+      let cancelled = false;
+      const revealGenAtStart = sparkRevealGenRef.current;
       (async () => {
+        const prefs = await getPlannerPreferences();
+        if (cancelled) return;
+        setPlannerPrefs(prefs);
         const spark = await getCurrentWeeklySpark();
+        if (cancelled) return;
         setWeeklySpark(spark);
-        if (spark?.plans?.length) {
-          setWeekendPlans(spark.plans);
-          setWeeklySuggestion(buildWeeklyWeekendSuggestion(spark.plans));
-        }
 
         if (activeTab === "archive") return;
         const [showProactive, weeklyDismissed] = await Promise.all([
           shouldShowProactiveSuggestion(),
           getWeeklyWeekendDismissedUntil(),
         ]);
+        // A deep-link / header reopen may have cleared dismiss while we were awaiting.
+        if (cancelled || revealGenAtStart !== sparkRevealGenRef.current) return;
         const now = Date.now();
-        const inWeekendPeriod = isWeekendIdeasPeriod();
-        if (inWeekendPeriod && (weeklyDismissed == null || now > weeklyDismissed)) {
-          const plans = spark?.plans ?? [];
-          if (plans.length) setWeekendPlans(plans);
-          setWeeklySuggestion(buildWeeklyWeekendSuggestion(plans.length ? plans : undefined));
+        const sparkDismissed =
+          !focusSpark && weeklyDismissed != null && now <= weeklyDismissed;
+
+        // Weekly Sparks replace the old "weekend ideas" card — show all week unless dismissed.
+        // Header spark reopens after dismiss. Do not fall back to a weekend "Winkly suggestion".
+        if (prefs.aiSuggestions && !sparkDismissed) {
           setShowWeeklyCard(true);
-          setProactiveSuggestion(null);
-          setShowProactiveCard(false);
-        } else if (showProactive) {
-          const raw = getProactiveSuggestion(activeTab as PlannerTabKey);
-          const suggestion = await enrichProactiveSuggestion(raw, activeTab as PlannerTabKey);
-          setProactiveSuggestion(suggestion);
-          setShowProactiveCard(!!suggestion);
-          setWeeklySuggestion(null);
+          setWeeklySuggestion(buildWeeklyWeekendSuggestion(spark?.plans));
+        } else {
           setShowWeeklyCard(false);
+          setWeeklySuggestion(null);
+        }
+
+        // Contextual proactive tips only when Sparks are hidden (dismissed or AI suggestions off).
+        if (!prefs.aiSuggestions || sparkDismissed) {
+          if (showProactive) {
+            const raw = getProactiveSuggestion(activeTab as PlannerTabKey);
+            // Skip weekend-ritual copy — Sparks own that job.
+            const isWeekendRitual =
+              !!raw &&
+              (raw.id.includes("weekend") ||
+                raw.datePreset === "weekend" ||
+                /weekend/i.test(raw.title) ||
+                /weekend/i.test(raw.subtitle));
+            if (raw && !isWeekendRitual) {
+              const suggestion = await enrichProactiveSuggestion(raw, activeTab as PlannerTabKey);
+              if (cancelled || revealGenAtStart !== sparkRevealGenRef.current) return;
+              setProactiveSuggestion(suggestion);
+              setShowProactiveCard(!!suggestion);
+            } else {
+              setProactiveSuggestion(null);
+              setShowProactiveCard(false);
+            }
+          } else {
+            setProactiveSuggestion(null);
+            setShowProactiveCard(false);
+          }
         } else {
           setProactiveSuggestion(null);
           setShowProactiveCard(false);
-          setWeeklySuggestion(null);
-          setShowWeeklyCard(false);
         }
       })();
-    }, [activeTab])
+      return () => {
+        cancelled = true;
+      };
+    }, [activeTab, focusSpark])
   );
 
-  // Deep-linked from the Spark nudge: scroll the weekend-ideas card into view and expand plans.
+  useEffect(() => {
+    onWeeklySparkVisibilityChange?.(showWeeklyCard && activeTab !== "archive");
+  }, [showWeeklyCard, activeTab, onWeeklySparkVisibilityChange]);
+
   useEffect(() => {
     if (!focusSpark) return;
-    setWeekendExpanded(true);
-    const id = requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: true }));
-    return () => cancelAnimationFrame(id);
+    let cancelled = false;
+    sparkRevealGenRef.current += 1;
+    const revealGen = sparkRevealGenRef.current;
+    void clearWeeklySparkDismissed().then(() => {
+      if (cancelled || revealGen !== sparkRevealGenRef.current) return;
+      setShowWeeklyCard(true);
+      setProactiveSuggestion(null);
+      setShowProactiveCard(false);
+      requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: true }));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [focusSpark]);
 
   useEffect(() => {
@@ -564,67 +615,91 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   }, []);
 
   const handleWeeklyDismiss = useCallback(async () => {
+    sparkRevealGenRef.current += 1;
     await dismissWeeklyWeekend();
     setShowWeeklyCard(false);
     setWeeklySuggestion(null);
-    setWeekendExpanded(false);
     setWeekendPlans([]);
     setWeekendPlansError(false);
   }, []);
 
-  const loadWeekendPlans = useCallback(async () => {
-    if (weekendPlans.length > 0) return;
-    if (weeklySpark?.plans?.length) {
-      setWeekendPlans(weeklySpark.plans);
-      return;
+  const openWeeklySparks = useCallback(async () => {
+    Haptics.selectionAsync();
+    sparkRevealGenRef.current += 1;
+    const revealGen = sparkRevealGenRef.current;
+    await clearWeeklySparkDismissed();
+    if (revealGen !== sparkRevealGenRef.current) return;
+    setShowWeeklyCard(true);
+    setWeeklySuggestion(buildWeeklyWeekendSuggestion(weeklySpark?.plans));
+    setProactiveSuggestion(null);
+    setShowProactiveCard(false);
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: true }));
+  }, [weeklySpark?.plans]);
+
+  const toggleWeeklySparks = useCallback(() => {
+    if (showWeeklyCard) {
+      void handleWeeklyDismiss();
+    } else {
+      void openWeeklySparks();
     }
+  }, [showWeeklyCard, handleWeeklyDismiss, openWeeklySparks]);
+
+  const sparkContext = useMemo(() => plannerTabToSparkContext(activeTab), [activeTab]);
+
+  const loadWeekendPlans = useCallback(async () => {
+    const loadGen = ++weekendPlansLoadGenRef.current;
     setWeekendPlansLoading(true);
     setWeekendPlansError(false);
     try {
-      const plans = await fetchWeekendPlansFallback({
+      const plans = await fetchWeeklySparkPlansForContext({
+        context: sparkContext,
         city: defaultCity,
         country: defaultCountry,
+        existingPlans: weeklySpark?.plans ?? [],
       });
+      if (loadGen !== weekendPlansLoadGenRef.current) return;
       if (plans.length) {
         setWeekendPlans(plans);
+        setWeeklySuggestion(buildWeeklyWeekendSuggestion(plans));
       } else {
         setWeekendPlansError(true);
       }
     } catch {
+      if (loadGen !== weekendPlansLoadGenRef.current) return;
       setWeekendPlansError(true);
     } finally {
-      setWeekendPlansLoading(false);
+      if (loadGen === weekendPlansLoadGenRef.current) {
+        setWeekendPlansLoading(false);
+      }
     }
-  }, [weekendPlans.length, weeklySpark?.plans, defaultCity, defaultCountry]);
+  }, [sparkContext, weeklySpark?.plans, defaultCity, defaultCountry]);
 
-  const handleWeekendExpand = useCallback(() => {
-    setWeekendExpanded(true);
-  }, []);
-
+  // Reload Sparks when tab/mode context, location, or visibility changes.
   useEffect(() => {
-    if (!weekendExpanded) return;
+    if (!showWeeklyCard || activeTab === "archive") return;
+    setWeekendPlans([]);
     void loadWeekendPlans();
-  }, [weekendExpanded, loadWeekendPlans]);
-
+  }, [showWeeklyCard, activeTab, sparkContext, defaultCity, defaultCountry, loadWeekendPlans]);
   const openSparkPlanConfirm = useCallback((plan: WeeklySparkPlan) => {
     Haptics.selectionAsync();
     setSelectedSparkPlan(plan);
     setSparkConfirmVisible(true);
   }, []);
 
-  // Tap a Spark card → open its verified booking link, else a Maps view of the verified place.
-  const openSparkPlanDetails = useCallback((plan: WeeklySparkPlan) => {
-    const url =
-      plan.bookingUrl ??
-      (plan.placeLat != null && plan.placeLng != null
-        ? `https://www.google.com/maps/search/?api=1&query=${plan.placeLat},${plan.placeLng}`
-        : plan.placeName
-          ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(plan.placeName)}`
-          : null);
-    if (url) void Linking.openURL(url).catch(() => {});
-  }, []);
-
-  useImperativeHandle(ref, () => ({ openFilter: onFiltersPress, openConcierge }), [onFiltersPress, openConcierge]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      openFilter: onFiltersPress,
+      openConcierge,
+      openWeeklySparks: () => {
+        void openWeeklySparks();
+      },
+      hideWeeklySparks: () => {
+        void handleWeeklyDismiss();
+      },
+    }),
+    [onFiltersPress, openConcierge, openWeeklySparks, handleWeeklyDismiss],
+  );
 
   const applyFilters = () => {
     Haptics.selectionAsync();
@@ -775,19 +850,10 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   const showConciergePromoCard =
     !embedded && activeTab !== "archive" && overviewMode === "list" && activePlannerCount === 0 && plannerPrefs.aiSuggestions;
 
-  const hasSparkPlans = (weeklySpark?.plans?.length ?? weekendPlans.length) > 0;
-  const weekendSuggestion = useMemo(
-    () =>
-      weeklySuggestion ??
-      (hasSparkPlans ? buildWeeklyWeekendSuggestion(weeklySpark?.plans ?? weekendPlans) : null),
-    [weeklySuggestion, hasSparkPlans, weeklySpark?.plans, weekendPlans],
-  );
   const showWeekendIdeas =
     activeTab !== "archive" &&
-    ((plannerPrefs.aiSuggestions && showWeeklyCard && weekendSuggestion != null) || hasSparkPlans);
-  /** Cron plans Mon–Wed: show cards immediately; Thu–Sun teaser expands on tap. */
-  const weekendIdeasExpanded =
-    weekendExpanded || (hasSparkPlans && !showWeeklyCard);
+    showWeeklyCard &&
+    plannerPrefs.aiSuggestions !== false;
 
   const today = todayStart;
 
@@ -910,10 +976,16 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
 
   return (
     <View style={styles.screen}>
-      {/* TOP HEADER — Filter | Winkly | optional AI Spark (no profile/settings; those only at Mode Selection) */}
+      {/* TOP HEADER — Filter | Winkly | Weekly Sparks (+ optional AI) */}
       {!embedded && (
         <PlannerHeader
           onFilterPress={onFiltersPress}
+          onWeeklySparkPress={
+            activeTab !== "archive" && plannerPrefs.aiSuggestions !== false
+              ? toggleWeeklySparks
+              : undefined
+          }
+          weeklySparkActive={showWeekendIdeas}
           onAIPress={showConciergePromoCard ? undefined : openConcierge}
         />
       )}
@@ -965,20 +1037,19 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         showsVerticalScrollIndicator={false}
       >
         {activeTab !== "archive" && <WeatherPivotBanner />}
-        {showWeekendIdeas && weekendSuggestion && (
+        {activeTab !== "archive" && <PlanRatingSection />}
+        {showWeekendIdeas && (
           <WeekendIdeasBlock
-            suggestion={weekendSuggestion}
-            plans={weekendPlans.length ? weekendPlans : (weeklySpark?.plans ?? [])}
-            expanded={weekendIdeasExpanded}
+            title={weeklySuggestion?.title}
+            plans={weekendPlans}
             loadingPlans={weekendPlansLoading}
             loadError={weekendPlansError}
             locale={appLocale}
+            sparkContext={sparkContext}
             highlighted={focusSpark}
-            onExpand={handleWeekendExpand}
             onRetryLoad={loadWeekendPlans}
             onDismiss={handleWeeklyDismiss}
-            onPrimary={openSparkPlanConfirm}
-            onOpenPlan={openSparkPlanDetails}
+            onViewPlan={openSparkPlanConfirm}
             showDismiss={showWeeklyCard}
           />
         )}

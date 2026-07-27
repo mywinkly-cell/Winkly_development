@@ -1,6 +1,6 @@
 /**
- * Weekly weekend ideas — "Your weekend ideas" (Fri/Sat/Sun).
- * Shown Thu evening – Sun. One card, one CTA to generate plans.
+ * @deprecated Replaced by WeekendIdeasBlock (3 Weekly Spark cards). Kept only if a legacy
+ * screen still imports it — do not use for new Planner UI.
  */
 
 import React from "react";

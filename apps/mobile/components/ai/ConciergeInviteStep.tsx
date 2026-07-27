@@ -1,6 +1,9 @@
 /**
  * Step 6 — Invite / Share: "Invite someone?" when user hasn't selected participants yet.
- * Options: Matches, Friends, Contacts, Share externally, Skip.
+ *
+ * Invite sources are deliberately **cross-mode**: a Romance-tagged plan can still invite a
+ * Friend / Business contact / Winkly contact (and vice versa). The plan's mode is a hint, not
+ * a gate on who you can invite.
  */
 
 import React from "react";
@@ -11,21 +14,32 @@ import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import type { Mode } from "@/types";
 
-const OPTIONS: { key: string; label: string; icon: string }[] = [
-  { key: "matches", label: "Matches", icon: "heart-outline" },
-  { key: "friends", label: "Friends", icon: "people-outline" },
-  { key: "contacts", label: "Contacts", icon: "call-outline" },
-  { key: "share_external", label: "Share externally", icon: "share-outline" },
-  { key: "skip", label: "Skip", icon: "arrow-forward-outline" },
+export type InviteSourceChoice = "matches" | "friends" | "business" | "contacts" | "share_external" | "skip";
+
+const OPTIONS: { key: InviteSourceChoice; label: string; icon: string; hint?: string }[] = [
+  { key: "matches", label: "Romance matches", icon: "heart-outline", hint: "Dates & romance DMs" },
+  { key: "friends", label: "Friends", icon: "people-outline", hint: "Friend connections" },
+  { key: "business", label: "Business", icon: "briefcase-outline", hint: "Business connections" },
+  { key: "contacts", label: "Winkly contacts", icon: "search-outline", hint: "Search anyone on Winkly" },
+  { key: "share_external", label: "Share externally", icon: "share-outline", hint: "SMS, WhatsApp, etc." },
+  { key: "skip", label: "Skip — just me for now", icon: "arrow-forward-outline" },
 ];
 
+const MODE_LABEL: Partial<Record<Mode, string>> = {
+  romance: "Date (Romance)",
+  friends: "Meet-up (Friends)",
+  business: "Meeting (Business)",
+  events: "Solo / Events",
+};
+
 export type ConciergeInviteStepProps = {
+  /** Plan's current mode — shown as context only; does not hide other invite sources. */
   mode: Mode;
   planTitle?: string;
   planLocation?: string;
   planDate?: string;
   planTime?: string;
-  onSelect: (choice: "matches" | "friends" | "contacts" | "share_external" | "skip") => void;
+  onSelect: (choice: InviteSourceChoice) => void;
   onBack: () => void;
   showInlineBack?: boolean;
 };
@@ -40,6 +54,8 @@ export function ConciergeInviteStep({
   onBack,
   showInlineBack = true,
 }: ConciergeInviteStepProps) {
+  const modeLabel = MODE_LABEL[mode] ?? "this plan";
+
   const handleShareExternal = () => {
     Haptics.selectionAsync();
     const parts = [
@@ -67,7 +83,8 @@ export function ConciergeInviteStep({
 
       <Text style={styles.title}>Invite someone?</Text>
       <Text style={styles.subtitle}>
-        Add people to your plan or share it outside Winkly
+        This plan is tagged as {modeLabel}. You can still invite a romance match, a friend, a business
+        contact, or anyone on Winkly — the invite mode follows who you pick (you can change it next).
       </Text>
 
       <View style={styles.options}>
@@ -81,10 +98,12 @@ export function ConciergeInviteStep({
                 activeOpacity={0.85}
               >
                 <View style={styles.optionIconWrap}>
-                  <Ionicons name={opt.icon as any} size={24} color={Colors.primaryViolet} />
+                  <Ionicons name={opt.icon as keyof typeof Ionicons.glyphMap} size={24} color={Colors.primaryViolet} />
                 </View>
-                <Text style={styles.optionLabel}>{opt.label}</Text>
-                <Text style={styles.optionHint}>SMS, WhatsApp, etc.</Text>
+                <View style={styles.optionTextCol}>
+                  <Text style={styles.optionLabel}>{opt.label}</Text>
+                  {opt.hint ? <Text style={styles.optionHint}>{opt.hint}</Text> : null}
+                </View>
               </TouchableOpacity>
             );
           }
@@ -97,7 +116,7 @@ export function ConciergeInviteStep({
                 activeOpacity={0.85}
               >
                 <Text style={styles.optionLabelSecondary}>{opt.label}</Text>
-                <Ionicons name={opt.icon as any} size={20} color={Colors.gray600} />
+                <Ionicons name={opt.icon as keyof typeof Ionicons.glyphMap} size={20} color={Colors.gray600} />
               </TouchableOpacity>
             );
           }
@@ -107,14 +126,18 @@ export function ConciergeInviteStep({
               style={styles.optionCard}
               onPress={() => {
                 Haptics.selectionAsync();
-                onSelect(opt.key as "matches" | "friends" | "contacts");
+                onSelect(opt.key);
               }}
               activeOpacity={0.85}
             >
               <View style={styles.optionIconWrap}>
-                <Ionicons name={opt.icon as any} size={24} color={Colors.primaryViolet} />
+                <Ionicons name={opt.icon as keyof typeof Ionicons.glyphMap} size={24} color={Colors.primaryViolet} />
               </View>
-              <Text style={styles.optionLabel}>{opt.label}</Text>
+              <View style={styles.optionTextCol}>
+                <Text style={styles.optionLabel}>{opt.label}</Text>
+                {opt.hint ? <Text style={styles.optionHint}>{opt.hint}</Text> : null}
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.gray400} />
             </TouchableOpacity>
           );
         })}
@@ -134,7 +157,7 @@ const styles = StyleSheet.create({
   },
   backText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
   title: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 8 },
-  subtitle: { ...Typography.caption, color: Colors.gray600, marginBottom: 24 },
+  subtitle: { ...Typography.caption, color: Colors.gray600, marginBottom: 24, lineHeight: 20 },
   options: { gap: 12 },
   optionCard: {
     flexDirection: "row",
@@ -158,7 +181,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 14,
   },
-  optionLabel: { ...Typography.body, fontWeight: "600", color: Colors.textPrimary, flex: 1 },
-  optionLabelSecondary: { ...Typography.body, fontWeight: "600", color: Colors.gray700 },
+  optionTextCol: { flex: 1, gap: 2 },
+  optionLabel: { ...Typography.body, fontWeight: "600", color: Colors.textPrimary },
+  optionLabelSecondary: { ...Typography.body, fontWeight: "600", color: Colors.gray700, flex: 1 },
   optionHint: { ...Typography.caption, color: Colors.gray500 },
 });

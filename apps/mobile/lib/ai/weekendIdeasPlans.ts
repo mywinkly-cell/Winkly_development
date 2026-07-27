@@ -1,6 +1,7 @@
 /**
- * Weekend ideas — maps Weekly Spark DB plans (or on-demand AI fallback) into the
- * "Your weekend ideas" teaser + three fully planned experience cards.
+ * Weekly Spark ideas — maps DB plans (or on-demand AI fallback) into three fully planned
+ * experience cards for the current week. Context-aware: All / mode-selection shows solo +
+ * date + meetup; a mode-scoped planner shows three plans for that mode.
  */
 
 import type { Mode } from "@/types";
@@ -10,8 +11,10 @@ import type { SparkSlot, WeeklySparkPlan } from "@/lib/ai/weeklySpark";
 
 const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 
-type WeekendTheme = {
-  day: WeeklyWeekendIdea["day"];
+export type WeeklySparkContext = "all" | "romance" | "friends" | "business" | "events";
+
+type WeekTheme = {
+  dayLabel: string;
   label: string;
   activityHint: string;
   slot: SparkSlot;
@@ -20,11 +23,61 @@ type WeekendTheme = {
   hour: number;
 };
 
-const WEEKEND_THEMES: WeekendTheme[] = [
-  { day: "Friday", label: "Wine bar", activityHint: "Wine bar", slot: "solo", mode: "events", dow: 5, hour: 19 },
-  { day: "Saturday", label: "Art exhibition", activityHint: "Art exhibition", slot: "date", mode: "romance", dow: 6, hour: 14 },
-  { day: "Sunday", label: "Day trip", activityHint: "Day trip", slot: "meetup", mode: "friends", dow: 0, hour: 11 },
+/** Mixed All / mode-selection: one solo, one date, one meetup across the week. */
+const ALL_WEEK_THEMES: WeekTheme[] = [
+  { dayLabel: "Wednesday", label: "Solo outing", activityHint: "Specialty coffee and a quiet walk", slot: "solo", mode: "events", dow: 3, hour: 11 },
+  { dayLabel: "Friday", label: "Date night", activityHint: "Wine bar", slot: "date", mode: "romance", dow: 5, hour: 19 },
+  { dayLabel: "Saturday", label: "Friends meet-up", activityHint: "Casual dinner with friends", slot: "meetup", mode: "friends", dow: 6, hour: 18 },
 ];
+
+const ROMANCE_WEEK_THEMES: WeekTheme[] = [
+  { dayLabel: "Tuesday", label: "Weeknight date", activityHint: "Wine bar", slot: "date", mode: "romance", dow: 2, hour: 19 },
+  { dayLabel: "Thursday", label: "Dinner date", activityHint: "Romantic restaurant", slot: "date", mode: "romance", dow: 4, hour: 19 },
+  { dayLabel: "Saturday", label: "Weekend date", activityHint: "Art gallery and coffee", slot: "date", mode: "romance", dow: 6, hour: 14 },
+];
+
+const FRIENDS_WEEK_THEMES: WeekTheme[] = [
+  { dayLabel: "Wednesday", label: "Weeknight hangout", activityHint: "Board game café", slot: "meetup", mode: "friends", dow: 3, hour: 18 },
+  { dayLabel: "Friday", label: "Friday drinks", activityHint: "Beer garden or brewery", slot: "meetup", mode: "friends", dow: 5, hour: 19 },
+  { dayLabel: "Sunday", label: "Weekend activity", activityHint: "Brunch and a walk", slot: "meetup", mode: "friends", dow: 0, hour: 11 },
+];
+
+const BUSINESS_WEEK_THEMES: WeekTheme[] = [
+  { dayLabel: "Tuesday", label: "Coffee meeting", activityHint: "Business coffee meeting", slot: "meetup", mode: "business", dow: 2, hour: 10 },
+  { dayLabel: "Thursday", label: "Lunch networking", activityHint: "Networking lunch", slot: "meetup", mode: "business", dow: 4, hour: 12 },
+  { dayLabel: "Friday", label: "After-work meetup", activityHint: "Professional after-work drinks", slot: "meetup", mode: "business", dow: 5, hour: 18 },
+];
+
+const EVENTS_WEEK_THEMES: WeekTheme[] = [
+  { dayLabel: "Monday", label: "Quiet start", activityHint: "Independent bookshop café", slot: "solo", mode: "events", dow: 1, hour: 11 },
+  { dayLabel: "Thursday", label: "Culture evening", activityHint: "Art museum or exhibition", slot: "solo", mode: "events", dow: 4, hour: 17 },
+  { dayLabel: "Saturday", label: "City explore", activityHint: "City park and specialty coffee", slot: "solo", mode: "events", dow: 6, hour: 11 },
+];
+
+function themesForContext(ctx: WeeklySparkContext): WeekTheme[] {
+  if (ctx === "romance") return ROMANCE_WEEK_THEMES;
+  if (ctx === "friends") return FRIENDS_WEEK_THEMES;
+  if (ctx === "business") return BUSINESS_WEEK_THEMES;
+  if (ctx === "events") return EVENTS_WEEK_THEMES;
+  return ALL_WEEK_THEMES;
+}
+
+export function plannerTabToSparkContext(tab: string): WeeklySparkContext {
+  if (tab === "dates") return "romance";
+  if (tab === "meetups") return "friends";
+  if (tab === "business") return "business";
+  if (tab === "events") return "events";
+  return "all";
+}
+
+/** Slot expected from cron for a given planner context (business has no cron slot). */
+function preferredCronSlot(ctx: WeeklySparkContext): SparkSlot | null {
+  if (ctx === "romance") return "date";
+  if (ctx === "friends") return "meetup";
+  if (ctx === "events") return "solo";
+  if (ctx === "all") return null;
+  return null; // business — always AI fill
+}
 
 /** Next local occurrence of `dow` (0=Sun) at hour:00, today or later. */
 export function nextWeekdayAt(dow: number, hour: number, from: Date = new Date()): Date {
@@ -36,69 +89,58 @@ export function nextWeekdayAt(dow: number, hour: number, from: Date = new Date()
   return target;
 }
 
-function dayLabelFromIso(iso: string | null): WeeklyWeekendIdea["day"] | null {
+function dayLabelFromIso(iso: string | null): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  const name = DAY_LABELS[d.getDay()];
-  if (name === "Friday" || name === "Saturday" || name === "Sunday") return name;
-  return null;
+  return DAY_LABELS[d.getDay()] ?? null;
 }
 
-/** Build Fri/Sat/Sun teaser rows from verified spark plans when available. */
+/** Build teaser rows from plans (any weekday). */
 export function teaserIdeasFromSparkPlans(plans: WeeklySparkPlan[]): WeeklyWeekendIdea[] {
-  const byDay = new Map<WeeklyWeekendIdea["day"], WeeklyWeekendIdea>();
-  for (const plan of plans) {
-    const day = dayLabelFromIso(plan.startsAt);
-    if (!day || byDay.has(day)) continue;
-    byDay.set(day, {
+  const out: WeeklyWeekendIdea[] = [];
+  for (const plan of plans.slice(0, 3)) {
+    const day = (dayLabelFromIso(plan.startsAt) ?? "This week") as WeeklyWeekendIdea["day"];
+    out.push({
       day,
-      label: plan.title || plan.placeName || day,
+      label: plan.title || plan.placeName || "Plan",
       activityHint: plan.placeName ?? plan.title,
     });
   }
-  const ordered: WeeklyWeekendIdea["day"][] = ["Friday", "Saturday", "Sunday"];
-  const out: WeeklyWeekendIdea[] = [];
-  for (const day of ordered) {
-    const row = byDay.get(day);
-    if (row) out.push(row);
-  }
-  if (out.length >= 3) return out.slice(0, 3);
-  for (const theme of WEEKEND_THEMES) {
-    if (out.length >= 3) break;
-    if (!out.some((r) => r.day === theme.day)) {
-      out.push({ day: theme.day, label: theme.label, activityHint: theme.activityHint });
-    }
-  }
-  return out.sort((a, b) => ordered.indexOf(a.day) - ordered.indexOf(b.day));
+  return out;
 }
 
 export function buildWeeklyWeekendSuggestion(plans?: WeeklySparkPlan[]): WeeklyWeekendSuggestion {
-  const ideas = plans?.length ? teaserIdeasFromSparkPlans(plans) : WEEKEND_THEMES.map((t) => ({
-    day: t.day,
-    label: t.label,
-    activityHint: t.activityHint,
-  }));
+  const ideas = plans?.length
+    ? teaserIdeasFromSparkPlans(plans)
+    : ALL_WEEK_THEMES.map((t) => ({
+        day: t.dayLabel as WeeklyWeekendIdea["day"],
+        label: t.label,
+        activityHint: t.activityHint,
+      }));
   return {
-    id: `weekly_weekend_${Date.now()}`,
-    title: "Your weekend ideas",
+    id: `weekly_spark_${Date.now()}`,
+    title: "This week's Sparks",
     ideas,
   };
 }
 
 function themePlanToSparkPlan(
   plan: PlannerThemePlanOption,
-  theme: WeekendTheme,
+  theme: WeekTheme,
   startsAt: Date,
+  rank: number,
 ): WeeklySparkPlan {
   return {
-    id: `weekend_${theme.slot}_${startsAt.toISOString().slice(0, 10)}`,
+    id: `week_${theme.mode}_${theme.slot}_${rank}_${startsAt.toISOString().slice(0, 10)}`,
     slot: theme.slot,
-    rank: WEEKEND_THEMES.indexOf(theme),
+    rank,
     title: plan.title,
     fitReason: plan.why_this_fits || plan.fit_reason || "",
     placeId: null,
     placeName: plan.venue?.name ?? null,
+    placeAddress: plan.venue?.address ?? null,
+    googleMapsUrl: plan.venue?.google_maps_link ?? null,
     placeLat: null,
     placeLng: null,
     startsAt: startsAt.toISOString(),
@@ -113,37 +155,93 @@ function themePlanToSparkPlan(
   };
 }
 
-/** On-demand fallback when weekly_sparks cron has not run yet for this user. */
+async function fetchThemePlan(
+  theme: WeekTheme,
+  rank: number,
+  params: { city?: string | null; country?: string | null },
+  from: Date,
+): Promise<WeeklySparkPlan | null> {
+  const when = nextWeekdayAt(theme.dow, theme.hour, from);
+  const { plans } = await getPlannerThemePlans({
+    mode: theme.mode,
+    theme: theme.activityHint,
+    city: params.city ?? undefined,
+    country: params.country ?? undefined,
+    dateTimeIso: when.toISOString(),
+  });
+  const pick = plans.find((p) => p.option_id === "A") ?? plans[0];
+  if (!pick) return null;
+  return themePlanToSparkPlan(pick, theme, when, rank);
+}
+
+/**
+ * Resolve up to 3 weekly spark plans for the planner context.
+ * - all: prefer cron solo/date/meetup; fill gaps via AI
+ * - mode: prefer matching cron slot once, then AI-fill to 3 mode-specific plans
+ */
+export async function fetchWeeklySparkPlansForContext(params: {
+  context: WeeklySparkContext;
+  city?: string | null;
+  country?: string | null;
+  existingPlans?: WeeklySparkPlan[];
+}): Promise<WeeklySparkPlan[]> {
+  const themes = themesForContext(params.context);
+  const existing = params.existingPlans ?? [];
+  const now = new Date();
+
+  if (params.context === "all") {
+    if (existing.length >= 3) {
+      return [...existing].sort((a, b) => a.rank - b.rank).slice(0, 3);
+    }
+    const bySlot = new Map<SparkSlot, WeeklySparkPlan>();
+    for (const p of existing) {
+      if (!bySlot.has(p.slot)) bySlot.set(p.slot, p);
+    }
+    const out: WeeklySparkPlan[] = [];
+    for (let i = 0; i < themes.length; i++) {
+      const theme = themes[i];
+      const fromCron = bySlot.get(theme.slot);
+      if (fromCron) {
+        out.push(fromCron);
+        continue;
+      }
+      const generated = await fetchThemePlan(theme, i, params, now);
+      if (generated) out.push(generated);
+    }
+    return out.slice(0, 3);
+  }
+
+  // Mode-scoped: three plans for this mode.
+  const preferred = preferredCronSlot(params.context);
+  const seed = preferred ? existing.filter((p) => p.slot === preferred) : [];
+  const out: WeeklySparkPlan[] = [];
+  if (seed[0]) out.push({ ...seed[0], rank: 0 });
+
+  for (let i = out.length; i < 3; i++) {
+    const theme = themes[i] ?? themes[themes.length - 1];
+    const generated = await fetchThemePlan(theme, i, params, now);
+    if (generated) out.push(generated);
+  }
+  return out.slice(0, 3);
+}
+
+/** @deprecated Use fetchWeeklySparkPlansForContext — kept for older call sites. */
 export async function fetchWeekendPlansFallback(params: {
   city?: string | null;
   country?: string | null;
 }): Promise<WeeklySparkPlan[]> {
-  const now = new Date();
-  const results = await Promise.all(
-    WEEKEND_THEMES.map(async (theme) => {
-      const when = nextWeekdayAt(theme.dow, theme.hour, now);
-      const { plans } = await getPlannerThemePlans({
-        mode: theme.mode,
-        theme: theme.activityHint,
-        city: params.city ?? undefined,
-        country: params.country ?? undefined,
-        dateTimeIso: when.toISOString(),
-      });
-      const pick = plans.find((p) => p.option_id === "A") ?? plans[0];
-      if (!pick) return null;
-      return themePlanToSparkPlan(pick, theme, when);
-    }),
-  );
-  return results.filter((p): p is WeeklySparkPlan => p != null);
+  return fetchWeeklySparkPlansForContext({ context: "all", ...params });
 }
 
 export function sparkPlanToStructured(plan: WeeklySparkPlan): PlannerThemePlanOption {
+  const mapsQuery = [plan.placeName, plan.placeAddress].filter(Boolean).join(", ");
   const mapsLink =
-    plan.placeLat != null && plan.placeLng != null
+    plan.googleMapsUrl?.trim() ||
+    (plan.placeLat != null && plan.placeLng != null
       ? `https://www.google.com/maps/search/?api=1&query=${plan.placeLat},${plan.placeLng}`
-      : plan.placeName
-        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(plan.placeName)}`
-        : "";
+      : mapsQuery
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`
+        : "");
   const cost =
     plan.approxPriceCents != null && plan.approxPriceCents > 0
       ? `${Math.round(plan.approxPriceCents / 100)} ${plan.currency ?? "EUR"}`
@@ -168,7 +266,7 @@ export function sparkPlanToStructured(plan: WeeklySparkPlan): PlannerThemePlanOp
       : [{ time: "", description: plan.placeName ?? plan.title }],
     venue: {
       name: plan.placeName ?? plan.title,
-      address: "",
+      address: plan.placeAddress ?? "",
       google_maps_link: mapsLink,
       estimated_cost: cost,
       booking_url: plan.bookingUrl ?? undefined,
@@ -189,7 +287,5 @@ export function dateForSparkPlan(plan: WeeklySparkPlan): Date {
     const d = new Date(plan.startsAt);
     if (!Number.isNaN(d.getTime())) return d;
   }
-  const theme = WEEKEND_THEMES.find((t) => t.slot === plan.slot);
-  if (theme) return nextWeekdayAt(theme.dow, theme.hour);
   return nextWeekdayAt(6, 12);
 }

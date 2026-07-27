@@ -37,9 +37,9 @@ export type ProactiveSuggestion = {
   partner_display_name?: string;
 };
 
-/** Weekend ideas (Fri/Sat/Sun) — shown Thu–Sun. */
+/** Weekend ideas (Fri/Sat/Sun) — shown Thu–Sun. Day label may be any weekday for weekly Sparks. */
 export type WeeklyWeekendIdea = {
-  day: "Friday" | "Saturday" | "Sunday";
+  day: string;
   label: string;
   activityHint: string;
 };
@@ -83,10 +83,13 @@ export async function shouldShowProactiveSuggestion(): Promise<boolean> {
   return Date.now() > until;
 }
 
-/** Dismiss weekly weekend card until next week. */
+/**
+ * Soft-hide Weekly Sparks until cleared (header spark / deep-link) or until the
+ * next Monday 00:00 local — Sparks are week-scoped (Mon–Sun), not Thu–Sun.
+ */
 export async function dismissWeeklyWeekend(): Promise<void> {
-  const nextThu = getNextThursday();
-  await AsyncStorage.setItem(KEY_WEEKEND_DISMISSED, String(nextThu.getTime()));
+  const nextMon = getNextMonday();
+  await AsyncStorage.setItem(KEY_WEEKEND_DISMISSED, String(nextMon.getTime()));
 }
 
 export async function getWeeklyWeekendDismissedUntil(): Promise<number | null> {
@@ -99,13 +102,18 @@ export async function getWeeklyWeekendDismissedUntil(): Promise<number | null> {
   }
 }
 
-function getNextThursday(): Date {
+/** Clear dismiss so Weekly Sparks can show again (header spark / deep-link). */
+export async function clearWeeklySparkDismissed(): Promise<void> {
+  await AsyncStorage.removeItem(KEY_WEEKEND_DISMISSED);
+}
+
+/** Next Monday 00:00 local (always in the future — tomorrow if today is Monday). */
+function getNextMonday(): Date {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
-  const day = d.getDay();
-  const thu = 4;
-  let daysUntil = thu - day;
-  if (daysUntil <= 0) daysUntil += 7;
+  const day = d.getDay(); // 0=Sun … 1=Mon
+  let daysUntil = (1 - day + 7) % 7;
+  if (daysUntil === 0) daysUntil = 7;
   d.setDate(d.getDate() + daysUntil);
   return d;
 }
