@@ -2,7 +2,6 @@
 // Winkly Password Reset Screen
 // v7.0 – November 2025
 // © Winkly Technologies UG (haftungsbeschränkt)
-// Maintainer: Kateryna Shyshkalova
 // Purpose: Allow user to request a password reset link
 // via Supabase auth, consistent with onboarding design
 // ────────────────────────────────────────────────

@@ -2,7 +2,6 @@
 // Winkly Password Reset Confirmation Screen
 // v7.0 – November 2025
 // © Winkly Technologies UG (haftungsbeschränkt)
-// Maintainer: Kateryna Shyshkalova
 // Purpose: Allow user to set a new password after reset link
 // opened via deep link (winkly://reset-confirm)
 // ────────────────────────────────────────────────

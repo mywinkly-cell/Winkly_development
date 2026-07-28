@@ -2,7 +2,6 @@
 // Winkly Onboarding – Get Started Screen
 // v7.0 – November 2025
 // © Winkly Technologies UG (haftungsbeschränkt)
-// Maintainer: Kateryna Shyshkalova
 // Purpose: Let user choose account type (Personal / Business)
 // and start onboarding flow
 // ────────────────────────────────────────────────

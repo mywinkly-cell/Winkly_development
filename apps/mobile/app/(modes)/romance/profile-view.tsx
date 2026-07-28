@@ -2,7 +2,6 @@
 // ────────────────────────────────────────────────
 // Winkly Romance Mode – Profile View (v7.1 AI)
 // © 2025 Winkly Technologies UG (haftungsbeschränkt)
-// Maintainer: Kateryna Shyshkalova
 //
 // Purpose:
 //   • Full-screen view of another user's profile (Romance context)

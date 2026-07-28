@@ -1,7 +1,6 @@
 // ────────────────────────────────────────────────
 // Winkly Mode Switch Button – Final v7.0
 // © 2025 Winkly Technologies UG (haftungsbeschränkt)
-// Maintainer: Kateryna Shyshkalova
 // Purpose: Floating button used inside all modes to allow
 // quick switching back to Mode Selection screen.
 // ────────────────────────────────────────────────
