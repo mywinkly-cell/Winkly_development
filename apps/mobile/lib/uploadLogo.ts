@@ -2,7 +2,6 @@
 // Winkly Storage Helper: uploadLogo.ts
 // v7.0 – November 2025
 // © Winkly Technologies UG (haftungsbeschränkt)
-// Maintainer: Kateryna Shyshkalova
 // Purpose: Upload business logo to Supabase Storage
 // and save public URL into business_profiles table.
 // ────────────────────────────────────────────────

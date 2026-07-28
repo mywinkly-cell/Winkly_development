@@ -109,7 +109,7 @@ export default function EditCore() {
           <TextInput
             value={firstName}
             onChangeText={setFirstName}
-            placeholder="Kateryna"
+            placeholder="Alex"
             placeholderTextColor={Colors.gray500}
             style={styles.input}
             editable={!saving}
@@ -119,7 +119,7 @@ export default function EditCore() {
           <TextInput
             value={lastName}
             onChangeText={setLastName}
-            placeholder="Shyshkalova"
+            placeholder="Schmidt"
             placeholderTextColor={Colors.gray500}
             style={styles.input}
             editable={!saving}

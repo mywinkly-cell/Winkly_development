@@ -2,7 +2,6 @@
 // Winkly Onboarding: Welcome (Business)
 // v7.0 – November 2025
 // © Winkly Technologies UG (haftungsbeschränkt)
-// Maintainer: Kateryna Shyshkalova
 // Purpose: Final onboarding screen for Business Accounts
 // ────────────────────────────────────────────────
 

@@ -2,7 +2,6 @@
 -- Winkly Database Schema: user_profiles
 -- v7.1 – January 2026
 -- © Winkly Technologies UG (haftungsbeschränkt)
--- Maintainer: Kateryna Shyshkalova
 -- Purpose: Core profile information for personal users
 -- Updates: Added instagram for personal profile linking
 -- ────────────────────────────────────────────────

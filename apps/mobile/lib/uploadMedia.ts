@@ -2,7 +2,6 @@
 // Winkly Upload Utilities – Photos & Videos
 // v7.0 – November 2025
 // © Winkly Technologies UG (haftungsbeschränkt)
-// Maintainer: Kateryna Shyshkalova
 // Purpose: Unified upload logic for personal profiles
 // (core + sub-profiles: romance / friends / business)
 // ────────────────────────────────────────────────
