@@ -1,6 +1,6 @@
 # Winkly — Environments (local / cloud dev / cloud production)
 
-**Last updated:** 2026-06-07
+**Last updated:** 2026-07-28
 
 > **No staging environment.** Cloud projects are **Winkly_development** (`gwgjdpqskusuejlwrsnd`) and **winkly-production** (`orjccytcmklzcfjgqwwj`) only. Day-to-day app work uses `npm run env:dev`.
 
@@ -11,7 +11,7 @@
 | [**Winkly_development**](https://github.com/mywinkly-cell/Winkly_development) (public) | **Winkly_development** | `gwgjdpqskusuejlwrsnd` | Author migrations & Edge Functions; push here first |
 | [**winkly-production**](https://github.com/mywinkly-cell/winkly-production) (private) | **winkly-production** | `orjccytcmklzcfjgqwwj` | Production snapshot + store builds; receive mirrored `supabase/` on promote |
 
-See **docs/BRANCHING.md** for code promote (`Winkly_development/main` → `winkly-production/main`). See **supabase/PROJECTS.md** for migration rules.
+See **docs/BRANCHING.md** for code promote (`npm run promote` force-pushes `Winkly_development/main` → `winkly-production/main`). See **supabase/PROJECTS.md** for migration rules.
 
 | Environment | Backend | Mobile env file | EAS profile | Purpose |
 | ----------- | ------- | --------------- | ----------- | ------- |
@@ -61,7 +61,9 @@ npm run supabase:push:development
 
 # 3) QA app against gwgjdpqskusuejlwrsnd if needed
 
-# 4) Promote Winkly_development/main → winkly-production/main (mirrors supabase/)
+# 4) Promote code (exact mirror; does not push DB or Edge Functions)
+npm run promote:dry-run
+npm run promote
 
 # 5) Cloud production — dry-run before apply
 npm run supabase:push:production:dry-run

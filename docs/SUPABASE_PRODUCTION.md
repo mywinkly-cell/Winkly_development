@@ -1,6 +1,6 @@
 # Supabase — Cloud projects, migrations & backups
 
-**Last updated:** 2026-06-06
+**Last updated:** 2026-07-28
 
 | Repo | Supabase | Project ref | Role |
 | ---- | -------- | ----------- | ---- |
@@ -37,8 +37,8 @@ Winkly_development (author) → db reset (local) → push dev → promote repo �
 ## 2. Production cloud (`orjccytcmklzcfjgqwwj`)
 
 1. [winkly-production dashboard](https://supabase.com/dashboard/project/orjccytcmklzcfjgqwwj) → `.env.production` / EAS env vars.
-2. Promote `Winkly_development/main` → `winkly-production/main` (must include mirrored `supabase/`).
-3. From `winkly-production` checkout: `npm run supabase:push:production:dry-run` then `npm run supabase:push:production`
+2. From `Winkly_development`: `npm run promote` (force-pushes mirror including `supabase/` to `winkly-production/main`).
+3. From either checkout: `npm run supabase:push:production:dry-run` then `npm run supabase:push:production`
 4. Deploy Edge Functions + production secrets (see **docs/API_KEYS_AND_ENV.md** §3.2).
 
 ### Auth redirect URLs (production)
@@ -58,7 +58,7 @@ ls supabase/migrations/*.sql | wc -l   # should match Winkly_development (52)
 npm run supabase:push:production:dry-run
 ```
 
-Could not verify the private repo contents from this environment (no local clone, API 404 without auth). **Action:** clone `winkly-production` and confirm `supabase/migrations/` exists; if empty, promote `Winkly_development/main` now to seed it.
+If the private repo is still empty, seed it with `npm run promote` from `Winkly_development/main`.
 
 ---
 

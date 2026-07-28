@@ -24,8 +24,8 @@ Winkly_development (author)  →  supabase db reset (local)  →  push dev cloud
 2. Verify locally: `supabase db reset`.
 3. Push to **development** cloud: `npm run supabase:push:development`.
 4. QA on dev cloud (app pointed at `gwgjdpqskusuejlwrsnd` if needed).
-5. Promote **`Winkly_development/main` → `winkly-production/main`** (code snapshot includes mirrored `supabase/`).
-6. Push to **production** cloud from either checkout **with identical migration files**: `npm run supabase:push:production` (typically run from `winkly-production` after promote).
+5. Promote code: **`npm run promote`** from clean `Winkly_development/main` (force-pushes mirror including `supabase/` to `winkly-production/main`).
+6. Push to **production** cloud from either checkout **with identical migration files**: `npm run supabase:push:production`.
 
 Before any prod push, always dry-run:
 
@@ -89,7 +89,7 @@ Optional: `MEETUP_API_KEY`, `EVENTBRITE_PRIVATE_TOKEN`, `GOOGLE_PLACES_API_KEY`.
 - `supabase db push` run from the **private** repo reflects exactly what ships to `orjccytcmklzcfjgqwwj`.
 - The private repo stays a complete deployable snapshot, not just mobile app code.
 
-**Authoring stays in Winkly_development** — `winkly-production` only receives copies via promote PR/merge, never hand-edited migration files.
+**Authoring stays in Winkly_development** — `winkly-production` only receives copies via `npm run promote`, never hand-edited migration files.
 
 Verify mirror after first promote:
 

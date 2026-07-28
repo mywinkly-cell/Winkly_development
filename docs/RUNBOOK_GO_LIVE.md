@@ -125,7 +125,27 @@ Concierge plan generation · planner theme plans · chat topics · match agent �
 
 ## 4. Then promote to production
 
+Code promotion and cloud promotion are separate. Git promote only mirrors the repo; it does **not** push migrations or deploy Edge Functions.
+
+### 4.0 Promote the git snapshot
+
+From a clean `Winkly_development` checkout on `main` (in sync with `origin/main`):
+
+```bash
+npm run promote:dry-run   # optional — show commit + file count
+npm run promote           # force-pushes to winkly-production/main (type "promote")
+```
+
+Details and checklist: **docs/BRANCHING.md**. After this, Vercel redeploys the website from `winkly-production/main`. Continue below for Supabase.
+
 ### 4.1 Link and push migrations
+
+```bash
+npm run supabase:push:production:dry-run   # review first
+npm run supabase:push:production
+```
+
+Or manually:
 
 ```bash
 npx supabase login
@@ -134,7 +154,7 @@ npx supabase db diff --linked    # review first — this is the irreversible one
 npx supabase db push
 ```
 
-88 migrations, including `premium_trial`, `user_settings` and both cron schedules.
+Migrations include `premium_trial`, `user_settings` and both cron schedules. Count must match `Winkly_development` after the git promote.
 
 ### 4.2 Deploy the functions
 
