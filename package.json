@@ -32,6 +32,8 @@
     "start:prod": "npm run env:prod && npm run mobile:start",
     "ci": "npm run mobile:lint && npm run mobile:typecheck && npm run mobile:test && npm run website:verify",
     "postinstall": "patch-package --patch-dir apps/mobile/patches && node scripts/prune-expo-dynamic-image-crop-nested.mjs",
+    "promote": "node scripts/promote-to-production.mjs",
+    "promote:dry-run": "node scripts/promote-to-production.mjs --dry-run",
     "supabase:deploy-auth-redirect": "supabase functions deploy auth-redirect",
     "supabase:link:development": "node scripts/supabase-link.mjs development",
     "supabase:link:production": "node scripts/supabase-link.mjs production",
