@@ -45,8 +45,8 @@ Output: `website/dist/`. Preview with any static server, e.g. `npx serve dist`.
 ## Deploy (Vercel)
 
 1. In Vercel, create or open the project for **mywinkly.de**.
-2. Set **Root Directory** to `website`.
-3. Framework preset: **Other** (build uses `vercel.json`).
+2. Set **Root Directory** to `website` (required — build reads `../docs`).
+3. Framework preset: **Other** (build uses `vercel.json`: install skips monorepo `postinstall` mobile patches).
 4. Deploy. Ensure **Deployment Protection** is off for production so legal URLs are public.
 
 Alternatively, from CLI:
