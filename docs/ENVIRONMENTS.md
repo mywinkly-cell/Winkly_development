@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-06-07
 
-> **No staging environment.** The old staging Supabase project was renamed to **winkly-production** (`orjccytcmklzcfjgqwwj`). Day-to-day app work uses **Winkly_development** (`gwgjdpqskusuejlwrsnd`) via `npm run env:dev`.
+> **No staging environment.** Cloud projects are **Winkly_development** (`gwgjdpqskusuejlwrsnd`) and **winkly-production** (`orjccytcmklzcfjgqwwj`) only. Day-to-day app work uses `npm run env:dev`.
 
 ### Repositories ↔ Supabase projects
 

@@ -9,7 +9,7 @@
 
 Optional **local** stack: `supabase start` on developer machines (fastest loop). Full matrix: **docs/ENVIRONMENTS.md**.
 
-The former staging project (`orjccytcmklzcfjgqwwj`) is now **production**. Development cloud is the **Winkly_development** Supabase project (`gwgjdpqskusuejlwrsnd`).
+Production cloud is **winkly-production** (`orjccytcmklzcfjgqwwj`). Development cloud is **Winkly_development** (`gwgjdpqskusuejlwrsnd`). There is no staging Supabase project.
 
 ---
 
