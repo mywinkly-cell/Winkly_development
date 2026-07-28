@@ -65,3 +65,7 @@ coverage/
 # Supabase CLI local caches (sometimes generated; remove from git index if already tracked)
 supabase/.temp/
 supabase/.branches/
+
+# Agent / AI coding artifacts (local only — never commit)
+.claude/
+memory/
