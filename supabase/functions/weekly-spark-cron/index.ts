@@ -20,6 +20,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
+import { cronSecretOk } from "../_shared/timingSafeEqual.ts";
 import {
   resolveVerifiedPlace,
   searchPlaceIds,
@@ -707,22 +708,11 @@ async function generateForUser(
   return plans;
 }
 
-/** Constant-time string compare so the cron-secret check leaks no timing side-channel. */
-function timingSafeEqual(a: string, b: string): boolean {
-  const ba = new TextEncoder().encode(a);
-  const bb = new TextEncoder().encode(b);
-  if (ba.length !== bb.length) return false;
-  let diff = 0;
-  for (let i = 0; i < ba.length; i++) diff |= ba[i] ^ bb[i];
-  return diff === 0;
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return withCorsEmpty(req, { status: 204 });
 
-  const secret = Deno.env.get("CRON_SECRET") ?? "";
-  const got = req.headers.get("x-cron-secret") ?? "";
-  if (!secret || !timingSafeEqual(got, secret)) return jsonResponse(req, 401, { error: "Unauthorized" });
+  // Shared with weather-pivot-cron and calendar-sync-sweep so the three cannot drift (SEC-4).
+  if (!cronSecretOk(req)) return jsonResponse(req, 401, { error: "Unauthorized" });
 
   // FAIL CLOSED — never emit world-knowledge venues.
   const placesKey = getPlacesKey();

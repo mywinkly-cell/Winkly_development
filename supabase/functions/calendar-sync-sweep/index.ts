@@ -14,6 +14,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
+import { cronSecretOk } from "../_shared/timingSafeEqual.ts";
 import { syncConfirmedEventToCloud } from "../_shared/calendarSync.ts";
 
 const MAX_EVENTS_PER_SWEEP = 50;
@@ -26,11 +27,8 @@ serve(async (req) => {
   const cors = corsHeaders(req);
   const jsonHeaders = { "Content-Type": "application/json", ...Object.fromEntries(cors) };
 
-  const secret = Deno.env.get("CRON_SECRET") ?? "";
-  const got = req.headers.get("x-cron-secret") ?? "";
-  // Fail closed: a missing CRON_SECRET must reject (not bypass) — this function runs with
-  // the service-role key. Matches weather-pivot-cron / notify-fanout's secret check.
-  if (!secret || got !== secret) {
+  // Fail closed on a missing CRON_SECRET, and compare in constant time (SEC-4).
+  if (!cronSecretOk(req)) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: jsonHeaders });
   }
 

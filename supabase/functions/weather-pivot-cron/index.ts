@@ -13,6 +13,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
+import { cronSecretOk } from "../_shared/timingSafeEqual.ts";
 
 async function geocodeCity(city: string): Promise<{ lat: number; lng: number } | null> {
   const url = new URL("https://geocoding-api.open-meteo.com/v1/search");
@@ -74,11 +75,9 @@ serve(async (req) => {
     return withCorsEmpty(req, { status: 204 });
   }
   const cors = corsHeaders(req);
-  const secret = Deno.env.get("CRON_SECRET") ?? "";
-  const got = req.headers.get("x-cron-secret") ?? "";
-  // Fail closed: a missing CRON_SECRET must reject (not bypass) — this function
-  // runs with the service-role key. Matches notify-fanout's secret check.
-  if (!secret || got !== secret) {
+  // Fail closed on a missing CRON_SECRET, and compare in constant time
+  // (SEC-4): the previous `got !== secret` leaked the matching-prefix length.
+  if (!cronSecretOk(req)) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
