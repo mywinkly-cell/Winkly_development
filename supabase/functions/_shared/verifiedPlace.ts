@@ -84,19 +84,48 @@ export async function searchPlaceIds(opts: {
   limit?: number;
   /** Optional in-memory memo (normalized query → ordered place_ids) for a single run. */
   queryCache?: Map<string, string[]>;
+  /** Bias results near the user (small towns otherwise return ZERO_RESULTS for niche queries). */
+  lat?: number | null;
+  lng?: number | null;
+  /** Meters; Google Text Search max is 50_000. Default 40km. */
+  radiusMeters?: number;
 }): Promise<string[]> {
   const query = opts.query.trim();
   if (!query || !opts.placesKey) return [];
   const limit = opts.limit ?? 5;
-  const cacheKey = query.toLowerCase();
+  const hasLoc =
+    typeof opts.lat === "number" && Number.isFinite(opts.lat) &&
+    typeof opts.lng === "number" && Number.isFinite(opts.lng);
+  const radius = Math.max(1000, Math.min(50_000, opts.radiusMeters ?? 40_000));
+  const cacheKey = hasLoc
+    ? `${query.toLowerCase()}@${opts.lat!.toFixed(2)},${opts.lng!.toFixed(2)},r${radius}`
+    : query.toLowerCase();
 
   const memo = opts.queryCache?.get(cacheKey);
   if (memo) return memo.slice(0, limit);
 
   try {
-    const url = `${PLACES_TEXTSEARCH}?query=${encodeURIComponent(query.slice(0, 280))}&key=${encodeURIComponent(opts.placesKey)}`;
+    const params = new URLSearchParams({
+      query: query.slice(0, 280),
+      key: opts.placesKey,
+    });
+    if (hasLoc) {
+      params.set("location", `${opts.lat},${opts.lng}`);
+      params.set("radius", String(radius));
+    }
+    const url = `${PLACES_TEXTSEARCH}?${params.toString()}`;
     const res = await fetch(url);
-    const data = (await res.json()) as { status?: string; results?: Array<Record<string, unknown>> };
+    const data = (await res.json()) as {
+      status?: string;
+      error_message?: string;
+      results?: Array<Record<string, unknown>>;
+    };
+    if (data.status && data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+      console.warn(
+        `[verifiedPlace] Text Search status=${data.status}` +
+          (data.error_message ? ` error=${data.error_message}` : ""),
+      );
+    }
     const ids =
       data.status === "OK" && Array.isArray(data.results)
         ? data.results
@@ -203,6 +232,10 @@ export async function resolveVerifiedPlace(
     ttlDays?: number;
     placesKey?: string | null;
     queryCache?: Map<string, string[]>;
+    /** Bias Text Search near the user (helps small towns / niche themes). */
+    lat?: number | null;
+    lng?: number | null;
+    radiusMeters?: number;
   },
 ): Promise<VerifiedPlace | null> {
   const ttlDays = opts.ttlDays ?? DEFAULT_TTL_DAYS;
@@ -215,6 +248,9 @@ export async function resolveVerifiedPlace(
       placesKey: opts.placesKey,
       limit: 1,
       queryCache: opts.queryCache,
+      lat: opts.lat,
+      lng: opts.lng,
+      radiusMeters: opts.radiusMeters,
     });
     placeId = ids[0];
   }

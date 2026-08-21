@@ -8,12 +8,20 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "rea
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { SparklesIcon } from "@/components/ui/WinklyAISpark";
+import { WeeklySparksIcon } from "@/components/ui/WeeklySparksIcon";
 import { Colors, Typography } from "@/constants/tokens";
 import { getDeviceCoordsIfPermitted } from "@/lib/location/deviceLocation";
 import { distanceKm, markWeeklySparkSeen, type WeeklySparkPlan, type SparkSlot } from "@/lib/ai/weeklySpark";
 import type { WeeklySparkContext } from "@/lib/ai/weekendIdeasPlans";
 import { WeeklySparkCard } from "@/components/planner/WeeklySparkCard";
+import {
+  WeeklySparkSettingsBar,
+  type WeeklySparkSettingsSave,
+} from "@/components/planner/WeeklySparkSettingsBar";
+import type {
+  WeeklySparkLocationPrefs,
+  WeeklySparkTimingPrefs,
+} from "@/lib/ai/weeklySparkSettings";
 
 export type WeekendIdeasBlockProps = {
   title?: string;
@@ -25,8 +33,19 @@ export type WeekendIdeasBlockProps = {
   onRetryLoad?: () => void;
   onDismiss: () => void;
   onViewPlan: (plan: WeeklySparkPlan) => void;
+  /** Spark plan ids already added to the Planner — those cards show "Planned" instead of "View the plan". */
+  plannedPlanIds?: Set<string>;
+  /** Opens the existing Planner entry for a plan already in plannedPlanIds. */
+  onReviewPlan?: (plan: WeeklySparkPlan) => void;
   highlighted?: boolean;
   showDismiss?: boolean;
+  sparkLocationPrefs?: WeeklySparkLocationPrefs | null;
+  sparkTimingPrefs?: WeeklySparkTimingPrefs | null;
+  defaultLocationLine?: string;
+  defaultCity?: string | null;
+  defaultCountry?: string | null;
+  savingLocationPrefs?: boolean;
+  onSaveLocationPrefs?: (next: WeeklySparkSettingsSave) => void;
 };
 
 const SLOT_ACCENT: Record<SparkSlot, string> = {
@@ -54,11 +73,21 @@ export function WeekendIdeasBlock({
   onRetryLoad,
   onDismiss,
   onViewPlan,
+  plannedPlanIds,
+  onReviewPlan,
   highlighted = false,
   showDismiss = true,
+  sparkLocationPrefs = null,
+  sparkTimingPrefs = null,
+  defaultLocationLine,
+  defaultCity,
+  defaultCountry,
+  savingLocationPrefs = false,
+  onSaveLocationPrefs,
 }: WeekendIdeasBlockProps) {
   const { t } = useTranslation();
   const [origin, setOrigin] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     void markWeeklySparkSeen();
@@ -83,20 +112,57 @@ export function WeekendIdeasBlock({
       <View style={styles.card}>
         <View style={styles.header}>
           <View style={styles.badge}>
-            <SparklesIcon size={18} color={Colors.primaryViolet} />
+            <WeeklySparksIcon size={18} color={Colors.primaryViolet} />
             <Text style={styles.badgeText}>{title ?? t("weeklySpark.sectionTitle")}</Text>
           </View>
-          {showDismiss ? (
-            <TouchableOpacity
-              onPress={() => { Haptics.selectionAsync(); onDismiss(); }}
-              hitSlop={12}
-              style={styles.dismissBtn}
-              accessibilityLabel="Dismiss"
-            >
-              <Ionicons name="close" size={22} color={Colors.gray500} />
-            </TouchableOpacity>
-          ) : null}
+          <View style={styles.headerActions}>
+            {onSaveLocationPrefs ? (
+              <TouchableOpacity
+                onPress={() => { Haptics.selectionAsync(); setSettingsOpen((v) => !v); }}
+                hitSlop={8}
+                style={[styles.settingsBtn, settingsOpen && styles.settingsBtnActive]}
+                accessibilityRole="button"
+                accessibilityLabel={t("weeklySpark.settingsPanelTitle")}
+                activeOpacity={0.85}
+              >
+                <Ionicons
+                  name="options-outline"
+                  size={18}
+                  color={settingsOpen ? Colors.white : Colors.primaryViolet}
+                />
+              </TouchableOpacity>
+            ) : null}
+            {showDismiss ? (
+              <TouchableOpacity
+                onPress={() => { Haptics.selectionAsync(); onDismiss(); }}
+                hitSlop={12}
+                style={styles.dismissBtn}
+                accessibilityLabel="Dismiss"
+              >
+                <Ionicons name="close" size={22} color={Colors.gray500} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
+
+        <Text style={styles.subtitle}>{t("weeklySpark.sectionSubtitle")}</Text>
+
+        {onSaveLocationPrefs && settingsOpen ? (
+          <WeeklySparkSettingsBar
+            prefs={sparkLocationPrefs}
+            timing={sparkTimingPrefs}
+            defaultLocationLine={defaultLocationLine}
+            defaultCity={defaultCity}
+            defaultCountry={defaultCountry}
+            language={locale}
+            saving={savingLocationPrefs}
+            onSave={(next) => {
+              onSaveLocationPrefs(next);
+              setSettingsOpen(false);
+            }}
+            onClose={() => setSettingsOpen(false)}
+          />
+        ) : null}
 
         <View style={styles.expanded}>
           {loadingPlans ? (
@@ -126,7 +192,9 @@ export function WeekendIdeasBlock({
                   accentColor={modeAccent ?? SLOT_ACCENT[plan.slot]}
                   distanceKm={dist}
                   locale={locale}
+                  planned={plannedPlanIds?.has(plan.id) ?? false}
                   onViewPlan={onViewPlan}
+                  onReviewPlan={onReviewPlan}
                 />
               );
             })
@@ -185,6 +253,25 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     fontWeight: "700",
     color: Colors.primaryViolet,
+  },
+  subtitle: {
+    ...Typography.caption,
+    color: Colors.gray600,
+    lineHeight: 18,
+    marginTop: -6,
+    marginBottom: 12,
+  },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  settingsBtn: {
+    padding: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.primaryViolet + "33",
+    backgroundColor: Colors.primaryViolet + "0F",
+  },
+  settingsBtnActive: {
+    backgroundColor: Colors.primaryViolet,
+    borderColor: Colors.primaryViolet,
   },
   dismissBtn: { padding: 4 },
   expanded: { marginTop: 4 },

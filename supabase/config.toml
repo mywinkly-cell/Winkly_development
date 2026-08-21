@@ -359,6 +359,17 @@ verify_jwt = false
 [functions.weather-pivot-cron]
 verify_jwt = false
 
+# calendar-oauth-callback is hit directly by Google/Microsoft's OAuth redirect (a browser
+# navigation, not an app fetch) — it has no Bearer JWT. Protected by the signed `state`
+# query param (CALENDAR_OAUTH_STATE_SECRET) instead, same shape as auth-redirect's CSRF state.
+[functions.calendar-oauth-callback]
+verify_jwt = false
+
+# calendar-sync-sweep is invoked by a pg_cron schedule (pg_net), not by users. It has no
+# Bearer JWT; it is protected by the `x-cron-secret` header (CRON_SECRET env var) instead.
+[functions.calendar-sync-sweep]
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

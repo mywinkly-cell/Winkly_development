@@ -243,6 +243,10 @@ export type ConciergeContext = {
   budget_currency?: string;
   latitude?: number;
   longitude?: number;
+  /** Optional venue search radius in kilometers (planning forms). */
+  search_radius_km?: number;
+  /** Human-readable precise pin label when latitude/longitude are set. */
+  pin_label?: string;
   timezone?: string;
   limit_events?: number;
   source_mode?: Mode;
@@ -359,6 +363,8 @@ function serializeConciergeContextForGateway(context: ConciergeContext) {
     budget_currency: context.budget_currency,
     latitude: context.latitude,
     longitude: context.longitude,
+    search_radius_km: context.search_radius_km,
+    pin_label: context.pin_label,
     timezone: context.timezone,
     limit_events: context.limit_events,
     source_mode: context.source_mode,

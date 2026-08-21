@@ -30,6 +30,18 @@ const GEMINI_MODEL_LITE = Deno.env.get("GEMINI_MODEL_LITE") ?? "gemini-3.1-flash
 const GEMINI_MODEL_TOPICS = Deno.env.get("GEMINI_MODEL_TOPICS") ?? "gemini-3.1-flash-lite";
 const GEMINI_MODEL_PLAN = Deno.env.get("GEMINI_MODEL_PLAN") ?? "gemini-3.5-flash";
 
+/**
+ * Gemini 3.x flash models are "thinking" models: internal reasoning tokens count
+ * against maxOutputTokens. With our structured-JSON budgets (200–2048) thinking
+ * can eat the whole budget and truncate the JSON mid-document (finishReason
+ * MAX_TOKENS, near-empty text), silently degrading every plan to the Places
+ * fallback. All Gemini calls here are structured UI tasks, so thinking is
+ * disabled by default. Override via GEMINI_THINKING_BUDGET (tokens) if needed.
+ */
+const GEMINI_THINKING_CONFIG = {
+  thinkingBudget: Math.max(0, Math.floor(Number(Deno.env.get("GEMINI_THINKING_BUDGET") ?? "0")) || 0),
+} as const;
+
 /** Anthropic (Claude) — primary for Premium/Enterprise. Override via Supabase secrets. */
 const ANTHROPIC_MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-sonnet-4-20250514";
 const ANTHROPIC_MODEL_LITE = Deno.env.get("ANTHROPIC_MODEL_LITE") ?? "claude-3-5-haiku-20241022";
@@ -272,7 +284,8 @@ async function runAnthropicJson(
     { retries: 3, baseMs: 700 },
   );
   if (!res.ok) {
-    console.error("[ai-gateway] Anthropic JSON !ok status=" + res.status);
+    const err = await res.text().catch(() => "");
+    console.error("[ai-gateway] Anthropic JSON !ok status=" + res.status + " body=" + err.slice(0, 400));
     return null;
   }
   const data = await res.json();
@@ -407,11 +420,28 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/** 429/402 from empty prepaid credits — retries only burn latency; fall through to the next provider. */
+function isHardBillingThrottle(status: number, bodySnippet: string): boolean {
+  if (status !== 429 && status !== 402) return false;
+  const s = bodySnippet.toLowerCase();
+  return (
+    s.includes("credits are depleted") ||
+    s.includes("prepayment") ||
+    s.includes("insufficient_quota") ||
+    s.includes("exceeded your current quota") ||
+    s.includes("billing hard limit") ||
+    s.includes("payment required")
+  );
+}
+
 async function fetchWithBackoff(url: string, init: RequestInit, opts: { retries: number; baseMs: number }): Promise<Response> {
   let attempt = 0;
   while (true) {
     const res = await fetch(url, init);
     if (res.status !== 429 || attempt >= opts.retries) return res;
+    // Permanent billing throttles (e.g. Gemini prepaid depleted) — do not retry.
+    const snippet = (await res.clone().text().catch(() => "")).slice(0, 400);
+    if (isHardBillingThrottle(res.status, snippet)) return res;
     const ra = res.headers.get("retry-after");
     const retryAfterMs = ra && !isNaN(Number(ra)) ? Number(ra) * 1000 : null;
     const jitter = Math.round(Math.random() * 250);
@@ -419,6 +449,52 @@ async function fetchWithBackoff(url: string, init: RequestInit, opts: { retries:
     await sleep(retryAfterMs != null ? Math.max(backoff, retryAfterMs) : backoff);
     attempt++;
   }
+}
+
+/**
+ * Gemini key rotation: GEMINI_API_KEY_TEST (free tier) is tried first when set;
+ * the paid GEMINI_API_KEY is the automatic fallback (rate limits, quota, outages).
+ */
+const GEMINI_KEYS: string[] = [
+  Deno.env.get("GEMINI_API_KEY_TEST") ?? "",
+  Deno.env.get("GEMINI_API_KEY") ?? "",
+].map((k) => k.trim()).filter(Boolean);
+
+/** First configured Gemini key (test key preferred). Use as a truthy "Gemini available" check. */
+function getGeminiKey(): string | undefined {
+  return GEMINI_KEYS[0];
+}
+
+/**
+ * POST models/{model}:generateContent, trying each configured Gemini key in order
+ * (test → paid). Returns the first OK response, the last failing response (body
+ * unconsumed so callers can log it), or null when no key is configured.
+ */
+async function geminiGenerateContent(
+  model: string,
+  body: Record<string, unknown>,
+  opts: { retries: number; baseMs: number },
+): Promise<Response | null> {
+  let last: Response | null = null;
+  for (let i = 0; i < GEMINI_KEYS.length; i++) {
+    const url =
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(GEMINI_KEYS[i])}`;
+    const res = await fetchWithBackoff(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }, opts);
+    if (res.ok) return res;
+    if (i < GEMINI_KEYS.length - 1) {
+      const snippet = (await res.text().catch(() => "")).slice(0, 200);
+      console.warn(
+        `[ai-gateway] Gemini ${model} key#${i + 1} !ok status=${res.status} — trying next key. body=${snippet}`,
+      );
+    } else {
+      last = res;
+    }
+  }
+  return last;
 }
 
 const ALLOWED_MODES = ["romance", "friends", "business", "events"];
@@ -447,6 +523,8 @@ const ALLOWLISTED_CONTEXT_KEYS = [
   "presentation",
   /** Match Agent: optional chat link + when to meet + search radius (miles). */
   "conversation_id", "target_slot_iso", "search_radius_miles",
+  /** Planning forms: optional search radius in km + precise pin label. */
+  "search_radius_km", "pin_label",
   "planning_entry_surface", "origin_location_label", "travel_from_origin_summary", "exact_time_hm",
   "sanitized_requester_persona",
   /** Winkly Plan (multi-user): explicit list of participants (includes requester). */
@@ -1907,7 +1985,6 @@ Respond with valid JSON only:
   "agent_message": "Winkly: ... (conversational; ends with asking both to confirm; no home addresses)"
 }`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_PLAN}:generateContent?key=${encodeURIComponent(geminiKey)}`;
   const body = {
     systemInstruction: { parts: [{ text: MATCH_AGENT_SYSTEM }] },
     contents: [{ role: "user", parts: [{ text: `Structured pipeline output:\n${JSON.stringify(payload)}` }] }],
@@ -1915,14 +1992,11 @@ Respond with valid JSON only:
       maxOutputTokens: capOutputTokens(1024),
       temperature: 0.45,
       responseMimeType: "application/json",
+      thinkingConfig: GEMINI_THINKING_CONFIG,
     },
   };
-  const res = await fetchWithBackoff(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  }, { retries: 4, baseMs: 900 });
-  if (!res.ok) return null;
+  const res = await geminiGenerateContent(GEMINI_MODEL_PLAN, body, { retries: 4, baseMs: 900 });
+  if (!res || !res.ok) return null;
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (typeof text !== "string") return null;
@@ -2086,7 +2160,7 @@ async function runMatchAgentPipeline(
   };
 
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-  const geminiKey = Deno.env.get("GEMINI_API_KEY");
+  const geminiKey = getGeminiKey();
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
   let model: MatchAgentModelJson | null = null;
   if (isPremiumTier(tier) && anthropicKey) {
@@ -2219,7 +2293,6 @@ async function runSuperLikeIcebreakerGemini(
   geminiKey: string,
   payload: Record<string, unknown>,
 ): Promise<string | null> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(geminiKey)}`;
   const body = {
     systemInstruction: { parts: [{ text: SUPER_LIKE_ICEBREAKER_SYSTEM }] },
     contents: [{ role: "user", parts: [{ text: JSON.stringify(payload) }] }],
@@ -2227,14 +2300,11 @@ async function runSuperLikeIcebreakerGemini(
       maxOutputTokens: capOutputTokens(200),
       temperature: 0.65,
       responseMimeType: "application/json",
+      thinkingConfig: GEMINI_THINKING_CONFIG,
     },
   };
-  const res = await fetchWithBackoff(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  }, { retries: 2, baseMs: 500 });
-  if (!res.ok) return null;
+  const res = await geminiGenerateContent(GEMINI_MODEL, body, { retries: 2, baseMs: 500 });
+  if (!res || !res.ok) return null;
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (typeof text !== "string") return null;
@@ -2260,7 +2330,6 @@ async function runMatchBridgeGeminiJson(
   geminiKey: string,
   payload: Record<string, unknown>,
 ): Promise<MatchBridgePayload | null> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(geminiKey)}`;
   const body = {
     systemInstruction: { parts: [{ text: MATCH_BRIDGE_SYSTEM }] },
     contents: [{ role: "user", parts: [{ text: `Context JSON:\n${JSON.stringify(payload)}` }] }],
@@ -2268,14 +2337,11 @@ async function runMatchBridgeGeminiJson(
       maxOutputTokens: capOutputTokens(768),
       temperature: 0.55,
       responseMimeType: "application/json",
+      thinkingConfig: GEMINI_THINKING_CONFIG,
     },
   };
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) return null;
+  const res = await geminiGenerateContent(GEMINI_MODEL, body, { retries: 1, baseMs: 500 });
+  if (!res || !res.ok) return null;
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (typeof text !== "string") return null;
@@ -2490,7 +2556,6 @@ async function runGeminiWithTools(
       : task === "winkly_plan" || task === "planner_theme_plans"
         ? GEMINI_MODEL_PLAN
         : GEMINI_MODEL;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(geminiKey)}`;
 
   type Part = { text?: string; functionCall?: { name: string; args?: Record<string, unknown> }; functionResponse?: { name: string; response: Record<string, unknown> } };
   const contents: Array<{ role: string; parts: Part[] }> = [
@@ -2504,7 +2569,7 @@ async function runGeminiWithTools(
     const body: Record<string, unknown> = {
       systemInstruction: { parts: [{ text: sysFull }] },
       contents,
-      generationConfig: { maxOutputTokens: resolveMaxTokens(task), temperature: 0.7 },
+      generationConfig: { maxOutputTokens: resolveMaxTokens(task), temperature: 0.7, thinkingConfig: GEMINI_THINKING_CONFIG },
     };
     // Grounding control: only enable Gemini tools (Maps/Search/etc.) for final plan phase.
     // We treat winkly_plan + concierge/plan/event_suggest as "final"; topic/theme previews should not invoke tools.
@@ -2512,30 +2577,27 @@ async function runGeminiWithTools(
       body.tools = [{ functionDeclarations: conciergeGeminiTools(context) }];
     }
 
-    let res = await fetchWithBackoff(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }, { retries: 4, baseMs: 900 });
+    const res = await geminiGenerateContent(model, body, { retries: 4, baseMs: 900 });
 
     // Legacy 429 retry logic removed: handled by fetchWithBackoff (with jitter + Retry-After support).
 
-    if (!res.ok) {
-      const err = await res.text();
-      console.error("[ai-gateway] Gemini !ok status=" + res.status + " body=" + err.slice(0, 400));
+    if (!res || !res.ok) {
+      const status = res?.status ?? 0;
+      const err = res ? await res.text() : "no Gemini key configured";
+      console.error("[ai-gateway] Gemini !ok status=" + status + " body=" + err.slice(0, 400));
       // A hard quota/billing exhaustion will not recover on retry — surface a distinct message.
-      const quotaExhausted = res.status === 429 && /RESOURCE_EXHAUSTED|quota|billing|exceeded/i.test(err);
+      const quotaExhausted = status === 429 && /RESOURCE_EXHAUSTED|quota|billing|exceeded/i.test(err);
       const friendly = quotaExhausted
         ? "Winkly AI has reached its usage quota for now. Please try again later."
-        : res.status === 429
+        : status === 429
           ? "The AI provider is rate-limiting. Wait a minute and try again, or use a paid API key for higher limits."
-          : res.status === 401 || res.status === 403
+          : status === 401 || status === 403
             ? "Invalid or restricted API key. Check your Gemini/OpenAI key in Supabase secrets."
-            : `AI temporarily unavailable (${res.status}). Try again in a moment.`;
-      if (res.status === 429) {
-        return { message: friendly, suggestions: [], statusCode: 429 as const, retry_after: quotaExhausted ? 3600 : 60, provider_status: res.status, quota_exhausted: quotaExhausted };
+            : `AI temporarily unavailable (${status}). Try again in a moment.`;
+      if (status === 429) {
+        return { message: friendly, suggestions: [], statusCode: 429 as const, retry_after: quotaExhausted ? 3600 : 60, provider_status: status, quota_exhausted: quotaExhausted };
       }
-      return { message: friendly, suggestions: [], provider_status: res.status };
+      return { message: friendly, suggestions: [], provider_status: status };
     }
 
     const data = await res.json();
@@ -2891,7 +2953,7 @@ async function runConciergeLlmChain(
   systemPrompt: string,
 ): Promise<ConciergeLlmResult> {
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-  const geminiKey = Deno.env.get("GEMINI_API_KEY");
+  const geminiKey = getGeminiKey();
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
 
   if (isPremiumTier(tier) && anthropicKey) {
@@ -3210,6 +3272,79 @@ function noVenueFoundPlan(seedTitle: string): WinklyPlanOutput {
   return { options: [mk("A", "Bolder pick"), mk("B", "Reliable pick")] };
 }
 
+/** Short Places Text Search query — avoid stuffing weather/form prose into Google's query. */
+function cleanPlacesSearchIdea(userIdea: string, seedTitle: string): string {
+  const seed = seedTitle.trim();
+  if (seed && !/^plan$/i.test(seed) && seed.toLowerCase() !== "custom") {
+    return seed.slice(0, 120);
+  }
+  const firstLine = userIdea.split(/\r?\n/).map((l) => l.trim()).find(Boolean) ?? "";
+  return (
+    firstLine
+      .replace(/\b(Weather:|Prefer indoor|Prefer outdoor).*$/i, "")
+      .trim()
+      .slice(0, 120) || "cafe"
+  );
+}
+
+/** Prefer a prefetched POI hint when Places verify missed (e.g. key restricted on Edge). */
+function venueFromLocationHints(
+  injection: LocationContextInjection | null | undefined,
+  city: string,
+  country?: string,
+): { name: string; address: string; google_maps_link: string } | null {
+  if (!injection) return null;
+  for (const item of mergeLocationHints(injection)) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const name = typeof o.name === "string" ? o.name.trim() : "";
+    if (!name || name.toLowerCase() === "no suitable venue found") continue;
+    const address =
+      typeof o.formatted_address === "string" && o.formatted_address.trim()
+        ? ensureAddressIncludesCity(o.formatted_address.trim(), city)
+        : [city, country].filter(Boolean).join(", ");
+    const placeId = typeof o.place_id === "string" ? o.place_id.trim() : "";
+    const google_maps_link = placeId
+      ? `https://www.google.com/maps/place/?q=place_id:${placeId}`
+      : mapsSearchUrlForVenue(name, city, country);
+    return { name: name.slice(0, 120), address: address.slice(0, 180), google_maps_link: google_maps_link.slice(0, 600) };
+  }
+  return null;
+}
+
+/** Last-resort A/B cards with Maps search links — used when every LLM is unavailable. */
+function cityMapsSearchPlan(
+  seedTitle: string,
+  city: string,
+  country: string | undefined,
+  weather: Record<string, unknown> | null,
+): WinklyPlanOutput {
+  const title = seedTitle.slice(0, 120) || `Plans in ${city}`;
+  const maps = mapsSearchUrlForVenue(title, city, country);
+  const mk = (id: "A" | "B", label: string, suffix: string): WinklyPlanOptionOut => ({
+    option_id: id,
+    character_label: label,
+    title: `${title}${suffix}`.slice(0, 140),
+    fit_reason: `Explore options near ${city}.`,
+    why_this_fits: `Open Maps to pick a real spot for “${title}” near ${city}.`,
+    itinerary: [
+      { time: "18:30", description: `Meet near ${city}` },
+      { time: "20:00", description: "Enjoy the experience" },
+    ],
+    venue: {
+      name: `${title} · ${city}`.slice(0, 120),
+      address: [city, country].filter(Boolean).join(", "),
+      google_maps_link: maps,
+      estimated_cost: "Varies",
+    },
+    weather_note: formatWeatherSnapshotProse(weather),
+    duration_minutes: 120,
+  });
+  return {
+    options: [mk("A", "Bolder pick", ""), mk("B", "Reliable pick", " — nearby")],
+  };
+}
+
 /** When Places verification succeeded, force both options onto the grounded venue (booking URL optional). */
 function applyVerifiedVenueToOptions(
   plan: WinklyPlanOutput,
@@ -3506,8 +3641,6 @@ Return JSON only:
     trip: { start_date: startIso, num_days: params.numDays },
   };
 
-  const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_PLAN}:generateContent?key=${encodeURIComponent(params.geminiKey)}`;
   // A multi-day trip must emit two options × N days of itinerary in one JSON document.
   // The flat planner_theme_plans budget (PLAN_OPTIONS_MAX_TOKENS, default 1200) is sized
   // for a single day, so anything longer truncates mid-JSON — and because
@@ -3525,14 +3658,15 @@ Return JSON only:
       maxOutputTokens: multiDayMaxTokens,
       temperature: 0.45,
       responseMimeType: "application/json",
+      thinkingConfig: GEMINI_THINKING_CONFIG,
     },
   };
-  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => "");
+  const res = await geminiGenerateContent(GEMINI_MODEL_PLAN, body, { retries: 1, baseMs: 700 });
+  if (!res || !res.ok) {
+    const errBody = res ? await res.text().catch(() => "") : "no Gemini key configured";
     console.error(
       "[ai-gateway] multi-day plan: Gemini !ok" +
-        ` status=${res.status} model=${GEMINI_MODEL_PLAN} num_days=${params.numDays}` +
+        ` status=${res?.status ?? 0} model=${GEMINI_MODEL_PLAN} num_days=${params.numDays}` +
         ` body=${errBody.slice(0, 400)}`,
     );
     const seed = noVenueFoundPlan(params.userIdea.slice(0, 120) || "Trip");
@@ -3590,6 +3724,12 @@ async function generateWinklyPlan(params: {
   appLanguage?: string;
   /** Group "Vibe Check" prose (mood/energy/notes) injected into the brief for group plans. */
   groupVibe?: string | null;
+  /** Optional pin / profile coords to bias Places Text Search. */
+  latitude?: number | null;
+  longitude?: number | null;
+  searchRadiusMeters?: number | null;
+  /** Prefetched location middleware result — used for venue stubs when Maps verify misses. */
+  locationInjection?: LocationContextInjection | null;
 }): Promise<{
   plan: WinklyPlanOutput;
   trip_days?: PlannerTripDayOut[];
@@ -3654,11 +3794,10 @@ async function generateWinklyPlan(params: {
     };
   });
 
-  // Multi-person scheduling conflicts (TB-2.3): for true groups (>2 participants),
-  // fetch each participant's busy blocks so the model can avoid double-booking.
-  // Capped at the group size limit (8) so this stays cheap.
+  // Scheduling conflicts: inject busy blocks for the requester (and any partners)
+  // so solo Sparks / 1:1 plans also avoid existing planner_items — not only groups >2.
   let participantsPlannerItems: Array<{ user_id: string; busy: unknown }> | null = null;
-  if (ensureRequester.length > 2) {
+  {
     const capped = ensureRequester.slice(0, 8);
     try {
       const results = await Promise.all(
@@ -3691,7 +3830,7 @@ async function generateWinklyPlan(params: {
 
   const planSeedTitle = (params.displaySeedTitle ?? userIdea ?? "Plan").trim().slice(0, 120) || "Plan";
 
-  const geminiKey = Deno.env.get("GEMINI_API_KEY");
+  const geminiKey = getGeminiKey();
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
   const useAnthropicPlan = params.tier && isPremiumTier(params.tier) && !!anthropicKey;
@@ -3756,16 +3895,11 @@ async function generateWinklyPlan(params: {
     console.warn("[ai-gateway] multi-day requested without GEMINI_API_KEY — using single-day path");
   }
 
-  if (!geminiKey && !useAnthropicPlan && !openaiKey) {
-    const fallback = noVenueFoundPlan(planSeedTitle);
-    return {
-      plan: fallback,
-      pending_plan_id: null,
-      provider: "fallback",
-      location_id: null,
-      booking_url: null,
-      participants: ensureRequester,
-    };
+  if (!geminiKey && !useAnthropicPlan && !openaiKey && !anthropicKey) {
+    console.warn("[ai-gateway] generateWinklyPlan: no LLM keys configured — Places/maps stub only", {
+      city,
+      seedTitle: planSeedTitle,
+    });
   }
 
   // Maps grounding (cost control) — now via the shared verified_places cache (single source of
@@ -3774,15 +3908,32 @@ async function generateWinklyPlan(params: {
   // - textsearch / verify: resolve one real place; verify also surfaces a verified booking_url.
   // Without a key, resolveVerifiedPlace returns null and Gemini still produces venues from world knowledge.
   const mapsKey = Deno.env.get("GOOGLE_PLACES_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY");
-  const ideaForSearch = userIdea || profiles.map((p) => (Array.isArray(p.interests) ? p.interests.slice(0, 2).join(", ") : "")).filter(Boolean).join(", ") || "date night";
+  const ideaForSearch =
+    cleanPlacesSearchIdea(userIdea, planSeedTitle) ||
+    profiles.map((p) => (Array.isArray(p.interests) ? p.interests.slice(0, 2).join(", ") : "")).filter(Boolean).join(", ") ||
+    "date night";
   const query = `${ideaForSearch} in ${[city, country].filter(Boolean).join(", ")}`.slice(0, 220);
+  const placesLat =
+    typeof params.latitude === "number" && Number.isFinite(params.latitude) ? params.latitude : null;
+  const placesLng =
+    typeof params.longitude === "number" && Number.isFinite(params.longitude) ? params.longitude : null;
+  const placesRadius =
+    typeof params.searchRadiusMeters === "number" && params.searchRadiusMeters > 0
+      ? Math.min(50_000, Math.max(1000, Math.round(params.searchRadiusMeters)))
+      : 40_000;
 
   let verifiedVenue: { name: string; address: string; google_maps_link: string } | null = null;
   let verifiedPlaceId: string | null = null;
   // Hallucination guardrail: booking_url is only a Places-verified link, and only in verify mode.
   let verifiedBookingUrl: string | null = null;
   if (maps_grounding !== "none" && mapsKey) {
-    const place = await resolveVerifiedPlace(supabase, { query, placesKey: mapsKey });
+    const place = await resolveVerifiedPlace(supabase, {
+      query,
+      placesKey: mapsKey,
+      lat: placesLat,
+      lng: placesLng,
+      radiusMeters: placesRadius,
+    });
     if (place && place.name && place.place_id) {
       verifiedPlaceId = place.place_id;
       verifiedVenue = {
@@ -3873,8 +4024,10 @@ Required JSON schema:
 
   let parsed: WinklyPlanOutput | null = null;
   let planProvider: "gemini" | "anthropic" | "openai" | "fallback" = "fallback";
+  let triedAnthropic = false;
 
   if (useAnthropicPlan && anthropicKey) {
+    triedAnthropic = true;
     const anthropicText = await runAnthropicJson(
       anthropicKey,
       SYSTEM,
@@ -3888,7 +4041,6 @@ Required JSON schema:
   }
 
   if (!parsed && geminiKey) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_PLAN}:generateContent?key=${encodeURIComponent(geminiKey)}`;
     const body = {
       systemInstruction: { parts: [{ text: SYSTEM }] },
       contents: [{ role: "user", parts: [{ text: planUserContent }] }],
@@ -3896,14 +4048,11 @@ Required JSON schema:
         maxOutputTokens: resolveMaxTokens("winkly_plan"),
         temperature: 0.5,
         responseMimeType: "application/json",
+        thinkingConfig: GEMINI_THINKING_CONFIG,
       },
     };
-    const res = await fetchWithBackoff(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }, { retries: 2, baseMs: 700 });
-    if (res.ok) {
+    const res = await geminiGenerateContent(GEMINI_MODEL_PLAN, body, { retries: 2, baseMs: 700 });
+    if (res?.ok) {
       const data = await res.json();
       const candidate = data.candidates?.[0];
       const text = candidate?.content?.parts?.[0]?.text;
@@ -3917,8 +4066,8 @@ Required JSON schema:
         });
       }
     } else {
-      const errBody = await res.text().catch(() => "");
-      console.error("[ai-gateway] Gemini plan !ok status=" + res.status + " body=" + errBody.slice(0, 400));
+      const errBody = res ? await res.text().catch(() => "") : "no Gemini key configured";
+      console.error("[ai-gateway] Gemini plan !ok status=" + (res?.status ?? 0) + " body=" + errBody.slice(0, 400));
     }
   }
 
@@ -3926,6 +4075,20 @@ Required JSON schema:
     const openaiText = await runOpenAIPlanJson(openaiKey, SYSTEM, planUserContent);
     parsed = openaiText ? parseWinklyPlanOutput(openaiText, { city, country }) : null;
     if (parsed) planProvider = "openai";
+  }
+
+  // Super/Free: Anthropic is not primary, but use it when Gemini/OpenAI are down (e.g. prepaid credits depleted).
+  if (!parsed && anthropicKey && !triedAnthropic) {
+    const anthropicText = await runAnthropicJson(
+      anthropicKey,
+      SYSTEM,
+      planUserContent,
+      ANTHROPIC_MODEL_PLAN,
+      resolveMaxTokens("winkly_plan"),
+      0.5,
+    );
+    parsed = anthropicText ? parseWinklyPlanOutput(anthropicText, { city, country }) : null;
+    if (parsed) planProvider = "anthropic";
   }
 
   if (!parsed && verifiedVenue) {
@@ -3958,10 +4121,44 @@ Required JSON schema:
     planProvider = "fallback";
   }
 
-  let finalPlan: WinklyPlanOutput = parsed ?? noVenueFoundPlan(planSeedTitle);
+  if (!parsed) {
+    const hintVenue = venueFromLocationHints(params.locationInjection, city, country);
+    if (hintVenue) {
+      verifiedVenue = hintVenue;
+      const mkFromVenue = (id: "A" | "B", label: string, title: string): WinklyPlanOptionOut => ({
+        option_id: id,
+        character_label: label,
+        title: title.slice(0, 140),
+        fit_reason: `Matches your brief in ${city}.`,
+        why_this_fits: `Matches your brief in ${city}.`,
+        itinerary: [
+          { time: "18:30", description: `Meet at ${hintVenue.name}` },
+          { time: "20:00", description: "Enjoy the experience" },
+        ],
+        venue: {
+          name: hintVenue.name,
+          address: hintVenue.address,
+          google_maps_link: hintVenue.google_maps_link,
+          estimated_cost: "Varies",
+        },
+        weather_note: formatWeatherSnapshotProse(weather),
+        duration_minutes: 120,
+      });
+      parsed = {
+        options: [
+          mkFromVenue("A", "Bolder pick", planSeedTitle),
+          mkFromVenue("B", "Reliable pick", `${planSeedTitle} — classic`),
+        ],
+      };
+      planProvider = "fallback";
+    }
+  }
+
+  let finalPlan: WinklyPlanOutput =
+    parsed ?? cityMapsSearchPlan(planSeedTitle, city, country, weather);
   if (!parsed) {
     planProvider = "fallback";
-    console.error("[ai-gateway] generateWinklyPlan all providers failed — using fallback", {
+    console.error("[ai-gateway] generateWinklyPlan all providers failed — using maps-search fallback", {
       city,
       hasGemini: !!geminiKey,
       hasAnthropic: !!anthropicKey,
@@ -4259,6 +4456,10 @@ serve(async (req) => {
 
       const locCtxWp = await applyLocationContextMiddleware({ ...scrubbedSafeContext });
       const wpInjection = locCtxWp.SYSTEM_CONTEXT_LOCATION as LocationContextInjection | undefined;
+      const wpRadiusKm =
+        typeof scrubbedSafeContext.search_radius_km === "number" && scrubbedSafeContext.search_radius_km > 0
+          ? Math.min(50, Math.max(0.5, scrubbedSafeContext.search_radius_km as number))
+          : null;
       const out = await generateWinklyPlan({
         supabase,
         requesterUserId: user.id,
@@ -4269,7 +4470,11 @@ serve(async (req) => {
         tier,
         appLanguage: typeof scrubbedSafeContext.app_language === "string" ? scrubbedSafeContext.app_language : undefined,
         systemContextBlock: wpInjection ? formatSystemContextBlock(wpInjection) : undefined,
+        locationInjection: wpInjection ?? null,
         groupVibe: typeof scrubbedSafeContext.group_vibe === "string" ? scrubbedSafeContext.group_vibe : undefined,
+        latitude: typeof scrubbedSafeContext.latitude === "number" ? scrubbedSafeContext.latitude : null,
+        longitude: typeof scrubbedSafeContext.longitude === "number" ? scrubbedSafeContext.longitude : null,
+        searchRadiusMeters: wpRadiusKm != null ? Math.round(wpRadiusKm * 1000) : null,
       });
       if (isNoVenueFallbackPlan(out.plan)) {
         return new Response(
@@ -4398,6 +4603,10 @@ serve(async (req) => {
 
       const locCtxPt = await applyLocationContextMiddleware({ ...scrubbedSafeContext, city, country: countryStr });
       const ptInjection = locCtxPt.SYSTEM_CONTEXT_LOCATION as LocationContextInjection | undefined;
+      const ptRadiusKm =
+        typeof scrubbedSafeContext.search_radius_km === "number" && scrubbedSafeContext.search_radius_km > 0
+          ? Math.min(50, Math.max(0.5, scrubbedSafeContext.search_radius_km as number))
+          : null;
 
       // Single canonical plan generator: returns two options (A/B) in the WinklyPlanOption shape.
       const out = await generateWinklyPlan({
@@ -4413,7 +4622,11 @@ serve(async (req) => {
         planRequestText: pr || undefined,
         appLanguage: typeof scrubbedSafeContext.app_language === "string" ? scrubbedSafeContext.app_language : undefined,
         systemContextBlock: ptInjection ? formatSystemContextBlock(ptInjection) : undefined,
+        locationInjection: ptInjection ?? null,
         groupVibe: typeof scrubbedSafeContext.group_vibe === "string" ? scrubbedSafeContext.group_vibe : undefined,
+        latitude: typeof scrubbedSafeContext.latitude === "number" ? scrubbedSafeContext.latitude : null,
+        longitude: typeof scrubbedSafeContext.longitude === "number" ? scrubbedSafeContext.longitude : null,
+        searchRadiusMeters: ptRadiusKm != null ? Math.round(ptRadiusKm * 1000) : null,
       });
 
       if (isNoVenueFallbackPlan(out.plan)) {
@@ -4589,7 +4802,7 @@ serve(async (req) => {
       const requestIdSl = !insSl.error ? (insSl.data as { id?: string } | null)?.id ?? null : null;
 
       const anthropicKeySl = Deno.env.get("ANTHROPIC_API_KEY");
-      const geminiKeySl = Deno.env.get("GEMINI_API_KEY");
+      const geminiKeySl = getGeminiKey();
 
       let openerSl: string | null = null;
       if (geminiKeySl) {
@@ -4709,7 +4922,7 @@ serve(async (req) => {
       }
 
       const anthropicKeyMb = Deno.env.get("ANTHROPIC_API_KEY");
-      const geminiKeyMb = Deno.env.get("GEMINI_API_KEY");
+      const geminiKeyMb = getGeminiKey();
       const openaiKeyMb = Deno.env.get("OPENAI_API_KEY");
 
       let bridge: MatchBridgePayload | null = null;

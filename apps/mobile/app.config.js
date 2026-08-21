@@ -9,6 +9,10 @@ const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 // Which environment this build/run targets: development | production.
 // Set via .env (local) or eas.json build profile env (EAS). Defaults to development.
 const APP_ENV = process.env.APP_ENV || "development";
+const GOOGLE_MAPS_API_KEY =
+  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY ||
+  process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY ||
+  "";
 
 /** Expo Push / EAS expects a real UUID project id — never use a placeholder string. */
 function isLikelyUuid(value) {
@@ -115,11 +119,14 @@ module.exports = {
       // (see website/public/.well-known/ + docs/DEEP_LINKING.md). Scoped to /app so the
       // legal pages and the /auth email bridge keep opening in the browser.
       associatedDomains: ["applinks:mywinkly.de"],
+      ...(GOOGLE_MAPS_API_KEY
+        ? { config: { googleMapsApiKey: GOOGLE_MAPS_API_KEY } }
+        : {}),
       infoPlist: {
         CFBundleDisplayName: "Winkly",
         ITSAppUsesNonExemptEncryption: false,
         NSLocationWhenInUseUsageDescription:
-          "Winkly uses your location to show nearby people and events.",
+          "Winkly uses your location to show nearby people and events, and to set a precise planning spot on the map.",
         NSCalendarsUsageDescription:
           "Winkly syncs your planner items with your calendar so you never miss an event.",
         NSRemindersUsageDescription:
@@ -134,6 +141,9 @@ module.exports = {
       package: "com.winkly.app",
       label: "Winkly",
       ...(androidGoogleServicesFile ? { googleServicesFile: androidGoogleServicesFile } : {}),
+      ...(GOOGLE_MAPS_API_KEY
+        ? { config: { googleMaps: { apiKey: GOOGLE_MAPS_API_KEY } } }
+        : {}),
       adaptiveIcon: {
         foregroundImage: "./assets/icons/winkly-emoji-shadow.png",
         backgroundColor: "#FFFFFF"
@@ -200,7 +210,8 @@ module.exports = {
       ...(easProjectId ? { eas: { projectId: easProjectId } } : {}),
       appEnv: APP_ENV,
       supabaseUrl: SUPABASE_URL,
-      supabaseAnonKey: SUPABASE_ANON_KEY
+      supabaseAnonKey: SUPABASE_ANON_KEY,
+      ...(GOOGLE_MAPS_API_KEY ? { googleMapsApiKey: GOOGLE_MAPS_API_KEY } : {}),
     }
   }
 };

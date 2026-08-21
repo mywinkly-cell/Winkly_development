@@ -136,12 +136,18 @@ No Supabase setup is required for opening maps; you only need to store and pass 
 | Task                                                                  | Where                 | Status         |
 | --------------------------------------------------------------------- | --------------------- | -------------- |
 | Device calendar permission                                            | App (`expo-calendar`) | Done           |
+| Device calendar write-through on plan confirm                         | App (`lib/integrations/calendarSync.ts`) | Done |
 | Device location permission                                            | App (`expo-location`) | Done           |
-| Planner settings UI                                                   | App                   | Done           |
+| Planner settings UI (device + cloud)                                  | App                   | Done           |
 | `calendar_connections` table                                          | Supabase              | Exists         |
-| RLS for `calendar_connections`                                        | Supabase              | Add if missing |
-| Google OAuth credentials                                              | Google Cloud          | To configure   |
-| Edge Function: OAuth + sync                                           | Supabase              | To implement   |
+| RLS for `calendar_connections`                                        | Supabase              | Exists         |
+| Google + Microsoft OAuth connect/disconnect flow                      | Edge Functions (`calendar-oauth-start/callback/disconnect`) | Done — needs real credentials (below) |
+| Token encryption at rest                                              | `_shared/calendarTokenCrypto.ts` (AES-256-GCM) | Done — needs `CALENDAR_TOKEN_ENCRYPTION_KEY` |
+| Edge Function: sync confirmed plans to Google/Outlook                 | `calendar-sync-confirmed-event`, `_shared/calendarSync.ts` | Done |
+| Durability retry sweep (cron)                                         | `calendar-sync-sweep` + `20260802120000_calendar_sync_sweep_cron_schedule.sql` | Done |
+| Cloud free/busy merge (Concierge white-space)                         | `calendar-freebusy`   | Done — not yet wired to a mobile caller |
+| Google Cloud OAuth app (Client ID/Secret)                             | Google Cloud Console  | **To configure by you** |
+| Microsoft Entra ID app registration (Client ID/Secret)                | Azure Portal          | **To configure by you** |
 | `location` / `location_lat` / `location_lng` on planner_items, events | Supabase              | Add if missing |
 | Geocoding (optional)                                                  | Edge Function         | To implement   |
 

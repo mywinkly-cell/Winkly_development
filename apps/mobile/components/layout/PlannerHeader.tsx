@@ -1,5 +1,6 @@
 // PlannerHeader — Used on every Planner screen only
-// Left: Filter | Center: Winkly | Right: Weekly Sparks (+ optional AI concierge).
+// Left: Filter | Center: Winkly | Right: Weekly Sparks (calendar spark, toggle) + Winkly AI (sparkles, opens concierge).
+// The two right buttons use different icons on purpose: Sparks = ready-made weekly ideas, AI = plan on request.
 // Settings live only at Mode Selection (General settings) to avoid overwhelming users.
 
 import React from "react";
@@ -9,12 +10,13 @@ import { getModeHubFromPathname, plannerRoutes } from "@/lib/navigation/modeHub"
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Layout, Shadow, Typography, FontFamily, HEADER } from "@/constants/tokens";
-import { SparklesIcon, WinklyAISpark } from "@/components/ui/WinklyAISpark";
+import { WinklyAISpark } from "@/components/ui/WinklyAISpark";
+import { WeeklySparksIcon } from "@/components/ui/WeeklySparksIcon";
 
 type PlannerHeaderProps = {
   /** Open filter modal (e.g. standalone planner); if not set, navigates to /planner */
   onFilterPress?: () => void;
-  /** Show / reopen This week's Sparks (3 cards). */
+  /** Show / reopen Weekly Sparks (3 cards). */
   onWeeklySparkPress?: () => void;
   /** When Sparks section is visible — accents the header spark button. */
   weeklySparkActive?: boolean;
@@ -62,10 +64,12 @@ export function PlannerHeader({
             }}
             style={[styles.iconBtn, weeklySparkActive && styles.iconBtnActive]}
             activeOpacity={0.8}
-            accessibilityLabel={weeklySparkActive ? "Hide weekly Sparks" : "Show weekly Sparks"}
+            accessibilityLabel={
+              weeklySparkActive ? "Hide this week's Sparks" : "Show this week's Sparks"
+            }
             accessibilityState={{ selected: weeklySparkActive }}
           >
-            <SparklesIcon
+            <WeeklySparksIcon
               size={HEADER.iconSize}
               color={weeklySparkActive ? Colors.white : Colors.primaryViolet}
             />
@@ -78,7 +82,7 @@ export function PlannerHeader({
               onPress={onAIPress}
               size={HEADER.iconSize}
               style={styles.sparkBtn}
-              accessibilityLabel="Winkly AI Agent"
+              accessibilityLabel="Ask Winkly to plan something"
             />
           </View>
         ) : onWeeklySparkPress == null ? (

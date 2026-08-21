@@ -6,7 +6,41 @@
 import { supabase } from "@/lib/supabase";
 import { requestPeerPushNotification } from "@/lib/push/winklyPush";
 import { recordPairBehaviorSignal } from "@/lib/matching/behaviorSignals";
+import { syncPlannerItemToDeviceCalendar } from "@/lib/integrations/calendarSync";
+import { ensureConfirmedEventForPlannerItem, triggerCloudCalendarSync } from "@/lib/integrations/confirmedEvents";
 import type { Mode } from "@/types";
+
+/** Fire-and-forget: register the confirmed-plan bookkeeping row, then ask the cloud sync
+ * function to push it to whichever calendars (Google/Outlook) the participant has connected. */
+function syncCloudCalendar(input: {
+  plannerItemId: string;
+  creatorId: string;
+  participantUserId: string;
+  title: string;
+  startsAt: string;
+  endsAt?: string | null;
+}): void {
+  void (async () => {
+    const confirmedEventId = await ensureConfirmedEventForPlannerItem(input);
+    if (confirmedEventId) await triggerCloudCalendarSync(confirmedEventId);
+  })();
+}
+
+/** Pulls a best-guess location string out of a planner item's free-form payload/meta. */
+function derivePlannerLocation(payload: {
+  location?: string;
+  place?: string;
+  item_meta?: Record<string, unknown> | null;
+}): string | null {
+  if (payload.location) return payload.location;
+  if (payload.place) return payload.place;
+  const meta = payload.item_meta;
+  if (meta && typeof meta === "object") {
+    const loc = meta.location ?? meta.place ?? meta.venue_name;
+    if (typeof loc === "string" && loc) return loc;
+  }
+  return null;
+}
 
 export type PlannerInvitationStatus = "pending" | "accepted" | "declined" | "reschedule";
 
@@ -80,6 +114,24 @@ export async function createPlannerItemForSelf(
   });
   if (partError) throw new Error(partError.message);
 
+  void syncPlannerItemToDeviceCalendar({
+    plannerItemId: item.id,
+    userId,
+    title: payload.title,
+    description: payload.description ?? null,
+    location: derivePlannerLocation(payload),
+    startsAt: payload.starts_at,
+    endsAt: payload.ends_at ?? null,
+  });
+  syncCloudCalendar({
+    plannerItemId: item.id,
+    creatorId: userId,
+    participantUserId: userId,
+    title: payload.title,
+    startsAt: payload.starts_at,
+    endsAt: payload.ends_at ?? null,
+  });
+
   return item.id;
 }
 
@@ -121,6 +173,26 @@ export async function createPlannerInvite(
     { planner_item_id: item.id, user_id: inviteeId, role: "invitee" },
   ]);
   if (partError) throw new Error(partError.message);
+
+  // Only the inviter has a real commitment yet — the invitee's row is still "invitee"
+  // (pending), so it isn't synced to their calendar until they accept.
+  void syncPlannerItemToDeviceCalendar({
+    plannerItemId: item.id,
+    userId: inviterId,
+    title: payload.title,
+    description: payload.description ?? null,
+    location: derivePlannerLocation(payload),
+    startsAt: payload.starts_at,
+    endsAt: payload.ends_at ?? null,
+  });
+  syncCloudCalendar({
+    plannerItemId: item.id,
+    creatorId: inviterId,
+    participantUserId: inviterId,
+    title: payload.title,
+    startsAt: payload.starts_at,
+    endsAt: payload.ends_at ?? null,
+  });
 
   const { data: inv, error: invError } = await supabase
     .from("planner_invitations")
@@ -187,7 +259,7 @@ export async function acceptPlannerInvite(invitationId: string): Promise<AcceptP
 
   const { data: itemRow } = await supabase
     .from("planner_items")
-    .select("source_mode, title, starts_at")
+    .select("source_mode, title, description, starts_at, ends_at, meta")
     .eq("id", inv.planner_item_id)
     .maybeSingle();
 
@@ -208,6 +280,34 @@ export async function acceptPlannerInvite(invitationId: string): Promise<AcceptP
       { onConflict: "planner_item_id,user_id" }
     );
   if (insertErr) throw new Error(insertErr.message);
+
+  const typedItemRow = itemRow as {
+    title?: string;
+    description?: string | null;
+    starts_at?: string;
+    ends_at?: string | null;
+    meta?: Record<string, unknown> | null;
+  } | null;
+
+  if (typedItemRow?.starts_at) {
+    void syncPlannerItemToDeviceCalendar({
+      plannerItemId: inv.planner_item_id,
+      userId: uid,
+      title: typedItemRow.title ?? "Plan",
+      description: typedItemRow.description ?? null,
+      location: derivePlannerLocation({ item_meta: typedItemRow.meta ?? null }),
+      startsAt: typedItemRow.starts_at,
+      endsAt: typedItemRow.ends_at ?? null,
+    });
+    syncCloudCalendar({
+      plannerItemId: inv.planner_item_id,
+      creatorId: inv.inviter_id,
+      participantUserId: uid,
+      title: typedItemRow.title ?? "Plan",
+      startsAt: typedItemRow.starts_at,
+      endsAt: typedItemRow.ends_at ?? null,
+    });
+  }
 
   const itemTitle = (itemRow as { title?: string } | null)?.title ?? "your plan";
   let accepterName = "Someone";

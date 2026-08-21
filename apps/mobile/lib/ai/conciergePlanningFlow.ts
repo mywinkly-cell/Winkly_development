@@ -11,6 +11,8 @@ export type ConciergeFlowStep =
   | "sub_activity"
   /** Trip-specific questions before activity details (location/dates). */
   | "trip_planning"
+  /** Free-text quick request — skip the long activity form. */
+  | "quick_request"
   | "activity"
   | "social"
   | "summary"
@@ -80,7 +82,17 @@ export interface ActivityDetails {
   originLocationLabel?: string;
   /** Single-day optional precise start time HH:mm (local). */
   exactTimeHm?: string;
+  /** Optional venue search radius in kilometers around city or precise pin. */
+  searchRadiusKm?: number;
+  /** Optional precise map pin (search center). */
+  latitude?: number;
+  longitude?: number;
+  /** Human-readable label for the precise pin (reverse-geocoded). */
+  pinLabel?: string;
 }
+
+/** Optional search-radius chips shared by Quick plan + activity forms. */
+export const PLANNING_RADIUS_KM_OPTIONS = [1, 2, 5, 10, 20] as const;
 
 export type CategoryDetailsVariant = "standard" | "food_drink" | "trip";
 
@@ -151,8 +163,6 @@ export interface PlanningFlowState {
   partnerDisplayName: string | null;
 }
 
-const SURPRISE = "Surprise me";
-
 export const FOOD_AND_DRINKS_FORMAT_PROMPTS: Record<string, string> = {
   "Dinner / Brunch":
     "Sit-down meal — the meal itself is the social occasion. Time of day and atmosphere from the form determine whether this is dinner or brunch in feel.",
@@ -162,8 +172,6 @@ export const FOOD_AND_DRINKS_FORMAT_PROMPTS: Record<string, string> = {
     "Café meet — relaxed, no meal commitment. Pick a café with good seating and a conversation-friendly environment.",
   "Street food or market":
     "Casual food market, stalls or food hall — grazing and exploring rather than sitting down. Walkable, social, no booking required.",
-  [SURPRISE]:
-    "Choose the best food-related format for this person, mode, weather and time of day. Pick one and plan it.",
 } as const;
 
 /** Broad intent buckets — Step 2 narrows via `subActivities` chips where listed. */
@@ -193,7 +201,6 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
       "Cinema",
       "Exhibition",
       "Opera / classical",
-      SURPRISE,
     ],
     modes: ["romance", "events"],
     interestTags: ["arts_culture"],
@@ -208,7 +215,6 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
       "Drinks & bar",
       "Coffee",
       "Street food or market",
-      SURPRISE,
     ],
     modes: ["romance"],
     interestTags: ["food_drink"],
@@ -226,7 +232,6 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
       "Cycling route",
       "Evening stroll",
       "Indoor climbing",
-      SURPRISE,
     ],
     modes: ["romance"],
     interestTags: ["fitness_wellness", "outdoors", "play"],
@@ -236,7 +241,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     key: "dance_music",
     label: "Dance & music",
     icon: "musical-notes-outline",
-    subActivities: ["Social dance / class", "Live jazz bar", "Acoustic set", "Salsa / latin night", SURPRISE],
+    subActivities: ["Social dance / class", "Live jazz bar", "Acoustic set", "Salsa / latin night"],
     modes: ["romance"],
     interestTags: ["music"],
     subActivityPrompt: "What sounds fun?",
@@ -245,7 +250,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     key: "experience",
     label: "Experience",
     icon: "star-outline",
-    subActivities: ["Cooking class", "Tasting flight", "Boat / mini-excursion", "Photography walk", SURPRISE],
+    subActivities: ["Cooking class", "Tasting flight", "Boat / mini-excursion", "Photography walk"],
     modes: ["romance", "events"],
     interestTags: ["food_drink", "arts_culture"],
     subActivityPrompt: "What kind of experience?",
@@ -254,7 +259,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     key: "wellness",
     label: "Wellness",
     icon: "leaf-outline",
-    subActivities: ["Spa / massage", "Sauna / bath", "Meditation / breathwork", "Thermal day pass", SURPRISE],
+    subActivities: ["Spa / massage", "Sauna / bath", "Meditation / breathwork", "Thermal day pass"],
     modes: ["romance"],
     interestTags: ["fitness_wellness"],
     subActivityPrompt: "What kind of wellness?",
@@ -263,7 +268,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     key: "workshop_offsite",
     label: "Workshop / offsite",
     icon: "school-outline",
-    subActivities: ["Creative workshop", "Strategy day space", "Retreat-style venue", "Team rituals block", SURPRISE],
+    subActivities: ["Creative workshop", "Strategy day space", "Retreat-style venue", "Team rituals block"],
     modes: ["romance", "events"],
     interestTags: ["other"],
     subActivityPrompt: "What kind of workshop or offsite?",
@@ -272,7 +277,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     key: "outdoors",
     label: "Outdoors",
     icon: "trail-sign-outline",
-    subActivities: ["Hike", "Picnic", "Beach or waterfront", "Park stroll", "Scenic viewpoint", SURPRISE],
+    subActivities: ["Hike", "Picnic", "Beach or waterfront", "Park stroll", "Scenic viewpoint"],
     modes: ["friends"],
     interestTags: ["outdoors"],
     subActivityPrompt: "What kind of outdoor plan?",
@@ -281,7 +286,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     key: "games_fun",
     label: "Games & fun",
     icon: "game-controller-outline",
-    subActivities: ["Board-game café", "Bowling", "Arcade", "Escape room", "Mini golf", SURPRISE],
+    subActivities: ["Board-game café", "Bowling", "Arcade", "Escape room", "Mini golf"],
     modes: ["friends"],
     interestTags: ["play"],
     subActivityPrompt: "What kind of games or fun?",
@@ -295,7 +300,6 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
       "Drinks & bar",
       "Coffee",
       "Street food or market",
-      SURPRISE,
     ],
     modes: ["friends"],
     interestTags: ["food_drink"],
@@ -307,7 +311,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     key: "sport",
     label: "Sport",
     icon: "trophy-outline",
-    subActivities: ["Watch a match", "Casual padel / hoops", "Running buddy laps", "Ice skating", SURPRISE],
+    subActivities: ["Watch a match", "Casual padel / hoops", "Running buddy laps", "Ice skating"],
     modes: ["friends"],
     interestTags: ["fitness_wellness", "play"],
     subActivityPrompt: "What kind of sport?",
@@ -316,7 +320,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     key: "music_nightlife",
     label: "Music & nightlife",
     icon: "moon-outline",
-    subActivities: ["Live gig", "DJ night", "Karaoke room", "Late bites after show", SURPRISE],
+    subActivities: ["Live gig", "DJ night", "Karaoke room", "Late bites after show"],
     modes: ["friends", "events"],
     interestTags: ["music"],
     subActivityPrompt: "What kind of night out?",
@@ -325,7 +329,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     key: "fitness_wellness",
     label: "Fitness & wellness",
     icon: "fitness-outline",
-    subActivities: ["Gym buddy slot", "Yoga / pilates", "HIIT class", "Recovery stretch / sauna", SURPRISE],
+    subActivities: ["Gym buddy slot", "Yoga / pilates", "HIIT class", "Recovery stretch / sauna"],
     modes: ["friends"],
     interestTags: ["fitness_wellness"],
     subActivityPrompt: "What kind of fitness or wellness?",
@@ -334,7 +338,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     key: "coffee_meeting",
     label: "Coffee meeting",
     icon: "cafe-outline",
-    subActivities: ["Quick espresso", "Long catch-up", "Quiet laptop-friendly café", "Specialty tasting flight", SURPRISE],
+    subActivities: ["Quick espresso", "Long catch-up", "Quiet laptop-friendly café", "Specialty tasting flight"],
     modes: ["business"],
     interestTags: ["food_drink"],
     foodRelated: true,
@@ -345,7 +349,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     key: "lunch_meeting",
     label: "Lunch meeting",
     icon: "fast-food-outline",
-    subActivities: ["Business lunch restaurant", "Casual counter-order", "Outdoor terrace lunch", SURPRISE],
+    subActivities: ["Business lunch restaurant", "Casual counter-order", "Outdoor terrace lunch"],
     modes: ["business"],
     interestTags: ["food_drink"],
     foodRelated: true,
@@ -356,7 +360,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     key: "golf",
     label: "Golf",
     icon: "golf-outline",
-    subActivities: ["Full round", "Driving range session", "Clubhouse drinks round", "Short lesson + range", SURPRISE],
+    subActivities: ["Full round", "Driving range session", "Clubhouse drinks round", "Short lesson + range"],
     modes: ["business"],
     interestTags: ["fitness_wellness"],
     subActivityPrompt: "What kind of golf outing?",
@@ -365,7 +369,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     key: "industry_event",
     label: "Industry event",
     icon: "people-outline",
-    subActivities: ["Conference / summit", "Meetup talk", "Trade fair floor", "Afterparty networking", SURPRISE],
+    subActivities: ["Conference / summit", "Meetup talk", "Trade fair floor", "Afterparty networking"],
     modes: ["business", "events"],
     interestTags: ["other"],
     subActivityPrompt: "What kind of industry event?",
@@ -374,7 +378,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     key: "walk_talk",
     label: "Walk & talk",
     icon: "navigate-outline",
-    subActivities: ["Park loop agenda", "Waterfront stride", "Coffee-to-stroll", "Standing walking meeting", SURPRISE],
+    subActivities: ["Park loop agenda", "Waterfront stride", "Coffee-to-stroll", "Standing walking meeting"],
     modes: ["business"],
     interestTags: ["outdoors", "fitness_wellness"],
     subActivityPrompt: "What kind of walk & talk?",
@@ -383,7 +387,7 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     key: "business_dinner",
     label: "Business dinner",
     icon: "restaurant-outline",
-    subActivities: ["Client dinner", "Team celebration", "Quiet steakhouse", "Chef's table style", SURPRISE],
+    subActivities: ["Client dinner", "Team celebration", "Quiet steakhouse", "Chef's table style"],
     modes: ["business"],
     interestTags: ["food_drink"],
     foodRelated: true,
@@ -398,6 +402,14 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
     modes: ["romance", "friends", "business", "events"],
     interestTags: ["outdoors", "food_drink", "arts_culture"],
     detailsVariant: "trip",
+  },
+  {
+    key: "quick",
+    label: "Quick plan",
+    icon: "flash-outline",
+    subActivities: [],
+    modes: ["romance", "friends", "business", "events"],
+    interestTags: [],
   },
   {
     key: "custom",
@@ -431,6 +443,26 @@ export type PlannerGroup = {
 // ─── 1. Generic planner (All tab, no mode context) ─────────────────────────
 // 11 cards in 5 named groups. No overlap between cards.
 export const PLANNER_GROUPS: PlannerGroup[] = [
+  {
+    key: "quick_start",
+    label: "Quick start",
+    cards: [
+      {
+        key: "custom",
+        label: "Custom plan",
+        icon: "create-outline",
+        sub: "Describe exactly what you have in mind",
+        interestTags: [],
+      },
+      {
+        key: "quick",
+        label: "Quick plan",
+        icon: "flash-outline",
+        sub: "Type what you want — get venue options nearby",
+        interestTags: [],
+      },
+    ],
+  },
   {
     key: "food_social",
     label: "Food & social",
@@ -526,8 +558,8 @@ export const PLANNER_GROUPS: PlannerGroup[] = [
     ],
   },
   {
-    key: "travel_other",
-    label: "Travel & other",
+    key: "travel",
+    label: "Travel",
     cards: [
       {
         key: "trip",
@@ -535,20 +567,6 @@ export const PLANNER_GROUPS: PlannerGroup[] = [
         icon: "car-outline",
         sub: "Day trip or weekend away (1–n days)",
         interestTags: ["outdoors", "food_drink", "arts_culture"],
-      },
-      {
-        key: "surprise_me",
-        label: "Surprise me",
-        icon: "star-outline",
-        sub: "AI picks based on your profile & weather",
-        interestTags: [],
-      },
-      {
-        key: "custom",
-        label: "Custom plan",
-        icon: "create-outline",
-        sub: "Describe exactly what you have in mind",
-        interestTags: [],
       },
     ],
   },
@@ -707,8 +725,8 @@ export const MODE_CARDS: Record<Mode, ActivityCardDef[]> = {
 
 // ─── 3. Generic tail cards (always appended after mode-specific in mode contexts) ──
 export const GENERIC_TAIL: ActivityCardDef[] = [
-  { key: "surprise_me", label: "Surprise me", icon: "star-outline", sub: "AI picks the perfect plan", interestTags: [] },
   { key: "custom", label: "Custom plan", icon: "create-outline", sub: "Your own idea", interestTags: [] },
+  { key: "quick", label: "Quick plan", icon: "flash-outline", sub: "Type what you want — options nearby", interestTags: [] },
 ];
 
 export type RankedCard = ActivityCardDef & {
@@ -808,8 +826,8 @@ export function getIntentCards(
     label: "More options",
     labelStyle: "muted",
     cards: [
-      ...crossModeCards,
       ...GENERIC_TAIL.map((c) => ({ ...c, boosted: false })),
+      ...crossModeCards,
     ],
   });
 
@@ -861,6 +879,7 @@ const ACTIVITY_TIME: Record<string, TimeOfDay> = {
   walk_talk: "afternoon",
   business_dinner: "evening",
   trip: "morning",
+  quick: "any",
   custom: "any",
   // ── Mode-specific intent keys (new taxonomy) ─────────────────────────────
   food_drinks_r: "evening",
@@ -907,6 +926,7 @@ const ACTIVITY_BUDGET: Record<string, number> = {
   walk_talk: 12,
   business_dinner: 85,
   trip: 60,
+  quick: 40,
   custom: 45,
   // ── Mode-specific intent keys (new taxonomy) ─────────────────────────────
   // Romance

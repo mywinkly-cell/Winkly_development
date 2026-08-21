@@ -38,6 +38,7 @@ import {
 import { formatDefaultLocationDisplay, normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { ConciergeIntentStep } from "@/components/ai/ConciergeIntentStep";
 import { ConciergeSubActivityStep } from "@/components/ai/ConciergeSubActivityStep";
+import { ConciergeQuickRequestStep } from "@/components/ai/ConciergeQuickRequestStep";
 import { ConciergeActivityDetailsStep } from "@/components/ai/ConciergeActivityDetailsStep";
 import { ConciergeSummaryStep } from "@/components/ai/ConciergeSummaryStep";
 import { ConciergeInviteStep } from "@/components/ai/ConciergeInviteStep";
@@ -192,6 +193,8 @@ export function ConciergePlanningFlow({
   const autoGenerateRef = useRef(false);
   const genAttemptRef = useRef(0);
   const swipeStartX = useRef(0);
+  /** Free-text Quick plan path — skips activity form + summary. */
+  const isQuickPlan = activityKey === "quick";
 
   const [loadingPhaseIdx, setLoadingPhaseIdx] = useState(0);
   const loadingFade = useRef(new Animated.Value(0)).current;
@@ -338,7 +341,10 @@ export function ConciergePlanningFlow({
     setFlowStep(initialStep);
   }, [initialStep, proactiveActivityLabel, proactiveDatePreset, proactiveTimeOfDay]);
 
-  const buildContext = useCallback(async (): Promise<ConciergeContext> => {
+  const buildContext = useCallback(async (overrides?: {
+    activityLabel?: string;
+    intentNotes?: string;
+  }): Promise<ConciergeContext> => {
     let city = details.city;
     let country = details.country;
     if (details.location?.trim()) {
@@ -372,12 +378,15 @@ export function ConciergePlanningFlow({
           : await getWeatherForCityAndDate(city, dateStr, country, weatherTimeOptions);
       weather_snapshot = w ? weatherSnapshotToConciergePayload(w) : undefined;
     }
-    const baseTopic = activityLabel ?? "Plan";
+    const effectiveLabel = (overrides?.activityLabel ?? activityLabel)?.trim() || "Plan";
+    const effectiveNotes = (overrides?.intentNotes ?? details.intentNotes)?.trim() || "";
+    const isQuick = activityKey === "quick";
+    const baseTopic = isQuick ? (effectiveNotes || effectiveLabel) : effectiveLabel;
     const extra =
-      (activityKey === "custom" ? details.customPromptExtra : details.additionalInfo)?.trim() ?? "";
+      (!isQuick && activityKey === "custom" ? details.customPromptExtra : !isQuick ? details.additionalInfo : "")?.trim() ?? "";
     const mergeExtra = !!extra;
     const activityOrTopic = mergeExtra ? `${baseTopic} — ${extra}` : baseTopic;
-    const userPromptMerged = mergeExtra ? `${baseTopic} — ${extra}` : activityLabel ?? undefined;
+    const userPromptMerged = mergeExtra ? `${baseTopic} — ${extra}` : baseTopic;
 
     let sanitizedPersona = "";
     const { data: auth } = await supabase.auth.getUser();
@@ -391,10 +400,14 @@ export function ConciergePlanningFlow({
         ? inclusivePlanDayCount(dateStr, dateEndStr)
         : 1;
     const extraNotes = [
-      details.intentNotes?.trim(),
+      // Quick: free-text is already activityOrTopic — don't duplicate.
+      isQuick ? "" : effectiveNotes,
       details.mustHaves?.trim(),
-      details.additionalInfo?.trim(),
+      isQuick ? "" : details.additionalInfo?.trim(),
       nd > 1 ? `Trip length: ${nd} day(s).` : "",
+      isQuick
+        ? "Quick plan: prefer nearby real venues and any matching Winkly business profiles/services. Keep options concrete and bookable."
+        : "",
     ]
       .filter(Boolean)
       .join("\n\n");
@@ -405,6 +418,10 @@ export function ConciergePlanningFlow({
       activityOrTopic,
       city,
       country,
+      latitude: typeof details.latitude === "number" ? details.latitude : undefined,
+      longitude: typeof details.longitude === "number" ? details.longitude : undefined,
+      pinLabel: details.pinLabel,
+      searchRadiusKm: typeof details.searchRadiusKm === "number" ? details.searchRadiusKm : undefined,
       originLocationLabel: details.originLocationLabel,
       exactTimeHm: details.singleDay !== false ? details.exactTimeHm : undefined,
       dateFrom: dateStr,
@@ -426,7 +443,11 @@ export function ConciergePlanningFlow({
     const [slots] = await Promise.all([getMergedDeviceWhiteSpaceSlots()]);
     const calStr = formatCalendarWhiteSpaceForGateway(slots);
     const booking = buildBookingContextForAi({
-      venueQuery: effectiveMode === "business" ? "professional lunch or quiet cafe" : "casual restaurant or cafe",
+      venueQuery: isQuick
+        ? baseTopic
+        : effectiveMode === "business"
+          ? "professional lunch or quiet cafe"
+          : "casual restaurant or cafe",
       city: city ? city.split(",")[0]?.trim() : undefined,
       dateIso: dateStr,
     });
@@ -441,6 +462,10 @@ export function ConciergePlanningFlow({
       plan_request_text,
       city,
       country,
+      latitude: typeof details.latitude === "number" ? details.latitude : undefined,
+      longitude: typeof details.longitude === "number" ? details.longitude : undefined,
+      search_radius_km: typeof details.searchRadiusKm === "number" ? details.searchRadiusKm : undefined,
+      pin_label: details.pinLabel,
       date_from: dateStr,
       date_to: dateEndStr,
       budget_tier: budgetTier,
@@ -477,8 +502,32 @@ export function ConciergePlanningFlow({
     }
   }, []);
 
-  const handleGenerate = useCallback(async (opts?: { refinementFeedback?: string; previousOptions?: ExperienceOption[] | null }) => {
+  const handleGenerate = useCallback(async (opts?: {
+    refinementFeedback?: string;
+    previousOptions?: ExperienceOption[] | null;
+    /** Free-text Quick plan request — bypasses stale activityLabel closure. */
+    requestOverride?: string;
+  }) => {
     const genId = ++genAttemptRef.current;
+    const requestOverride = opts?.requestOverride?.trim() || undefined;
+    const priorVenueNames =
+      activityKey === "quick"
+        ? (structuredPlans ?? [])
+            .map((p) => p?.venue?.name)
+            .filter((n): n is string => !!n && n !== "No suitable venue found")
+        : [];
+    if (requestOverride) {
+      setActivityLabel(requestOverride);
+      setDetails((prev) => ({
+        ...prev,
+        intentNotes: requestOverride,
+        customPromptExtra: undefined,
+        datePreset: "today",
+        date: prev.date ?? new Date(),
+        singleDay: true,
+        timeOfDay: prev.timeOfDay ?? "any",
+      }));
+    }
     setError(null);
     setLimitError(null);
     setNoOptionsReason(null);
@@ -496,12 +545,17 @@ export function ConciergePlanningFlow({
       source_screen,
       source_planner_tab,
       activityKey,
-      activityLabel,
+      activityLabel: requestOverride ?? activityLabel,
+      isQuickPlan: activityKey === "quick",
       hasPartner: !!partnerId,
     });
     try {
       // Structured output (plan_options[]) per template. Theme = current intent/activity.
-      const fullCtx = await buildContext();
+      const fullCtx = await buildContext(
+        requestOverride
+          ? { activityLabel: requestOverride, intentNotes: requestOverride }
+          : undefined
+      );
       const refinement_feedback = opts?.refinementFeedback?.trim() || undefined;
       lastContextRef.current = fullCtx;
       let city = details.city;
@@ -519,13 +573,18 @@ export function ConciergePlanningFlow({
       } else {
         dt.setHours(18, 0, 0, 0);
       }
-      const theme = String(activityLabel ?? activityKey ?? "Custom").trim();
+      const theme = String(requestOverride ?? activityLabel ?? activityKey ?? "Custom").trim();
+      const previousVenueHint =
+        priorVenueNames.length && refinement_feedback
+          ? `Avoid repeating these venues: ${priorVenueNames.join(", ")}.`
+          : undefined;
+      const combinedRefinement = [refinement_feedback, previousVenueHint].filter(Boolean).join(" ");
       trace("generate:request", {
         theme,
         city: city ?? null,
         country: country ?? null,
         dateTimeIso: dt.toISOString(),
-        refinement_feedback: refinement_feedback ?? null,
+        refinement_feedback: combinedRefinement || null,
       });
       const { plans, requestId, limitError: gatewayLimit } = await getPlannerThemePlans({
         mode: effectiveMode,
@@ -542,7 +601,7 @@ export function ConciergePlanningFlow({
           country: country ?? fullCtx.country,
           date_from: dt.toISOString(),
           selected_date_time: dt.toISOString(),
-          ...(refinement_feedback ? { refinement_feedback } : {}),
+          ...(combinedRefinement ? { refinement_feedback: combinedRefinement } : {}),
         },
       });
       if (genId !== genAttemptRef.current) return;
@@ -566,7 +625,11 @@ export function ConciergePlanningFlow({
       }
       setStructuredPlans(plans.slice(0, 2));
       if (!plans.length) {
-        setMessage("No plan options returned. Try changing the theme, date/time, or location and retry.");
+        setMessage(
+          activityKey === "quick"
+            ? "No venue options returned. Try a clearer request or a nearby city."
+            : "No plan options returned. Try changing the theme, date/time, or location and retry."
+        );
       } else {
         setMessage(null);
       }
@@ -584,7 +647,16 @@ export function ConciergePlanningFlow({
       }
       setError(msg);
     }
-  }, [trace, effectiveMode, buildContext, source_screen, source_planner_tab, activityKey, activityLabel, partnerId, details, appLanguage]);
+  }, [trace, effectiveMode, buildContext, source_screen, source_planner_tab, activityKey, activityLabel, partnerId, details, appLanguage, structuredPlans]);
+
+  const handleQuickGenerate = useCallback(
+    (query: string) => {
+      const q = query.trim();
+      if (!q) return;
+      void handleGenerate({ requestOverride: q });
+    },
+    [handleGenerate]
+  );
 
   const handleCorrectDetails = useCallback(
     (refinementHint: string) => {
@@ -632,6 +704,10 @@ export function ConciergePlanningFlow({
       setFlowStep("intent");
       return;
     }
+    if (flowStep === "quick_request") {
+      setFlowStep("intent");
+      return;
+    }
     if (flowStep === "activity") {
       if (activityKey === "trip") {
         setFlowStep("trip_planning");
@@ -654,7 +730,7 @@ export function ConciergePlanningFlow({
     if (flowStep === "suggestions") {
       genAttemptRef.current += 1;
       setLoading(false);
-      setFlowStep("summary");
+      setFlowStep(activityKey === "quick" ? "quick_request" : "summary");
       return;
     }
     if (flowStep === "invite") {
@@ -690,6 +766,7 @@ export function ConciergePlanningFlow({
     intent: 1,
     sub_activity: 2,
     trip_planning: 2,
+    quick_request: 2,
     activity: 2,
     // Kept for type completeness; UI flow no longer routes to this step.
     social: 3,
@@ -704,6 +781,7 @@ export function ConciergePlanningFlow({
     flowStep === "intent" ||
     flowStep === "sub_activity" ||
     flowStep === "trip_planning" ||
+    flowStep === "quick_request" ||
     flowStep === "activity"
       ? "Winkly AI Planner"
       : flowStep === "summary"
@@ -770,7 +848,6 @@ export function ConciergePlanningFlow({
                 outdoors_nature: "outdoors",
                 work_meeting: "coffee_meeting",
                 social_hangout: "games_fun",
-                surprise_me: "custom",
                 // Romance
                 food_drinks_r: "dinner_drinks",
                 arts_culture_r: "art_culture",
@@ -823,8 +900,11 @@ export function ConciergePlanningFlow({
             }));
             const cat = getActivityCategoryByKey(resolvedKey);
             const isTrip = resolvedKey === "trip" || cat?.detailsVariant === "trip";
+            const isQuick = resolvedKey === "quick" || key === "quick";
             const hasSub = (cat?.subActivities?.length ?? 0) > 0;
-            if (isTrip) {
+            if (isQuick) {
+              setFlowStep("quick_request");
+            } else if (isTrip) {
               setFlowStep("trip_planning");
             } else if (key !== "custom" && hasSub) {
               setFlowStep("sub_activity");
@@ -832,6 +912,41 @@ export function ConciergePlanningFlow({
               setFlowStep("activity");
             }
           }}
+        />
+      )}
+
+      {flowStep === "quick_request" && (
+        <ConciergeQuickRequestStep
+          initialQuery={details.intentNotes ?? (activityLabel && activityLabel !== "Quick plan" ? activityLabel : "")}
+          location={{
+            location: details.location ?? "",
+            city: details.city,
+            country: details.country,
+            searchRadiusKm: details.searchRadiusKm ?? null,
+            latitude: details.latitude ?? null,
+            longitude: details.longitude ?? null,
+            pinLabel: details.pinLabel ?? null,
+          }}
+          onLocationChange={(next) => {
+            setDetails((prev) => ({
+              ...prev,
+              location: next.location,
+              city: next.city,
+              country: next.country,
+              searchRadiusKm: next.searchRadiusKm ?? undefined,
+              latitude: next.latitude ?? undefined,
+              longitude: next.longitude ?? undefined,
+              pinLabel: next.pinLabel ?? undefined,
+              ...(next.locationFromGps && next.location
+                ? { originLocationLabel: next.location }
+                : {}),
+            }));
+          }}
+          language={appLanguage}
+          onGenerate={handleQuickGenerate}
+          onBack={() => setFlowStep("intent")}
+          showInlineBack={false}
+          generating={loading}
         />
       )}
 
@@ -939,7 +1054,7 @@ export function ConciergePlanningFlow({
                         setSavingRequest(true);
                         try {
                           await addRecentRequest(lastContextRef.current!);
-                          setFlowStep("summary");
+                          setFlowStep(isQuickPlan ? "quick_request" : "summary");
                         } finally {
                           setSavingRequest(false);
                         }
@@ -960,8 +1075,8 @@ export function ConciergePlanningFlow({
             <GestureScrollView contentContainerStyle={styles.emptyContent}>
               <Text style={styles.messageText}>{message}</Text>
               {noOptionsReason && <Text style={styles.noOptionsReason}>{noOptionsReason}</Text>}
-              <TouchableOpacity style={styles.tryAgainBtn} onPress={() => setFlowStep("summary")} activeOpacity={0.9}>
-                <Text style={styles.tryAgainBtnText}>Change details</Text>
+              <TouchableOpacity style={styles.tryAgainBtn} onPress={() => setFlowStep(isQuickPlan ? "quick_request" : "summary")} activeOpacity={0.9}>
+                <Text style={styles.tryAgainBtnText}>{isQuickPlan ? "Edit request" : "Change details"}</Text>
               </TouchableOpacity>
             </GestureScrollView>
           ) : !suggestions?.length && !structuredPlans?.length ? (
@@ -970,8 +1085,8 @@ export function ConciergePlanningFlow({
                 {noOptionsReason || "No plans generated. Check your details or try again."}
               </Text>
               <View style={styles.emptyActionsRow}>
-                <TouchableOpacity style={styles.tryAgainBtn} onPress={() => setFlowStep("summary")} activeOpacity={0.9}>
-                  <Text style={styles.tryAgainBtnText}>Change details</Text>
+                <TouchableOpacity style={styles.tryAgainBtn} onPress={() => setFlowStep(isQuickPlan ? "quick_request" : "summary")} activeOpacity={0.9}>
+                  <Text style={styles.tryAgainBtnText}>{isQuickPlan ? "Edit request" : "Change details"}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.retryBtn} onPress={() => handleGenerate()} activeOpacity={0.9}>
                   <Text style={styles.retryBtnText}>Retry</Text>
@@ -981,13 +1096,13 @@ export function ConciergePlanningFlow({
           ) : structuredPlans && structuredPlans.length > 0 ? (
             <GestureScrollView style={styles.optionsScroll} contentContainerStyle={styles.optionsContent}>
               <View style={styles.optionsHeaderRow}>
-                <Text style={styles.optionsIntro}>Two options</Text>
+                <Text style={styles.optionsIntro}>{isQuickPlan ? "Nearby options" : "Two options"}</Text>
                 <TouchableOpacity
                   style={styles.tryDifferentBtn}
-                  onPress={() => handleGenerate({ refinementFeedback: "Different vibe" })}
+                  onPress={() => handleGenerate({ refinementFeedback: isQuickPlan ? "Load more nearby options with different venues" : "Different vibe" })}
                   activeOpacity={0.9}
                 >
-                  <Text style={styles.tryDifferentBtnText}>Try different options</Text>
+                  <Text style={styles.tryDifferentBtnText}>{isQuickPlan ? "Load more" : "Try different options"}</Text>
                 </TouchableOpacity>
               </View>
               {structuredPlans
@@ -1045,9 +1160,6 @@ export function ConciergePlanningFlow({
                           <Text style={styles.characterChipText}>{characterLabel}</Text>
                         </View>
                       </View>
-                      {p.why_this_fits ? (
-                        <Text style={styles.planPlace} numberOfLines={2}>{p.why_this_fits}</Text>
-                      ) : null}
                       <Text style={styles.planTitle} numberOfLines={1}>{p.title}</Text>
                       <Text style={styles.planPlace} numberOfLines={2}>
                         {[p.venue?.name, p.venue?.address, p.venue?.estimated_cost].filter(Boolean).join(" • ")}
@@ -1114,8 +1226,8 @@ export function ConciergePlanningFlow({
                 </View>
                 <Text style={styles.conciergeUpsellBody}>
                   {hasFullConcierge
-                    ? "Open Winkly AI inside any chat for the full 3-option concierge — deeper “why it fits your DNA”, per-step tips and logistics."
-                    : "Premium gives you 3 curated options with deeper “why it fits your DNA”, concierge tips and logistics. Ask Winkly AI in any chat."}
+                    ? "Open Winkly AI inside any chat for the full 3-option concierge — deeper tips and logistics."
+                    : "Premium gives you 3 curated options with concierge tips and logistics. Ask Winkly AI in any chat."}
                 </Text>
                 {!hasFullConcierge ? (
                   <TouchableOpacity

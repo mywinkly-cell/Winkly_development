@@ -37,14 +37,28 @@ async function fetchGooglePlacesHints(input: {
   query: string;
   city: string;
   country?: string;
+  lat?: number | null;
+  lng?: number | null;
+  radiusMeters?: number | null;
 }): Promise<unknown[]> {
   const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY");
   if (!placesKey || !input.query || !input.city) return [];
 
   try {
     const textQuery = `${input.query} ${input.city} ${input.country ?? ""}`.trim().slice(0, 280);
-    const url =
-      `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(textQuery)}&key=${encodeURIComponent(placesKey)}`;
+    const params = new URLSearchParams({
+      query: textQuery,
+      key: placesKey,
+    });
+    if (typeof input.lat === "number" && typeof input.lng === "number") {
+      params.set("location", `${input.lat},${input.lng}`);
+      const radius =
+        typeof input.radiusMeters === "number" && input.radiusMeters > 0
+          ? Math.min(50000, Math.max(500, Math.round(input.radiusMeters)))
+          : 15000;
+      params.set("radius", String(radius));
+    }
+    const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?${params.toString()}`;
     const res = await fetch(url);
     const data = await res.json() as { results?: Array<Record<string, unknown>>; status?: string };
     if (data.status !== "OK" && data.status !== "ZERO_RESULTS") return [];
@@ -173,7 +187,15 @@ export async function buildLocationContextInjection(
     }
   }
 
-  const base = { query, city, country, lat, lng };
+  const radiusKm =
+    typeof context.search_radius_km === "number" && context.search_radius_km > 0
+      ? Math.min(50, Math.max(0.5, context.search_radius_km as number))
+      : typeof context.search_radius_miles === "number" && context.search_radius_miles > 0
+        ? Math.min(50, Math.max(0.5, (context.search_radius_miles as number) * 1.60934))
+        : null;
+  const radiusMeters = radiusKm != null ? Math.round(radiusKm * 1000) : null;
+
+  const base = { query, city, country, lat, lng, radiusMeters };
   const empty: LocationContextInjection = {
     user_message: userMessage || query,
     city,

@@ -26,12 +26,10 @@ import type { Mode } from "@/types";
 import {
   getWeatherForCityAndDate,
   getWeatherForCityAndDateRange,
-  searchLocationAutocomplete,
   buildWeatherTimeOptions,
   formatWeatherDisplayText,
   weatherSnapshotToConciergePayload,
   type WeatherSnapshot,
-  type LocationSuggestion,
 } from "@/lib/weatherClient";
 import { getPartnersForConcierge, searchWinklyUsersForInvite, type ConciergePartner } from "@/lib/ai/conciergePartners";
 import { type RecentRequest } from "@/lib/ai/conciergeStorage";
@@ -42,6 +40,7 @@ import { supabase } from "@/lib/supabase";
 import { loadPlanningProfileContext, formatSanitizedPersonaForConciergePrompt } from "@/lib/ai/customPlanPresets";
 import { getDeviceLocationDisplay } from "@/lib/location/deviceLocation";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
+import { PlanningLocationFields } from "@/components/ai/PlanningLocationFields";
 
 function dayKey(d: Date): string {
   const y = d.getFullYear();
@@ -212,10 +211,12 @@ export function ConciergeRequestForm({
   const [location, setLocation] = useState(() =>
     formatDefaultLocationDisplay(defaultCity, defaultCountry, appLanguage)
   );
+  const [searchRadiusKm, setSearchRadiusKm] = useState<number | null>(null);
+  const [pinLatitude, setPinLatitude] = useState<number | null>(null);
+  const [pinLongitude, setPinLongitude] = useState<number | null>(null);
+  const [pinLabel, setPinLabel] = useState<string | null>(null);
   const defaultLocationApplied = useRef(false);
   const initialPromptApplied = useRef(false);
-  const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestion[]>([]);
-  const [locationSearchLoading, setLocationSearchLoading] = useState(false);
   const [date, setDate] = useState<Date>(() => new Date());
   const [dateEnd, setDateEnd] = useState<Date>(() => {
     const d = new Date();
@@ -289,22 +290,6 @@ export function ConciergeRequestForm({
     const curr = key ? CITY_CURRENCY[key] : null;
     if (curr) setBudgetCurrency(curr);
   }, [location]);
-
-  // Debounced location autocomplete when user types
-  useEffect(() => {
-    const q = location.trim();
-    if (q.length < 2) {
-      setLocationSuggestions([]);
-      return;
-    }
-    const t = setTimeout(() => {
-      setLocationSearchLoading(true);
-      searchLocationAutocomplete(q, appLanguage)
-        .then((list) => setLocationSuggestions(list))
-        .finally(() => setLocationSearchLoading(false));
-    }, 280);
-    return () => clearTimeout(t);
-  }, [location, appLanguage]);
 
   // Debounced search for Invite → Search
   useEffect(() => {
@@ -397,6 +382,10 @@ export function ConciergeRequestForm({
       activityOrTopic: prompt.trim() || "Plan",
       city: cityPart || undefined,
       country: countryPart,
+      latitude: pinLatitude ?? undefined,
+      longitude: pinLongitude ?? undefined,
+      pinLabel: pinLabel ?? undefined,
+      searchRadiusKm: searchRadiusKm ?? undefined,
       originLocationLabel,
       dateFrom: fromStr,
       dateTo: toStr,
@@ -422,6 +411,10 @@ export function ConciergeRequestForm({
       plan_request_text,
       city: cityPart || undefined,
       country: countryPart,
+      latitude: pinLatitude ?? undefined,
+      longitude: pinLongitude ?? undefined,
+      search_radius_km: searchRadiusKm ?? undefined,
+      pin_label: pinLabel ?? undefined,
       date_from: fromStr,
       date_to: toStr,
       budget_tier: tierFromAmount,
@@ -443,7 +436,7 @@ export function ConciergeRequestForm({
       sanitized_requester_persona: sanitizedPersona || undefined,
     };
     return ctx;
-  }, [mode, source_screen, source_planner_tab, prompt, extraNotes, location, dateStr, dateEndStr, dateRangePreset, budgetAmount, budgetCurrency, partner, weatherSnapshot, timePreference, availableSlots, appLanguage, presentation]);
+  }, [mode, source_screen, source_planner_tab, prompt, extraNotes, location, searchRadiusKm, pinLatitude, pinLongitude, pinLabel, dateStr, dateEndStr, dateRangePreset, budgetAmount, budgetCurrency, partner, weatherSnapshot, timePreference, availableSlots, appLanguage, presentation]);
 
   const handleSelectPartner = (p: ConciergePartner | null) => {
     Haptics.selectionAsync();
@@ -453,12 +446,18 @@ export function ConciergeRequestForm({
   };
 
   const handleSubmit = async () => {
+    const { city: cityPart } = parseLocation(location, appLanguage);
+    if (!cityPart.trim()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const ctx = await buildContextAsync();
     await Promise.resolve(onSubmit(ctx));
   };
 
-  const canSubmit = true;
+  const canSubmit =
+    prompt.trim().length > 0 && parseLocation(location, appLanguage).city.trim().length > 0;
 
   const modeLabel =
     mode === "romance"
@@ -651,53 +650,24 @@ export function ConciergeRequestForm({
             multiline
             maxLength={300}
           />
-          <Text style={styles.label}>Location</Text>
-          <View style={styles.locationWrap}>
-            <TextInput
-              style={styles.locationInput}
-              placeholder={defaultCity ? "Current location or type city, country" : "e.g. Berlin, Germany"}
-              placeholderTextColor={Colors.gray500}
-              value={location}
-              onChangeText={setLocation}
-              onFocus={() => {
-                if (location.trim().length >= 2 && locationSuggestions.length === 0 && !locationSearchLoading) {
-                  searchLocationAutocomplete(location.trim(), appLanguage).then(setLocationSuggestions);
-                }
-              }}
-              onBlur={() => {
-                setLocation((prev) => normalizeLocationDisplayString(prev, appLanguage));
-                // Delay hiding so tap on suggestion registers
-                setTimeout(() => setLocationSuggestions([]), 200);
-              }}
-              autoCapitalize="words"
-              autoCorrect={false}
-            />
-            {locationSearchLoading && (
-              <View style={styles.locationInputSpinner}>
-                <ActivityIndicator size="small" color={Colors.primaryViolet} />
-              </View>
-            )}
-            {locationSuggestions.length > 0 &&
-              !(locationSuggestions.length === 1 && locationSuggestions[0].display === location) && (
-              <View style={styles.locationSuggestionsList}>
-                {locationSuggestions.slice(0, 6).map((s) => (
-                  <TouchableOpacity
-                    key={`${s.city}-${s.country}`}
-                    style={styles.locationSuggestionItem}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setLocation(s.display);
-                      setLocationSuggestions([]);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="location-outline" size={18} color={Colors.gray500} />
-                    <Text style={styles.locationSuggestionText} numberOfLines={1}>{s.display}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
+          <PlanningLocationFields
+            value={{
+              location,
+              searchRadiusKm,
+              latitude: pinLatitude,
+              longitude: pinLongitude,
+              pinLabel,
+            }}
+            onChange={(next) => {
+              setLocation(next.location);
+              setSearchRadiusKm(next.searchRadiusKm ?? null);
+              setPinLatitude(next.latitude ?? null);
+              setPinLongitude(next.longitude ?? null);
+              setPinLabel(next.pinLabel ?? null);
+            }}
+            language={appLanguage}
+            compact
+          />
           {parseLocation(location, appLanguage).city && (
             <View style={styles.weatherRow}>
               {weatherLoading ? (

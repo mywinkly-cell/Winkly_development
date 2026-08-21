@@ -11,8 +11,10 @@
  * - FAIL CLOSED: if GOOGLE_PLACES_API_KEY (or GOOGLE_MAPS_API_KEY) is unset, the run produces NO
  *   Spark and logs a clear error — it must never fall back to model-from-memory venues.
  * - VALIDATION GATE before persist: resolved place_id + real address + business_status OPERATIONAL
- *   + opening_hours covering the proposed time (events: future time + real ticket URL). Otherwise the
+ *   + opening_hours covering the proposed **local** start time (events: future time + real ticket URL).
+ *   Slot times are city-local wall-clock (via Open-Meteo utc offset), not UTC. Otherwise the
  *   candidate is discarded; if a slot can't be filled it is skipped (better 2 great than 3 with a dud).
+ * - Places Text Search is biased with the user's lat/lng (40km) so small towns still get nearby metros.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -127,21 +129,67 @@ function mondayUTC(d: Date): string {
   return x.toISOString().slice(0, 10);
 }
 
-/** ISO timestamp for the next occurrence of `dow` (0=Sun) at hour:min UTC, today or later. */
-function nextSlotTime(dow: number, hour: number, minute: number): string {
+/**
+ * ISO timestamp for the next occurrence of `dow` (0=Sun) at local hour:min.
+ * `utcOffsetMinutes` is minutes east of UTC for the user's city (e.g. Munich CEST = 120).
+ * Interpreting hour/minute as UTC made evening Sparks land after local closing time
+ * (19:30 UTC → 21:30 in Munich) and the hours gate discarded every candidate.
+ */
+function nextSlotTime(dow: number, hour: number, minute: number, utcOffsetMinutes = 0): string {
   const now = new Date();
-  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hour, minute, 0));
-  let delta = (dow - d.getUTCDay() + 7) % 7;
-  if (delta === 0 && d.getTime() <= now.getTime()) delta = 7;
-  d.setUTCDate(d.getUTCDate() + delta);
-  return d.toISOString();
+  const offsetMs = utcOffsetMinutes * 60 * 1000;
+  // Shift into "local-as-UTC" space so getUTC* reads local wall-clock components.
+  const nowLocalMs = now.getTime() + offsetMs;
+  const nowLocal = new Date(nowLocalMs);
+  const localDow = nowLocal.getUTCDay();
+  let candLocalMs = Date.UTC(
+    nowLocal.getUTCFullYear(),
+    nowLocal.getUTCMonth(),
+    nowLocal.getUTCDate(),
+    hour,
+    minute,
+    0,
+  );
+  let delta = (dow - localDow + 7) % 7;
+  if (delta === 0 && candLocalMs <= nowLocalMs) delta = 7;
+  candLocalMs += delta * 24 * 60 * 60 * 1000;
+  return new Date(candLocalMs - offsetMs).toISOString();
 }
 
-/** Candidate start times per slot — spread across the week (not only weekend). */
-function slotTimes(slot: Slot): string[] {
-  if (slot === "solo") return [nextSlotTime(3, 11, 0), nextSlotTime(6, 15, 0)]; // Wed 11:00, Sat 15:00
-  if (slot === "date") return [nextSlotTime(2, 19, 30), nextSlotTime(5, 19, 30)]; // Tue/Fri 19:30
-  return [nextSlotTime(4, 18, 0), nextSlotTime(6, 16, 0)]; // meetup: Thu 18:00, Sat 16:00
+/**
+ * Candidate start times per slot — local wall-clock, spread across the week.
+ * Multiple alternatives per slot so the opening-hours gate has room to succeed.
+ * Follows Winkly's default timing rule: work days stay in the evening, daytime/morning ideas are
+ * offered at the weekend only (the app lets users widen these windows in Spark settings).
+ */
+function slotTimes(slot: Slot, utcOffsetMinutes = 0): string[] {
+  const t = (dow: number, hour: number, minute: number) => nextSlotTime(dow, hour, minute, utcOffsetMinutes);
+  if (slot === "solo") {
+    return [t(6, 11, 0), t(0, 11, 0), t(6, 15, 0), t(3, 18, 30)]; // Sat/Sun morning, Sat afternoon, Wed evening
+  }
+  if (slot === "date") {
+    return [t(2, 19, 0), t(5, 19, 30), t(6, 18, 30), t(4, 19, 0)]; // Tue/Fri/Sat/Thu evening
+  }
+  return [t(4, 18, 0), t(6, 16, 0), t(5, 17, 30), t(3, 18, 0)]; // meetup: Thu evening, Sat afternoon, Fri/Wed evening
+}
+
+/** Best-effort UTC offset for the user's city (Open-Meteo). Falls back to 0 (UTC). */
+async function resolveUtcOffsetMinutes(lat: number | null, lng: number | null): Promise<number> {
+  if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return 0;
+  try {
+    const url = new URL("https://api.open-meteo.com/v1/forecast");
+    url.searchParams.set("latitude", String(lat));
+    url.searchParams.set("longitude", String(lng));
+    url.searchParams.set("current", "temperature_2m");
+    url.searchParams.set("timezone", "auto");
+    const res = await fetch(url.toString());
+    if (!res.ok) return 0;
+    const data = (await res.json()) as { utc_offset_seconds?: number };
+    if (typeof data.utc_offset_seconds !== "number" || !Number.isFinite(data.utc_offset_seconds)) return 0;
+    return Math.round(data.utc_offset_seconds / 60);
+  } catch {
+    return 0;
+  }
 }
 
 async function geocodeCity(city: string): Promise<{ lat: number; lng: number } | null> {
@@ -201,8 +249,12 @@ function interestToQuery(interest: string, slot: Slot): string | null {
   return null;
 }
 
-/** Build the ordered query list for a slot: interest-derived first, then seed categories. */
-function slotQueries(slot: Slot, s: UserSignals, cityLabel: string): string[] {
+/**
+ * Build the ordered query list for a slot: interest-derived first, then seed categories.
+ * When lat/lng bias is available we search the bare category ("wine bar") so nearby
+ * metros fill in for small towns; otherwise append the city label as before.
+ */
+function slotQueries(slot: Slot, s: UserSignals, cityLabel: string, hasLocationBias: boolean): string[] {
   const derived = [...s.interests, ...s.activityPreferences]
     .map((i) => interestToQuery(i, slot))
     .filter((x): x is string => !!x);
@@ -216,7 +268,9 @@ function slotQueries(slot: Slot, s: UserSignals, cityLabel: string): string[] {
     const key = q.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push(`${q} ${cityLabel}`.trim());
+    // Wishlist free-text keeps the city so "rooftop Schwabing" stays specific.
+    const isWish = wished.some((w) => w.toLowerCase() === key);
+    out.push(hasLocationBias && !isWish ? q.trim() : `${q} ${cityLabel}`.trim());
   }
   return out.slice(0, 4);
 }
@@ -224,10 +278,22 @@ function slotQueries(slot: Slot, s: UserSignals, cityLabel: string): string[] {
 /** Gather up to `want` verified, currently-relevant venue candidates for a slot. */
 async function gatherVerifiedCandidates(
   supabase: SupabaseClient,
-  params: { slot: Slot; signals: UserSignals; cityLabel: string; placesKey: string; queryCache: Map<string, string[]>; want: number },
+  params: {
+    slot: Slot;
+    signals: UserSignals;
+    cityLabel: string;
+    placesKey: string;
+    queryCache: Map<string, string[]>;
+    want: number;
+    lat?: number | null;
+    lng?: number | null;
+  },
 ): Promise<VerifiedPlace[]> {
   const out: VerifiedPlace[] = [];
   const seen = new Set<string>();
+  const hasLocationBias =
+    typeof params.lat === "number" && Number.isFinite(params.lat) &&
+    typeof params.lng === "number" && Number.isFinite(params.lng);
 
   // Saved places first. They still go through resolveVerifiedPlace, so a wish
   // only becomes a suggestion if the venue is operational, has a real address
@@ -245,9 +311,16 @@ async function gatherVerifiedCandidates(
     if (place && place.name && place.formatted_address) out.push(place);
   }
 
-  for (const query of slotQueries(params.slot, params.signals, params.cityLabel)) {
+  for (const query of slotQueries(params.slot, params.signals, params.cityLabel, hasLocationBias)) {
     if (out.length >= params.want) break;
-    const ids = await searchPlaceIds({ query, placesKey: params.placesKey, limit: 3, queryCache: params.queryCache });
+    const ids = await searchPlaceIds({
+      query,
+      placesKey: params.placesKey,
+      limit: 3,
+      queryCache: params.queryCache,
+      lat: params.lat,
+      lng: params.lng,
+    });
     for (const id of ids) {
       if (out.length >= params.want) break;
       if (seen.has(id)) continue;
@@ -400,7 +473,15 @@ Respond with valid JSON only: {"chosen_index": <number>, "title": "<string>", "f
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: "user", parts: [{ text: JSON.stringify(payload) }] }],
-        generationConfig: { temperature: 0.5, maxOutputTokens: 512, responseMimeType: "application/json" },
+        // thinkingConfig: Gemini 3.x flash "thinking" tokens count against
+        // maxOutputTokens; without a zero budget they can consume all 512 tokens
+        // and truncate the JSON (finishReason MAX_TOKENS), losing the pick.
+        generationConfig: {
+          temperature: 0.5,
+          maxOutputTokens: 512,
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingBudget: 0 },
+        },
       }),
     });
     if (!res.ok) return null;
@@ -433,7 +514,19 @@ function fallbackSelection(slot: Slot, tier: ProfileTier, signals: UserSignals, 
 /** Build one verified-venue plan for solo/date (and meetup fallback). */
 async function buildVenuePlan(
   supabase: SupabaseClient,
-  ctx: { slot: Slot; signals: UserSignals; tier: ProfileTier; cityLabel: string; placesKey: string; geminiKey: string | null; queryCache: Map<string, string[]>; nudgeFor: string },
+  ctx: {
+    slot: Slot;
+    signals: UserSignals;
+    tier: ProfileTier;
+    cityLabel: string;
+    placesKey: string;
+    geminiKey: string | null;
+    queryCache: Map<string, string[]>;
+    nudgeFor: string;
+    lat?: number | null;
+    lng?: number | null;
+    utcOffsetMinutes?: number;
+  },
 ): Promise<SparkCandidatePlan | null> {
   const candidates = await gatherVerifiedCandidates(supabase, {
     slot: ctx.slot,
@@ -442,10 +535,19 @@ async function buildVenuePlan(
     placesKey: ctx.placesKey,
     queryCache: ctx.queryCache,
     want: 6,
+    lat: ctx.lat,
+    lng: ctx.lng,
   });
   if (candidates.length === 0) return null;
 
-  const valid = pickValidVenue(candidates, slotTimes(ctx.slot));
+  // Prefer the venue's own Places utc_offset when available (more reliable than Open-Meteo).
+  let offset = ctx.utcOffsetMinutes ?? 0;
+  for (const c of candidates) {
+    const o = c.opening_hours?.utc_offset_minutes;
+    if (typeof o === "number" && Number.isFinite(o)) { offset = o; break; }
+  }
+
+  const valid = pickValidVenue(candidates, slotTimes(ctx.slot, offset));
   if (!valid) return null;
 
   // Offer the model the venues that PASSED the gate (the chosen one is guaranteed valid).
@@ -576,15 +678,18 @@ async function generateForUser(
   if (!cityLabel && lat && lng) cityLabel = await reverseGeocodeCity(lat, lng);
   if (!cityLabel) return []; // can't ground Places queries without a place label
 
+  const utcOffsetMinutes = await resolveUtcOffsetMinutes(lat, lng);
   const tier = computeTier(signals);
   const nudgeFor = nudgeForThisWeek();
   const plans: SparkCandidatePlan[] = [];
+  const venueCtx = {
+    signals, tier, cityLabel, placesKey: ctx.placesKey, geminiKey: ctx.geminiKey,
+    queryCache: ctx.queryCache, nudgeFor, lat, lng, utcOffsetMinutes,
+  };
 
   // SOLO + DATE — verified venues.
   for (const slot of ["solo", "date"] as Slot[]) {
-    const plan = await buildVenuePlan(supabase, {
-      slot, signals, tier, cityLabel, placesKey: ctx.placesKey, geminiKey: ctx.geminiKey, queryCache: ctx.queryCache, nudgeFor,
-    });
+    const plan = await buildVenuePlan(supabase, { ...venueCtx, slot });
     if (plan) plans.push(plan);
   }
 
@@ -595,9 +700,7 @@ async function generateForUser(
     meetup = await buildEventPlan({ signals, tier, geminiKey: ctx.geminiKey, nudgeFor, events });
   }
   if (!meetup) {
-    meetup = await buildVenuePlan(supabase, {
-      slot: "meetup", signals, tier, cityLabel, placesKey: ctx.placesKey, geminiKey: ctx.geminiKey, queryCache: ctx.queryCache, nudgeFor,
-    });
+    meetup = await buildVenuePlan(supabase, { ...venueCtx, slot: "meetup" });
   }
   if (meetup) plans.push(meetup);
 
@@ -632,7 +735,8 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabase = createClient(supabaseUrl, serviceKey);
-    const geminiKey = Deno.env.get("GEMINI_API_KEY") ?? null;
+    // Test/free-tier key first (mirrors ai-gateway GEMINI_KEYS rotation); paid key as fallback.
+    const geminiKey = Deno.env.get("GEMINI_API_KEY_TEST") ?? Deno.env.get("GEMINI_API_KEY") ?? null;
 
     const weekStart = mondayUTC(new Date());
     const expiresAt = new Date(Date.parse(`${weekStart}T00:00:00Z`) + 8 * 24 * 60 * 60 * 1000).toISOString();

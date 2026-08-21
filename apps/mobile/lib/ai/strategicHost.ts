@@ -77,6 +77,8 @@ export async function getPlannerThemePlans(params: {
   country?: string;
   dateTimeIso?: string;
   weatherForecastText?: string;
+  /** Places / venue search radius (km) for gateway location context. */
+  searchRadiusKm?: number;
   /** Group "Vibe Check" prose (mood/energy/notes) injected for group planning. */
   groupVibe?: string;
   /**
@@ -108,6 +110,8 @@ export async function getPlannerThemePlans(params: {
       date_from: params.dateTimeIso ?? params.fullContext?.date_from,
       weather_forecast: params.weatherForecastText ?? params.fullContext?.weather_forecast,
       group_vibe: params.groupVibe ?? params.fullContext?.group_vibe,
+      search_radius_km:
+        params.searchRadiusKm ?? params.fullContext?.search_radius_km,
       source_screen: "planner",
       origin_context: `Planner_${params.mode.charAt(0).toUpperCase() + params.mode.slice(1)}`,
     },
@@ -130,7 +134,7 @@ export async function getPlannerThemePlans(params: {
   const err = (res as unknown as { error?: unknown })?.error;
   if (typeof err === "string" && err.trim()) {
     if (__DEV__) {
-      console.error("[planner_theme_plans] request failed", {
+      console.warn("[planner_theme_plans] request failed", {
         error: err,
         mode: params.mode,
         theme: params.theme,
@@ -140,7 +144,7 @@ export async function getPlannerThemePlans(params: {
         plan_request_chars: params.fullContext?.plan_request_text?.length ?? 0,
       });
     }
-    throw new Error(err);
+    return { plans: [] };
   }
   const raw = (res as unknown as { plan_options?: PlannerThemePlanOption[] }).plan_options;
   return {

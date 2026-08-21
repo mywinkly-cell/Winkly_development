@@ -35,7 +35,7 @@ import {
   searchWinklyUsersForInvite,
   type ConciergePartner,
 } from "@/lib/ai/conciergePartners";
-import type { WeeklySparkPlan } from "@/lib/ai/weeklySpark";
+import { sparkVenueFullAddressLine, type WeeklySparkPlan } from "@/lib/ai/weeklySpark";
 import type { Mode } from "@/types";
 
 export type SparkPlanConfirmModalProps = {
@@ -44,6 +44,8 @@ export type SparkPlanConfirmModalProps = {
   locationLineDisplay?: string;
   /** Open on invite picker (e.g. solo card secondary CTA / date invite CTA). */
   initialStep?: "confirm" | "invite";
+  /** Called once the plan is added to the Planner (or invited), so the caller can mark its card "Planned". */
+  onPlanAdded?: (sparkPlanId: string, plannerItemId: string) => void;
   onClose: () => void;
 };
 
@@ -77,6 +79,7 @@ export function SparkPlanConfirmModal({
   plan,
   locationLineDisplay,
   initialStep = "confirm",
+  onPlanAdded,
   onClose,
 }: SparkPlanConfirmModalProps) {
   const insets = useSafeAreaInsets();
@@ -175,7 +178,10 @@ export function SparkPlanConfirmModal({
             mode={slotMode}
             planTitle={plan.title}
             planLocation={
-              [plan.placeName, plan.placeAddress].filter(Boolean).join(", ") ||
+              sparkVenueFullAddressLine({
+                placeName: plan.placeName,
+                placeAddress: plan.placeAddress,
+              }) ||
               locationLineDisplay ||
               undefined
             }
@@ -206,6 +212,9 @@ export function SparkPlanConfirmModal({
                 : undefined
             }
             allowEditDetails
+            onReviewPlanner={handleClose}
+            sparkPlanId={plan.id}
+            onAddedToPlanner={(plannerItemId) => onPlanAdded?.(plan.id, plannerItemId)}
             showInlineBack
           />
         )}

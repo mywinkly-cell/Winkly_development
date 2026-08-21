@@ -19,14 +19,11 @@ export type ConciergeSubActivityStepProps = {
   showInlineBack?: boolean;
 };
 
-const SURPRISE_LABEL = "Surprise me";
-
 const SUB_ACTIVITY_META: Record<string, { icon: string; hint?: string }> = {
   "Dinner / Brunch": { icon: "restaurant-outline", hint: "Sit-down meal occasion" },
   "Drinks & bar": { icon: "wine-outline", hint: "Bar, wine bar or pub" },
   Coffee: { icon: "cafe-outline", hint: "Relaxed café meet" },
   "Street food or market": { icon: "storefront-outline", hint: "Markets & food halls" },
-  [SURPRISE_LABEL]: { icon: "sparkles-outline", hint: "AI picks the perfect plan" },
   "Theatre / show": { icon: "ticket-outline", hint: "Live performance" },
   "Museum / gallery": { icon: "images-outline", hint: "Explore exhibits" },
   Cinema: { icon: "film-outline", hint: "Movie outing" },
@@ -104,12 +101,7 @@ function getSubActivityMeta(label: string, category: ActivityCategory) {
   return SUB_ACTIVITY_META[label] ?? { icon: category.icon, hint: undefined };
 }
 
-function buildOptionKey(label: string, categoryKey: string): string {
-  if (label === SURPRISE_LABEL) {
-    return categoryKey === "food_drinks" || categoryKey === "dinner_drinks"
-      ? "surprise_me"
-      : "any";
-  }
+function buildOptionKey(label: string): string {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 }
 
@@ -119,28 +111,16 @@ export function ConciergeSubActivityStep({
   onBack,
   showInlineBack = true,
 }: ConciergeSubActivityStepProps) {
-  const { regularOptions, surpriseOption } = useMemo(() => {
+  const options = useMemo(() => {
     const list = category.subActivities ?? [];
     if (!list.length) {
-      return {
-        regularOptions: [{ key: "any", label: "Any" }],
-        surpriseOption: null as { key: string; label: string } | null,
-      };
+      return [{ key: "any", label: "Any" }];
     }
-
-    const mapped = list.map((label) => ({
-      key: buildOptionKey(label, category.key),
+    return list.map((label) => ({
+      key: buildOptionKey(label),
       label,
     }));
-    const surpriseIdx = mapped.findIndex((opt) => opt.label === SURPRISE_LABEL);
-    if (surpriseIdx < 0) {
-      return { regularOptions: mapped, surpriseOption: null };
-    }
-    return {
-      regularOptions: mapped.filter((opt) => opt.label !== SURPRISE_LABEL),
-      surpriseOption: mapped[surpriseIdx],
-    };
-  }, [category.key, category.subActivities]);
+  }, [category.subActivities]);
 
   const prompt = category.subActivityPrompt?.trim() || `What kind of ${category.label.toLowerCase()}?`;
 
@@ -173,7 +153,7 @@ export function ConciergeSubActivityStep({
       <Text style={styles.subtitle}>Pick the vibe — we&apos;ll handle the rest</Text>
 
       <View style={styles.grid}>
-        {regularOptions.map((opt) => {
+        {options.map((opt) => {
           const meta = getSubActivityMeta(opt.label, category);
           return (
             <TouchableOpacity
@@ -200,26 +180,6 @@ export function ConciergeSubActivityStep({
           );
         })}
       </View>
-
-      {surpriseOption ? (
-        <TouchableOpacity
-          style={styles.surpriseCard}
-          onPress={() => handleSelect(surpriseOption)}
-          activeOpacity={0.88}
-          accessibilityRole="button"
-          accessibilityLabel={surpriseOption.label}
-          accessibilityHint={SUB_ACTIVITY_META[SURPRISE_LABEL]?.hint}
-        >
-          <View style={styles.surpriseIconWrap}>
-            <Ionicons name="sparkles" size={24} color={Colors.primaryViolet} />
-          </View>
-          <View style={styles.surpriseTextWrap}>
-            <Text style={styles.surpriseLabel}>{surpriseOption.label}</Text>
-            <Text style={styles.surpriseHint}>Let Winkly AI choose the best format for you</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.secondaryViolet} />
-        </TouchableOpacity>
-      ) : null}
     </GestureScrollView>
   );
 }
@@ -248,17 +208,18 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: Colors.white,
     borderRadius: 999,
-    paddingVertical: 6,
+    paddingVertical: 8,
     paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.secondaryViolet,
+    ...CARD_SHADOW,
   },
   categoryIconWrap: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "#F3E8FF",
+    backgroundColor: Colors.secondaryViolet,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -266,15 +227,17 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     fontWeight: "700",
     color: Colors.primaryViolet,
+    maxWidth: 220,
   },
   title: {
-    ...Typography.h3,
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
+    fontSize: 26,
+    lineHeight: 32,
     color: Colors.textPrimary,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   subtitle: {
-    ...Typography.caption,
+    ...Typography.body,
     color: Colors.gray600,
     marginBottom: 20,
   },
@@ -282,73 +245,36 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 12,
-    marginBottom: 12,
   },
   gridCard: {
-    width: "47%",
-    minWidth: 140,
+    width: "47.5%",
+    flexGrow: 1,
     backgroundColor: Colors.white,
-    borderRadius: Layout.radii.card,
-    paddingVertical: 18,
-    paddingHorizontal: 14,
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
     borderColor: Colors.gray200,
-    alignItems: "center",
+    minHeight: 118,
     ...CARD_SHADOW,
   },
   gridIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: Colors.gray100,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.secondaryViolet,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 10,
   },
   gridLabel: {
-    ...Typography.caption,
+    ...Typography.body,
     fontWeight: "700",
     color: Colors.textPrimary,
-    textAlign: "center",
     marginBottom: 4,
   },
   gridHint: {
     ...Typography.caption,
-    fontSize: 11,
-    lineHeight: 15,
     color: Colors.gray600,
-    textAlign: "center",
-  },
-  surpriseCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: "#F3E8FF",
-    borderRadius: Layout.radii.card,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: "#E9D5FF",
-    ...CARD_SHADOW,
-  },
-  surpriseIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.white,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  surpriseTextWrap: { flex: 1 },
-  surpriseLabel: {
-    ...Typography.body,
-    fontWeight: "700",
-    color: Colors.primaryViolet,
-    marginBottom: 2,
-  },
-  surpriseHint: {
-    ...Typography.caption,
-    fontSize: 12,
-    color: Colors.secondaryViolet,
+    lineHeight: 16,
   },
 });

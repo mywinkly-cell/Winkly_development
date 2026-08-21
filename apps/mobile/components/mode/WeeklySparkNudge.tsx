@@ -4,9 +4,9 @@
  *
  * It pulls the user toward the Planner ("we've picked something for you") without
  * overriding navigation: the mode grid stays primary. Visual language mirrors
- * components/planner/ProactiveSuggestionCard.tsx (white card, left accent, Sparkles
- * badge) so the Spark reads consistently across surfaces. A subtle pulsing halo signals
- * "something new"; when there is nothing new the banner is simply not rendered.
+ * WeeklySparkCard (white card, left accent, Sparkles badge) so the Spark reads
+ * consistently across surfaces. A subtle pulsing halo signals "something new";
+ * when there is nothing new the banner is simply not rendered.
  */
 
 import React, { useEffect, useRef } from "react";

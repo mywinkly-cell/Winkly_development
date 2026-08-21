@@ -24,14 +24,13 @@ import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import {
   getWeatherForCityAndDate,
   getWeatherForCityAndDateRange,
-  searchLocationAutocomplete,
   buildWeatherTimeOptions,
   formatWeatherDisplayText,
   type WeatherSnapshot,
-  type LocationSuggestion,
 } from "@/lib/weatherClient";
 import { getDeviceLocationDisplay } from "@/lib/location/deviceLocation";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
+import { PlanningLocationFields } from "@/components/ai/PlanningLocationFields";
 import {
   type ActivityDetails,
   type ActivityCategory,
@@ -42,7 +41,6 @@ import {
   type WhoJoining,
   BUDGET_QUICK_AMOUNTS,
   getCurrencySymbol,
-  getInlineHint,
 } from "@/lib/ai/conciergePlanningFlow";
 import type { Mode } from "@/types";
 import { supabase } from "@/lib/supabase";
@@ -155,9 +153,17 @@ export function ConciergeActivityDetailsStep({
   );
   /** True after user taps the locate button; cleared when they edit the field or pick from list. */
   const [locationFromGps, setLocationFromGps] = useState(false);
-  const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestion[]>([]);
-  const [, setLocationLoading] = useState(false);
-  const [deviceLocationLoading, setDeviceLocationLoading] = useState(false);
+  const [searchRadiusKm, setSearchRadiusKm] = useState<number | null>(
+    typeof initialDetails.searchRadiusKm === "number" ? initialDetails.searchRadiusKm : null
+  );
+  const [pinLatitude, setPinLatitude] = useState<number | null>(
+    typeof initialDetails.latitude === "number" ? initialDetails.latitude : null
+  );
+  const [pinLongitude, setPinLongitude] = useState<number | null>(
+    typeof initialDetails.longitude === "number" ? initialDetails.longitude : null
+  );
+  const [pinLabel, setPinLabel] = useState<string | null>(initialDetails.pinLabel ?? null);
+  const [, setDeviceLocationLoading] = useState(false);
   const [datePreset, setDatePreset] = useState<DatePreset>(initialDetails.datePreset ?? "today");
   const [date, setDate] = useState<Date>(initialDetails.date ?? new Date());
   const [dateEnd, setDateEnd] = useState<Date>(() => {
@@ -184,7 +190,6 @@ export function ConciergeActivityDetailsStep({
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showDateEndPicker, setShowDateEndPicker] = useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
-  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [weatherSnapshot, setWeatherSnapshot] = useState<WeatherSnapshot | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [cuisine, setCuisine] = useState(initialDetails.cuisine ?? "");
@@ -316,22 +321,6 @@ export function ConciergeActivityDetailsStep({
       .finally(() => setDeviceLocationLoading(false));
   }, [initialDetails.location, appLanguage]);
 
-  // Location autocomplete
-  useEffect(() => {
-    const q = location.trim();
-    if (q.length < 2) {
-      setLocationSuggestions([]);
-      return;
-    }
-    const t = setTimeout(() => {
-      setLocationLoading(true);
-      searchLocationAutocomplete(q, appLanguage)
-        .then(setLocationSuggestions)
-        .finally(() => setLocationLoading(false));
-    }, 280);
-    return () => clearTimeout(t);
-  }, [location, appLanguage]);
-
   // Weather: refresh when location, date, or time change
   useEffect(() => {
     if (!cityPart) {
@@ -446,6 +435,10 @@ export function ConciergeActivityDetailsStep({
   }, []);
 
   const handleNext = () => {
+    if (!cityPart.trim()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const locLine = normalizeLocationDisplayString(location, appLanguage);
     const parsed = parseLocation(locLine, appLanguage);
@@ -472,6 +465,10 @@ export function ConciergeActivityDetailsStep({
       customPromptExtra: showProfilePrompt ? customPromptExtra.trim() || undefined : undefined,
       originLocationLabel: originLocationLabel.trim() || undefined,
       exactTimeHm,
+      searchRadiusKm: searchRadiusKm ?? undefined,
+      latitude: pinLatitude ?? undefined,
+      longitude: pinLongitude ?? undefined,
+      pinLabel: pinLabel ?? undefined,
     });
   };
 
@@ -524,7 +521,7 @@ export function ConciergeActivityDetailsStep({
       };
     }
     if (activityKey === "sport_activity" || activityKey === "sport") {
-      const opts = (activityCategory?.subActivities ?? []).filter((x) => x && x !== "Surprise me");
+      const opts = (activityCategory?.subActivities ?? []);
       const fallback = ["Tennis / padel", "Bowling", "Cycling route", "Evening stroll", "Indoor climbing"];
       const list = (opts.length ? opts : fallback).slice(0, 6);
       return {
@@ -539,7 +536,7 @@ export function ConciergeActivityDetailsStep({
       };
     }
     if (activityKey === "art_culture") {
-      const opts = (activityCategory?.subActivities ?? []).filter((x) => x && x !== "Surprise me");
+      const opts = (activityCategory?.subActivities ?? []);
       const list = (opts.length ? opts : ["Museum / gallery", "Theatre / show", "Cinema", "Exhibition"]).slice(0, 6);
       return {
         title: "Type",
@@ -559,11 +556,6 @@ export function ConciergeActivityDetailsStep({
     () => ["Italian", "Japanese", "Mexican", "Thai", "Indian", "French", "Greek", "Korean", "Spanish", "Other…"],
     []
   );
-
-  const locationHint = getInlineHint("location", {
-    hasLocation: !!location.trim(),
-    locationFromGps,
-  });
 
   return (
     <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -695,75 +687,30 @@ export function ConciergeActivityDetailsStep({
       ) : null}
 
       <View style={styles.sectionCard}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Location</Text>
-          <TouchableOpacity
-            style={styles.locatePillBtn}
-            onPress={() => {
-              if (deviceLocationLoading) return;
-              Haptics.selectionAsync();
-              setDeviceLocationLoading(true);
-              getDeviceLocationDisplay(appLanguage).then((res) => {
-                if (res.ok && res.display) {
-                  setLocation(normalizeLocationDisplayString(res.display, appLanguage));
-                  setLocationFromGps(true);
-                }
-                setDeviceLocationLoading(false);
-              });
-            }}
-            disabled={deviceLocationLoading}
-            activeOpacity={0.85}
-          >
-            {deviceLocationLoading ? (
-              <ActivityIndicator size="small" color={Colors.primaryViolet} />
-            ) : (
-              <>
-                <Ionicons name="locate" size={18} color={Colors.primaryViolet} />
-                <Text style={styles.locatePillBtnText}>Use current</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.surfaceCard}>
-          <TextInput
-            style={styles.textField}
-            placeholder="City, Country"
-            placeholderTextColor={Colors.gray500}
-            value={location}
-            onChangeText={(text) => {
-              setLocationFromGps(false);
-              setLocation(text);
-            }}
-            onFocus={() => setShowLocationDropdown(true)}
-            onBlur={() => {
-              setLocation((prev) => normalizeLocationDisplayString(prev, appLanguage));
-              setTimeout(() => setShowLocationDropdown(false), 200);
-            }}
-          />
-
-          {locationSuggestions.length > 0 && showLocationDropdown ? (
-            <View style={styles.suggestionsList}>
-              {locationSuggestions.slice(0, 5).map((s) => (
-                <TouchableOpacity
-                  key={s.display}
-                  style={styles.suggestionItem}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setLocationFromGps(false);
-                    setLocation(s.display);
-                    setLocationSuggestions([]);
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="location-outline" size={18} color={Colors.gray500} />
-                  <Text style={styles.suggestionText} numberOfLines={1}>{s.display}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : null}
-          {locationHint ? <Text style={styles.inlineHint}>{locationHint}</Text> : null}
-        </View>
+        <PlanningLocationFields
+          value={{
+            location,
+            city: cityPart || undefined,
+            country: countryPart,
+            searchRadiusKm,
+            latitude: pinLatitude,
+            longitude: pinLongitude,
+            pinLabel,
+            locationFromGps,
+          }}
+          onChange={(next) => {
+            setLocation(next.location);
+            setLocationFromGps(!!next.locationFromGps);
+            setSearchRadiusKm(next.searchRadiusKm ?? null);
+            setPinLatitude(next.latitude ?? null);
+            setPinLongitude(next.longitude ?? null);
+            setPinLabel(next.pinLabel ?? null);
+            if (next.locationFromGps && next.location) {
+              setOriginLocationLabel(next.location);
+            }
+          }}
+          language={appLanguage}
+        />
       </View>
 
       {cityPart ? (
@@ -1202,7 +1149,17 @@ export function ConciergeActivityDetailsStep({
         <View style={{ marginTop: 4 }} />
       ) : null}
 
-      <TouchableOpacity style={styles.nextBtn} onPress={handleNext} activeOpacity={0.92}>
+      {!cityPart.trim() ? (
+        <Text style={{ ...Typography.caption, color: Colors.errorRed, marginBottom: 8, fontWeight: "600" }}>
+          City is required to continue.
+        </Text>
+      ) : null}
+      <TouchableOpacity
+        style={[styles.nextBtn, !cityPart.trim() && { opacity: 0.45 }]}
+        onPress={handleNext}
+        disabled={!cityPart.trim()}
+        activeOpacity={0.92}
+      >
         <Text style={styles.nextBtnText}>Continue</Text>
       </TouchableOpacity>
     </GestureScrollView>

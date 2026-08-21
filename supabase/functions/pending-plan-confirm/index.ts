@@ -14,6 +14,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
 import { sendExpoPushMessages } from "../_shared/expoPush.ts";
+import { syncConfirmedEventToCloud } from "../_shared/calendarSync.ts";
 
 function isUuid(v: unknown): v is string {
   return typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
@@ -305,6 +306,10 @@ serve(async (req) => {
               sync_status: "pending",
             }).then(() => {}).catch(() => {});
           }
+
+          // Best-effort, non-blocking: push this plan to any connected Google/Outlook
+          // calendars right away. calendar-sync-sweep retries anything left over.
+          syncConfirmedEventToCloud(supabase, ce.id).catch((e) => console.warn("pending-plan-confirm cloud sync:", e));
         }
 
         await supabase.from("pending_plans").update({

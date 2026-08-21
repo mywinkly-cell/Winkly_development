@@ -39,6 +39,7 @@ import {
   distanceKm,
   localityFromAddress,
   sparkVenueDisplayLine,
+  sparkVenueFullAddressLine,
   WEEKLY_SPARK_LABEL_KEY,
   WEEKLY_SPARK_FOCUS_PARAM,
   WEEKLY_SPARK_FOCUS_VALUE,
@@ -200,13 +201,22 @@ describe("weeklySpark", () => {
       expect(localityFromAddress("Marienplatz 1, 80331 München, Germany")).toBe("München");
     });
 
-    it("shows venue · city on the card when the city is not in the name", () => {
+    it("shows venue - City, Country on the card", () => {
       expect(
         sparkVenueDisplayLine({
           placeName: "Test Wine Bar",
           placeAddress: "Marienplatz 1, 80331 München, Germany",
         }),
-      ).toBe("Test Wine Bar · München");
+      ).toBe("Test Wine Bar - München, Germany");
+    });
+
+    it("shows venue - full Places address in details", () => {
+      expect(
+        sparkVenueFullAddressLine({
+          placeName: "Test Wine Bar",
+          placeAddress: "Marienplatz 1, 80331 München, Germany",
+        }),
+      ).toBe("Test Wine Bar - Marienplatz 1, 80331 München, Germany");
     });
   });
 

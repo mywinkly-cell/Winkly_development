@@ -1,14 +1,18 @@
 /**
- * calendar-freebusy — Future: Google Calendar FreeBusy using calendar_connections + refresh token.
- * v0 returns structured "not_configured" so clients keep using device calendar white space.
+ * calendar-freebusy — merges busy blocks from every cloud calendar the user has connected
+ * (Google / Microsoft) so the Concierge can avoid suggesting times the user is actually busy
+ * on their real calendar, not just their device's local white-space read.
  *
- * Next steps: decrypt token_encrypted, OAuth refresh with GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET,
- * POST https://www.googleapis.com/calendar/v3/freeBusy with timeMin/timeMax.
+ * "not_configured": the user hasn't connected any cloud calendar — client keeps using
+ * device calendar white space only (apps/mobile/lib/integrations/calendarWhiteSpace.ts).
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
+import { getValidAccessToken, type CalendarConnectionRow } from "../_shared/calendarSync.ts";
+import { getGoogleFreeBusy } from "../_shared/googleCalendar.ts";
+import { getMicrosoftFreeBusy } from "../_shared/microsoftGraph.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -17,12 +21,11 @@ serve(async (req) => {
 
   try {
     const cors = corsHeaders(req);
+    const jsonHeaders = { "Content-Type": "application/json", ...Object.fromEntries(cors) };
+
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
-      });
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: jsonHeaders });
     }
 
     const token = authHeader.replace("Bearer ", "");
@@ -30,40 +33,53 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
-
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid session" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
-      });
+      return new Response(JSON.stringify({ error: "Invalid session" }), { status: 401, headers: jsonHeaders });
     }
 
-    const { data: row } = await supabase
-      .from("calendar_connections")
-      .select("id, provider, token_encrypted, last_sync_at, scopes")
-      .eq("user_id", user.id)
-      .eq("provider", "google")
-      .maybeSingle();
+    const body = await req.json().catch(() => ({})) as { time_min?: unknown; time_max?: unknown };
+    const timeMin = typeof body.time_min === "string" ? body.time_min : new Date().toISOString();
+    const timeMax = typeof body.time_max === "string"
+      ? body.time_max
+      : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
-    if (!row?.token_encrypted) {
+    const { data: connections } = await supabase
+      .from("calendar_connections")
+      .select("user_id, provider, token_encrypted, token_expires_at")
+      .eq("user_id", user.id)
+      .in("provider", ["google", "microsoft"]);
+
+    if (!connections?.length) {
       return new Response(
         JSON.stringify({
           status: "not_configured",
-          message: "Connect Google Calendar in app settings to merge cloud busy times with device white space.",
+          message: "Connect Google or Outlook Calendar in Planner settings to merge cloud busy times with device white space.",
           busy_blocks: [],
         }),
-        { headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } },
+        { headers: jsonHeaders },
       );
     }
 
+    const busyBlocks: { start: string; end: string; provider: string }[] = [];
+    for (const conn of connections as CalendarConnectionRow[]) {
+      try {
+        const accessToken = await getValidAccessToken(supabase, conn);
+        if (!accessToken) continue;
+
+        const blocks = conn.provider === "google"
+          ? await getGoogleFreeBusy(accessToken, timeMin, timeMax)
+          : await getMicrosoftFreeBusy(accessToken, timeMin, timeMax);
+
+        for (const b of blocks ?? []) busyBlocks.push({ ...b, provider: conn.provider });
+      } catch (e) {
+        console.warn(`calendar-freebusy (${conn.provider}):`, e);
+      }
+    }
+
     return new Response(
-      JSON.stringify({
-        status: "pending_implementation",
-        message: "Google FreeBusy will run here once OAuth refresh + KMS for tokens are wired.",
-        busy_blocks: [],
-      }),
-      { headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } },
+      JSON.stringify({ status: "ok", busy_blocks: busyBlocks }),
+      { headers: jsonHeaders },
     );
   } catch (e) {
     console.error("calendar-freebusy:", e);

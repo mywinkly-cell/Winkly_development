@@ -1,0 +1,108 @@
+name: Security
+
+# Static security checks on every pull request and on pushes to main (OPS-3,
+# August 2026 audit). CI previously ran lint, typecheck and unit tests only —
+# nothing that would catch a secret committed by accident, or a newly disclosed
+# vulnerability in a transitive dependency between weekly Dependabot bumps.
+#
+# For a solo project CI is the only reviewer there is, so these run on the
+# schedule too: a vulnerability can be disclosed on a day nobody pushes.
+#
+# All three actions are free on public repositories.
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+  schedule:
+    # Mondays 06:00 UTC, before the Dependabot run.
+    - cron: "0 6 * * 1"
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          # security-extended adds the injection and auth-bypass queries that
+          # matter most here; the default suite alone would not have looked at
+          # most of the Edge Function surface.
+          queries: security-extended
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          # gitleaks needs history to scan the commits in a PR, not just the tree.
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependencies:
+    name: Dependency review
+    # Only meaningful on a PR — it diffs the manifests between base and head.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: always
+
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Audit production dependencies
+        # Advisory, not a gate: the React Native tree reliably carries
+        # low-severity transitive advisories with no upgrade path, and a red X
+        # everyone learns to ignore is worse than no check. High and critical
+        # findings fail the job; everything else is printed for triage.
+        run: npm audit --omit=dev --audit-level=high

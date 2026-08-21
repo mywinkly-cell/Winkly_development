@@ -166,6 +166,12 @@ export type BuildPlanRequestTextInput = {
   /** Destination area for the plan (city / area), same as before */
   city?: string;
   country?: string;
+  /** Optional precise map pin for search center. */
+  latitude?: number;
+  longitude?: number;
+  pinLabel?: string;
+  /** Optional search radius in km around city / pin. */
+  searchRadiusKm?: number;
   /** Device / "where I am now" when distinct from destination (optional). */
   originLocationLabel?: string;
   /**
@@ -229,6 +235,14 @@ export function buildPlanRequestText(i: BuildPlanRequestTextInput): string {
     : "Current location (origin): not set separately — assume destination area unless user implied travel.";
 
   const dest = destinationPlaceLine(i.city, i.country);
+  const pinLine =
+    typeof i.latitude === "number" && typeof i.longitude === "number"
+      ? `Precise search center: ${i.pinLabel?.trim() || `${i.latitude.toFixed(5)}, ${i.longitude.toFixed(5)}`} (${i.latitude.toFixed(5)}, ${i.longitude.toFixed(5)}). Prefer venues near this pin.`
+      : null;
+  const radiusLine =
+    typeof i.searchRadiusKm === "number" && i.searchRadiusKm > 0
+      ? `Search radius: within about ${i.searchRadiusKm} km of the ${pinLine ? "precise pin" : "destination city"}. Stay inside this radius when suggesting venues.`
+      : null;
   const travel =
     i.travelFromOriginSummary?.trim()
       ? `Travel from origin to destination (app / estimate): ${i.travelFromOriginSummary.trim()}.`
@@ -252,8 +266,10 @@ export function buildPlanRequestText(i: BuildPlanRequestTextInput): string {
     `Topic / activity: ${i.activityOrTopic.trim() || "Not specified"}.`,
     originLine,
     dest,
-    travel,
   ];
+  if (pinLine) lines.push(pinLine);
+  if (radiusLine) lines.push(radiusLine);
+  lines.push(travel);
   if (venue) lines.push(venue);
 
   lines.push(

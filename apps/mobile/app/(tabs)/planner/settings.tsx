@@ -23,7 +23,18 @@ import * as Calendar from "expo-calendar";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Colors, Typography, Layout } from "@/constants/tokens";
-import { CALENDAR_SYNC_STORAGE_KEY, setCalendarSyncPreference } from "@/lib/integrations/calendarSync";
+import {
+  CALENDAR_SYNC_STORAGE_KEY,
+  setCalendarSyncPreference,
+  backfillPlannerItemsToDeviceCalendar,
+} from "@/lib/integrations/calendarSync";
+import {
+  connectCloudCalendar,
+  disconnectCloudCalendar,
+  getCloudCalendarConnections,
+  type CloudCalendarProvider,
+} from "@/lib/integrations/cloudCalendarAuth";
+import { supabase } from "@/lib/supabase";
 
 const STORAGE_KEYS = {
   reminders: "winkly_planner_reminders",
@@ -64,6 +75,16 @@ export default function PlannerSettings() {
   const [calendarSync, setCalendarSync] = useState(false);
   const [locationStatus, setLocationStatus] = useState<PermissionStatus>("undetermined");
   const [loading, setLoading] = useState<"calendar" | "location" | null>(null);
+  const [cloudConnections, setCloudConnections] = useState<{ google: boolean; microsoft: boolean }>({
+    google: false,
+    microsoft: false,
+  });
+  const [cloudLoading, setCloudLoading] = useState<CloudCalendarProvider | null>(null);
+
+  const loadCloudConnections = useCallback(async () => {
+    const status = await getCloudCalendarConnections();
+    setCloudConnections(status);
+  }, []);
 
   const checkCalendarPermission = async () => {
     try {
@@ -110,7 +131,8 @@ export default function PlannerSettings() {
     checkCalendarPermission();
     checkLocationPermission();
     loadPreferences();
-  }, [loadPreferences]);
+    loadCloudConnections();
+  }, [loadPreferences, loadCloudConnections]);
 
   const saveReminders = useCallback(async (value: boolean) => {
     setReminders(value);
@@ -184,6 +206,15 @@ export default function PlannerSettings() {
     await setCalendarSyncPreference(value);
   }, []);
 
+  /** Sync items added before the user opted in — fire-and-forget, doesn't block the toggle. */
+  const backfillCalendarSync = useCallback(() => {
+    void (async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (uid) await backfillPlannerItemsToDeviceCalendar(uid);
+    })();
+  }, []);
+
   const handleCalendarSyncToggle = async (value: boolean) => {
     Haptics.selectionAsync();
 
@@ -196,6 +227,7 @@ export default function PlannerSettings() {
     // Turning on requires granted calendar permission — request it if needed.
     if (calendarStatus === "granted") {
       await persistCalendarSync(true);
+      backfillCalendarSync();
       return;
     }
 
@@ -218,6 +250,7 @@ export default function PlannerSettings() {
       setCalendarStatus(next);
       if (next === "granted") {
         await persistCalendarSync(true);
+        backfillCalendarSync();
       } else {
         await persistCalendarSync(false);
         if (next === "denied") {
@@ -236,6 +269,34 @@ export default function PlannerSettings() {
       Alert.alert(t("common.error"), t("planner.calendarPermissionError"));
     } finally {
       setLoading(null);
+    }
+  };
+
+  const handleCloudCalendarConnect = async (provider: CloudCalendarProvider) => {
+    Haptics.selectionAsync();
+    setCloudLoading(provider);
+    try {
+      const result = await connectCloudCalendar(provider);
+      if (result.ok) {
+        await loadCloudConnections();
+      } else if (result.reason === "not_configured") {
+        Alert.alert(t("common.error"), t("planner.cloudNotConfigured"));
+      } else if (result.reason !== "cancelled") {
+        Alert.alert(t("common.error"), t("planner.cloudConnectFailed"));
+      }
+    } finally {
+      setCloudLoading(null);
+    }
+  };
+
+  const handleCloudCalendarDisconnect = async (provider: CloudCalendarProvider) => {
+    Haptics.selectionAsync();
+    setCloudLoading(provider);
+    try {
+      await disconnectCloudCalendar(provider);
+      await loadCloudConnections();
+    } finally {
+      setCloudLoading(null);
     }
   };
 
@@ -477,6 +538,62 @@ export default function PlannerSettings() {
               <Ionicons name="chevron-forward" size={18} color={Colors.primaryViolet} />
             )}
           </TouchableOpacity>
+        </View>
+
+        <View style={[styles.card, { marginTop: 20 }]}>
+          <Text style={styles.title}>{t("planner.cloudCalendarSection")}</Text>
+          <Text style={styles.subtitle}>{t("planner.cloudCalendarSectionSub")}</Text>
+
+          {(["google", "microsoft"] as CloudCalendarProvider[]).map((provider, idx) => {
+            const connected = cloudConnections[provider];
+            const isLoading = cloudLoading === provider;
+            return (
+              <React.Fragment key={provider}>
+                {idx > 0 && <View style={styles.hr} />}
+                <View style={styles.integrationRow}>
+                  <View style={[styles.iconWrap, { backgroundColor: Colors.romance.primary + "20" }]}>
+                    <Ionicons name="cloud-outline" size={24} color={Colors.romance.primary} />
+                  </View>
+                  <View style={styles.integrationContent}>
+                    <Text style={styles.rowTitle}>
+                      {provider === "google" ? t("planner.googleCalendarTitle") : t("planner.outlookCalendarTitle")}
+                    </Text>
+                    <View style={styles.statusRow}>
+                      <View
+                        style={[
+                          styles.statusDot,
+                          { backgroundColor: connected ? Colors.events.primary : Colors.gray600 },
+                        ]}
+                      />
+                      <Text style={[styles.statusText, { color: connected ? Colors.events.primary : Colors.gray600 }]}>
+                        {connected ? t("planner.cloudConnected") : t("planner.cloudNotConnected")}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() =>
+                    connected ? handleCloudCalendarDisconnect(provider) : handleCloudCalendarConnect(provider)
+                  }
+                  disabled={isLoading}
+                  style={[styles.integrationBtn, isLoading && styles.integrationBtnDisabled]}
+                  activeOpacity={0.9}
+                >
+                  {isLoading ? <ActivityIndicator size="small" color={Colors.primaryViolet} /> : null}
+                  <Text style={styles.integrationBtnText}>
+                    {isLoading
+                      ? t("planner.cloudConnecting")
+                      : connected
+                        ? t("planner.disconnect")
+                        : t("planner.connect")}
+                  </Text>
+                  {!connected && !isLoading && (
+                    <Ionicons name="chevron-forward" size={18} color={Colors.primaryViolet} />
+                  )}
+                </TouchableOpacity>
+              </React.Fragment>
+            );
+          })}
         </View>
       </ScrollView>
     </View>

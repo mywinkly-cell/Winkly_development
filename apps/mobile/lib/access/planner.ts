@@ -3,15 +3,32 @@
 import { supabase } from "@/lib/supabase";
 type PlannerSource = "romance" | "friends" | "business" | "events";
 
-/** Get planner items for user, optionally filtered by source_mode. RLS enforces participant access. */
+/**
+ * Get the user's *confirmed* planner items (role owner/attendee), optionally filtered by
+ * source_mode. RLS enforces participant access, but RLS alone would also surface items where
+ * the user is only a pending or declined "invitee" — createPlannerInvite seeds that row up front
+ * so the recipient can read the proposed plan, and declining never removes it. Those aren't real
+ * commitments, so callers doing conflict/availability checks (ConciergeConfirmStep, Weekly Spark
+ * scheduling) must not treat them as busy time.
+ */
 export async function getPlannerItems(
   userId: string,
   sourceMode?: PlannerSource | "all",
   limit = 50
 ) {
+  const { data: parts, error: partsError } = await supabase
+    .from("planner_participants")
+    .select("planner_item_id")
+    .eq("user_id", userId)
+    .in("role", ["owner", "attendee"]);
+  if (partsError) return [];
+  const ids = Array.from(new Set((parts ?? []).map((p: { planner_item_id: string }) => p.planner_item_id)));
+  if (ids.length === 0) return [];
+
   let query = supabase
     .from("planner_items")
     .select("*")
+    .in("id", ids)
     .order("starts_at", { ascending: true })
     .limit(limit);
 

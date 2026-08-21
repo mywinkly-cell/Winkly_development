@@ -81,25 +81,68 @@ function placeEmbed(embed: PlaceEmbed): { address: string | null; mapsUrl: strin
  * Used on Spark cards so nearby towns (Olching vs München) are visible before opening details.
  */
 export function localityFromAddress(address: string | null | undefined): string | null {
-  if (!address?.trim()) return null;
-  const parts = address.split(",").map((p) => p.trim()).filter(Boolean);
-  if (parts.length === 0) return null;
-  if (parts.length >= 2) {
-    const cityish = parts[parts.length - 2].replace(/^\d{4,5}\s+/, "").trim();
-    if (cityish) return cityish;
-  }
-  return parts[parts.length - 1] || null;
+  const { city } = cityCountryFromAddress(address);
+  return city;
 }
 
-/** Card meta line: venue name plus city when the city is not already in the name. */
+/**
+ * Parse Places `formatted_address` into city + country.
+ * e.g. "Marienplatz 1, 80331 München, Germany" → { city: "München", country: "Germany" }
+ */
+export function cityCountryFromAddress(
+  address: string | null | undefined,
+): { city: string | null; country: string | null } {
+  if (!address?.trim()) return { city: null, country: null };
+  const parts = address.split(",").map((p) => p.trim()).filter(Boolean);
+  if (parts.length === 0) return { city: null, country: null };
+  if (parts.length === 1) {
+    const only = parts[0].replace(/^\d{4,5}\s+/, "").trim();
+    return { city: only || null, country: null };
+  }
+  const country = parts[parts.length - 1] || null;
+  const city = parts[parts.length - 2].replace(/^\d{4,5}\s+/, "").trim() || null;
+  return { city, country };
+}
+
+/** Compact location for cards: "City, Country". */
+export function cityCountryDisplayLine(address: string | null | undefined): string | null {
+  const { city, country } = cityCountryFromAddress(address);
+  if (city && country) return `${city}, ${country}`;
+  return city ?? country;
+}
+
+/**
+ * Card meta line: "[Venue] - [City, Country]".
+ * Falls back to venue name or city/country alone when the other is missing.
+ */
 export function sparkVenueDisplayLine(plan: Pick<WeeklySparkPlan, "placeName" | "placeAddress">): string | null {
   const name = plan.placeName?.trim() || null;
-  const city = localityFromAddress(plan.placeAddress);
-  if (name && city && !name.toLowerCase().includes(city.toLowerCase())) {
-    return `${name} · ${city}`;
-  }
+  const cityCountry = cityCountryDisplayLine(plan.placeAddress);
+  if (name && cityCountry) return `${name} - ${cityCountry}`;
   if (name) return name;
-  return city ?? plan.placeAddress?.trim() ?? null;
+  return cityCountry ?? plan.placeAddress?.trim() ?? null;
+}
+
+/**
+ * Details line: "[Venue] - [Street + number, PLZ, City, Country]" (Places formatted_address).
+ */
+export function sparkVenueFullAddressLine(
+  plan: Pick<WeeklySparkPlan, "placeName" | "placeAddress"> | { name?: string | null; address?: string | null },
+): string | null {
+  const name =
+    "placeName" in plan
+      ? plan.placeName?.trim() || null
+      : plan.name?.trim() || null;
+  const address =
+    "placeAddress" in plan
+      ? plan.placeAddress?.trim() || null
+      : plan.address?.trim() || null;
+  if (name && address) {
+    // Avoid "Name - Name, Street…" when formatted_address already starts with the venue.
+    if (address.toLowerCase().startsWith(name.toLowerCase())) return address;
+    return `${name} - ${address}`;
+  }
+  return name ?? address;
 }
 
 export type WeeklySpark = {
@@ -230,6 +273,51 @@ export async function markWeeklySparkSeen(): Promise<void> {
     .update({ seen_at: nowIso })
     .is("seen_at", null)
     .or(notExpiredFilter(nowIso));
+}
+
+export type PlannedSparkPlanInfo = {
+  plannerItemId: string;
+  title: string;
+  description: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  sourceMode: string;
+};
+
+/**
+ * Weekly Spark plan ids (from the current pack) already added to the user's Planner — keyed by
+ * spark plan id (`planner_items.meta.weekly_spark_plan_id`, tagged on add in ConciergeConfirmStep).
+ * Drives the card's "View the plan" → "Planned" swap; naturally resets when next Monday's Spark
+ * generates fresh plan ids, since the old ids simply stop matching.
+ */
+export async function getPlannedSparkPlanIds(
+  sparkPlanIds: string[],
+): Promise<Map<string, PlannedSparkPlanInfo>> {
+  const ids = Array.from(new Set(sparkPlanIds.filter(Boolean)));
+  const out = new Map<string, PlannedSparkPlanInfo>();
+  if (ids.length === 0) return out;
+
+  const { data, error } = await supabase
+    .from("planner_items")
+    .select("id, title, description, starts_at, ends_at, source_mode, meta")
+    .in("meta->>weekly_spark_plan_id", ids);
+  if (error || !data) return out;
+
+  for (const row of data as Record<string, unknown>[]) {
+    const meta = row.meta as Record<string, unknown> | null;
+    const sparkPlanId =
+      meta && typeof meta.weekly_spark_plan_id === "string" ? meta.weekly_spark_plan_id : null;
+    if (!sparkPlanId || out.has(sparkPlanId)) continue;
+    out.set(sparkPlanId, {
+      plannerItemId: String(row.id),
+      title: typeof row.title === "string" ? row.title : "",
+      description: typeof row.description === "string" ? row.description : null,
+      startsAt: String(row.starts_at),
+      endsAt: row.ends_at ? String(row.ends_at) : null,
+      sourceMode: typeof row.source_mode === "string" ? row.source_mode : "events",
+    });
+  }
+  return out;
 }
 
 /** Haversine distance in km between two coordinates (for the card's "X km away"). */

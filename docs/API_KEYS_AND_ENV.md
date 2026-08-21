@@ -1,6 +1,6 @@
 # API Keys and Environment Variables — Winkly
 
-**Last updated:** 2026-07-04
+**Last updated:** 2026-07-29
 
 This doc lists every API key and env var used by Winkly, where they are used, and **how to set them**. You must set these yourself (in Supabase Dashboard / CLI and in the mobile app `.env`); the app cannot set them for you.
 
@@ -30,6 +30,7 @@ All mobile env vars are prefixed with `EXPO_PUBLIC_` so they are available at bu
 | `EXPO_PUBLIC_POSTHOG_HOST` | No | PostHog host. Default `https://us.i.posthog.com` (use `https://eu.i.posthog.com` for EU). |
 | `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` | No | Google OAuth Android client ID (for Sign in with Google). |
 | `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` | No | Google OAuth iOS client ID. |
+| `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` | No | Google Maps SDK / JS key for the in-app planning map pin picker (`react-native-maps`). Enable **Maps SDK for Android/iOS** (and optionally Maps JavaScript API). Falls back to Apple Maps on iOS Expo Go when unset. Restrict the key to your app bundle IDs. |
 | `EXPO_PUBLIC_FACEBOOK_APP_ID` | No | Facebook App ID (for Sign in with Facebook). |
 | `EXPO_PUBLIC_ABLY_KEY` | No | Optional Ably API key for future pub/sub (match notifications). When unset, `lib/realtime/ablyOptional.ts` is a no-op; chat uses Supabase Realtime. |
 | `EXPO_PUBLIC_EAS_PROJECT_ID` | No | **Expo Push:** EAS **Project ID UUID**. **Linked project:** `5a6f6f9d-5969-4867-9572-5ee50a938066` (`@winkly/winkly`) — baked into `app.config.js` as fallback; also set on EAS for builds. Omit locally for **Expo Go**; use an **EAS development build** to test push (Android Expo Go cannot register remote push on SDK 53+). |
@@ -52,11 +53,13 @@ These are **server-side only**. Never put them in the mobile app.
 | `SUPABASE_URL` | All Edge Functions | **Auto** | Injected by Supabase when the function runs. You do not set this manually. |
 | `SUPABASE_SERVICE_ROLE_KEY` | ai-gateway, others | **Auto** | Injected by Supabase. Used to call Supabase APIs bypassing RLS (e.g. fetch events for AI tools). |
 | `OPENAI_API_KEY` | **ai-gateway** | Optional | OpenAI API key. When set **without** `GEMINI_API_KEY`, tasks `plan`, `concierge`, `event_suggest` use GPT + tools. When **both** keys are set, OpenAI is **fallback** only (after Gemini or on 429). |
-| `GEMINI_API_KEY` | **ai-gateway** | Optional | Google Gemini API key. **Primary** when set (including when both keys exist—matches free-tier usage in AI Studio). Optional overrides: `GEMINI_MODEL` (default **`gemini-3.5-flash`**), `GEMINI_MODEL_LITE` (**`gemini-3.1-flash-lite`**), `GEMINI_MODEL_TOPICS` (**`gemini-3.1-flash-lite`**), `GEMINI_MODEL_PLAN` (**`gemini-3.5-flash`**). (`gemini-2.0-*` shut down 2026-06-01.) |
-| `ANTHROPIC_API_KEY` | **ai-gateway** | **Recommended for Premium** | Anthropic API key for Claude. **Primary LLM for Premium/Enterprise** users (concierge, match_bridge, plan, event_suggest, winkly_plan). Super tier uses Gemini first. Fallback chain for Premium: Claude → Gemini → OpenAI. Optional overrides: `ANTHROPIC_MODEL` (default **`claude-sonnet-4-20250514`**), `ANTHROPIC_MODEL_LITE` (**`claude-3-5-haiku-20241022`**), `ANTHROPIC_MODEL_PLAN` (**`claude-sonnet-4-20250514`**). |
+| `GEMINI_API_KEY` | **ai-gateway** | Optional | Google Gemini API key. **Primary** when set (including when both keys exist—matches free-tier usage in AI Studio). Optional overrides: `GEMINI_MODEL` (default **`gemini-3.5-flash`**), `GEMINI_MODEL_LITE` (**`gemini-3.1-flash-lite`**), `GEMINI_MODEL_TOPICS` (**`gemini-3.1-flash-lite`**), `GEMINI_MODEL_PLAN` (**`gemini-3.5-flash`**). (`gemini-2.0-*` shut down 2026-06-01.) **Note:** prepaid-credit `429`s are not retried; the gateway falls through to OpenAI → Anthropic → Places stub. |
+| `GEMINI_API_KEY_TEST` | **ai-gateway**, **weekly-spark-cron** | Optional | Free-tier/test Gemini key. When set it is tried **first** on every Gemini call (`GEMINI_KEYS` rotation in `ai-gateway`); the paid `GEMINI_API_KEY` is the automatic per-request fallback when the test key fails (rate limit, quota, outage). Remove the secret to go back to the paid key only. |
+| `ANTHROPIC_API_KEY` | **ai-gateway** | **Recommended for Premium** | Anthropic API key for Claude. **Primary LLM for Premium/Enterprise** users (concierge, match_bridge, plan, event_suggest, winkly_plan). Super tier uses Gemini first. Fallback chain: Premium Claude → Gemini → OpenAI; Super/Free Gemini → OpenAI → **Claude** (when Gemini/OpenAI fail) → Places-grounded stub. Optional overrides: `ANTHROPIC_MODEL` (default **`claude-sonnet-4-20250514`**), `ANTHROPIC_MODEL_LITE` (**`claude-3-5-haiku-20241022`**), `ANTHROPIC_MODEL_PLAN` (**`claude-sonnet-4-20250514`**). |
 | `GOOGLE_PLACES_API_KEY` or `GOOGLE_MAPS_API_KEY` | **ai-gateway** | Optional | Google Places **Text Search** for **`[SYSTEM_CONTEXT]`** parallel injection and `EXTERNAL_PLACE_HINTS`. When unset, OSM Nominatim is used (rate-limited; ok for hints). Enable “Places API” in Google Cloud for the key. |
 | `RADAR_SECRET_KEY` or `RADAR_API_KEY` | **ai-gateway** | Optional | Radar **search/autocomplete** for **`[SYSTEM_CONTEXT]`** POI hints (server-side; use secret key). When unset, Google + OSM still run in parallel. |
 | `AI_STRUCTURED_MAX_TOKENS` | **ai-gateway** | Optional | Max LLM output tokens for structured UI tasks (`plan`, `concierge`, `planner_theme_plans`, …). Default **384** (&lt;400). |
+| `GEMINI_THINKING_BUDGET` | **ai-gateway** | Optional | Gemini `thinkingConfig.thinkingBudget` (tokens) for all gateway Gemini calls. Default **0** (thinking disabled): Gemini 3.x flash "thinking" tokens count against `maxOutputTokens`, so with the structured-JSON budgets thinking can consume the whole budget and truncate the JSON (`finishReason: MAX_TOKENS`), silently degrading plans to the Places fallback. `weekly-spark-cron` hard-codes budget 0. |
 | `MEETUP_API_KEY` | **get-nearby-external-events** | Optional | Meetup API key (or token). When set, Edge Function can fetch nearby Meetup events for Events home. When unset, external events from Meetup are not fetched. |
 | `EVENTBRITE_PRIVATE_TOKEN` | **get-nearby-external-events** | Optional | Eventbrite private token. When set, Edge Function can fetch nearby Eventbrite events. |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` (or `AWS_DEFAULT_REGION`) | **verify-profile-photo** | Optional | AWS Rekognition **CompareFaces** for selfie vs profile photo. When unset, verifications stay **pending** unless `MOCK_FACE_MATCH=true` (dev only). |
@@ -138,7 +141,7 @@ npx supabase secrets list --project-ref orjccytcmklzcfjgqwwj
 | `EXPO_ACCESS_TOKEN` | **Missing** | Create at expo.dev → set secret → redeploy push functions |
 | `EVENTBRITE_PRIVATE_TOKEN` | **Missing** (dev has it) | External events |
 | `POSTHOG_API_KEY` | **Missing** (dev has it) | Server-side analytics |
-| `GOOGLE_PLACES_API_KEY` | **Set** (2026-07-04) | Same key on dev + prod; powers venue grounding in `ai-gateway`, `weather-pivot-cron`, `weekly-spark-cron`. Enable **Places API** (legacy Text Search) in Google Cloud. |
+| `GOOGLE_PLACES_API_KEY` | **Invalid (2026-07-28)** | Value on Dev + Prod (+ repo-root `.env`) is set but **not a valid Google key** (`REQUEST_DENIED` / not `AIza…`). Replace with a real Places (legacy Text Search + Place Details) key from Google Cloud, then `npx supabase secrets set GOOGLE_PLACES_API_KEY=…` on **both** refs. Blocks Weekly Sparks + venue grounding until fixed. |
 | `MEETUP_API_KEY` | Optional | External events |
 | `MOCK_FACE_MATCH` | **Not set** ✓ | Must stay unset on production |
 | `AI_GATEWAY_DISABLED` | **Not set** ✓ | Kill switch — see **docs/RUNBOOK.md** §1 |
@@ -153,6 +156,15 @@ VALUES (true, 'https://orjccytcmklzcfjgqwwj.supabase.co', '<same-as-WEBHOOK_SECR
 ON CONFLICT (id) DO UPDATE
   SET function_base_url = EXCLUDED.function_base_url,
       secret = EXCLUDED.secret;
+```
+
+**Cron / push gateway headers:** `private.webhook_config` also needs `cron_secret` (= Edge `CRON_SECRET`) and `edge_anon_key` (= project legacy anon JWT) so pg_net can call `weather-pivot-cron` / `weekly-spark-cron` without `UNAUTHORIZED_NO_AUTH_HEADER`.
+
+```sql
+UPDATE private.webhook_config
+SET cron_secret = '<same-as-CRON_SECRET>',
+    edge_anon_key = '<project-anon-jwt>'
+WHERE id;
 ```
 
 Remove any misnamed legacy secrets (e.g. old `WinklyApp` label) from Dashboard → Edge Functions → Secrets.

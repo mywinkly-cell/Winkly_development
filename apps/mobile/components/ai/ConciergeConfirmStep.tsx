@@ -3,7 +3,7 @@
  * conflict check, "Just this time" / "Repeat weekly", and "Add to planner".
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -16,10 +16,11 @@ import {
   Platform,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useRouter } from "expo-router";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography } from "@/constants/tokens";
+import { Colors, Layout, Shadow, Typography } from "@/constants/tokens";
 import {
   callWinklyPlan,
   reportConciergeOutcome,
@@ -36,9 +37,16 @@ import { getPlannerItems } from "@/lib/access/planner";
 import { supabase } from "@/lib/supabase";
 import { recordBusinessAnalyticsEvent } from "@/lib/business/analyticsStore";
 import { PlanRecommendationFeedback } from "@/components/planner/PlanRecommendationFeedback";
+import { sparkVenueFullAddressLine } from "@/lib/ai/weeklySpark";
 
 type PlannerItemRow = { id: string; title: string; starts_at: string; ends_at: string | null };
 
+const DEFAULT_ITEM_DURATION_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Planner items often have no `ends_at`; assume a normal outing length instead of an open-ended
+ * window, otherwise every legacy item would "conflict" with every future plan forever.
+ */
 function overlaps(
   aStart: string,
   aEnd: string,
@@ -48,8 +56,77 @@ function overlaps(
   const aS = new Date(aStart).getTime();
   const aE = new Date(aEnd).getTime();
   const bS = new Date(bStart).getTime();
-  const bE = bEnd ? new Date(bEnd).getTime() : Infinity;
+  if (Number.isNaN(aS) || Number.isNaN(aE) || Number.isNaN(bS)) return false;
+  const parsedEnd = bEnd ? new Date(bEnd).getTime() : NaN;
+  const bE = Number.isNaN(parsedEnd) ? bS + DEFAULT_ITEM_DURATION_MS : parsedEnd;
   return aS < bE && aE > bS;
+}
+
+/** Only upcoming items can clash with a plan the user is about to make. */
+function isRelevantForConflicts(item: PlannerItemRow, now = Date.now()): boolean {
+  const start = new Date(item.starts_at).getTime();
+  if (Number.isNaN(start)) return false;
+  const parsedEnd = item.ends_at ? new Date(item.ends_at).getTime() : NaN;
+  const end = Number.isNaN(parsedEnd) ? start + DEFAULT_ITEM_DURATION_MS : parsedEnd;
+  return end >= now;
+}
+
+/** Same-day plans that don't overlap but leave little room to travel between them. */
+type NearbyItem = { item: PlannerItemRow; position: "before" | "after"; gapMinutes: number };
+
+const TIGHT_GAP_MINUTES = 90;
+
+function findNearbyItems(
+  planStart: string,
+  planEnd: string,
+  items: PlannerItemRow[]
+): NearbyItem[] {
+  const planS = new Date(planStart).getTime();
+  const planE = new Date(planEnd).getTime();
+  const out: NearbyItem[] = [];
+  for (const it of items) {
+    const itS = new Date(it.starts_at).getTime();
+    if (Number.isNaN(itS)) continue;
+    const itE = it.ends_at ? new Date(it.ends_at).getTime() : itS + 2 * 60 * 60 * 1000;
+    if (Number.isNaN(itE)) continue;
+    if (planS < itE && planE > itS) continue; // hard conflict — handled separately
+    const gapBefore = planS - itE;
+    const gapAfter = itS - planE;
+    if (gapBefore >= 0 && gapBefore <= TIGHT_GAP_MINUTES * 60 * 1000) {
+      out.push({ item: it, position: "before", gapMinutes: Math.round(gapBefore / 60000) });
+    } else if (gapAfter >= 0 && gapAfter <= TIGHT_GAP_MINUTES * 60 * 1000) {
+      out.push({ item: it, position: "after", gapMinutes: Math.round(gapAfter / 60000) });
+    }
+  }
+  return out.sort((a, b) => a.gapMinutes - b.gapMinutes);
+}
+
+/** Fields of the plan-details card the user can adjust one at a time (pencil → confirm). */
+type EditableField = "title" | "date" | "time" | "venue" | "address";
+
+function hmToDate(base: Date, hm: string): Date {
+  const d = new Date(base);
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hm.trim());
+  if (m) d.setHours(Math.min(23, parseInt(m[1], 10)), Math.min(59, parseInt(m[2], 10)), 0, 0);
+  else d.setHours(19, 0, 0, 0);
+  return d;
+}
+
+function dateToHm(d: Date): string {
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatDateLabel(d: Date): string {
+  return d.toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function formatTimeLabel(d: Date): string {
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
 function parseTimeFromOption(option: ExperienceOption): { hour: number; minute: number } {
@@ -125,8 +202,14 @@ export type ConciergeConfirmStepProps = {
   onInviteModeChange?: (mode: "romance" | "friends" | "business") => void;
   /** Allow editing title / date / time / venue before adding (Weekly Spark details). */
   allowEditDetails?: boolean;
+  /** Opens the user's Planner so they can sanity-check a tight schedule. Defaults to routing to /planner. */
+  onReviewPlanner?: () => void;
   /** Links thumb feedback to ai_requests.outcome_satisfaction when set. */
   aiRequestId?: string;
+  /** Weekly Spark plan id this confirm step originated from — tags the created planner item so its card can show "Planned" until next Monday's Spark replaces it. */
+  sparkPlanId?: string;
+  /** Called with the created planner_item id once "Add to planner" (or invite) succeeds, when sparkPlanId is set. */
+  onAddedToPlanner?: (plannerItemId: string) => void;
   showInlineBack?: boolean;
 };
 
@@ -150,15 +233,22 @@ export function ConciergeConfirmStep({
   inviteMode,
   onInviteModeChange,
   allowEditDetails = false,
+  onReviewPlanner,
   aiRequestId,
+  sparkPlanId,
+  onAddedToPlanner,
   showInlineBack = true,
 }: ConciergeConfirmStepProps) {
+  const router = useRouter();
+  const scrollRef = useRef<React.ComponentRef<typeof GestureScrollView>>(null);
   const [saving, setSaving] = useState(false);
   const [inviteToo, setInviteToo] = useState(!!partner);
   const [error, setError] = useState<string | null>(null);
   const [refinementCustom, setRefinementCustom] = useState("");
   const [conflictingItems, setConflictingItems] = useState<PlannerItemRow[]>([]);
+  const [nearbyItems, setNearbyItems] = useState<NearbyItem[]>([]);
   const [conflictChecked, setConflictChecked] = useState(false);
+  const [retimeRequested, setRetimeRequested] = useState(false);
   const [addRecurrence, setAddRecurrence] = useState<"once" | "weekly">("once");
   const [editTitle, setEditTitle] = useState("");
   const [editDate, setEditDate] = useState(dateForPlan);
@@ -166,6 +256,11 @@ export function ConciergeConfirmStep({
   const [editPlace, setEditPlace] = useState("");
   const [editAddress, setEditAddress] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [editingField, setEditingField] = useState<EditableField | null>(null);
+  const [draftText, setDraftText] = useState("");
+  const [draftDate, setDraftDate] = useState<Date>(dateForPlan);
+  const [fieldError, setFieldError] = useState<string | null>(null);
 
   useEffect(() => {
     setInviteToo(!!partner);
@@ -177,31 +272,36 @@ export function ConciergeConfirmStep({
     (chosenOption?.narrative as string) ||
     "Plan";
 
+  // Primitive deps only: parents rebuild `structuredPlan` on every render, so depending on the
+  // object would reset the user's confirmed edits whenever the parent re-renders.
+  const planVenueName = structuredPlan?.venue?.name ?? "";
+  const planVenueAddress = structuredPlan?.venue?.address ?? "";
+  const planFirstTime = structuredPlan?.itinerary?.[0]?.time?.trim() ?? "";
+  const dateForPlanKey = dateForPlan.getTime();
+
   useEffect(() => {
     setEditTitle(baseTitle);
-    setEditDate(dateForPlan);
-    const fromItin = structuredPlan?.itinerary?.[0]?.time?.trim() ?? "";
+    setEditDate(new Date(dateForPlanKey));
     const hm =
       exactTimeHm && /^\d{2}:\d{2}$/.test(exactTimeHm)
         ? exactTimeHm
         : (() => {
-            const m = fromItin.match(/(\d{1,2}):(\d{2})/);
+            const m = planFirstTime.match(/(\d{1,2}):(\d{2})/);
             if (!m) return "";
             return `${m[1].padStart(2, "0")}:${m[2]}`;
           })();
     setEditTimeHm(hm);
-    setEditPlace(structuredPlan?.venue?.name ?? "");
-    setEditAddress(structuredPlan?.venue?.address || locationLineDisplay?.trim() || "");
-  }, [baseTitle, dateForPlan, exactTimeHm, structuredPlan, locationLineDisplay]);
+    setEditPlace(planVenueName);
+    setEditAddress(planVenueAddress || locationLineDisplay?.trim() || "");
+    setEditingField(null);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
+  }, [baseTitle, dateForPlanKey, exactTimeHm, planFirstTime, planVenueName, planVenueAddress, locationLineDisplay]);
 
   const title = allowEditDetails ? (editTitle.trim() || baseTitle) : baseTitle;
   const effectiveDate = allowEditDetails ? editDate : dateForPlan;
   const effectiveTimeHm = allowEditDetails && /^\d{2}:\d{2}$/.test(editTimeHm) ? editTimeHm : exactTimeHm;
-  const why =
-    structuredPlan?.why_this_fits ||
-    (chosenOption?.why_this_fits as string) ||
-    (chosenOption?.logic_bridge as string) ||
-    "";
+  const needsRetime = retimeRequested && conflictingItems.length > 0;
   const tripDays: PlannerTripDay[] | undefined = structuredPlan?.trip_days;
   const structuredItinerary = Array.isArray(structuredPlan?.itinerary) ? structuredPlan!.itinerary : [];
 
@@ -248,24 +348,101 @@ export function ConciergeConfirmStep({
         ranges = [buildStartsEnds(effectiveDate, chosenOption as ExperienceOption, effectiveTimeHm)];
       }
 
-      const items = await getPlannerItems(meId, undefined, 100);
+      const allItems = await getPlannerItems(meId, undefined, 100);
       if (cancelled) return;
+      const items = (allItems as PlannerItemRow[]).filter((it) => isRelevantForConflicts(it));
       const overlapping: PlannerItemRow[] = [];
       for (const r of ranges) {
-        for (const it of items as PlannerItemRow[]) {
+        for (const it of items) {
           if (overlaps(r.starts_at, r.ends_at, it.starts_at, it.ends_at)) {
             overlapping.push(it);
             break;
           }
         }
       }
+      const nearby = overlapping.length
+        ? []
+        : ranges.flatMap((r) => findNearbyItems(r.starts_at, r.ends_at, items));
       setConflictingItems(overlapping);
+      setNearbyItems(nearby);
       setConflictChecked(true);
+      if (overlapping.length === 0) setRetimeRequested(false);
     })();
     return () => {
       cancelled = true;
     };
   }, [effectiveDate, chosenOption, structuredPlan, effectiveTimeHm, tripDays, structuredItinerary]);
+
+  const startEdit = (field: EditableField) => {
+    Haptics.selectionAsync();
+    setFieldError(null);
+    setEditingField(field);
+    if (field === "title") setDraftText(editTitle);
+    if (field === "venue") setDraftText(editPlace);
+    if (field === "address") setDraftText(editAddress);
+    if (field === "date") {
+      setDraftDate(editDate);
+      setShowDatePicker(true);
+    }
+    if (field === "time") {
+      setDraftDate(hmToDate(editDate, editTimeHm));
+      setShowTimePicker(true);
+    }
+  };
+
+  const cancelEdit = () => {
+    Haptics.selectionAsync();
+    setEditingField(null);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
+    setFieldError(null);
+  };
+
+  /** Changes only take effect once the user taps the confirm check. */
+  const commitEdit = () => {
+    if (!editingField) return;
+    if (editingField === "title") {
+      if (!draftText.trim()) {
+        setFieldError("Give your plan a title.");
+        return;
+      }
+      setEditTitle(draftText.trim());
+    }
+    if (editingField === "venue") setEditPlace(draftText.trim());
+    if (editingField === "address") setEditAddress(draftText.trim());
+    if (editingField === "date") setEditDate(draftDate);
+    if (editingField === "time") setEditTimeHm(dateToHm(draftDate));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setEditingField(null);
+    setShowDatePicker(false);
+    setShowTimePicker(false);
+    setFieldError(null);
+  };
+
+  /**
+   * Conflict resolution stays inside the form when date/time are editable — sending the user
+   * back to the Spark cards would throw away the plan they were about to make.
+   */
+  const handlePickAnotherTime = () => {
+    Haptics.selectionAsync();
+    if (!allowEditDetails) {
+      onBack();
+      return;
+    }
+    setRetimeRequested(true);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+    setTimeout(() => startEdit("time"), 400);
+  };
+
+  const handleReviewPlanner = () => {
+    Haptics.selectionAsync();
+    if (onReviewPlanner) {
+      onReviewPlanner();
+      return;
+    }
+    onBack();
+    router.push("/planner");
+  };
 
   const handleAddToPlanner = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -319,13 +496,20 @@ export function ConciergeConfirmStep({
       const conciergeMeta: Record<string, unknown> = {
         from_concierge: true,
         ...(aiRequestId ? { ai_request_id: aiRequestId } : {}),
+        ...(sparkPlanId ? { weekly_spark_plan_id: sparkPlanId } : {}),
         activity,
         location,
         place,
       };
+      // Kept on the planner item even though the UI no longer renders a "why it fits" line.
+      const description =
+        structuredPlan?.why_this_fits?.trim() ||
+        structuredPlan?.fit_reason?.trim() ||
+        (chosenOption?.narrative as string | undefined)?.trim() ||
+        undefined;
       const payload = {
         title,
-        description: why || undefined,
+        description,
         source_mode: mode,
         starts_at,
         ends_at,
@@ -400,6 +584,7 @@ export function ConciergeConfirmStep({
             source_mode: mode,
           });
           await sendMessage(conversationId, meId, ctaPayload, [], { messageType: "cta" });
+          if (sparkPlanId) onAddedToPlanner?.(planner_item_id);
         } else {
           const baseCtx = contextForPendingPlan ?? { mode };
           const planRes = await callWinklyPlan({
@@ -462,18 +647,22 @@ export function ConciergeConfirmStep({
               ? structuredItinerary.map((s) => ({ time: s.time, activity: s.description }))
               : [{ activity: title }],
           } as ExperienceOption));
+        let firstItemId: string | null = null;
         for (const weekOffset of weeks) {
           const startDate = new Date(effectiveDate);
           startDate.setDate(startDate.getDate() + weekOffset * 7);
           const { starts_at: s, ends_at: e } = buildStartsEnds(startDate, recurrenceSeed);
-          await createPlannerItemForSelf(meId, {
+          const weekItemId = await createPlannerItemForSelf(meId, {
             ...payload,
             starts_at: s,
             ends_at: e,
           });
+          if (firstItemId === null) firstItemId = weekItemId;
         }
+        if (sparkPlanId && firstItemId) onAddedToPlanner?.(firstItemId);
       } else {
         const itemId = await createPlannerItemForSelf(meId, payload);
+        if (sparkPlanId) onAddedToPlanner?.(itemId);
         if (aiRequestId) {
           void reportConciergeOutcome(aiRequestId, "added_to_planner");
         }
@@ -507,8 +696,141 @@ export function ConciergeConfirmStep({
     }
   };
 
+  const renderDetailRow = (row: {
+    field: EditableField;
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+    value: string;
+    placeholder: string;
+    first?: boolean;
+    flagged?: boolean;
+    multiline?: boolean;
+  }) => {
+    const editing = editingField === row.field;
+    const isPicker = row.field === "date" || row.field === "time";
+    const pickerVisible = row.field === "date" ? showDatePicker : showTimePicker;
+    return (
+      <View
+        key={row.field}
+        style={[
+          styles.detailRow,
+          !row.first && styles.detailRowDivided,
+          editing && styles.detailRowEditing,
+          row.flagged && !editing && styles.detailRowFlagged,
+        ]}
+      >
+        <View style={styles.detailIconWrap}>
+          <Ionicons name={row.icon} size={17} color={Colors.primaryViolet} />
+        </View>
+
+        <View style={styles.detailBody}>
+          <Text style={styles.detailLabel}>{row.label}</Text>
+
+          {editing && isPicker ? (
+            <Text style={styles.detailValue}>
+              {row.field === "date" ? formatDateLabel(draftDate) : formatTimeLabel(draftDate)}
+            </Text>
+          ) : editing ? (
+            <TextInput
+              style={[styles.detailInput, row.multiline && styles.detailInputMultiline]}
+              value={draftText}
+              onChangeText={setDraftText}
+              placeholder={row.placeholder}
+              placeholderTextColor={Colors.gray500}
+              autoFocus
+              multiline={row.multiline}
+              blurOnSubmit={!row.multiline}
+              returnKeyType="done"
+              onSubmitEditing={row.multiline ? undefined : commitEdit}
+            />
+          ) : (
+            <Text style={[styles.detailValue, !row.value && styles.detailValuePlaceholder]}>
+              {row.value || row.placeholder}
+            </Text>
+          )}
+
+          {editing && isPicker && pickerVisible ? (
+            <DateTimePicker
+              value={draftDate}
+              mode={row.field === "date" ? "date" : "time"}
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              minimumDate={row.field === "date" ? new Date() : undefined}
+              onChange={(_, d) => {
+                if (Platform.OS !== "ios") {
+                  setShowDatePicker(false);
+                  setShowTimePicker(false);
+                }
+                if (d) setDraftDate(d);
+              }}
+            />
+          ) : null}
+
+          {editing && isPicker && !pickerVisible ? (
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.selectionAsync();
+                if (row.field === "date") setShowDatePicker(true);
+                else setShowTimePicker(true);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.detailPickAgain}>
+                {row.field === "date" ? "Pick another date" : "Pick another time"}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {editing && fieldError ? <Text style={styles.detailError}>{fieldError}</Text> : null}
+        </View>
+
+        <View style={styles.detailActions}>
+          {editing ? (
+            <>
+              <TouchableOpacity
+                style={styles.detailCancelBtn}
+                onPress={cancelEdit}
+                hitSlop={8}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={`Discard ${row.label.toLowerCase()} change`}
+              >
+                <Ionicons name="close" size={18} color={Colors.gray600} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.detailConfirmBtn}
+                onPress={commitEdit}
+                hitSlop={8}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Apply ${row.label.toLowerCase()}`}
+              >
+                <Ionicons name="checkmark" size={19} color={Colors.white} />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity
+              style={[styles.detailEditBtn, editingField !== null && styles.detailEditBtnMuted]}
+              onPress={() => startEdit(row.field)}
+              disabled={editingField !== null}
+              hitSlop={8}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={`Edit ${row.label.toLowerCase()}`}
+            >
+              <Ionicons
+                name="pencil"
+                size={16}
+                color={editingField !== null ? Colors.gray400 : Colors.primaryViolet}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
+
   return (
-    <GestureScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+    <GestureScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.scrollContent}>
       {showInlineBack ? (
         <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={22} color={Colors.primaryViolet} />
@@ -519,64 +841,61 @@ export function ConciergeConfirmStep({
       <Text style={styles.title}>{allowEditDetails ? "Plan details" : title}</Text>
       {allowEditDetails ? (
         <View style={styles.editBlock}>
-          <Text style={styles.editLabel}>Title</Text>
-          <TextInput
-            style={styles.editInput}
-            value={editTitle}
-            onChangeText={setEditTitle}
-            placeholder="Plan title"
-            placeholderTextColor={Colors.gray500}
-          />
-          <Text style={styles.editLabel}>Date</Text>
-          <TouchableOpacity
-            style={styles.editInput}
-            onPress={() => { Haptics.selectionAsync(); setShowDatePicker(true); }}
-          >
-            <Text style={styles.editInputText}>
-              {editDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
-            </Text>
-          </TouchableOpacity>
-          {showDatePicker ? (
-            <DateTimePicker
-              value={editDate}
-              mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={(_, d) => {
-                if (Platform.OS !== "ios") setShowDatePicker(false);
-                if (d) setEditDate(d);
-              }}
-            />
+          <Text style={styles.editIntro}>
+            Everything is set — tap a pencil to adjust, then the check to apply.
+          </Text>
+
+          {retimeRequested && conflictingItems.length > 0 ? (
+            <View style={styles.retimeBanner}>
+              <Ionicons name="time-outline" size={18} color={Colors.primaryViolet} />
+              <Text style={styles.retimeBannerText}>
+                {`“${conflictingItems[0].title}” is already in your Planner then. Adjust the date or time below.`}
+              </Text>
+            </View>
           ) : null}
-          {Platform.OS === "ios" && showDatePicker ? (
-            <TouchableOpacity onPress={() => setShowDatePicker(false)} style={styles.editDoneBtn}>
-              <Text style={styles.editDoneText}>Done</Text>
-            </TouchableOpacity>
-          ) : null}
-          <Text style={styles.editLabel}>Time (HH:mm)</Text>
-          <TextInput
-            style={styles.editInput}
-            value={editTimeHm}
-            onChangeText={setEditTimeHm}
-            placeholder="19:30"
-            placeholderTextColor={Colors.gray500}
-            keyboardType="numbers-and-punctuation"
-          />
-          <Text style={styles.editLabel}>Venue</Text>
-          <TextInput
-            style={styles.editInput}
-            value={editPlace}
-            onChangeText={setEditPlace}
-            placeholder="Place name"
-            placeholderTextColor={Colors.gray500}
-          />
-          <Text style={styles.editLabel}>Address</Text>
-          <TextInput
-            style={styles.editInput}
-            value={editAddress}
-            onChangeText={setEditAddress}
-            placeholder="Street, city"
-            placeholderTextColor={Colors.gray500}
-          />
+
+          <View style={styles.detailCard}>
+            {renderDetailRow({
+              field: "title",
+              icon: "sparkles-outline",
+              label: "Plan",
+              value: editTitle,
+              placeholder: "Add a title",
+              first: true,
+            })}
+            {renderDetailRow({
+              field: "date",
+              icon: "calendar-outline",
+              label: "Date",
+              value: formatDateLabel(editDate),
+              placeholder: "Pick a date",
+              flagged: needsRetime,
+            })}
+            {renderDetailRow({
+              field: "time",
+              icon: "time-outline",
+              label: "Time",
+              value: editTimeHm ? formatTimeLabel(hmToDate(editDate, editTimeHm)) : "",
+              placeholder: "Pick a time",
+              flagged: needsRetime,
+            })}
+            {renderDetailRow({
+              field: "venue",
+              icon: "storefront-outline",
+              label: "Venue",
+              value: editPlace,
+              placeholder: "Add a venue",
+            })}
+            {renderDetailRow({
+              field: "address",
+              icon: "location-outline",
+              label: "Address",
+              value: editAddress,
+              placeholder: "Street + number, PLZ, City, Country",
+              multiline: true,
+            })}
+          </View>
+
           {(structuredPlan?.venue?.google_maps_link || editPlace.trim() || editAddress.trim()) ? (
             <TouchableOpacity
               style={styles.mapsBtnInline}
@@ -602,21 +921,16 @@ export function ConciergeConfirmStep({
           ) : null}
         </View>
       ) : null}
-      {why ? (
-        <>
-          <Text style={styles.whyLabel}>Why it fits your DNA</Text>
-          <Text style={styles.why} numberOfLines={5}>{why}</Text>
-        </>
-      ) : null}
       {!allowEditDetails && structuredPlan?.venue?.name ? (
         <View style={styles.venueBlock}>
           <View style={styles.venueTextCol}>
-            <Text style={styles.venueName} numberOfLines={2}>{structuredPlan.venue.name}</Text>
-            {structuredPlan.venue.address ? (
-              <Text style={styles.venueAddress} numberOfLines={3}>{structuredPlan.venue.address}</Text>
-            ) : locationLineDisplay?.trim() ? (
-              <Text style={styles.venueAddress} numberOfLines={2}>{locationLineDisplay.trim()}</Text>
-            ) : null}
+            {(() => {
+              const line = sparkVenueFullAddressLine({
+                name: structuredPlan.venue.name,
+                address: structuredPlan.venue.address || locationLineDisplay?.trim() || null,
+              });
+              return line ? <Text style={styles.venueName}>{line}</Text> : null;
+            })()}
           </View>
           {structuredPlan.venue.google_maps_link ? (
             <TouchableOpacity
@@ -635,7 +949,8 @@ export function ConciergeConfirmStep({
           ) : null}
         </View>
       ) : null}
-      {tripDays?.length ? (
+      {/* When editing (e.g. Spark confirm), date/time/venue fields already cover this — skip itinerary echo. */}
+      {!allowEditDetails && tripDays?.length ? (
         <View style={styles.tripTimeline}>
           {tripDays.map((d) => (
             <View key={`${d.day}-${d.date}`} style={styles.tripDayCard}>
@@ -648,7 +963,7 @@ export function ConciergeConfirmStep({
             </View>
           ))}
         </View>
-      ) : schedule.length > 0 ? (
+      ) : !allowEditDetails && schedule.length > 0 ? (
         <View style={styles.scheduleBlock}>
           {schedule.map((line, i) => (
             <Text key={i} style={styles.scheduleLine}>{line}</Text>
@@ -791,8 +1106,14 @@ export function ConciergeConfirmStep({
             You have {conflictingItems[0].title} at that time.
           </Text>
           <View style={styles.conflictActions}>
-            <TouchableOpacity style={styles.conflictSecondaryBtn} onPress={onBack} activeOpacity={0.8}>
-              <Text style={styles.conflictSecondaryText}>Pick another time</Text>
+            <TouchableOpacity
+              style={styles.conflictSecondaryBtn}
+              onPress={handlePickAnotherTime}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.conflictSecondaryText}>
+                {allowEditDetails ? "Change date or time" : "Pick another time"}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.conflictPrimaryBtn, saving && styles.primaryBtnDisabled]}
@@ -801,6 +1122,46 @@ export function ConciergeConfirmStep({
               activeOpacity={0.9}
             >
               {saving ? <ActivityIndicator color={Colors.white} size="small" /> : <Text style={styles.conflictPrimaryText}>Add anyway</Text>}
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity onPress={handleReviewPlanner} activeOpacity={0.7} style={styles.conflictLinkBtn}>
+            <Text style={styles.conflictLinkText}>Review my Planner</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {conflictChecked && conflictingItems.length === 0 && nearbyItems.length > 0 && (
+        <View style={styles.tightGapSection}>
+          <View style={styles.tightGapHeader}>
+            <Ionicons name="alert-circle-outline" size={18} color={Colors.primaryViolet} />
+            <Text style={styles.tightGapTitle}>Tight schedule</Text>
+          </View>
+          {nearbyItems.slice(0, 2).map((n) => (
+            <Text key={`${n.item.id}-${n.position}`} style={styles.tightGapText}>
+              {n.position === "before"
+                ? `“${n.item.title}” ends only ${n.gapMinutes} min before this plan starts.`
+                : `“${n.item.title}” starts only ${n.gapMinutes} min after this plan ends.`}
+            </Text>
+          ))}
+          <Text style={styles.tightGapText}>
+            Allow for travel time, or move one of them so you can enjoy both.
+          </Text>
+          <View style={styles.tightGapActions}>
+            {allowEditDetails ? (
+              <TouchableOpacity
+                style={styles.conflictSecondaryBtn}
+                onPress={handlePickAnotherTime}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.conflictSecondaryText}>Change date or time</Text>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity
+              style={styles.conflictSecondaryBtn}
+              onPress={handleReviewPlanner}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.conflictSecondaryText}>Review my Planner</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -856,20 +1217,25 @@ export function ConciergeConfirmStep({
       ) : null}
 
       {!(conflictChecked && conflictingItems.length > 0) && (
-        <TouchableOpacity
-          style={[styles.primaryBtn, saving && styles.primaryBtnDisabled]}
-          onPress={handleAddToPlanner}
-          disabled={saving}
-          activeOpacity={0.9}
-        >
-          {saving ? (
-            <ActivityIndicator color={Colors.white} />
-          ) : (
-            <Text style={styles.primaryBtnText}>
-              {inviteToo && partner ? `Send selection & invite ${partner.displayName}` : "Add to planner"}
-            </Text>
-          )}
-        </TouchableOpacity>
+        <>
+          <TouchableOpacity
+            style={[styles.primaryBtn, (saving || editingField !== null) && styles.primaryBtnDisabled]}
+            onPress={handleAddToPlanner}
+            disabled={saving || editingField !== null}
+            activeOpacity={0.9}
+          >
+            {saving ? (
+              <ActivityIndicator color={Colors.white} />
+            ) : (
+              <Text style={styles.primaryBtnText}>
+                {inviteToo && partner ? `Send selection & invite ${partner.displayName}` : "Add to planner"}
+              </Text>
+            )}
+          </TouchableOpacity>
+          {editingField !== null ? (
+            <Text style={styles.pendingEditHint}>Apply your change with the check to continue.</Text>
+          ) : null}
+        </>
       )}
     </GestureScrollView>
   );
@@ -894,49 +1260,141 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     marginBottom: 8,
   },
-  editBlock: { gap: 6, marginBottom: 16 },
-  editLabel: {
-    ...Typography.caption,
-    fontWeight: "700",
-    color: Colors.gray600,
-    marginTop: 4,
-  },
-  editInput: {
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    ...Typography.body,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.white,
-  },
-  editInputText: { ...Typography.body, color: Colors.textPrimary },
-  mapsBtnInline: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    alignSelf: "flex-start",
-    marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: Colors.gray100,
-    borderWidth: 1,
-    borderColor: Colors.primaryViolet + "40",
-  },
-  editDoneBtn: { alignSelf: "flex-end", paddingVertical: 6, paddingHorizontal: 10 },
-  editDoneText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "700" },
-  whyLabel: {
-    ...Typography.caption,
-    color: Colors.gray500,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  why: {
+  editBlock: { marginBottom: 20 },
+  editIntro: {
     ...Typography.caption,
     color: Colors.gray600,
     marginBottom: 12,
+  },
+  detailCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Layout.radii.card,
+    borderWidth: 1,
+    borderColor: Colors.gray200,
+    overflow: "hidden",
+    ...Shadow.card,
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: Colors.white,
+  },
+  detailRowDivided: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.gray200,
+  },
+  detailRowEditing: { backgroundColor: Colors.primaryViolet + "0A" },
+  detailRowFlagged: { backgroundColor: Colors.accentYellow + "1F" },
+  detailIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.primaryViolet + "12",
+    marginTop: 2,
+  },
+  detailBody: { flex: 1, gap: 2 },
+  detailLabel: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    color: Colors.gray600,
+  },
+  detailValue: {
+    ...Typography.body,
+    color: Colors.textPrimary,
+    fontWeight: "500",
+  },
+  detailValuePlaceholder: { color: Colors.gray500, fontWeight: "400" },
+  detailInput: {
+    ...Typography.body,
+    color: Colors.textPrimary,
+    borderWidth: 1,
+    borderColor: Colors.primaryViolet + "55",
+    borderRadius: Layout.radii.control,
+    backgroundColor: Colors.white,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 4,
+  },
+  detailInputMultiline: { minHeight: 76, textAlignVertical: "top" },
+  detailPickAgain: {
+    ...Typography.caption,
+    color: Colors.primaryViolet,
+    fontWeight: "600",
+    marginTop: 6,
+  },
+  detailError: {
+    ...Typography.caption,
+    color: Colors.errorRed,
+    marginTop: 4,
+  },
+  detailActions: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
+  detailEditBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.gray100,
+  },
+  detailEditBtnMuted: { opacity: 0.5 },
+  detailCancelBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.gray100,
+  },
+  detailConfirmBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.primaryViolet,
+    ...Shadow.button,
+  },
+  pendingEditHint: {
+    ...Typography.caption,
+    color: Colors.gray600,
+    textAlign: "center",
+    marginTop: 8,
+  },
+  retimeBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderRadius: Layout.radii.control,
+    backgroundColor: Colors.primaryViolet + "12",
+  },
+  retimeBannerText: {
+    ...Typography.caption,
+    flex: 1,
+    color: Colors.textPrimary,
+    lineHeight: 18,
+  },
+  mapsBtnInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: Layout.radii.control,
+    backgroundColor: Colors.primaryViolet + "0F",
+    borderWidth: 1,
+    borderColor: Colors.primaryViolet + "33",
   },
   venueBlock: {
     flexDirection: "row",
@@ -953,10 +1411,6 @@ const styles = StyleSheet.create({
     ...Typography.body,
     fontWeight: "600",
     color: Colors.textPrimary,
-  },
-  venueAddress: {
-    ...Typography.caption,
-    color: Colors.gray600,
   },
   mapsBtn: {
     flexDirection: "row",
@@ -1197,6 +1651,34 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: "600",
   },
+  conflictLinkBtn: { marginTop: 10, alignSelf: "flex-start" },
+  conflictLinkText: {
+    ...Typography.caption,
+    color: Colors.primaryViolet,
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
+  tightGapSection: {
+    backgroundColor: Colors.gray100,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.primaryViolet,
+    gap: 6,
+  },
+  tightGapHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+  tightGapTitle: {
+    ...Typography.caption,
+    fontWeight: "700",
+    color: Colors.textPrimary,
+  },
+  tightGapText: {
+    ...Typography.caption,
+    color: Colors.gray600,
+    lineHeight: 18,
+  },
+  tightGapActions: { flexDirection: "row", gap: 10, alignItems: "center", marginTop: 4, flexWrap: "wrap" },
   errorText: {
     ...Typography.caption,
     color: Colors.errorRed,

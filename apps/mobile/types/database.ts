@@ -256,6 +256,7 @@ export interface Database {
           user_id: string;
           role: string;
           created_at: string;
+          device_calendar_event_id: string | null;
         };
         Insert: {
           id?: string;
@@ -263,6 +264,7 @@ export interface Database {
           user_id: string;
           role?: string;
           created_at?: string;
+          device_calendar_event_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["planner_participants"]["Insert"]>;
         Relationships: [];
