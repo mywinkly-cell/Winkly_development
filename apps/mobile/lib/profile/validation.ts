@@ -21,6 +21,40 @@ function hasBirthdayValue(birthday: string | Date | null): boolean {
   return !!String(birthday).trim();
 }
 
+/** Winkly is 18+. Kept here so the rule has one definition on the client. */
+export const MIN_AGE_YEARS = 18;
+
+function toDate(birthday: string | Date | null): Date | null {
+  if (birthday == null) return null;
+  const d = birthday instanceof Date ? birthday : new Date(String(birthday));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Whole years between `birthday` and today, or null when unparseable. */
+export function ageFromBirthday(birthday: string | Date | null): number | null {
+  const d = toDate(birthday);
+  if (!d) return null;
+  const today = new Date();
+  let age = today.getFullYear() - d.getFullYear();
+  const m = today.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age -= 1;
+  return age;
+}
+
+/**
+ * True when the birthday is present and at least MIN_AGE_YEARS ago.
+ *
+ * The onboarding date picker already sets maximumDate to today-18y, but that is
+ * a UI hint on one screen: profiles_core / user_profiles are PATCHable by their
+ * owner, so the real floor is the CHECK constraint added in
+ * 20260821120000_security_hardening_audit_v1_48.sql. This function exists so
+ * the user gets a clear message instead of a raw database error (SAFE-1).
+ */
+export function meetsMinimumAge(birthday: string | Date | null): boolean {
+  const age = ageFromBirthday(birthday);
+  return age !== null && age >= MIN_AGE_YEARS;
+}
+
 export type ProfileValidationResult =
   | { ok: true }
   | { ok: false; title: string; message: string };
@@ -28,6 +62,13 @@ export type ProfileValidationResult =
 export function validateProfileCoreSubmit(input: ProfileCoreSubmitInput): ProfileValidationResult {
   if (!input.firstName || !input.lastName || !input.gender || !hasBirthdayValue(input.birthday) || !input.city) {
     return { ok: false, title: "Incomplete", message: "Please fill in all required fields." };
+  }
+  if (!meetsMinimumAge(input.birthday)) {
+    return {
+      ok: false,
+      title: "You must be 18 or older",
+      message: `Winkly is only for people aged ${MIN_AGE_YEARS} and over. Please check the date of birth you entered.`,
+    };
   }
   if (input.corePhotoCount < MIN_CORE_PHOTOS) {
     return {
@@ -45,7 +86,7 @@ export function isProfileCoreStepComplete(input: ProfileCoreSubmitInput): boolea
     input.corePhotoCount >= MIN_CORE_PHOTOS &&
     !!input.firstName.trim() &&
     !!input.lastName.trim() &&
-    hasBirthdayValue(input.birthday) &&
+    meetsMinimumAge(input.birthday) &&
     !!input.gender.trim() &&
     !!input.city.trim()
   );

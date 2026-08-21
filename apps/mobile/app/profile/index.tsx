@@ -81,8 +81,8 @@ export default function ProfileIndex() {
         />
         <Row
           title="Verification"
-          subtitle="Identity & trust checks (later: KYC)"
-          onPress={() => router.push("/profile/verification")}
+          subtitle="Verify your photo to earn a verified badge"
+          onPress={() => router.push("/account/photo-verification")}
         />
       </ScrollView>
     </View>
