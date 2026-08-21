@@ -17,6 +17,13 @@ import {
   mergeLocationHints,
   type LocationContextInjection,
 } from "./locationContext.ts";
+import {
+  markServedFromCache,
+  recordProviderUsage,
+  usageColumns,
+  withUsageLedger,
+} from "./usage.ts";
+import { microsToEur } from "./pricing.ts";
 
 /**
  * Gemini model routing — defaults use real Generative Language API model IDs.
@@ -120,6 +127,31 @@ const AI_LIMITS = {
   // Max candidates accepted for rank/suggest.
   maxCandidates: 50,
 } as const;
+
+/**
+ * Opt-out for the fail-closed rate limiter. Set AI_RATELIMIT_OPTIONAL=true in
+ * local dev, where there is no Upstash instance. Never set it in production.
+ */
+const RATELIMIT_OPTIONAL = envFlagOn("AI_RATELIMIT_OPTIONAL");
+
+/**
+ * Daily spend ceiling per user, in micro-euros (1 EUR = 1_000_000).
+ * 0 disables the check. Complements the per-minute burst limits, which do
+ * nothing to stop a paid account generating plans all day.
+ */
+const AI_DAILY_USER_COST_MICROS = Math.max(
+  0,
+  Math.floor(Number(Deno.env.get("AI_DAILY_USER_COST_MICROS") ?? "0")) || 0,
+);
+
+/**
+ * Global spend ceiling for the current UTC month, in micro-euros. 0 disables.
+ * This is the backstop that does not depend on anyone noticing a dashboard.
+ */
+const AI_MONTHLY_GLOBAL_COST_MICROS = Math.max(
+  0,
+  Math.floor(Number(Deno.env.get("AI_MONTHLY_GLOBAL_COST_MICROS") ?? "0")) || 0,
+);
 
 /** Clamp a requested output-token count to the configured per-request ceiling. */
 function capOutputTokens(requested: number): number {
@@ -289,6 +321,12 @@ async function runAnthropicJson(
     return null;
   }
   const data = await res.json();
+  recordProviderUsage({
+    provider: "anthropic",
+    model,
+    inputTokens: (data as { usage?: { input_tokens?: number } })?.usage?.input_tokens,
+    outputTokens: (data as { usage?: { output_tokens?: number } })?.usage?.output_tokens,
+  });
   const textBlock = (data.content as Array<{ type: string; text?: string }> | undefined)?.find((b) => b.type === "text");
   return typeof textBlock?.text === "string" ? textBlock.text : null;
 }
@@ -342,8 +380,18 @@ async function rateLimitOrThrow(params: {
   tier: SubscriptionTier;
   task: string;
 }): Promise<{ ok: true } | { ok: false; retry_after: number }> {
-  // No Redis configured → do not block (safe default for dev)
-  if (!UPSTASH_REDIS_REST_URL || !UPSTASH_REDIS_REST_TOKEN) return { ok: true };
+  // Fail CLOSED when the limiter is unavailable (COST-1, August 2026 audit).
+  //
+  // This used to return { ok: true } whenever Redis was missing, so an
+  // unprovisioned or briefly unreachable Upstash silently removed every rate
+  // limit in production — the same fail-open shape already fixed in
+  // weather-pivot-cron. Local development sets AI_RATELIMIT_OPTIONAL=true to
+  // get the old behaviour back explicitly.
+  if (!UPSTASH_REDIS_REST_URL || !UPSTASH_REDIS_REST_TOKEN) {
+    if (RATELIMIT_OPTIONAL) return { ok: true };
+    console.error("[ai-gateway] rate limiter unavailable: Upstash is not configured — refusing the request");
+    return { ok: false, retry_after: 30 };
+  }
 
   const { userId, tier, task } = params;
   const nowMin = Math.floor(Date.now() / 60000);
@@ -369,7 +417,13 @@ async function rateLimitOrThrow(params: {
     { command: "EXPIRE", args: [key, 60] },
   ]);
   const count = typeof incr?.result === "number" ? incr.result : Number(incr?.result ?? NaN);
-  if (!isFinite(count)) return { ok: true };
+  if (!isFinite(count)) {
+    // Redis answered with an error or something unparseable. Same rule as above:
+    // an unusable limiter is a reason to refuse, not to wave the request through.
+    if (RATELIMIT_OPTIONAL) return { ok: true };
+    console.error("[ai-gateway] rate limiter returned no usable count — refusing the request", incr?.error ?? "");
+    return { ok: false, retry_after: 30 };
+  }
   if (count > limit) return { ok: false, retry_after: 60 };
   return { ok: true };
 }
@@ -484,7 +538,20 @@ async function geminiGenerateContent(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }, opts);
-    if (res.ok) return res;
+    if (res.ok) {
+      // Read usage off a clone so the caller still gets an unconsumed body.
+      res.clone().json()
+        .then((body: { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }) => {
+          recordProviderUsage({
+            provider: "gemini",
+            model,
+            inputTokens: body?.usageMetadata?.promptTokenCount,
+            outputTokens: body?.usageMetadata?.candidatesTokenCount,
+          });
+        })
+        .catch(() => { /* usage accounting must never affect the response */ });
+      return res;
+    }
     if (i < GEMINI_KEYS.length - 1) {
       const snippet = (await res.text().catch(() => "")).slice(0, 200);
       console.warn(
@@ -4211,7 +4278,12 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return withCorsEmpty(req, { status: 204 });
   }
+  // Every request runs inside a usage ledger so the provider wrappers can
+  // accumulate token counts without being passed one (COST-2).
+  return await withUsageLedger(() => handleAiGatewayRequest(req));
+});
 
+async function handleAiGatewayRequest(req: Request): Promise<Response> {
   try {
     const cors = corsHeaders(req);
     const authHeader = req.headers.get("Authorization");
@@ -4352,6 +4424,58 @@ serve(async (req) => {
           }),
           { status: 429, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } },
         );
+      }
+    }
+
+    // Cost guard: daily per-user and monthly global spend ceilings (COST-2).
+    //
+    // The burst limiter above stops a user hammering the gateway for a minute.
+    // It does nothing about a paid account generating plans steadily all day,
+    // which is the shape an unexpected provider bill actually takes. Both
+    // ceilings are read from ai_requests.cost_micros, so they only mean
+    // anything once 20260821120100_ai_request_cost_tracking.sql is applied.
+    // Both default to 0 (disabled) — set them once you have a week of real
+    // numbers from the beta.
+    if (isAiTask && (AI_DAILY_USER_COST_MICROS > 0 || AI_MONTHLY_GLOBAL_COST_MICROS > 0)) {
+      try {
+        if (AI_MONTHLY_GLOBAL_COST_MICROS > 0) {
+          const { data: globalSpend } = await supabase.rpc("ai_spend_global_month_micros");
+          const spent = Number(globalSpend ?? 0);
+          if (Number.isFinite(spent) && spent >= AI_MONTHLY_GLOBAL_COST_MICROS) {
+            console.error(
+              `[ai-gateway] MONTHLY GLOBAL SPEND CEILING REACHED: EUR ${microsToEur(spent)} >= EUR ${microsToEur(AI_MONTHLY_GLOBAL_COST_MICROS)} — refusing AI tasks`,
+            );
+            return new Response(
+              JSON.stringify({
+                error: "AI planning is temporarily unavailable. Please try again later.",
+                code: "ai_budget_exhausted",
+              }),
+              { status: 503, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } },
+            );
+          }
+        }
+
+        if (AI_DAILY_USER_COST_MICROS > 0) {
+          const { data: userSpend } = await supabase.rpc("ai_spend_today_micros", { p_user_id: user.id });
+          const spent = Number(userSpend ?? 0);
+          if (Number.isFinite(spent) && spent >= AI_DAILY_USER_COST_MICROS) {
+            return new Response(
+              JSON.stringify({
+                error: "You've used today's AI allowance. It resets at midnight UTC.",
+                message: "You've used today's AI allowance. It resets at midnight UTC.",
+                code: "limit_reached",
+                limit_type: "daily_budget",
+                retry_after: 3600,
+              }),
+              { status: 429, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } },
+            );
+          }
+        }
+      } catch (err) {
+        // A spend-guard failure must not take the feature down. It is logged
+        // loudly because a guard that silently stops guarding is the bug this
+        // whole change exists to prevent.
+        console.error("[ai-gateway] spend guard could not be evaluated — allowing the request:", err);
       }
     }
 
@@ -4500,6 +4624,7 @@ serve(async (req) => {
         user_id: user.id,
         mode,
         task,
+        ...usageColumns(),
       }).select("id").single();
       const requestIdWp = !insWp.error ? (insWp.data as { id?: string } | null)?.id ?? null : null;
 
@@ -4657,6 +4782,7 @@ serve(async (req) => {
         user_id: user.id,
         mode,
         task,
+        ...usageColumns(),
       }).select("id").single();
       const requestIdPt = !insPt.error ? (insPt.data as { id?: string } | null)?.id ?? null : null;
 
@@ -4686,6 +4812,7 @@ serve(async (req) => {
         mode,
         task,
         prompt_variant: promptVariant,
+        ...usageColumns(),
       }).select("id").single();
       let requestIdMa: string | null = null;
       if (!insMa.error) requestIdMa = (insMa.data as { id?: string } | null)?.id ?? null;
@@ -4798,6 +4925,7 @@ serve(async (req) => {
         user_id: user.id,
         mode,
         task,
+        ...usageColumns(),
       }).select("id").single();
       const requestIdSl = !insSl.error ? (insSl.data as { id?: string } | null)?.id ?? null : null;
 
@@ -4913,6 +5041,7 @@ serve(async (req) => {
         mode,
         task,
         prompt_variant: promptVariant,
+        ...usageColumns(),
       }).select("id").single();
       let requestIdMb: string | null = null;
       if (insMb.error) {
@@ -5064,6 +5193,7 @@ serve(async (req) => {
       mode,
       task,
       prompt_variant: promptVariant,
+      ...usageColumns(),
     }).select("id").single();
     if (ins.error) {
       console.error("ai_requests insert failed:", ins.error.message);
@@ -5167,4 +5297,4 @@ serve(async (req) => {
       { status: 500, headers: { "Content-Type": "application/json", ...Object.fromEntries(corsHeaders(req)) } }
     );
   }
-});
+}
