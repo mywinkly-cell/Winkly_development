@@ -83,3 +83,42 @@ jobs:
 
       - name: Test
         run: npm run mobile:test
+
+  db-tests:
+    name: DB security regression
+    runs-on: ubuntu-latest
+    # Boots the local Supabase stack, applies every migration + seed.sql, then
+    # runs supabase/tests/security_hardening_test.sql as an unprivileged client.
+    # SEC-1 (tier self-escalation) and SEC-2 (the user_locations coordinate leak)
+    # both survived four audit cycles because nothing exercised RLS — this job is
+    # what stops them coming back on a later schema change.
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+      # Deterministic from supabase/config.toml ([db] port = 54322).
+      SUPABASE_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start Supabase (Postgres + migrations + seed)
+        # -x trims images this job never touches; keeps the DB, auth schema and
+        # the roles (anon / authenticated / service_role) the test switches into.
+        run: npx supabase start -x studio,edge-runtime,imgproxy
+
+      - name: Security hardening regression test
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/security_hardening_test.sql
+
+      - name: Stop Supabase
+        if: always()
+        run: npx supabase stop

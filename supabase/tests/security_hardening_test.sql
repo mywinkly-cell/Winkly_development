@@ -41,6 +41,14 @@ BEGIN
   END IF;
 END $$;
 
+-- The SAFE-1 assertions UPDATE public.user_profiles for test.user_a, so that row
+-- has to exist. A freshly seeded database only populates the legacy profiles_core,
+-- so provision it here (as the bootstrapping role, before the switch to
+-- `authenticated`). Everything rolls back at the end.
+INSERT INTO public.user_profiles (id, first_name, last_name, birthday)
+VALUES (current_setting('test.user_a')::uuid, 'Sec', 'Test', CURRENT_DATE - INTERVAL '30 years')
+ON CONFLICT (id) DO NOTHING;
+
 -- ══════════════════════════════════════════════════════════════════════════
 -- SEC-1 · billing and moderation columns on public.users
 -- ══════════════════════════════════════════════════════════════════════════
