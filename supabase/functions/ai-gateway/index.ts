@@ -28,7 +28,11 @@ import { microsToEur } from "./pricing.ts";
 /**
  * Gemini model routing — defaults use real Generative Language API model IDs.
  * Override via Supabase secrets: GEMINI_MODEL, GEMINI_MODEL_LITE, GEMINI_MODEL_TOPICS, GEMINI_MODEL_PLAN.
- * Keep defaults in sync with docs/API_KEYS_AND_ENV.md (gemini-2.0-* shut down 2026-06-01).
+ * Keep defaults in sync with docs/API_KEYS_AND_ENV.md.
+ * gemini-2.0-* shut down 2026-06-01. The Anthropic snapshots claude-sonnet-4-20250514
+ * and claude-3-5-haiku-20241022 RETIRED (2026-06-15 / 2026-02-19) — updated to
+ * claude-sonnet-4-6 and claude-haiku-4-5-20251001 (Sept 2026, OPS-2). These are the
+ * DEFAULTS: set ANTHROPIC_MODEL / _LITE / _PLAN secrets in prod to pin explicitly.
  */
 const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash";
 const GEMINI_MODEL_LITE = Deno.env.get("GEMINI_MODEL_LITE") ?? "gemini-3.1-flash-lite";
@@ -50,9 +54,9 @@ const GEMINI_THINKING_CONFIG = {
 } as const;
 
 /** Anthropic (Claude) — primary for Premium/Enterprise. Override via Supabase secrets. */
-const ANTHROPIC_MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-sonnet-4-20250514";
-const ANTHROPIC_MODEL_LITE = Deno.env.get("ANTHROPIC_MODEL_LITE") ?? "claude-3-5-haiku-20241022";
-const ANTHROPIC_MODEL_PLAN = Deno.env.get("ANTHROPIC_MODEL_PLAN") ?? "claude-sonnet-4-20250514";
+const ANTHROPIC_MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-sonnet-4-6";
+const ANTHROPIC_MODEL_LITE = Deno.env.get("ANTHROPIC_MODEL_LITE") ?? "claude-haiku-4-5-20251001";
+const ANTHROPIC_MODEL_PLAN = Deno.env.get("ANTHROPIC_MODEL_PLAN") ?? "claude-sonnet-4-6";
 
 // Redis (Upstash REST) — used for rate limiting + semantic caching + context caching
 const UPSTASH_REDIS_REST_URL = Deno.env.get("UPSTASH_REDIS_REST_URL") ?? "";
@@ -805,7 +809,6 @@ function summarizeModeProfile(
     bio: typeof row.bio === "string" && row.bio.length > 0 ? scrubPiiText(row.bio).slice(0, 300) : undefined,
     interests: Array.isArray(row.interests) ? row.interests : undefined,
     food: meta.food ?? meta.dietary,
-    allergies: meta.allergies,
     lifestyle: meta.lifestyle,
     smoking: meta.smoking,
     alcohol: meta.alcohol,
@@ -1798,17 +1801,17 @@ const CONCIERGE_SYSTEM_PROMPT = `You are the Elite Digital Concierge for Winkly.
 
 Feasibility (must check together when USER_REQUEST includes constraints): (1) Weather vs activity type—move outdoor plans indoor or to another day if weather_snapshot conflicts. (2) Arrival time vs venue hours—if opening hours are known or in EXTERNAL_PLACE_HINTS, ensure the suggested arrival is inside hours; avoid arriving within ~45 minutes of stated closing unless the user asked for a very short visit. (3) If origin and destination differ in USER_REQUEST, mention travel time/distance qualitatively; when the plan is shared, note that other participants' travel from their own location may differ. (4) Never fabricate Maps or booking URLs—only use URLs from Winkly rows, tool results, or well-known public search patterns the user can verify.
 
-When COMPATIBILITY_SUMMARY is present in context, use it as the primary input for personalization (compatibility score, shared interests, location, budget)—do not require full PRIMARY_USER/PARTNER_USER. Otherwise, profile-based personalization: PRIMARY_USER and PARTNER_USER (when present) contain minimal profile data used only to tailor suggestions: age, gender, city (location), interests, bio, lifestyle, dietary/food, allergies, values, goals (relationship_goals, meetup_goals, networking_goals), transport. You MUST use this profile information when making suggestions—e.g. match activities to interests, consider age-appropriate and inclusive options, respect dietary and allergies, align with lifestyle (smoking, alcohol, activity level) and location. Do not infer or assume data not provided.
+When COMPATIBILITY_SUMMARY is present in context, use it as the primary input for personalization (compatibility score, shared interests, location, budget)—do not require full PRIMARY_USER/PARTNER_USER. Otherwise, profile-based personalization: PRIMARY_USER and PARTNER_USER (when present) contain minimal profile data used only to tailor suggestions: age, gender, city (location), interests, bio, lifestyle, dietary/food, values, goals (relationship_goals, meetup_goals, networking_goals), transport. You MUST use this profile information when making suggestions—e.g. match activities to interests, consider age-appropriate and inclusive options, respect dietary needs, align with lifestyle (smoking, alcohol, activity level) and location. Do not infer or assume data not provided.
 
 Agency / preference engine: When PREFERENCE_ENGINE_MERGE is present, treat venue avoids (e.g. loud bars), prefer lists (quiet garden, vegan-friendly), noise_level, and professional_topics as constraints alongside dietary. PRIMARY_CONCIERGE_SIGNALS and PARTNER_CONCIERGE_SIGNALS are structured JSON from user_concierge_signals. When CALENDAR_WHITE_SPACE is present (ISO datetimes or short text describing merged free windows from device + optional Google Calendar), prefer proposing times inside those windows. When BOOKING_CONTEXT is present (e.g. opentable_search_url, resy_hint), use for discovery only—never claim a confirmed OpenTable/Resy reservation; suggest the user completes booking in-app or via the link.
 
 Reasoning priority (apply in order):
-1. Safety / Hard constraints: Allergies, dietary, mobility — non-negotiable. If any conflict, exclude (score S=0).
+1. Safety / Hard constraints: dietary needs, mobility — non-negotiable. If any conflict, exclude (score S=0).
 2. Contextual logic: Weather, time of day, mode — the "reality" filter. Use get_weather for outdoor plans; use get_planner_items to avoid double-booking.
 3. DNA alignment: Interests, lifestyle, values, age, gender — the "delight" filter. Use PRIMARY_USER and PARTNER_USER profile data.
 4. Internal supply (priority order): (a) WINKLY_EVENTS_CANDIDATES — public events (keyword + pg_trgm-ranked from DB) for the user's dates/city/activity; if one fits USER_REQUEST, prefer it as options[0] with source "winkly_event" and real winkly_event_id. (b) WINKLY_SPONSORED_OFFERS — pre-filtered sponsored business_offers (already relevance-gated: category overlap + radius). Use at most one when it genuinely fits; set source "winkly_business_offer", include offer id, and booking_url when present — never force an irrelevant ad. (c) WINKLY_BUSINESS_CANDIDATES — { services, profiles } from business_services and profiles_business; use for mode business or when a service/venue on Winkly matches; set source "winkly_business_service" or "winkly_business_profile" and include the id field from the row. (d) EXTERNAL_PLACE_HINTS — optional real-world POIs from Google Places (if configured) or OpenStreetMap Nominatim; use for logistics/names only, not as confirmed bookings; cite as external hints in logic_bridge or logistics. You may still call get_winkly_events. Do not fabricate URLs; use website/booking_url from Winkly rows when present.
 
-Heuristic scoring (think in these terms when ranking options): S = (w1·C) + (w2·V) + (w3·L). C = Compatibility (dietary/allergy); V = Vibe match (venue fits mode + DNA); L = Logistics (distance, transport). Romance: V weighted high (~0.7). Business: L and noise ~0.8. If C fails, S=0.
+Heuristic scoring (think in these terms when ranking options): S = (w1·C) + (w2·V) + (w3·L). C = Compatibility (dietary); V = Vibe match (venue fits mode + DNA); L = Logistics (distance, transport). Romance: V weighted high (~0.7). Business: L and noise ~0.8. If C fails, S=0.
 
 State machine (follow in order):
 1. Analysis: Use PRIMARY_USER and PARTNER_USER (age, gender, city, interests, lifestyle, dietary, values, goals). Compare values and interests across both; resolve friction (e.g. both "Adventure" but one "Mostly relaxed" → Scenic cable car or private boat, not heavy sport). Consider location (city) for venue proximity and vibe.
@@ -2143,8 +2146,8 @@ async function runMatchAgentPipeline(
   const o = profileCtx.partner as Record<string, unknown> | undefined;
   const cityP = String(p.city ?? safeContext.city ?? "").trim() || "Berlin";
   const cityO = String(o?.city ?? "").trim() || cityP;
-  const dietP = [p.food, p.allergies].filter(Boolean).join("; ");
-  const dietO = o ? [o.food, o.allergies].filter(Boolean).join("; ") : "";
+  const dietP = [p.food].filter(Boolean).join("; ");
+  const dietO = o ? [o.food].filter(Boolean).join("; ") : "";
 
   const extract =
     `User A: interests ${JSON.stringify(p.interests ?? [])}; food/diet: ${dietP || "n/a"}. ` +
@@ -2284,7 +2287,7 @@ Output a single JSON object only (no markdown), with this exact shape:
 }
 
 Rules:
-- Respect dietary restrictions and allergies from PRIMARY_USER and PARTNER_USER (food, allergies fields). Never suggest conflicting food venues.
+- Respect dietary restrictions from PRIMARY_USER and PARTNER_USER (food field). Never suggest conflicting food venues.
 - If schedules conflict heavily, pick the next reasonable slot and say so briefly in bridge_message.
 - Never invent full street addresses. Prefer hints from EXTERNAL_PLACE_HINTS or WINKLY_EVENTS_CANDIDATES when aligned.
 - If PARTNER_DEVICE_FREE_SLOTS is empty, infer only from PARTNER_PLANNER_ITEMS (busy) vs typical daytime windows; do not claim you read the partner's phone calendar.`;
@@ -3091,13 +3094,11 @@ async function getPlanningProfileRows(
 }
 
 function pickPlanningFieldsFromMeta(meta: Record<string, unknown> | null | undefined): {
-  allergies?: unknown;
   lifestyle?: unknown;
   hobbies?: unknown;
 } {
   const m = (meta ?? {}) as Record<string, unknown>;
   return {
-    allergies: m.allergies,
     lifestyle: m.lifestyle ?? m.lifestyle_tags,
     // Accept a few legacy keys used across onboarding/profile editors.
     hobbies: m.hobbies ?? m.activity_tags ?? m.sports_tags ?? m.creative_tags,
@@ -3672,7 +3673,7 @@ async function runMultiDayWinklyGemini(params: {
   const SYSTEM = `${langDirective ? `${langDirective}\n\n` : ""}You are Winkly Concierge Agent — multi-day trip planner.
 
 Rules:
-- Respect ALL participant allergies/constraints from profiles when naming activities.
+- Respect ALL participant dietary constraints from profiles when naming activities.
 - Produce exactly ${params.numDays} consecutive calendar days starting ${startIso} (use ISO date YYYY-MM-DD for each day).
 - Each day MUST include morning and afternoon slots (specific venues or neighborhoods when possible). Evening is optional.
 - booking_links must be [] unless you have verified HTTPS URLs (usually empty).
@@ -3850,12 +3851,11 @@ async function generateWinklyPlan(params: {
   const profiles = ensureRequester.map((uid) => {
     const r = profileById.get(uid);
     const meta = (r?.meta ?? {}) as Record<string, unknown>;
-    const { allergies, lifestyle, hobbies } = pickPlanningFieldsFromMeta(meta);
+    const { lifestyle, hobbies } = pickPlanningFieldsFromMeta(meta);
     return {
       user_id: uid,
       location: typeof r?.city === "string" ? r?.city : undefined,
       interests: Array.isArray(r?.interests) ? r?.interests : [],
-      allergies,
       lifestyle,
       hobbies: Array.isArray(hobbies) ? hobbies : typeof hobbies === "string" ? [hobbies] : [],
     };
@@ -4022,7 +4022,7 @@ async function generateWinklyPlan(params: {
   const planLangDirective = languageDirective(params.appLanguage);
   const SYSTEM = `${planLangDirective ? `${planLangDirective}\n\n` : ""}${params.systemContextBlock ? `${params.systemContextBlock}\n\n` : ""}You are Winkly Concierge Agent.
 
-You will receive: multiple participant profiles (interests, allergies, lifestyle, location) and planning form data (idea/date_time/budget/weather).
+You will receive: multiple participant profiles (interests, dietary needs, lifestyle, location) and planning form data (idea/date_time/budget/weather).
 
 Rules:
 - Validate the user's idea against ALL participant constraints.
@@ -4032,7 +4032,7 @@ Rules:
 - Option A — the bolder, more memorable choice. character_label: pick from ["Bolder pick","Surprising choice","Hidden gem","Local favourite"].
 - Option B — the safer, reliable choice. character_label: pick from ["Classic choice","Safe & solid","Reliable pick","Crowd pleaser"].
 - Use your world knowledge to suggest real, specific venues in the city and country provided (named restaurants, cafés, cultural venues, etc.). Do not invent fake URLs.
-- GROUP SYNTHESIS (when group_size > 2): (1) Apply hard constraints as a UNION — any one participant's allergy/dietary/accessibility need excludes that venue type for everyone (lowest common denominator). (2) Build Option A around the group's shared interest intersection ("the core thing everyone likes"); build Option B for variety/rotation so it isn't always the same person's pick. (3) Use GROUP_VIBE_TODAY only as a tiebreaker between otherwise-equal options, never as a hard filter. (4) Respect group_size when picking venues — avoid spots better suited to 2 people, and for groups of 5+ add a note to ask about a group table / reservation / private area.
+- GROUP SYNTHESIS (when group_size > 2): (1) Apply hard constraints as a UNION — any one participant's dietary/accessibility need excludes that venue type for everyone (lowest common denominator). (2) Build Option A around the group's shared interest intersection ("the core thing everyone likes"); build Option B for variety/rotation so it isn't always the same person's pick. (3) Use GROUP_VIBE_TODAY only as a tiebreaker between otherwise-equal options, never as a hard filter. (4) Respect group_size when picking venues — avoid spots better suited to 2 people, and for groups of 5+ add a note to ask about a group table / reservation / private area.
 - If PARTICIPANTS_PLANNER_ITEMS is present, propose a start time that does not overlap any participant's busy blocks; if a perfect slot doesn't exist, pick the time with the fewest conflicts and say so explicitly in why_this_fits or weather_note (e.g. "this overlaps with one member's gym class until 18:00, so I've set the start at 18:30").
 - If GROUP_VIBE_TODAY is present, weight the group's stated mood/energy and honour any notes (e.g. "nothing too far from the S-Bahn") when choosing venues and pacing.
 - When group_size > 2, populate group_fit_notes with 2-4 short bullets explaining why the plan works for the group — reference concrete constraints (dietary needs, the rain forecast, a member's timing, group_size). This is the "why this works for everyone" a thoughtful organiser would say. Omit group_fit_notes (or leave empty) for 1:1 plans.

@@ -34,6 +34,10 @@ const DEFAULT_PRICES: Record<string, ModelPrice> = {
   "gemini-3.5-flash": { in: 0.30, out: 2.50 },
   "gemini-3.1-flash-lite": { in: 0.10, out: 0.40 },
   // Anthropic Messages API
+  // Current (Sept 2026). The 2025 snapshots below retired 2026-06-15 / 2026-02-19;
+  // kept as harmless extra keys so any in-flight override still prices, not the fallback.
+  "claude-sonnet-4-6": { in: 3.00, out: 15.00 },
+  "claude-haiku-4-5-20251001": { in: 1.00, out: 5.00 },
   "claude-sonnet-4-20250514": { in: 3.00, out: 15.00 },
   "claude-3-5-haiku-20241022": { in: 0.80, out: 4.00 },
 };
