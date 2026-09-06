@@ -32,6 +32,11 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      # codeql-action reads the Actions run via the workflow-runs API for its
+      # status report; without this it exits "configuration error" even after a
+      # clean analysis. (SARIF upload itself still needs code scanning enabled
+      # on the repo — Settings → Code security.)
+      actions: read
     steps:
       - name: Checkout
         uses: actions/checkout@v5
