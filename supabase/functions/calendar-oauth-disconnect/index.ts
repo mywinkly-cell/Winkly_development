@@ -54,7 +54,7 @@ serve(async (req) => {
       .maybeSingle();
 
     if (row?.token_encrypted) {
-      const tokens = await decryptCalendarTokens(row.token_encrypted);
+      const tokens = await decryptCalendarTokens(row.token_encrypted, user.id);
       // Google supports self-service revoke; Microsoft doesn't offer an equivalent for
       // consumer delegated tokens (see _shared/microsoftGraph.ts comment) — dropping our
       // stored copy below is what actually matters for "Winkly no longer has access".

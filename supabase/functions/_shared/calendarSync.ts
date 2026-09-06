@@ -28,7 +28,7 @@ export type { CalendarConnectionRow };
 
 /** Returns a valid (non-expired) access token, refreshing + re-persisting it if needed. Null on failure. */
 export async function getValidAccessToken(supabase: SupabaseClient, conn: CalendarConnectionRow): Promise<string | null> {
-  const tokens = await decryptCalendarTokens(conn.token_encrypted);
+  const tokens = await decryptCalendarTokens(conn.token_encrypted, conn.user_id);
   if (!tokens) return null;
 
   const expiresAt = conn.token_expires_at ? Date.parse(conn.token_expires_at) : 0;
@@ -40,7 +40,7 @@ export async function getValidAccessToken(supabase: SupabaseClient, conn: Calend
     : await refreshMicrosoftAccessToken(tokens.refresh_token);
   if (!refreshed) return null;
 
-  const encrypted = await encryptCalendarTokens({ access_token: refreshed.access_token, refresh_token: tokens.refresh_token });
+  const encrypted = await encryptCalendarTokens({ access_token: refreshed.access_token, refresh_token: tokens.refresh_token }, conn.user_id);
   if (encrypted) {
     await supabase
       .from("calendar_connections")

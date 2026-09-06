@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
     const encrypted = await encryptCalendarTokens({
       access_token: tokenResult.access_token,
       refresh_token: tokenResult.refresh_token,
-    });
+    }, verified.uid);
     if (!encrypted) {
       console.error("calendar-oauth-callback: CALENDAR_TOKEN_ENCRYPTION_KEY not configured");
       return new Response(buildResultHtml(false, verified.provider, "server is not configured to store calendar access yet."), {
