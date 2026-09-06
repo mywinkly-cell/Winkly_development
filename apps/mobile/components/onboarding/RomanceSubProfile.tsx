@@ -13,7 +13,6 @@ import {
   POLITICAL_VIEWS_OPTIONS,
   VALUES_OPTIONS,
   PETS_OPTIONS,
-  ALLERGIES_OPTIONS,
   FOOD_OPTIONS,
 } from "@/constants/profileOptions";
 
@@ -140,12 +139,9 @@ export function RomanceSubProfile(props: {
   onValuesChange: (v: string[]) => void;
   pets: string[];
   onPetsChange: (v: string[]) => void;
-  allergies: string[];
-  onAllergiesChange: (v: string[]) => void;
   food: string;
   onFoodChange: (v: string) => void;
   toggleMulti: (arr: string[], val: string, setter: (v: string[]) => void, max: number) => void;
-  onAllergiesToggle?: (v: string) => void;
   onPetsToggle?: (v: string) => void;
   hideToggle?: boolean;
 }) {
@@ -154,7 +150,7 @@ export function RomanceSubProfile(props: {
   const { lifestyle, onLifestyleChange, smoking, onSmokingChange, alcohol, onAlcoholChange, kids, onKidsChange } = props;
   const { sexualViews, onSexualViewsChange } = props;
   const { relationshipGoals, onRelationshipGoalsChange, religion, onReligionChange } = props;
-  const { politicalViews, onPoliticalViewsChange, values, onValuesChange, pets, onPetsChange, allergies, onAllergiesChange, food, onFoodChange, toggleMulti, onAllergiesToggle, onPetsToggle } = props;
+  const { politicalViews, onPoliticalViewsChange, values, onValuesChange, pets, onPetsChange, food, onFoodChange, toggleMulti, onPetsToggle } = props;
 
   if (!enabled) {
     return (
@@ -229,14 +225,6 @@ export function RomanceSubProfile(props: {
         onToggle={onPetsToggle ?? ((v) => toggleMulti(pets, v, onPetsChange, 2))}
         max={2}
         exclusiveOption="No pets"
-      />
-      <Text style={label}>Allergies (up to 3)</Text>
-      <ChipSelect
-        options={ALLERGIES_OPTIONS}
-        selected={allergies}
-        onToggle={onAllergiesToggle ?? ((v) => toggleMulti(allergies, v, onAllergiesChange, 3))}
-        max={3}
-        exclusiveOption="None"
       />
       <SingleSelect options={FOOD_OPTIONS} selected={food} onSelect={onFoodChange} label="Food habits" />
 

@@ -206,7 +206,6 @@ export default function ProfileCore() {
   const [politicalViewsRomance, setPoliticalViewsRomance] = useState("");
   const [valuesRomance, setValuesRomance] = useState<string[]>([]);
   const [petsRomance, setPetsRomance] = useState<string[]>([]);
-  const [allergiesRomance, setAllergiesRomance] = useState<string[]>([]);
   const [foodRomance, setFoodRomance] = useState("");
 
   // Friends fields
@@ -217,7 +216,6 @@ export default function ProfileCore() {
   const [statusFriends, setStatusFriends] = useState("");
   const [kidsFriends, setKidsFriends] = useState("");
   const [petsFriends, setPetsFriends] = useState<string[]>([]);
-  const [allergiesFriends, setAllergiesFriends] = useState<string[]>([]);
   const [foodFriends, setFoodFriends] = useState("");
 
   // Business fields
@@ -333,7 +331,6 @@ export default function ProfileCore() {
               setPoliticalViewsRomance(String(meta.political_views ?? ""));
               setValuesRomance(Array.isArray(meta.values) ? meta.values : []);
               setPetsRomance(Array.isArray(meta.pets) ? meta.pets : []);
-              setAllergiesRomance(Array.isArray(meta.allergies) ? meta.allergies : meta.allergies ? [String(meta.allergies)] : []);
               setFoodRomance(String(meta.food ?? ""));
               setRomanceVideos(Array.isArray(meta.videos) ? ensureLength(meta.videos, 1) : [null]);
             }
@@ -352,7 +349,6 @@ export default function ProfileCore() {
               setStatusFriends(String(meta.status ?? ""));
               setKidsFriends(String(meta.kids ?? ""));
               setPetsFriends(Array.isArray(meta.pets) ? meta.pets : []);
-              setAllergiesFriends(Array.isArray(meta.allergies) ? meta.allergies : meta.allergies ? [String(meta.allergies)] : []);
               setFoodFriends(String(meta.food ?? ""));
               setFriendsVideos(Array.isArray(meta.videos) ? ensureLength(meta.videos, 1) : [null]);
             }
@@ -419,7 +415,6 @@ export default function ProfileCore() {
             setPoliticalViewsRomance(data.politicalViewsRomance ?? "");
             setValuesRomance(data.valuesRomance ?? []);
             setPetsRomance(data.petsRomance ?? []);
-            setAllergiesRomance(Array.isArray(data.allergiesRomance) ? data.allergiesRomance : (data.allergiesRomance ? [data.allergiesRomance] : []));
             setFoodRomance(data.foodRomance ?? "");
             setLifestyleFriends(data.lifestyleFriends ?? "");
             setAlcoholFriends(data.alcoholFriends ?? "");
@@ -428,7 +423,6 @@ export default function ProfileCore() {
             setStatusFriends(data.statusFriends ?? "");
             setKidsFriends(data.kidsFriends ?? "");
             setPetsFriends(data.petsFriends ?? []);
-            setAllergiesFriends(Array.isArray(data.allergiesFriends) ? data.allergiesFriends : (data.allergiesFriends ? [data.allergiesFriends] : []));
             setFoodFriends(data.foodFriends ?? "");
             setRoleBusiness(data.roleBusiness ?? "");
             setCompanyBusiness(data.companyBusiness ?? "");
@@ -514,7 +508,6 @@ export default function ProfileCore() {
       politicalViewsRomance,
       valuesRomance,
       petsRomance,
-      allergiesRomance,
       foodRomance,
       lifestyleFriends,
       alcoholFriends,
@@ -523,7 +516,6 @@ export default function ProfileCore() {
       statusFriends,
       kidsFriends,
       petsFriends,
-      allergiesFriends,
       foodFriends,
       roleBusiness,
       companyBusiness,
@@ -578,7 +570,6 @@ export default function ProfileCore() {
       politicalViewsRomance,
       valuesRomance,
       petsRomance,
-      allergiesRomance,
       foodRomance,
     lifestyleFriends,
     alcoholFriends,
@@ -587,7 +578,6 @@ export default function ProfileCore() {
       statusFriends,
       kidsFriends,
       petsFriends,
-      allergiesFriends,
       foodFriends,
       roleBusiness,
     companyBusiness,
@@ -773,32 +763,6 @@ export default function ProfileCore() {
     const has = arr.includes(val);
     if (has) setter(arr.filter((x) => x !== val));
     else if (arr.length < max) setter([...arr, val]);
-  };
-
-  const allergiesToggleRomance = (v: string) => {
-    if (v === "None") {
-      setAllergiesRomance((prev) => (prev.includes("None") ? [] : ["None"]));
-    } else {
-      setAllergiesRomance((prev) => {
-        const next = prev.filter((x) => x !== "None");
-        if (next.includes(v)) return next.filter((x) => x !== v);
-        if (next.length >= 3) return next;
-        return [...next, v];
-      });
-    }
-  };
-
-  const allergiesToggleFriends = (v: string) => {
-    if (v === "None") {
-      setAllergiesFriends((prev) => (prev.includes("None") ? [] : ["None"]));
-    } else {
-      setAllergiesFriends((prev) => {
-        const next = prev.filter((x) => x !== "None");
-        if (next.includes(v)) return next.filter((x) => x !== v);
-        if (next.length >= 3) return next;
-        return [...next, v];
-      });
-    }
   };
 
   const petsToggleRomance = (v: string) => {
@@ -1087,7 +1051,6 @@ export default function ProfileCore() {
           political_views: politicalViewsRomance || null,
           values: valuesRomance,
           pets: petsRomance,
-          allergies: allergiesRomance.length ? allergiesRomance : null,
           food: foodRomance || null,
           videos: uploadedRomanceVideos,
         };
@@ -1116,7 +1079,6 @@ export default function ProfileCore() {
           status: statusFriends || null,
           kids: kidsFriends || null,
           pets: petsFriends,
-          allergies: allergiesFriends.length ? allergiesFriends : null,
           food: foodFriends || null,
           videos: uploadedFriendsVideos,
         };
@@ -1929,9 +1891,6 @@ export default function ProfileCore() {
           pets={petsRomance}
           onPetsChange={setPetsRomance}
           onPetsToggle={petsToggleRomance}
-          allergies={allergiesRomance}
-          onAllergiesChange={setAllergiesRomance}
-          onAllergiesToggle={allergiesToggleRomance}
           food={foodRomance}
           onFoodChange={setFoodRomance}
           toggleMulti={toggleMulti}
@@ -1960,9 +1919,6 @@ export default function ProfileCore() {
           pets={petsFriends}
           onPetsChange={setPetsFriends}
           onPetsToggle={petsToggleFriends}
-          allergies={allergiesFriends}
-          onAllergiesChange={setAllergiesFriends}
-          onAllergiesToggle={allergiesToggleFriends}
           food={foodFriends}
           onFoodChange={setFoodFriends}
           toggleMulti={toggleMulti}
@@ -2093,9 +2049,6 @@ export default function ProfileCore() {
                 pets={petsRomance}
                 onPetsChange={setPetsRomance}
                 onPetsToggle={petsToggleRomance}
-                allergies={allergiesRomance}
-                onAllergiesChange={setAllergiesRomance}
-                onAllergiesToggle={allergiesToggleRomance}
                 food={foodRomance}
                 onFoodChange={setFoodRomance}
                 toggleMulti={toggleMulti}
@@ -2127,9 +2080,6 @@ export default function ProfileCore() {
                 pets={petsFriends}
                 onPetsChange={setPetsFriends}
                 onPetsToggle={petsToggleFriends}
-                allergies={allergiesFriends}
-                onAllergiesChange={setAllergiesFriends}
-                onAllergiesToggle={allergiesToggleFriends}
                 food={foodFriends}
                 onFoodChange={setFoodFriends}
                 toggleMulti={toggleMulti}

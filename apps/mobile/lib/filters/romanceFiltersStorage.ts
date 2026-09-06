@@ -29,7 +29,6 @@ export interface RomanceFiltersState {
   politicalViews: string;
   values: string[];
   pets: string[];
-  allergies: string[];
   food: string;
 }
 
@@ -50,7 +49,6 @@ const DEFAULT_ROMANCE_FILTERS: RomanceFiltersState = {
   politicalViews: "",
   values: [],
   pets: [],
-  allergies: [],
   food: "",
 };
 

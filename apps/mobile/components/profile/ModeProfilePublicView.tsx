@@ -196,7 +196,6 @@ export function ModeProfilePublicView({
             {metaLine("Food habits", String(activeMeta.food ?? ""))}
             {metaChips("Values", metaStringArray(activeMeta, "values"))}
             {metaChips("Pets", metaStringArray(activeMeta, "pets"))}
-            {metaChips("Allergies", metaStringArray(activeMeta, "allergies"))}
             {metaChips("Lifestyle tags", modeRow.lifestyle_tags)}
           </>
         ) : null}
@@ -218,7 +217,6 @@ export function ModeProfilePublicView({
             {metaLine("Kids", String(activeMeta.kids ?? ""))}
             {metaLine("Food habits", String(activeMeta.food ?? ""))}
             {metaChips("Pets", metaStringArray(activeMeta, "pets"))}
-            {metaChips("Allergies", metaStringArray(activeMeta, "allergies"))}
           </>
         ) : null}
 

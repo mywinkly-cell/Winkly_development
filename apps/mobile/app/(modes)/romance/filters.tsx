@@ -31,7 +31,6 @@ import {
   POLITICAL_VIEWS_OPTIONS,
   VALUES_OPTIONS,
   PETS_OPTIONS,
-  ALLERGIES_OPTIONS,
   FOOD_OPTIONS,
   INTEREST_POPULAR_ROMANCE,
 } from "@/constants/profileOptions";
@@ -128,7 +127,6 @@ export default function RomanceFiltersScreen() {
   const [politicalViews, setPoliticalViews] = useState<string>("");
   const [values, setValues] = useState<string[]>([]);
   const [pets, setPets] = useState<string[]>([]);
-  const [allergies, setAllergies] = useState<string[]>([]);
   const [food, setFood] = useState<string>("");
 
   // —— Premium (AI matching persisted) ——
@@ -191,7 +189,6 @@ export default function RomanceFiltersScreen() {
       setPoliticalViews(saved.politicalViews);
       setValues(saved.values);
       setPets(saved.pets);
-      setAllergies(saved.allergies);
       setFood(saved.food);
     })();
     return () => { cancelled = true; };
@@ -247,7 +244,6 @@ export default function RomanceFiltersScreen() {
       politicalViews,
       values,
       pets,
-      allergies,
       food,
     });
     router.back();
@@ -685,18 +681,6 @@ export default function RomanceFiltersScreen() {
                     style={[styles.chipSmall, pets.includes(p) && styles.chipSelected]}
                   >
                     <Text style={[styles.chipTextSmall, pets.includes(p) && styles.chipTextSelected]}>{p}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              <Text style={styles.label}>Allergies (up to 3)</Text>
-              <View style={styles.chipRowWrap}>
-                {ALLERGIES_OPTIONS.slice(0, 6).map((a) => (
-                  <Pressable
-                    key={a}
-                    onPress={() => toggleChip(allergies, a, setAllergies, 3)}
-                    style={[styles.chipSmall, allergies.includes(a) && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, allergies.includes(a) && styles.chipTextSelected]}>{a}</Text>
                   </Pressable>
                 ))}
               </View>
