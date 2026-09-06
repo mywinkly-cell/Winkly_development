@@ -76,11 +76,17 @@ export default function ProfilePreview() {
         }
         const uid = userData.user.id;
 
+        // birthday is intentionally NOT selected from user_profiles: the raw DOB
+        // column is locked down at the API layer. The owner reads their own date
+        // of birth only through the get_my_birthday() RPC, which is keyed on
+        // auth.uid(). Only the derived age is ever shown on the preview card.
         const { data: up } = await supabase
           .from("user_profiles")
-          .select("first_name, last_name, city, birthday, occupation, core_photos, main_photo_url")
+          .select("first_name, last_name, city, occupation, core_photos, main_photo_url")
           .eq("id", uid)
           .maybeSingle();
+
+        const { data: myBirthdayIso } = await supabase.rpc("get_my_birthday");
 
         const { data: subs } = await supabase
           .from("sub_profiles")
@@ -94,7 +100,7 @@ export default function ProfilePreview() {
           firstName: (up as any)?.first_name ?? "",
           lastName: (up as any)?.last_name ?? "",
           city: (up as any)?.city ?? "",
-          birthday: (up as any)?.birthday ?? null,
+          birthday: (myBirthdayIso as string | null) ?? null,
           occupation: (up as any)?.occupation ?? "",
           corePhotos: corePhotos.length ? corePhotos : [mainPhoto].filter(Boolean),
           interestsRomance: [],

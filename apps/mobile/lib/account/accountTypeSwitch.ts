@@ -13,10 +13,13 @@ export type AccountProfileStatus = {
 };
 
 export async function fetchAccountProfileStatus(userId: string): Promise<AccountProfileStatus> {
+  // birthday is intentionally NOT selected: the raw DOB column is locked down at
+  // the API layer (readable only by the owner via get_my_birthday()). Profile
+  // completeness does not depend on the date of birth value.
   const [{ data: personal }, { data: business }] = await Promise.all([
     supabase
       .from("user_profiles")
-      .select("first_name, last_name, gender, birthday, city, core_photos")
+      .select("first_name, last_name, gender, city, core_photos")
       .eq("id", userId)
       .maybeSingle(),
     supabase

@@ -138,9 +138,12 @@ export default function Splash() {
             .maybeSingle();
           profileComplete = isBusinessProfileComplete(bp as { business_name?: string });
         } else {
+          // birthday is intentionally NOT selected here: the raw DOB column is
+          // locked down at the API layer (readable only via get_my_birthday()).
+          // Profile completeness does not depend on the date of birth value.
           const { data: up } = await supabase
             .from("user_profiles")
-            .select("first_name, last_name, gender, birthday, city, core_photos")
+            .select("first_name, last_name, gender, city, core_photos")
             .eq("id", userId)
             .maybeSingle();
           profileComplete = isPersonalProfileComplete(up as Parameters<typeof isPersonalProfileComplete>[0]);

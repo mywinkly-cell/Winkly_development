@@ -257,11 +257,17 @@ export default function ProfileCore() {
         if (!userError && userData?.user) {
           const userId = userData.user.id;
 
+          // birthday is intentionally NOT selected from user_profiles: the raw
+          // DOB column is locked down at the API layer. The owner reads their own
+          // date of birth only via the get_my_birthday() RPC (keyed on auth.uid()).
           const { data: up } = await supabase
             .from("user_profiles")
-            .select("first_name, last_name, gender, birthday, city, education, occupation, languages, instagram, core_photos, main_photo_url, night_owl, interests, show_full_name")
+            .select("first_name, last_name, gender, city, education, occupation, languages, instagram, core_photos, main_photo_url, night_owl, interests, show_full_name")
             .eq("id", userId)
             .maybeSingle();
+
+          const { data: myBirthdayIso } = await supabase.rpc("get_my_birthday");
+          const myBirthdayDate = myBirthdayIso ? new Date(myBirthdayIso as string) : null;
 
           const upRow = up as {
             first_name?: string; last_name?: string; gender?: string; birthday?: string;
@@ -280,7 +286,7 @@ export default function ProfileCore() {
             setFirstName(upRow.first_name ?? "");
             setLastName(upRow.last_name ?? "");
             setGender(upRow.gender ?? "");
-            setBirthday(upRow.birthday ? new Date(upRow.birthday) : null);
+            setBirthday(myBirthdayDate);
             const dbCity = upRow.city ?? "";
             setCity(dbCity ? normalizeLocationDisplayString(String(dbCity), appLanguage) : "");
             if (dbCity) setCityConfirmed(true);
@@ -298,7 +304,7 @@ export default function ProfileCore() {
             resumeFromDb = {
               firstName: upRow.first_name ?? "",
               lastName: upRow.last_name ?? "",
-              birthday: upRow.birthday ? new Date(upRow.birthday) : null,
+              birthday: myBirthdayDate,
               city: dbCity,
               corePhotoCount: photos.length,
             };
