@@ -32,7 +32,22 @@ UPDATE public.profiles_mode
 ALTER TABLE public.user_profiles DROP COLUMN IF EXISTS allergies;
 
 -- 2 · public_profile_view — expose age, not birthday.
-DROP VIEW IF EXISTS public.public_profile_view;
+--
+-- The view can't simply be dropped: public.romance_discover_feed(uuid) (the app's
+-- legacy, non-geo discover fallback) is declared RETURNS SETOF this view, so it
+-- pins the view's row type and Postgres refuses a plain DROP. Some environments
+-- also still carry a superseded private.romance_discover_feed(uuid) that pins it
+-- the same way (schema drift — nothing calls it). DROP ... CASCADE clears every
+-- such dependent — the same approach the base migration 20250216110000 takes for
+-- this exact view. The only dependent that can legitimately exist is the public
+-- fallback, which is rebuilt against the new shape below, so the app keeps
+-- working — it now returns the derived age instead of birthday, which is the
+-- point. The explicit DROP FUNCTIONs are kept so the intent (and the private-
+-- schema drift cleanup) stays visible.
+DROP FUNCTION IF EXISTS private.romance_discover_feed(uuid);
+DROP FUNCTION IF EXISTS public.romance_discover_feed(uuid);
+
+DROP VIEW IF EXISTS public.public_profile_view CASCADE;
 CREATE VIEW public.public_profile_view AS
   SELECT
     p.id, p.first_name, p.last_name, p.gender,
@@ -45,6 +60,41 @@ CREATE VIEW public.public_profile_view AS
   LEFT JOIN public.profiles_mode pm ON pm.user_id = p.id AND pm.mode = 'romance';
 ALTER VIEW public.public_profile_view SET (security_invoker = on);
 GRANT SELECT ON public.public_profile_view TO authenticated;
+
+-- Recreate the legacy non-geo discover fallback against the rebuilt view. Body is
+-- unchanged from 20260710140000 (SECURITY INVOKER + auth.uid() self-guard); it
+-- selects v.* from the view, so it now returns age, not birthday. Default EXECUTE
+-- (PUBLIC) is preserved to match the prior definition; the self-guard protects it.
+CREATE FUNCTION public.romance_discover_feed(current_user_id uuid)
+RETURNS SETOF public.public_profile_view
+LANGUAGE plpgsql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+BEGIN
+  IF current_user_id IS DISTINCT FROM auth.uid() THEN
+    RAISE EXCEPTION 'romance_discover_feed: forbidden' USING ERRCODE = '28000';
+  END IF;
+  RETURN QUERY
+    SELECT v.*
+    FROM public.public_profile_view v
+    INNER JOIN public.profiles_mode pm ON pm.user_id = v.id AND pm.mode = 'romance'
+    WHERE v.id IS NOT NULL
+      AND v.id != current_user_id
+      AND NOT EXISTS (
+        SELECT 1 FROM public.romance_likes rl
+        WHERE rl.liker_id = current_user_id AND rl.liked_id = v.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM public.user_blocks ub
+        WHERE (ub.blocker_id = current_user_id AND ub.blocked_id = v.id)
+           OR (ub.blocker_id = v.id AND ub.blocked_id = current_user_id)
+      )
+    ORDER BY v.updated_at DESC NULLS LAST, v.created_at DESC NULLS LAST
+    LIMIT 100;
+END;
+$$;
 
 COMMENT ON COLUMN public.user_profiles.birthday IS
   'Exact DOB. Shown to others only as a derived age (via public_profile_view). API-level column lockdown is a prepared follow-up (needs owner-read repoints + QA).';
