@@ -153,9 +153,11 @@ export default function EventDetails() {
         return;
       }
 
+      // Read a derived age from public_profile_view — other users' exact date of
+      // birth is never sent to the client (Sept 2026 minimisation).
       const { data: profiles } = await supabase
-        .from("user_profiles")
-        .select("id, first_name, birthday, city, occupation, main_photo_url, core_photos")
+        .from("public_profile_view")
+        .select("id, first_name, age, city, occupation, main_photo_url, core_photos")
         .in("id", userIds);
 
       const byId = new Map<string, ParticipantInfo>();
@@ -165,7 +167,7 @@ export default function EventDetails() {
           id: p.id,
           firstName: p.first_name ?? "",
           photoUrl: photo,
-          birthday: p.birthday,
+          age: typeof p.age === "number" ? p.age : null,
           city: p.city,
           occupation: p.occupation,
           isOrganizer: p.id === ev.created_by,

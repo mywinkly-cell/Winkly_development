@@ -22,6 +22,9 @@ export type ParticipantInfo = {
   id: string;
   firstName: string;
   photoUrl?: string | null;
+  /** Preferred: a derived age. Producers should pass this so an exact DOB is never handled. */
+  age?: number | null;
+  /** Legacy: a birth date the card derives age from. Prefer `age`. */
   birthday?: string | null;
   city?: string | null;
   occupation?: string | null;
@@ -36,7 +39,7 @@ type EventParticipantCardProps = {
 
 export function EventParticipantCard({ participant, onPress }: EventParticipantCardProps) {
   const fmtLoc = useFormatLocationDisplay();
-  const age = getAge(participant.birthday ?? null);
+  const age = participant.age ?? getAge(participant.birthday ?? null);
   const name = participant.firstName?.trim() || "Anonymous";
 
   const content = (
