@@ -73,6 +73,8 @@ import {
   validateProfileCoreSubmit,
 } from "@/lib/profile/validation";
 import { keyboardAvoidingProps, PROFILE_HEADER_KEYBOARD_OFFSET } from "@/lib/ui/keyboardAvoiding";
+import { useAutosave } from "@/lib/profile/useAutosave";
+import { SaveStatusIndicator } from "@/components/profile/SaveStatusIndicator";
 
 const EDUCATION_OPTIONS = [
   "High school graduate",
@@ -227,6 +229,7 @@ export default function ProfileCore() {
   const [interestsBusiness, setInterestsBusiness] = useState<string[]>([]);
 
   const [saving, setSaving] = useState(false);
+  const [autosaveReady, setAutosaveReady] = useState(false);
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(1);
   const [selectedPrimaryMode, setSelectedPrimaryMode] = useState<PrimaryOnboardingMode>("romance");
   const [cropModalVisible, setCropModalVisible] = useState(false);
@@ -477,6 +480,10 @@ export default function ProfileCore() {
         }
       } catch (e) {
         console.warn("Profile draft/location init warning:", e);
+      } finally {
+        // Establishes the autosave baseline only after initial data has
+        // loaded, so loading existing values never looks like a user edit.
+        setAutosaveReady(true);
       }
     })();
   }, [appLanguage, isEditFlow, selectPrimaryMode]);
@@ -607,44 +614,240 @@ export default function ProfileCore() {
     return () => clearTimeout(timeout);
   }, [autoSave]);
 
-  const saveToSupabase = useCallback(async () => {
-    const { data } = await supabase.auth.getUser();
-    if (!data?.user?.id || !firstName || !lastName) return;
-    const cityNorm = city.trim() ? normalizeLocationDisplayString(city.trim(), appLanguage) : null;
-    try {
-      await supabase.from("user_profiles").upsert({
-        id: data.user.id,
-        first_name: firstName,
-        last_name: lastName,
-        gender: gender || null,
-        birthday: birthday ? toISODateOnly(birthday) : null,
-        city: cityNorm,
-        education: education || null,
-        occupation: occupation || null,
-        languages: languages.length ? languages : null,
-        instagram: instagram.trim() || null,
-        interests: interests.length ? interests : null,
-        show_full_name: showFullName,
-        core_photos: corePhotos.filter(Boolean) as string[],
-        main_photo_url: corePhotos[0] || null,
-      }, { onConflict: "id" });
-      await upsertOwnProfileCore(data.user.id, {
-        first_name: firstName.trim() || null,
-        last_name: lastName.trim() || null,
-        city: cityNorm,
-        interests: interests.length ? interests : null,
-        show_full_name: showFullName,
-      });
-    } catch (e) {
-      console.warn("Auto-save to Supabase:", e);
-    }
-  }, [firstName, lastName, gender, birthday, city, education, occupation, languages, instagram, interests, showFullName, corePhotos, appLanguage]);
+  // ─────────────── AUTO-SAVE TO SUPABASE (every field, debounced, diff-only) ───────────────
+  // Tracks the full set of editable fields; on change, debounces ~1.2s and
+  // persists only the fields that actually changed (never the whole form),
+  // so an edit in one section can never blank out another section's data.
+  const romanceMode = isEditFlow ? romanceEnabled : selectedPrimaryMode === "romance";
+  const friendsMode = isEditFlow ? friendsEnabled : selectedPrimaryMode === "friends";
+  const businessMode = isEditFlow ? businessEnabled : selectedPrimaryMode === "business";
 
-  useEffect(() => {
-    if (!firstName && !lastName) return;
-    const t = setTimeout(saveToSupabase, 2000);
-    return () => clearTimeout(t);
-  }, [saveToSupabase, firstName, lastName]);
+  const autosaveValues = useMemo(
+    () => ({
+      firstName,
+      lastName,
+      gender,
+      birthday: birthday ? toISODateOnly(birthday) : null,
+      city,
+      education,
+      occupation,
+      languages,
+      instagram,
+      interests,
+      showFullName,
+      corePhotos,
+
+      romanceMode,
+      bioRomance,
+      romancePhotos,
+      romanceVideos,
+      heightRomance,
+      weightRomance,
+      lifestyleRomance,
+      smokingRomance,
+      alcoholRomance,
+      kidsRomance,
+      sexualViewsRomance,
+      relationshipGoalsRomance,
+      religionRomance,
+      politicalViewsRomance,
+      valuesRomance,
+      petsRomance,
+      foodRomance,
+
+      friendsMode,
+      bioFriends,
+      friendsPhotos,
+      friendsVideos,
+      lifestyleFriends,
+      alcoholFriends,
+      smokingFriends,
+      meetupGoalsFriends,
+      statusFriends,
+      kidsFriends,
+      petsFriends,
+      foodFriends,
+
+      businessMode,
+      bioBusiness,
+      businessPhotos,
+      businessVideos,
+      roleBusiness,
+      companyBusiness,
+      areaBusiness,
+      networkingGoalsBusiness,
+      skillsBusiness,
+      interestsBusiness,
+      instagramBusiness,
+    }),
+    [
+      firstName, lastName, gender, birthday, city, education, occupation, languages, instagram, interests, showFullName, corePhotos,
+      romanceMode, bioRomance, romancePhotos, romanceVideos, heightRomance, weightRomance, lifestyleRomance, smokingRomance, alcoholRomance, kidsRomance, sexualViewsRomance, relationshipGoalsRomance, religionRomance, politicalViewsRomance, valuesRomance, petsRomance, foodRomance,
+      friendsMode, bioFriends, friendsPhotos, friendsVideos, lifestyleFriends, alcoholFriends, smokingFriends, meetupGoalsFriends, statusFriends, kidsFriends, petsFriends, foodFriends,
+      businessMode, bioBusiness, businessPhotos, businessVideos, roleBusiness, companyBusiness, areaBusiness, networkingGoalsBusiness, skillsBusiness, interestsBusiness, instagramBusiness,
+    ]
+  );
+  type CoreAutosaveValues = typeof autosaveValues;
+
+  const handleAutosave = useCallback(
+    async (changed: Partial<CoreAutosaveValues>, all: CoreAutosaveValues) => {
+      const { data, error: userErr } = await supabase.auth.getUser();
+      if (userErr) throw userErr;
+      const userId = data?.user?.id;
+      if (!userId) throw new Error("Not signed in");
+      if (!all.firstName && !all.lastName) return;
+
+      const cityNorm = all.city.trim() ? normalizeLocationDisplayString(all.city.trim(), appLanguage) : null;
+
+      // ---- public.user_profiles: only the columns that actually changed ----
+      const userProfilesPatch: Record<string, unknown> = {};
+      if ("firstName" in changed) userProfilesPatch.first_name = all.firstName;
+      if ("lastName" in changed) userProfilesPatch.last_name = all.lastName;
+      if ("gender" in changed) userProfilesPatch.gender = all.gender || null;
+      if ("birthday" in changed) userProfilesPatch.birthday = all.birthday;
+      if ("city" in changed) userProfilesPatch.city = cityNorm;
+      if ("education" in changed) userProfilesPatch.education = all.education || null;
+      if ("occupation" in changed) userProfilesPatch.occupation = all.occupation || null;
+      if ("languages" in changed) userProfilesPatch.languages = all.languages.length ? all.languages : null;
+      if ("instagram" in changed) userProfilesPatch.instagram = all.instagram.trim() || null;
+      if ("interests" in changed) userProfilesPatch.interests = all.interests.length ? all.interests : null;
+      if ("showFullName" in changed) userProfilesPatch.show_full_name = all.showFullName;
+      if ("corePhotos" in changed) {
+        userProfilesPatch.core_photos = all.corePhotos.filter(Boolean);
+        userProfilesPatch.main_photo_url = all.corePhotos[0] || null;
+      }
+      if (Object.keys(userProfilesPatch).length > 0) {
+        const { error } = await supabase
+          .from("user_profiles")
+          .upsert({ id: userId, ...userProfilesPatch }, { onConflict: "id" });
+        if (error) throw error;
+      }
+
+      // ---- public.profiles_core mirror ----
+      const corePatch: Record<string, unknown> = {};
+      if ("firstName" in changed) corePatch.first_name = all.firstName.trim() || null;
+      if ("lastName" in changed) corePatch.last_name = all.lastName.trim() || null;
+      if ("city" in changed) corePatch.city = cityNorm;
+      if ("interests" in changed) corePatch.interests = all.interests.length ? all.interests : null;
+      if ("showFullName" in changed) corePatch.show_full_name = all.showFullName;
+      if (Object.keys(corePatch).length > 0) {
+        const { error } = await upsertOwnProfileCore(userId, corePatch);
+        if (error) throw error;
+      }
+
+      // ---- sub-profiles: a mode's meta/photos/bio are one JSON unit, always
+      // rebuilt from the full (accurate, already-loaded) current state, so a
+      // change in that mode never blanks a sibling field within it. ----
+      const romanceChangedKeys: (keyof CoreAutosaveValues)[] = [
+        "bioRomance", "romancePhotos", "romanceVideos", "heightRomance", "weightRomance",
+        "lifestyleRomance", "smokingRomance", "alcoholRomance", "kidsRomance", "sexualViewsRomance",
+        "relationshipGoalsRomance", "religionRomance", "politicalViewsRomance", "valuesRomance",
+        "petsRomance", "foodRomance", "interests",
+      ];
+      if (all.romanceMode && romanceChangedKeys.some((k) => k in changed)) {
+        const romancePayload = {
+          user_id: userId,
+          mode: "romance",
+          bio: all.bioRomance || null,
+          photos: all.romancePhotos.filter(Boolean),
+          interests: all.interests.length ? all.interests : null,
+          meta: {
+            height: all.heightRomance.trim() || null,
+            weight: all.weightRomance.trim() || null,
+            lifestyle: all.lifestyleRomance || null,
+            smoking: all.smokingRomance || null,
+            alcohol: all.alcoholRomance || null,
+            kids: all.kidsRomance || null,
+            sexual_views: all.sexualViewsRomance || null,
+            relationship_goals: all.relationshipGoalsRomance,
+            religion: all.religionRomance || null,
+            political_views: all.politicalViewsRomance || null,
+            values: all.valuesRomance,
+            pets: all.petsRomance,
+            food: all.foodRomance || null,
+            videos: all.romanceVideos.filter(Boolean),
+          },
+        };
+        const { error: e1 } = await supabase.from("sub_profiles").upsert(romancePayload, { onConflict: "user_id,mode" });
+        if (e1) throw e1;
+        const { error: e2 } = await supabase
+          .from("profiles_mode")
+          .upsert({ ...romancePayload, updated_at: new Date().toISOString() }, { onConflict: "user_id,mode" });
+        if (e2) throw e2;
+      }
+
+      const friendsChangedKeys: (keyof CoreAutosaveValues)[] = [
+        "bioFriends", "friendsPhotos", "friendsVideos", "lifestyleFriends", "alcoholFriends",
+        "smokingFriends", "meetupGoalsFriends", "statusFriends", "kidsFriends", "petsFriends",
+        "foodFriends", "interests",
+      ];
+      if (all.friendsMode && friendsChangedKeys.some((k) => k in changed)) {
+        const friendsPayload = {
+          user_id: userId,
+          mode: "friends",
+          bio: all.bioFriends || null,
+          photos: all.friendsPhotos.filter(Boolean),
+          interests: all.interests.length ? all.interests : null,
+          meta: {
+            lifestyle: all.lifestyleFriends || null,
+            alcohol: all.alcoholFriends || null,
+            smoking: all.smokingFriends || null,
+            meetup_goals: all.meetupGoalsFriends,
+            status: all.statusFriends || null,
+            kids: all.kidsFriends || null,
+            pets: all.petsFriends,
+            food: all.foodFriends || null,
+            videos: all.friendsVideos.filter(Boolean),
+          },
+        };
+        const { error: e1 } = await supabase.from("sub_profiles").upsert(friendsPayload, { onConflict: "user_id,mode" });
+        if (e1) throw e1;
+        const { error: e2 } = await supabase
+          .from("profiles_mode")
+          .upsert({ ...friendsPayload, updated_at: new Date().toISOString() }, { onConflict: "user_id,mode" });
+        if (e2) throw e2;
+      }
+
+      const businessChangedKeys: (keyof CoreAutosaveValues)[] = [
+        "bioBusiness", "businessPhotos", "businessVideos", "roleBusiness", "companyBusiness",
+        "areaBusiness", "networkingGoalsBusiness", "skillsBusiness", "interestsBusiness", "instagramBusiness",
+      ];
+      if (all.businessMode && businessChangedKeys.some((k) => k in changed)) {
+        const businessPayload = {
+          user_id: userId,
+          mode: "business",
+          bio: all.bioBusiness || null,
+          photos: all.businessPhotos.filter(Boolean),
+          interests: all.interestsBusiness.length ? all.interestsBusiness : null,
+          meta: {
+            role: all.roleBusiness.trim() || null,
+            company: all.companyBusiness.trim() || null,
+            area: all.areaBusiness.trim() || null,
+            networking_goals: all.networkingGoalsBusiness.length ? all.networkingGoalsBusiness : null,
+            skills: all.skillsBusiness.length ? all.skillsBusiness : null,
+            interests: all.interestsBusiness,
+            instagram: all.instagramBusiness.trim() || null,
+            videos: all.businessVideos.filter(Boolean),
+          },
+        };
+        const { error: e1 } = await supabase.from("sub_profiles").upsert(businessPayload, { onConflict: "user_id,mode" });
+        if (e1) throw e1;
+        const { error: e2 } = await supabase
+          .from("profiles_mode")
+          .upsert({ ...businessPayload, updated_at: new Date().toISOString() }, { onConflict: "user_id,mode" });
+        if (e2) throw e2;
+      }
+    },
+    [appLanguage]
+  );
+
+  const { status: autosaveStatus, flush: flushAutosave } = useAutosave({
+    values: autosaveValues,
+    onSave: handleAutosave,
+    enabled: autosaveReady,
+    debounceMs: 1200,
+    draftStorageKey: "winkly_profile_autosave_pending",
+  });
 
   // ─────────────── CITY AUTOCOMPLETE (Nominatim) ───────────────
   const onCityChange = useCallback((text: string) => {
@@ -1131,6 +1334,7 @@ export default function ProfileCore() {
       }
 
       await AsyncStorage.removeItem("winkly_profile_draft");
+      await AsyncStorage.removeItem("winkly_profile_autosave_pending");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (isEditFlow) {
         router.back();
@@ -1173,7 +1377,7 @@ export default function ProfileCore() {
     }
     if (currentStep < ONBOARDING_STEP_COUNT) {
       await autoSave();
-      await saveToSupabase();
+      await flushAutosave();
       Haptics.selectionAsync();
       setCurrentStep((s) => (s + 1) as OnboardingStep);
       return;
@@ -1243,6 +1447,7 @@ export default function ProfileCore() {
       });
 
       await AsyncStorage.removeItem("winkly_profile_draft");
+      await AsyncStorage.removeItem("winkly_profile_autosave_pending");
       await setOnboardingSubProfileSkipped(selectedPrimaryMode);
       trackOnboardingSubProfileSkipped({
         skipped_mode: selectedPrimaryMode,
@@ -1349,11 +1554,15 @@ export default function ProfileCore() {
           </TouchableOpacity>
           <View style={{ flex: 1, alignItems: "center" }}>
             <Text style={{ ...Typography.headerTitle, color: Colors.textPrimary, fontFamily: FontFamily.headingBold }}>Your Profile</Text>
+            <View style={{ height: 16, justifyContent: "center" }}>
+              <SaveStatusIndicator status={autosaveStatus} />
+            </View>
           </View>
           <TouchableOpacity
             onPress={async () => {
               Haptics.selectionAsync();
               await autoSave();
+              await flushAutosave();
               router.push("/profile/view-profile");
             }}
             style={headerBtn}

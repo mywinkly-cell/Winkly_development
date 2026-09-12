@@ -1,16 +1,19 @@
 // apps/mobile/app/profile/edit-romance.tsx
 // Winkly – Profile: Edit Romance. Persists to profiles_mode (mode = romance).
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
 import { useAuth } from "@/providers";
-import { getOwnProfileMode, upsertOwnProfileMode } from "@/lib/access/profiles";
+import { getOwnProfileMode, upsertOwnProfileMode, type ProfileModeUpdate } from "@/lib/access/profiles";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { supabase } from "@/lib/supabase";
 import { pickAndUploadVideo } from "@/lib/uploadMedia";
+import { useAutosave } from "@/lib/profile/useAutosave";
+import type { AutosaveStatus } from "@/lib/profile/autosaveEngine";
+import { SaveStatusIndicator } from "@/components/profile/SaveStatusIndicator";
 
 export default function EditRomance() {
   const router = useRouter();
@@ -61,30 +64,50 @@ export default function EditRomance() {
     })();
   }, []);
 
-  const save = async () => {
-    if (!user?.id) return;
+  // ─────────────── AUTO-SAVE (debounced, diff-only, retries on failure) ───────────────
+  const autosaveValues = useMemo(
+    () => ({ goal, aboutLove, dealbreakers, lifestyleTags, voiceUrl, voiceSeconds, videoBioUrl }),
+    [goal, aboutLove, dealbreakers, lifestyleTags, voiceUrl, voiceSeconds, videoBioUrl]
+  );
+  type EditRomanceValues = typeof autosaveValues;
+
+  const handleAutosave = useCallback(
+    async (changed: Partial<EditRomanceValues>, all: EditRomanceValues) => {
+      if (!user?.id) return;
+      const patch: ProfileModeUpdate = {};
+      if (["goal", "aboutLove", "dealbreakers"].some((k) => k in changed)) {
+        patch.meta = {
+          relationship_goal: all.goal.trim() || null,
+          what_you_value: all.aboutLove.trim() || null,
+          dealbreakers: all.dealbreakers.trim() || null,
+        };
+      }
+      if ("lifestyleTags" in changed) {
+        const tags = all.lifestyleTags.split(",").map((t) => t.trim()).filter(Boolean).slice(0, 12);
+        patch.lifestyle_tags = tags.length ? tags : null;
+      }
+      if ("voiceUrl" in changed) patch.voice_prompt_url = all.voiceUrl;
+      if ("voiceSeconds" in changed) patch.voice_prompt_seconds = all.voiceSeconds;
+      if ("videoBioUrl" in changed) patch.video_bio_url = all.videoBioUrl;
+      if (Object.keys(patch).length === 0) return;
+      const { error } = await upsertOwnProfileMode(user.id, "romance", patch);
+      if (error) throw error;
+    },
+    [user?.id]
+  );
+
+  const { status: autosaveStatus, flush: flushAutosave } = useAutosave({
+    values: autosaveValues,
+    onSave: handleAutosave,
+    enabled: !loading,
+    debounceMs: 1200,
+    draftStorageKey: "winkly_edit_romance_autosave_pending",
+  });
+
+  const handleDone = async () => {
     setSaving(true);
-    const tags = lifestyleTags
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean)
-      .slice(0, 12);
-    const { error } = await upsertOwnProfileMode(user.id, "romance", {
-      lifestyle_tags: tags.length ? tags : null,
-      voice_prompt_url: voiceUrl,
-      voice_prompt_seconds: voiceSeconds,
-      video_bio_url: videoBioUrl,
-      meta: {
-        relationship_goal: goal.trim() || null,
-        what_you_value: aboutLove.trim() || null,
-        dealbreakers: dealbreakers.trim() || null,
-      },
-    });
+    await flushAutosave();
     setSaving(false);
-    if (error) {
-      Alert.alert("Error", "Could not save profile. Please try again.");
-      return;
-    }
     router.back();
   };
 
@@ -100,7 +123,7 @@ export default function EditRomance() {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Header title="Edit romance" onBack={() => router.back()} onSave={save} saving={saving} />
+        <Header title="Edit romance" onBack={() => router.back()} onSave={handleDone} saving={saving} status={autosaveStatus} />
 
         <View style={styles.card}>
           <Text style={styles.title}>Romance</Text>
@@ -229,15 +252,23 @@ function Header({
   onBack,
   onSave,
   saving,
-}: { title: string; onBack: () => void; onSave: () => void; saving?: boolean }) {
+  status,
+}: { title: string; onBack: () => void; onSave: () => void; saving?: boolean; status?: AutosaveStatus }) {
   return (
     <View style={styles.headerRow}>
       <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back" disabled={saving}>
         <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
       </TouchableOpacity>
-      <Text style={styles.headerTitle}>{title}</Text>
+      <View style={{ flex: 1, alignItems: "center" }}>
+        <Text style={styles.headerTitle}>{title}</Text>
+        {status ? (
+          <View style={{ height: 16, justifyContent: "center" }}>
+            <SaveStatusIndicator status={status} />
+          </View>
+        ) : null}
+      </View>
       <TouchableOpacity onPress={onSave} style={[styles.saveBtn, saving && styles.saveBtnDisabled]} activeOpacity={0.9} disabled={saving}>
-        <Text style={styles.saveText}>{saving ? "Saving…" : "Save"}</Text>
+        <Text style={styles.saveText}>{saving ? "Saving…" : "Done"}</Text>
       </TouchableOpacity>
     </View>
   );

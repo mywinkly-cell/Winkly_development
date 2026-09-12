@@ -1,13 +1,16 @@
 // apps/mobile/app/profile/edit-friends.tsx
 // Winkly – Profile: Edit Friends. Persists to profiles_mode (mode = friends).
 
-import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator } from "react-native";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/providers";
-import { getOwnProfileMode, upsertOwnProfileMode } from "@/lib/access/profiles";
+import { getOwnProfileMode, upsertOwnProfileMode, type ProfileModeUpdate } from "@/lib/access/profiles";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAutosave } from "@/lib/profile/useAutosave";
+import type { AutosaveStatus } from "@/lib/profile/autosaveEngine";
+import { SaveStatusIndicator } from "@/components/profile/SaveStatusIndicator";
 
 function toInterestsArray(s: string): string[] {
   return s
@@ -45,21 +48,46 @@ export default function EditFriends() {
     return () => { cancelled = true; };
   }, [user?.id]);
 
-  const save = async () => {
-    if (!user?.id) return;
+  // ─────────────── AUTO-SAVE (debounced, diff-only, retries on failure) ───────────────
+  const autosaveValues = useMemo(
+    () => ({ interests, meetupStyle, availability }),
+    [interests, meetupStyle, availability]
+  );
+  type EditFriendsValues = typeof autosaveValues;
+
+  const handleAutosave = useCallback(
+    async (changed: Partial<EditFriendsValues>, all: EditFriendsValues) => {
+      if (!user?.id) return;
+      const patch: ProfileModeUpdate = {};
+      if ("interests" in changed) {
+        const arr = toInterestsArray(all.interests);
+        patch.interests = arr.length ? arr : null;
+      }
+      if (["meetupStyle", "availability"].some((k) => k in changed)) {
+        patch.meta = {
+          meetup_style: all.meetupStyle.trim() || null,
+          availability: all.availability.trim() || null,
+        };
+      }
+      if (Object.keys(patch).length === 0) return;
+      const { error } = await upsertOwnProfileMode(user.id, "friends", patch);
+      if (error) throw error;
+    },
+    [user?.id]
+  );
+
+  const { status: autosaveStatus, flush: flushAutosave } = useAutosave({
+    values: autosaveValues,
+    onSave: handleAutosave,
+    enabled: !loading,
+    debounceMs: 1200,
+    draftStorageKey: "winkly_edit_friends_autosave_pending",
+  });
+
+  const handleDone = async () => {
     setSaving(true);
-    const { error } = await upsertOwnProfileMode(user.id, "friends", {
-      interests: toInterestsArray(interests).length ? toInterestsArray(interests) : null,
-      meta: {
-        meetup_style: meetupStyle.trim() || null,
-        availability: availability.trim() || null,
-      },
-    });
+    await flushAutosave();
     setSaving(false);
-    if (error) {
-      Alert.alert("Error", "Could not save profile. Please try again.");
-      return;
-    }
     router.back();
   };
 
@@ -75,7 +103,7 @@ export default function EditFriends() {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Header title="Edit friends" onBack={() => router.back()} onSave={save} saving={saving} />
+        <Header title="Edit friends" onBack={() => router.back()} onSave={handleDone} saving={saving} status={autosaveStatus} />
 
         <View style={styles.card}>
           <Text style={styles.title}>Friends</Text>
@@ -123,15 +151,23 @@ function Header({
   onBack,
   onSave,
   saving,
-}: { title: string; onBack: () => void; onSave: () => void; saving?: boolean }) {
+  status,
+}: { title: string; onBack: () => void; onSave: () => void; saving?: boolean; status?: AutosaveStatus }) {
   return (
     <View style={styles.headerRow}>
       <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back" disabled={saving}>
         <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
       </TouchableOpacity>
-      <Text style={styles.headerTitle}>{title}</Text>
+      <View style={{ flex: 1, alignItems: "center" }}>
+        <Text style={styles.headerTitle}>{title}</Text>
+        {status ? (
+          <View style={{ height: 16, justifyContent: "center" }}>
+            <SaveStatusIndicator status={status} />
+          </View>
+        ) : null}
+      </View>
       <TouchableOpacity onPress={onSave} style={[styles.saveBtn, saving && styles.saveBtnDisabled]} activeOpacity={0.9} disabled={saving}>
-        <Text style={styles.saveText}>{saving ? "Saving…" : "Save"}</Text>
+        <Text style={styles.saveText}>{saving ? "Saving…" : "Done"}</Text>
       </TouchableOpacity>
     </View>
   );

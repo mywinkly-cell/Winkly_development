@@ -1,8 +1,8 @@
 // apps/mobile/app/profile/edit-core.tsx
 // Winkly – Profile: Edit Core. Persists to public.profiles_core.
 
-import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator } from "react-native";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/providers";
@@ -12,6 +12,9 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { getOwnProfileCore, upsertOwnProfileCore } from "@/lib/access/profiles";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAutosave } from "@/lib/profile/useAutosave";
+import type { AutosaveStatus } from "@/lib/profile/autosaveEngine";
+import { SaveStatusIndicator } from "@/components/profile/SaveStatusIndicator";
 
 export default function EditCore() {
   const router = useRouter();
@@ -60,30 +63,53 @@ export default function EditCore() {
     return () => { cancelled = true; };
   }, [user?.id, i18n?.language]);
 
-  const save = async () => {
-    if (!user?.id) return;
+  // ─────────────── AUTO-SAVE (debounced, diff-only, retries on failure) ───────────────
+  const autosaveValues = useMemo(
+    () => ({ firstName, lastName, city, bio, nightOwl }),
+    [firstName, lastName, city, bio, nightOwl]
+  );
+  type EditCoreValues = typeof autosaveValues;
+
+  const handleAutosave = useCallback(
+    async (changed: Partial<EditCoreValues>, all: EditCoreValues) => {
+      if (!user?.id) return;
+      const lang = i18n?.language ?? "en";
+      const cityNorm = all.city.trim() ? normalizeLocationDisplayString(all.city.trim(), lang) : null;
+
+      const corePatch: Record<string, unknown> = {};
+      if ("firstName" in changed) corePatch.first_name = all.firstName.trim() || null;
+      if ("lastName" in changed) corePatch.last_name = all.lastName.trim() || null;
+      if ("city" in changed) corePatch.city = cityNorm;
+      if ("bio" in changed) corePatch.bio = all.bio.trim() || null;
+      if ("nightOwl" in changed) corePatch.night_owl = all.nightOwl;
+      if (Object.keys(corePatch).length > 0) {
+        const { error } = await upsertOwnProfileCore(user.id, corePatch);
+        if (error) throw error;
+      }
+
+      const userProfilesPatch: Record<string, unknown> = {};
+      if ("city" in changed) userProfilesPatch.city = cityNorm;
+      if ("nightOwl" in changed) userProfilesPatch.night_owl = all.nightOwl;
+      if (Object.keys(userProfilesPatch).length > 0) {
+        const { error } = await supabase.from("user_profiles").update(userProfilesPatch).eq("id", user.id);
+        if (error) throw error;
+      }
+    },
+    [user?.id, i18n?.language]
+  );
+
+  const { status: autosaveStatus, flush: flushAutosave } = useAutosave({
+    values: autosaveValues,
+    onSave: handleAutosave,
+    enabled: !loading,
+    debounceMs: 1200,
+    draftStorageKey: "winkly_edit_core_autosave_pending",
+  });
+
+  const handleDone = async () => {
     setSaving(true);
-    const lang = i18n?.language ?? "en";
-    const cityNorm = city.trim() ? normalizeLocationDisplayString(city.trim(), lang) : null;
-    const { error } = await upsertOwnProfileCore(user.id, {
-      first_name: firstName.trim() || null,
-      last_name: lastName.trim() || null,
-      city: cityNorm,
-      bio: bio.trim() || null,
-      night_owl: nightOwl,
-    });
-    if (!error) {
-      const { error: upErr } = await supabase
-        .from("user_profiles")
-        .update({ city: cityNorm, night_owl: nightOwl })
-        .eq("id", user.id);
-      if (upErr) console.warn("user_profiles city sync:", upErr);
-    }
+    await flushAutosave();
     setSaving(false);
-    if (error) {
-      Alert.alert("Error", "Could not save profile. Please try again.");
-      return;
-    }
     router.back();
   };
 
@@ -99,7 +125,7 @@ export default function EditCore() {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Header title="Edit core" onBack={() => router.back()} onSave={save} saving={saving} />
+        <Header title="Edit core" onBack={() => router.back()} onSave={handleDone} saving={saving} status={autosaveStatus} />
 
         <View style={styles.card}>
           <Text style={styles.title}>Basics</Text>
@@ -179,25 +205,34 @@ function Header({
   onBack,
   onSave,
   saving,
+  status,
 }: {
   title: string;
   onBack: () => void;
   onSave: () => void;
   saving?: boolean;
+  status?: AutosaveStatus;
 }) {
   return (
     <View style={styles.headerRow}>
       <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back" disabled={saving}>
         <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
       </TouchableOpacity>
-      <Text style={styles.headerTitle}>{title}</Text>
+      <View style={{ flex: 1, alignItems: "center" }}>
+        <Text style={styles.headerTitle}>{title}</Text>
+        {status ? (
+          <View style={{ height: 16, justifyContent: "center" }}>
+            <SaveStatusIndicator status={status} />
+          </View>
+        ) : null}
+      </View>
       <TouchableOpacity
         onPress={onSave}
         style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
         activeOpacity={0.9}
         disabled={saving}
       >
-        <Text style={styles.saveText}>{saving ? "Saving…" : "Save"}</Text>
+        <Text style={styles.saveText}>{saving ? "Saving…" : "Done"}</Text>
       </TouchableOpacity>
     </View>
   );

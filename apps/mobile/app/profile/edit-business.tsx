@@ -1,8 +1,8 @@
 // apps/mobile/app/profile/edit-business.tsx
 // Winkly – Profile: Edit Business. Personal → profiles_mode (business). Business account → profiles_business.
 
-import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator } from "react-native";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/providers";
@@ -15,6 +15,9 @@ import {
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import type { BusinessProfileType } from "@/types";
 import { BUSINESS_ORG_SUBTYPE_OPTIONS, normalizeBusinessType } from "@/lib/business/businessTypes";
+import { useAutosave } from "@/lib/profile/useAutosave";
+import type { AutosaveStatus } from "@/lib/profile/autosaveEngine";
+import { SaveStatusIndicator } from "@/components/profile/SaveStatusIndicator";
 
 const BUSINESS_TYPE_OPTIONS: Array<{ value: BusinessProfileType; label: string }> = [
   { value: "individual_professional", label: "Individual professional" },
@@ -79,36 +82,57 @@ export default function EditBusiness() {
     return () => { cancelled = true; };
   }, [user?.id, isBusinessAccount]);
 
-  const save = async () => {
-    if (!user?.id) return;
+  // ─────────────── AUTO-SAVE (debounced, diff-only, retries on failure) ───────────────
+  const autosaveValues = useMemo(
+    () => ({ role, company, networkingGoal, skills, businessType }),
+    [role, company, networkingGoal, skills, businessType]
+  );
+  type EditBusinessValues = typeof autosaveValues;
+
+  const handleAutosave = useCallback(
+    async (changed: Partial<EditBusinessValues>, all: EditBusinessValues) => {
+      if (!user?.id) return;
+      if (isBusinessAccount) {
+        const relevantKeys: (keyof EditBusinessValues)[] = ["company", "networkingGoal", "skills", "businessType"];
+        if (!relevantKeys.some((k) => k in changed)) return;
+        // profiles_business.business_name is NOT NULL, so every write must
+        // include the current (non-empty) value even when it isn't what changed.
+        const { error } = await upsertOwnProfileBusiness(user.id, {
+          business_name: all.company.trim() || "My Business",
+          business_type: all.businessType,
+          bio: all.networkingGoal.trim() || null,
+          tags: toTagsArray(all.skills).length ? toTagsArray(all.skills) : null,
+        });
+        if (error) throw error;
+      } else {
+        const relevantKeys: (keyof EditBusinessValues)[] = ["role", "company", "networkingGoal", "skills"];
+        if (!relevantKeys.some((k) => k in changed)) return;
+        const { error } = await upsertOwnProfileMode(user.id, "business", {
+          meta: {
+            role: all.role.trim() || null,
+            company: all.company.trim() || null,
+            networking_goal: all.networkingGoal.trim() || null,
+            skills: fromMetaTags(all.skills).trim() || null,
+          },
+        });
+        if (error) throw error;
+      }
+    },
+    [user?.id, isBusinessAccount]
+  );
+
+  const { status: autosaveStatus, flush: flushAutosave } = useAutosave({
+    values: autosaveValues,
+    onSave: handleAutosave,
+    enabled: !loading,
+    debounceMs: 1200,
+    draftStorageKey: "winkly_edit_business_autosave_pending",
+  });
+
+  const handleDone = async () => {
     setSaving(true);
-    if (isBusinessAccount) {
-      const { error } = await upsertOwnProfileBusiness(user.id, {
-        business_name: company.trim() || "My Business",
-        business_type: businessType,
-        bio: networkingGoal.trim() || null,
-        tags: toTagsArray(skills).length ? toTagsArray(skills) : null,
-      });
-      setSaving(false);
-      if (error) {
-        Alert.alert("Error", "Could not save profile. Please try again.");
-        return;
-      }
-    } else {
-      const { error } = await upsertOwnProfileMode(user.id, "business", {
-        meta: {
-          role: role.trim() || null,
-          company: company.trim() || null,
-          networking_goal: networkingGoal.trim() || null,
-          skills: fromMetaTags(skills).trim() || null,
-        },
-      });
-      setSaving(false);
-      if (error) {
-        Alert.alert("Error", "Could not save profile. Please try again.");
-        return;
-      }
-    }
+    await flushAutosave();
+    setSaving(false);
     router.back();
   };
 
@@ -124,7 +148,7 @@ export default function EditBusiness() {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Header title="Edit business" onBack={() => router.back()} onSave={save} saving={saving} />
+        <Header title="Edit business" onBack={() => router.back()} onSave={handleDone} saving={saving} status={autosaveStatus} />
 
         <View style={styles.card}>
           <Text style={styles.title}>Business</Text>
@@ -210,15 +234,23 @@ function Header({
   onBack,
   onSave,
   saving,
-}: { title: string; onBack: () => void; onSave: () => void; saving?: boolean }) {
+  status,
+}: { title: string; onBack: () => void; onSave: () => void; saving?: boolean; status?: AutosaveStatus }) {
   return (
     <View style={styles.headerRow}>
       <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back" disabled={saving}>
         <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
       </TouchableOpacity>
-      <Text style={styles.headerTitle}>{title}</Text>
+      <View style={{ flex: 1, alignItems: "center" }}>
+        <Text style={styles.headerTitle}>{title}</Text>
+        {status ? (
+          <View style={{ height: 16, justifyContent: "center" }}>
+            <SaveStatusIndicator status={status} />
+          </View>
+        ) : null}
+      </View>
       <TouchableOpacity onPress={onSave} style={[styles.saveBtn, saving && styles.saveBtnDisabled]} activeOpacity={0.9} disabled={saving}>
-        <Text style={styles.saveText}>{saving ? "Saving…" : "Save"}</Text>
+        <Text style={styles.saveText}>{saving ? "Saving…" : "Done"}</Text>
       </TouchableOpacity>
     </View>
   );
