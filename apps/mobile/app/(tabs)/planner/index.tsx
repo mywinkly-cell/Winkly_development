@@ -389,8 +389,12 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   const insets = useSafeAreaInsets();
   const filterModalBottomPadding = BOTTOM_BAR_HEIGHT + insets.bottom;
   // Deep-link from the mode-selection Spark nudge: focus + reveal the Spark section.
-  const sparkParams = useLocalSearchParams<{ spark?: string }>();
+  // Also carries focus_planner_item_id after a successful concierge "Add to planner" (see
+  // app/concierge.tsx handleClose), so the user lands on the entry they just created.
+  const sparkParams = useLocalSearchParams<{ spark?: string; focus_planner_item_id?: string }>();
   const focusSpark = sparkParams[WEEKLY_SPARK_FOCUS_PARAM] === WEEKLY_SPARK_FOCUS_VALUE;
+  const focusPlannerItemId = sparkParams.focus_planner_item_id;
+  const focusPlannerItemHandledRef = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
   /** Bumped when Sparks are force-shown so a stale focus-effect can't re-hide them. */
   const sparkRevealGenRef = useRef(0);
@@ -890,6 +894,15 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     setDetailsModalVisible(false);
     setSelectedItem(null);
   }, []);
+
+  /** Land the user on the entry they just added via concierge, once it shows up in the list. */
+  useEffect(() => {
+    if (!focusPlannerItemId || focusPlannerItemHandledRef.current) return;
+    const match = itemsState.find((it) => it.id === focusPlannerItemId);
+    if (!match) return;
+    focusPlannerItemHandledRef.current = true;
+    openDetails(match);
+  }, [focusPlannerItemId, itemsState, openDetails]);
 
   /** Opens the existing Planner entry for a Spark plan that's already "Planned". */
   const openReviewSparkPlan = useCallback((plan: WeeklySparkPlan) => {

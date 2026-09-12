@@ -305,8 +305,15 @@ export default function ConciergeScreen() {
     [step, handleBack]
   );
 
-  const handleClose = () => {
+  const handleClose = (plannerItemId?: string) => {
     Haptics.selectionAsync();
+    // A successful "Add to planner" passes the new item's id. Go straight to the planner tab
+    // (fresh mount) with it so the entry the user just created is what they land on, instead of
+    // popping back to whatever planner screen state was on the stack before they opened Winkly AI.
+    if (plannerItemId && source_screen === "planner") {
+      router.replace(`/(modes)/${mode}/planner?focus_planner_item_id=${encodeURIComponent(plannerItemId)}`);
+      return;
+    }
     backOrFallback(source_screen === "planner" ? `/(modes)/${mode}/planner` : `/(modes)/${mode}/chats`);
   };
 
