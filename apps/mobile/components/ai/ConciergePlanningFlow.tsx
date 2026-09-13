@@ -161,7 +161,12 @@ export function ConciergePlanningFlow({
     budgetCurrency: "EUR",
   });
   // Default to decide_later so the selection actually affects Summary/Invite even if user never taps it.
-  const [whoJoining, setWhoJoining] = useState<WhoJoining>("decide_later");
+  // When a companion is already known (e.g. opened from a swipe card or a chat), skip straight past
+  // the later "who do you want to invite?" step instead of asking the user to pick people again.
+  const [whoJoining, setWhoJoining] = useState<WhoJoining>(() => {
+    if (!partnerUserId) return "decide_later";
+    return mode === "romance" ? "invite_match" : mode === "business" ? "invite_business" : "invite_friends";
+  });
   const [partnerId, setPartnerId] = useState<string | null>(() => partnerUserId ?? null);
   const [partnerDisplayName, setPartnerDisplayName] = useState<string | null>(() => partnerDisplayNameHint ?? null);
   const [partners, setPartners] = useState<ConciergePartner[]>([]);

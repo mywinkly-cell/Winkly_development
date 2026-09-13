@@ -23,7 +23,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { FriendsBottomNav } from "@/components/layout/FriendsBottomNav";
 import { MatchCardOverlay } from "@/components/matching/MatchCardOverlay";
+import { CardPlanHint } from "@/components/matching/CardPlanHint";
 import { SwipeDeckEmptyState } from "@/components/matching/SwipeDeckEmptyState";
+import { openConciergeWithCompanion } from "@/lib/ai/conciergeCompanionLink";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { HIT_SLOP } from "@/constants/a11y";
 import { supabase } from "@/lib/supabase";
@@ -445,22 +447,6 @@ export default function FriendsHome() {
         onFilterPress={() => router.push("/(modes)/friends/filters")}
       />
 
-      <Pressable
-        onPress={() => {
-          Haptics.selectionAsync();
-          router.push({ pathname: "/groups/plan-together", params: { mode: "friends" } });
-        }}
-        style={styles.planBanner}
-        accessibilityLabel="Plan something for a group of friends"
-      >
-        <Ionicons name="sparkles" size={20} color={Colors.friends.primary} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.planBannerTitle}>Plan something for us</Text>
-          <Text style={styles.planBannerSubtitle}>Pick a few friends — get group plan options.</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color={Colors.friends.primary} />
-      </Pressable>
-
       {incomingRequestCount > 0 ? (
         <Pressable
           onPress={() => {
@@ -492,6 +478,21 @@ export default function FriendsHome() {
       ) : (
         <>
           <View style={styles.cardContainer}>
+            {showAiHints && currentProfile ? (
+              <CardPlanHint
+                mode="friends"
+                personName={currentProfile.display_name}
+                style={styles.cardPlanHint}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  openConciergeWithCompanion(router, {
+                    mode: "friends",
+                    partnerUserId: currentProfile.user_id ?? currentProfile.id,
+                    partnerDisplayName: currentProfile.display_name,
+                  });
+                }}
+              />
+            ) : null}
             <View style={[styles.cardStackWrap, { width: CARD_WIDTH, height: CARD_HEIGHT + STACK_OFFSET + 4 }]}>
               {profiles[currentIndex + 1] && (
                 <View
@@ -650,30 +651,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.friends.primary,
   },
-  planBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.friends.primary + "55",
-  },
-  planBannerTitle: {
-    ...Typography.button,
-    fontFamily: FontFamily.headingBold,
-    color: Colors.textPrimary,
-  },
-  planBannerSubtitle: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: Colors.gray600,
-    marginTop: 1,
+  cardPlanHint: {
+    marginBottom: 6,
   },
   requestsBannerText: {
     flex: 1,

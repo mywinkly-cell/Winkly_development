@@ -22,8 +22,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { RomanceBottomNav } from "@/components/layout/RomanceBottomNav";
 import { MatchCardOverlay } from "@/components/matching/MatchCardOverlay";
+import { CardPlanHint } from "@/components/matching/CardPlanHint";
 import { MatchCelebration } from "@/components/matching/MatchCelebration";
 import { SwipeDeckEmptyState } from "@/components/matching/SwipeDeckEmptyState";
+import { openConciergeWithCompanion } from "@/lib/ai/conciergeCompanionLink";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { HIT_SLOP } from "@/constants/a11y";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
@@ -673,6 +675,21 @@ export default function RomanceHome() {
       ) : (
         <>
           <View style={styles.cardContainer}>
+            {showAiHints && currentProfile && !currentProfile.isPendingInvite ? (
+              <CardPlanHint
+                mode="romance"
+                personName={currentProfile.name}
+                style={styles.cardPlanHint}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  openConciergeWithCompanion(router, {
+                    mode: "romance",
+                    partnerUserId: currentProfile.id,
+                    partnerDisplayName: currentProfile.name,
+                  });
+                }}
+              />
+            ) : null}
             <View style={[styles.cardStackWrap, { width: CARD_WIDTH, height: CARD_HEIGHT + STACK_OFFSET + 4 }]}>
               {/* Stacked "next" card peek for depth */}
               {profiles[currentIndex + 1] && (
@@ -1012,6 +1029,9 @@ const styles = StyleSheet.create({
     paddingTop: Layout.spacing.sm,
     paddingBottom: 2,
     minHeight: 0,
+  },
+  cardPlanHint: {
+    marginBottom: 6,
   },
   cardStackWrap: {
     alignItems: "center",

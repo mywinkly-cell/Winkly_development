@@ -21,6 +21,7 @@ import { BusinessProfileCard } from "@/components/business/BusinessProfileCard";
 import { BusinessFilterSheet } from "@/components/business/BusinessFilterSheet";
 import { BusinessHomeEmptyState } from "@/components/business/BusinessHomeEmptyState";
 import { PendingInvitesSheet } from "@/components/business/PendingInvitesSheet";
+import { CardPlanHint } from "@/components/matching/CardPlanHint";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { Routes } from "@/constants/routes";
 import { supabase } from "@/lib/supabase";
@@ -37,14 +38,18 @@ import {
 import { recordBusinessProfileView } from "@/lib/business/recentSearchStorage";
 import { getLastDiscoverQuery } from "@/lib/business/discoverQueryStorage";
 import { isBusinessProfileComplete } from "@/lib/routing/splash";
+import { hasAnyAIAccess } from "@/lib/ai/aiFeatureGate";
+import { openConciergeWithCompanion } from "@/lib/ai/conciergeCompanionLink";
 import * as Location from "expo-location";
-import { useAuth } from "@/providers";
+import { useAuth, useModeContext } from "@/providers";
 
 const COL_WIDTH = (Dimensions.get("window").width - 40 - 12) / 3;
 
 export default function BusinessHome() {
   const router = useRouter();
   const { accountType } = useAuth();
+  const { context: modeContext } = useModeContext();
+  const showAiHints = hasAnyAIAccess(modeContext.subscription_tier ?? "free");
   const primary = Colors.business.primary;
   const isBusinessAccount = accountType === "business";
 
@@ -264,16 +269,33 @@ export default function BusinessHome() {
             {suggested.length === 0 ? (
               <EmptyHint text="Complete your Business profile to see better matches." />
             ) : (
-              <View style={styles.grid3}>
-                {suggested.map((person) => (
-                  <BusinessProfileCard
-                    key={person.id}
-                    person={person}
-                    columnWidth={COL_WIDTH}
-                    onPress={() => openProfile(person)}
+              <>
+                {showAiHints ? (
+                  <CardPlanHint
+                    mode="business"
+                    personName={suggested[0].name}
+                    style={styles.topPickHint}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      openConciergeWithCompanion(router, {
+                        mode: "business",
+                        partnerUserId: suggested[0].id,
+                        partnerDisplayName: suggested[0].name,
+                      });
+                    }}
                   />
-                ))}
-              </View>
+                ) : null}
+                <View style={styles.grid3}>
+                  {suggested.map((person) => (
+                    <BusinessProfileCard
+                      key={person.id}
+                      person={person}
+                      columnWidth={COL_WIDTH}
+                      onPress={() => openProfile(person)}
+                    />
+                  ))}
+                </View>
+              </>
             )}
             <TouchableOpacity
               style={styles.seeMore}
@@ -425,6 +447,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 12,
     justifyContent: "flex-start",
+  },
+  topPickHint: {
+    alignItems: "flex-start",
+    paddingHorizontal: 20,
+    marginBottom: 6,
   },
   hRow: { paddingHorizontal: 20, paddingBottom: 4, gap: 12 },
   emptyBox: {
