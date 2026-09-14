@@ -122,7 +122,9 @@ export type ConciergePlanningFlowProps = {
   proactiveActivityLabel?: string;
   proactiveDatePreset?: DatePreset;
   proactiveTimeOfDay?: TimeOfDay;
-  onClose: () => void;
+  /** Called when the flow is done, including right after a successful "Add to planner" — passes
+   * the created planner_item id (when one exists yet) so the caller can jump straight to it. */
+  onClose: (plannerItemId?: string) => void;
   onBack: () => void;
 };
 
