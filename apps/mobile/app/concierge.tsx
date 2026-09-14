@@ -488,7 +488,7 @@ export default function ConciergeScreen() {
             </Text>
           )}
         </View>
-        <TouchableOpacity onPress={handleClose} style={styles.headerBtn} accessibilityLabel="Close">
+        <TouchableOpacity onPress={() => handleClose()} style={styles.headerBtn} accessibilityLabel="Close">
           <Ionicons name="close" size={22} color={Colors.gray600} />
         </TouchableOpacity>
       </View>
