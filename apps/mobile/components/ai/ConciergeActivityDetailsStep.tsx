@@ -19,8 +19,7 @@ import { useTranslation } from "react-i18next";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout, Shadow } from "@/constants/tokens";
-import { useAppTheme } from "@/constants/design-system";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { PrimaryButton } from "@/components/ds";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import {
@@ -150,6 +149,7 @@ export function ConciergeActivityDetailsStep({
   onWhoJoiningChange,
 }: ConciergeActivityDetailsStepProps) {
   const theme = useAppTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const { i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
   const [location, setLocation] = useState(() =>
@@ -574,7 +574,7 @@ export function ConciergeActivityDetailsStep({
     <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       {showInlineBack ? (
         <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={22} color={Colors.primaryViolet} />
+          <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
       ) : null}
@@ -589,7 +589,7 @@ export function ConciergeActivityDetailsStep({
             value={customPromptExtra}
             onChangeText={setCustomPromptExtra}
             placeholder="e.g. concert then café, group of 4, budget-friendly…"
-            placeholderTextColor={Colors.gray500}
+            placeholderTextColor={theme.colors.textMuted}
             multiline
             textAlignVertical="top"
             maxLength={600}
@@ -598,7 +598,7 @@ export function ConciergeActivityDetailsStep({
             {customChipsLoading ? "Building suggestions from your profile…" : "Suggestions for you"}
           </Text>
           {customChipsLoading ? (
-            <ActivityIndicator color={Colors.primaryViolet} style={{ marginVertical: 12 }} />
+            <ActivityIndicator color={theme.colors.primary} style={{ marginVertical: 12 }} />
           ) : (
             <View style={styles.customChipWrap}>
               {customChips.map((line, i) => (
@@ -608,7 +608,7 @@ export function ConciergeActivityDetailsStep({
                   onPress={() => appendCustomChip(line)}
                   activeOpacity={0.85}
                 >
-                  <Ionicons name="add-circle-outline" size={18} color={Colors.primaryViolet} />
+                  <Ionicons name="add-circle-outline" size={18} color={theme.colors.primary} />
                   <Text style={styles.customChipText} numberOfLines={2}>
                     {line}
                   </Text>
@@ -658,7 +658,7 @@ export function ConciergeActivityDetailsStep({
                 >
                   <View style={styles.whoCardTop}>
                     <View style={[styles.whoIconWrap, active && styles.whoIconWrapActive]}>
-                      <Ionicons name={opt.icon} size={18} color={active ? Colors.white : Colors.primaryViolet} />
+                      <Ionicons name={opt.icon} size={18} color={active ? theme.colors.onPrimary : theme.colors.primary} />
                     </View>
                     <Text style={[styles.whoTitle, active && styles.whoTitleActive]}>{opt.title}</Text>
                   </View>
@@ -734,10 +734,10 @@ export function ConciergeActivityDetailsStep({
           <View style={styles.surfaceCard}>
             <View style={styles.weatherRow}>
               {weatherLoading ? (
-                <ActivityIndicator size="small" color={Colors.primaryViolet} />
+                <ActivityIndicator size="small" color={theme.colors.primary} />
               ) : weatherSnapshot ? (
                 <>
-                  <Ionicons name="partly-sunny-outline" size={18} color={Colors.gray600} />
+                  <Ionicons name="partly-sunny-outline" size={18} color={theme.colors.textSecondary} />
                   <Text style={styles.weatherText}>
                     {formatWeatherDisplayText(weatherSnapshot, { singleDay, dateLabel: dateStr })}
                   </Text>
@@ -750,7 +750,7 @@ export function ConciergeActivityDetailsStep({
           {rainAdvisory ? (
             <View style={styles.advisoryBox}>
               <View style={styles.advisoryHeaderRow}>
-                <Ionicons name="rainy-outline" size={20} color={Colors.primaryViolet} />
+                <Ionicons name="rainy-outline" size={20} color={theme.colors.primary} />
                 <Text style={styles.advisoryText}>
                   {singleDay
                     ? `Rain is forecast for this date in ${cityPart}. Consider an indoor plan or shift a day.`
@@ -798,14 +798,14 @@ export function ConciergeActivityDetailsStep({
           {(datePreset === "custom" || datePreset === "weekend") ? (
             <View style={[styles.dateRow, { marginTop: 12, marginBottom: 0 }]}>
               <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.85}>
-                <Ionicons name="calendar-outline" size={18} color={Colors.gray600} />
+                <Ionicons name="calendar-outline" size={18} color={theme.colors.textSecondary} />
                 <Text style={styles.dateBtnText}>
                   {date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
                 </Text>
               </TouchableOpacity>
               {!singleDay && activityKey !== "trip" ? (
                 <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDateEndPicker(true)} activeOpacity={0.85}>
-                  <Ionicons name="calendar-outline" size={18} color={Colors.gray600} />
+                  <Ionicons name="calendar-outline" size={18} color={theme.colors.textSecondary} />
                   <Text style={styles.dateBtnText}>
                     To: {dateEnd.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
                   </Text>
@@ -966,7 +966,7 @@ export function ConciergeActivityDetailsStep({
             <Ionicons
               name={exactTimeEnabled ? "checkbox" : "square-outline"}
               size={18}
-              color={exactTimeEnabled ? Colors.primaryViolet : Colors.gray600}
+              color={exactTimeEnabled ? theme.colors.primary : theme.colors.textSecondary}
             />
             <Text style={styles.locatePillBtnText}>Set exact start time</Text>
           </TouchableOpacity>
@@ -977,7 +977,7 @@ export function ConciergeActivityDetailsStep({
               onPress={() => setShowExactTimePicker(true)}
               activeOpacity={0.85}
             >
-              <Ionicons name="time-outline" size={18} color={Colors.gray600} />
+              <Ionicons name="time-outline" size={18} color={theme.colors.textSecondary} />
               <Text style={styles.dateBtnText}>
                 {`${String(exactTime.getHours()).padStart(2, "0")}:${String(exactTime.getMinutes()).padStart(2, "0")}`}
               </Text>
@@ -1033,7 +1033,7 @@ export function ConciergeActivityDetailsStep({
         <TextInput
           style={styles.budgetInput}
           placeholder="Or enter amount (optional)"
-          placeholderTextColor={Colors.gray500}
+          placeholderTextColor={theme.colors.textMuted}
           value={budgetAmount}
           onChangeText={(t) => setBudgetAmount(t.replace(/[^0-9.,]/g, ""))}
           keyboardType="decimal-pad"
@@ -1044,7 +1044,7 @@ export function ConciergeActivityDetailsStep({
           activeOpacity={0.85}
         >
           <Text style={styles.currencyText}>{budgetCurrency}</Text>
-          <Ionicons name="chevron-down" size={16} color={Colors.gray600} />
+          <Ionicons name="chevron-down" size={16} color={theme.colors.textSecondary} />
         </TouchableOpacity>
       </View>
       </View>
@@ -1102,7 +1102,7 @@ export function ConciergeActivityDetailsStep({
               <TextInput
                 style={[styles.textField, { marginTop: 12, marginBottom: 0 }]}
                 placeholder="Type cuisine (e.g. Japanese, Italian)"
-                placeholderTextColor={Colors.gray500}
+                placeholderTextColor={theme.colors.textMuted}
                 value={cuisine}
                 onChangeText={(t) => {
                   setCuisine(t);
@@ -1150,7 +1150,7 @@ export function ConciergeActivityDetailsStep({
           <TextInput
             style={[styles.textField, { minHeight: 90, marginBottom: 0, textAlignVertical: "top" }]}
             placeholder="Anything else the AI should know? (max 150)"
-            placeholderTextColor={Colors.gray500}
+            placeholderTextColor={theme.colors.textMuted}
             value={additionalInfo}
             onChangeText={setAdditionalInfo}
             multiline
@@ -1174,30 +1174,31 @@ export function ConciergeActivityDetailsStep({
   );
 }
 
-const styles = StyleSheet.create({
-  // Match Step 1 (Intent) feel: clean white canvas + section blocks.
-  scroll: { flex: 1, backgroundColor: Colors.white },
-  content: { paddingHorizontal: Layout.spacing.xl, paddingBottom: Layout.spacing.xxl, paddingTop: 6 },
+function makeStyles(theme: AppTheme) {
+  return StyleSheet.create({
+  // Match Step 1 (Intent) feel: clean canvas + section blocks.
+  scroll: { flex: 1, backgroundColor: theme.colors.surface },
+  content: { paddingHorizontal: theme.spacing.xl, paddingBottom: theme.spacing.xxl, paddingTop: 6 },
   backRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     marginBottom: 16,
   },
-  backText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
+  backText: { ...theme.type.caption, color: theme.colors.primary, fontWeight: "600" },
   // Hero stays as a premium card (topic anchor).
   topicHero: {
-    backgroundColor: Colors.white,
-    borderRadius: Layout.radii.card,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.lg,
     paddingVertical: 16,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: Colors.gray200,
+    borderColor: theme.colors.border,
     marginBottom: 18,
-    ...Shadow.card,
+    ...theme.elevation(1),
   },
-  topicHeroLabel: { ...Typography.caption, color: Colors.gray600, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.6 },
-  topicHeroTitle: { ...Typography.h3, color: Colors.textPrimary, marginTop: 4 },
+  topicHeroLabel: { ...theme.type.caption, color: theme.colors.textSecondary, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.6 },
+  topicHeroTitle: { ...theme.type.h3, color: theme.colors.textPrimary, marginTop: 4 },
 
   // Section block styling mirrors Step 1 (left accent border + uppercase label).
   sectionCard: {
@@ -1205,23 +1206,23 @@ const styles = StyleSheet.create({
   },
   sectionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 },
   sectionTitle: {
-    ...Typography.caption,
+    ...theme.type.caption,
     fontWeight: "800",
-    color: Colors.gray600,
+    color: theme.colors.textSecondary,
     textTransform: "uppercase",
     letterSpacing: 0.6,
   },
-  sectionSubTitle: { ...Typography.body, color: Colors.textPrimary, fontWeight: "700", marginBottom: 10 },
+  sectionSubTitle: { ...theme.type.body, color: theme.colors.textPrimary, fontWeight: "700", marginBottom: 10 },
 
   // Standard surface card inside a section (same as Step 1 cards).
   surfaceCard: {
-    backgroundColor: Colors.white,
-    borderRadius: Layout.radii.card,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.lg,
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: Colors.gray200,
-    ...Shadow.card,
+    borderColor: theme.colors.border,
+    ...theme.elevation(1),
   },
   locatePillBtn: {
     flexDirection: "row",
@@ -1230,54 +1231,54 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
     borderWidth: 1,
-    borderColor: Colors.gray200,
+    borderColor: theme.colors.border,
   },
-  locatePillBtnText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "700" },
+  locatePillBtnText: { ...theme.type.caption, color: theme.colors.primary, fontWeight: "700" },
   textField: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.gray100,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
+    backgroundColor: theme.colors.backgroundMuted,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: Colors.gray200,
+    borderColor: theme.colors.border,
     marginBottom: 10,
   },
   subActivityBlock: { marginBottom: 20 },
   subActivityPrompt: {
-    ...Typography.caption,
+    ...theme.type.caption,
     fontWeight: "600",
-    color: Colors.textPrimary,
+    color: theme.colors.textPrimary,
     marginBottom: 10,
   },
   customPromptBlock: { marginBottom: 20 },
   customPromptLabel: {
-    ...Typography.caption,
+    ...theme.type.caption,
     fontSize: 13,
     fontWeight: "400",
-    color: Colors.gray500,
+    color: theme.colors.textMuted,
     marginBottom: 10,
     lineHeight: 20,
   },
   customPromptInput: {
     minHeight: 96,
     borderWidth: 1,
-    borderColor: Colors.gray200,
-    borderRadius: Layout.radii.control,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.md,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    ...Typography.body,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.white,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
+    backgroundColor: theme.colors.surface,
     marginBottom: 14,
   },
   customChipsLabel: {
-    ...Typography.caption,
+    ...theme.type.caption,
     fontWeight: "600",
-    color: Colors.gray700,
+    color: theme.colors.textSecondary,
     marginBottom: 10,
   },
   customChipWrap: { gap: 10, marginBottom: 8 },
@@ -1285,31 +1286,31 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 10,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: Colors.gray200,
+    borderColor: theme.colors.border,
   },
   customChipText: {
-    ...Typography.caption,
+    ...theme.type.caption,
     flex: 1,
-    color: Colors.textPrimary,
+    color: theme.colors.textPrimary,
     lineHeight: 20,
   },
   customDivider: {
     height: 1,
-    backgroundColor: Colors.gray200,
+    backgroundColor: theme.colors.border,
     marginBottom: 20,
     marginTop: 8,
   },
-  label: { ...Typography.caption, color: Colors.gray600, fontWeight: "600", marginBottom: 8 },
-  changeHint: { ...Typography.caption, fontSize: 11, color: Colors.gray500, marginTop: 4 },
+  label: { ...theme.type.caption, color: theme.colors.textSecondary, fontWeight: "600", marginBottom: 8 },
+  changeHint: { ...theme.type.caption, fontSize: 11, color: theme.colors.textMuted, marginTop: 4 },
   inlineHint: {
-    ...Typography.caption,
+    ...theme.type.caption,
     fontSize: 12,
-    color: Colors.gray500,
+    color: theme.colors.textMuted,
     marginTop: 4,
     marginBottom: 8,
     fontStyle: "italic",
@@ -1318,9 +1319,9 @@ const styles = StyleSheet.create({
   locationRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
   locationInput: {
     flex: 1,
-    ...Typography.body,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.gray100,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
+    backgroundColor: theme.colors.backgroundMuted,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -1330,15 +1331,15 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
     alignItems: "center",
     justifyContent: "center",
   },
   suggestionsList: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.gray200,
+    borderColor: theme.colors.border,
     marginBottom: 8,
     overflow: "hidden",
   },
@@ -1349,97 +1350,97 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
   },
-  suggestionText: { ...Typography.body, color: Colors.textPrimary, flex: 1 },
+  suggestionText: { ...theme.type.body, color: theme.colors.textPrimary, flex: 1 },
   weatherRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     marginBottom: 0,
   },
-  weatherText: { ...Typography.caption, color: Colors.gray600, flex: 1 },
+  weatherText: { ...theme.type.caption, color: theme.colors.textSecondary, flex: 1 },
   advisoryBox: {
     marginTop: 10,
-    backgroundColor: Colors.romance.secondary,
+    backgroundColor: theme.colors.primary + "14",
     borderRadius: 12,
     padding: 12,
     borderLeftWidth: 4,
-    borderLeftColor: Colors.primaryViolet,
+    borderLeftColor: theme.colors.primary,
   },
   advisoryHeaderRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 10 },
-  advisoryText: { ...Typography.caption, color: Colors.textPrimary, flex: 1 },
+  advisoryText: { ...theme.type.caption, color: theme.colors.textPrimary, flex: 1 },
   advisoryActions: { flexDirection: "row", gap: 10 },
   advisoryBtn: {
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: Colors.gray200,
+    borderColor: theme.colors.border,
   },
-  advisoryBtnActive: { backgroundColor: Colors.primaryViolet, borderColor: Colors.primaryViolet },
-  advisoryBtnText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
-  advisoryBtnTextActive: { color: Colors.white },
+  advisoryBtnActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  advisoryBtnText: { ...theme.type.caption, color: theme.colors.primary, fontWeight: "600" },
+  advisoryBtnTextActive: { color: theme.colors.onPrimary },
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
   chipsRowTight: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
   },
-  chipActive: { backgroundColor: Colors.primaryViolet },
-  chipText: { ...Typography.caption, color: Colors.gray700, fontWeight: "500" },
-  chipTextActive: { color: Colors.white },
+  chipActive: { backgroundColor: theme.colors.primary },
+  chipText: { ...theme.type.caption, color: theme.colors.textSecondary, fontWeight: "500" },
+  chipTextActive: { color: theme.colors.onPrimary },
   keyQuestionBlock: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: Colors.gray200,
+    borderColor: theme.colors.border,
     marginBottom: 16,
   },
-  keyQuestionTitle: { ...Typography.caption, color: Colors.gray600, fontWeight: "700" },
-  keyQuestionSub: { ...Typography.body, color: Colors.textPrimary, fontWeight: "700", marginTop: 4, marginBottom: 10 },
+  keyQuestionTitle: { ...theme.type.caption, color: theme.colors.textSecondary, fontWeight: "700" },
+  keyQuestionSub: { ...theme.type.body, color: theme.colors.textPrimary, fontWeight: "700", marginTop: 4, marginBottom: 10 },
   keyQuestionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   keyChip: {
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
     borderWidth: 1,
-    borderColor: Colors.gray200,
+    borderColor: theme.colors.border,
   },
-  keyChipActive: { backgroundColor: Colors.primaryViolet, borderColor: Colors.primaryViolet },
-  keyChipText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "700" },
-  keyChipTextActive: { color: Colors.white },
+  keyChipActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  keyChipText: { ...theme.type.caption, color: theme.colors.primary, fontWeight: "700" },
+  keyChipTextActive: { color: theme.colors.onPrimary },
   whoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   whoCard: {
     flexGrow: 1,
     minWidth: 140,
     flexBasis: "31%",
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
     borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: Colors.gray200,
+    borderColor: theme.colors.border,
   },
-  whoCardActive: { backgroundColor: Colors.primaryViolet, borderColor: Colors.primaryViolet },
+  whoCardActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
   whoCardTop: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 },
   whoIconWrap: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.colors.surface,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: Colors.gray200,
+    borderColor: theme.colors.border,
   },
   whoIconWrapActive: { backgroundColor: "rgba(255,255,255,0.22)", borderColor: "rgba(255,255,255,0.22)" },
-  whoTitle: { ...Typography.caption, color: Colors.textPrimary, fontWeight: "800" },
-  whoTitleActive: { color: Colors.white },
-  whoSub: { ...Typography.caption, color: Colors.gray600 },
+  whoTitle: { ...theme.type.caption, color: theme.colors.textPrimary, fontWeight: "800" },
+  whoTitleActive: { color: theme.colors.onPrimary },
+  whoSub: { ...theme.type.caption, color: theme.colors.textSecondary },
   whoSubActive: { color: "rgba(255,255,255,0.9)" },
   dateRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
   dateBtn: {
@@ -1447,32 +1448,32 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
     borderRadius: 10,
     padding: 12,
   },
-  dateBtnText: { ...Typography.body, color: Colors.textPrimary },
-  pickerOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
+  dateBtnText: { ...theme.type.body, color: theme.colors.textPrimary },
+  pickerOverlay: { flex: 1, backgroundColor: theme.colors.overlay, justifyContent: "flex-end" },
   pickerSheet: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.colors.surface,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     padding: 20,
     paddingBottom: 32,
   },
-  pickerTitle: { ...Typography.body, fontWeight: "600", color: Colors.textPrimary, marginBottom: 12 },
+  pickerTitle: { ...theme.type.body, fontWeight: "600", color: theme.colors.textPrimary, marginBottom: 12 },
   pickerItem: { paddingVertical: 14, paddingHorizontal: 12, borderRadius: 10, marginBottom: 4 },
-  pickerItemActive: { backgroundColor: Colors.primaryViolet },
-  pickerItemText: { ...Typography.body, color: Colors.textPrimary },
-  pickerItemTextActive: { color: Colors.white, fontWeight: "600" },
+  pickerItemActive: { backgroundColor: theme.colors.primary },
+  pickerItemText: { ...theme.type.body, color: theme.colors.textPrimary },
+  pickerItemTextActive: { color: theme.colors.onPrimary, fontWeight: "600" },
   pickerDone: { alignSelf: "flex-end", marginTop: 8 },
-  pickerDoneText: { ...Typography.button, color: Colors.primaryViolet },
+  pickerDoneText: { ...theme.type.button, color: theme.colors.primary },
   budgetRow: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
   budgetInput: {
     flex: 1,
-    ...Typography.body,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.gray100,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
+    backgroundColor: theme.colors.backgroundMuted,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -1482,19 +1483,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     minWidth: 72,
   },
-  currencyText: { ...Typography.body, color: Colors.textPrimary, fontWeight: "600" },
+  currencyText: { ...theme.type.body, color: theme.colors.textPrimary, fontWeight: "600" },
   optionalInput: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.gray100,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
+    backgroundColor: theme.colors.backgroundMuted,
     borderRadius: 10,
     padding: 12,
     marginBottom: 12,
   },
-});
+  });
+}

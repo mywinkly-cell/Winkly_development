@@ -1559,7 +1559,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         {filterModalVisible && (
           <View
             style={[
-              StyleSheet.absoluteFillObject,
+              StyleSheet.absoluteFill,
               { bottom: filterModalBottomPadding },
             ]}
             pointerEvents="box-none"
@@ -1772,7 +1772,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         {detailsModalVisible && (
           <View
             style={[
-              StyleSheet.absoluteFillObject,
+              StyleSheet.absoluteFill,
               { bottom: filterModalBottomPadding },
             ]}
             pointerEvents="box-none"

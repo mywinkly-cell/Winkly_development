@@ -7,7 +7,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme, type ModeName } from "@/constants/design-system";
 import type { Mode } from "@/types";
 import type { IntentSection, RankedCard } from "@/lib/ai/conciergePlanningFlow";
 
@@ -31,7 +31,18 @@ export function ConciergeIntentStep({
   sections,
   onContinue,
 }: ConciergeIntentStepProps) {
+  const theme = useAppTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const derived = useMemo(() => sections ?? [], [sections]);
+
+  const sectionAccent = (labelStyle: IntentSection["labelStyle"]): string => {
+    if (labelStyle === "romance" || labelStyle === "friends" || labelStyle === "business") {
+      return theme.modeAccent(labelStyle as ModeName).primary;
+    }
+    if (labelStyle === "boosted") return theme.colors.primary;
+    if (labelStyle === "muted") return theme.colors.textSecondary;
+    return theme.colors.border;
+  };
 
   return (
     <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -40,29 +51,9 @@ export function ConciergeIntentStep({
       {derived.map((section) => (
         <View
           key={section.key}
-          style={[
-            styles.section,
-            section.labelStyle === "romance"
-              ? { borderLeftColor: Colors.romance.primary }
-              : section.labelStyle === "friends"
-                ? { borderLeftColor: Colors.friends.primary }
-                : section.labelStyle === "business"
-                  ? { borderLeftColor: Colors.business.primary }
-                  : section.labelStyle === "boosted"
-                    ? { borderLeftColor: Colors.primaryViolet }
-                    : { borderLeftColor: Colors.gray300 },
-          ]}
+          style={[styles.section, { borderLeftColor: sectionAccent(section.labelStyle) }]}
         >
-          <Text
-            style={[
-              styles.sectionTitle,
-              section.labelStyle === "muted" ? { color: Colors.gray600 } : undefined,
-              section.labelStyle === "boosted" ? { color: Colors.primaryViolet } : undefined,
-              section.labelStyle === "romance" ? { color: Colors.romance.primary } : undefined,
-              section.labelStyle === "friends" ? { color: Colors.friends.primary } : undefined,
-              section.labelStyle === "business" ? { color: Colors.business.primary } : undefined,
-            ]}
-          >
+          <Text style={[styles.sectionTitle, { color: sectionAccent(section.labelStyle) }]}>
             {section.label}
           </Text>
           <View style={styles.grid}>
@@ -70,6 +61,8 @@ export function ConciergeIntentStep({
               <CardButton
                 key={`${section.key}-${card.key}`}
                 card={card}
+                theme={theme}
+                styles={styles}
                 onPress={() => {
                   Haptics.selectionAsync();
                   onContinue({
@@ -90,20 +83,24 @@ export function ConciergeIntentStep({
 
 const CardButton = React.memo(function CardButton({
   card,
+  theme,
+  styles,
   onPress,
 }: {
   card: RankedCard;
+  theme: AppTheme;
+  styles: ReturnType<typeof makeStyles>;
   onPress: () => void;
 }) {
   return (
     <TouchableOpacity
-      style={[styles.button]}
+      style={styles.button}
       onPress={onPress}
       activeOpacity={0.85}
       accessibilityLabel={card.label}
     >
       <View style={styles.iconWrap}>
-        <Ionicons name={card.icon as never} size={28} color={Colors.primaryViolet} />
+        <Ionicons name={card.icon as never} size={28} color={theme.colors.primary} />
       </View>
       <Text style={styles.buttonLabel} numberOfLines={2}>
         {card.label}
@@ -117,76 +114,73 @@ const CardButton = React.memo(function CardButton({
   );
 });
 
-const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  content: {
-    paddingHorizontal: Layout.spacing.xl,
-    paddingBottom: Layout.spacing.xxl,
-  },
-  title: {
-    ...Typography.h3,
-    fontFamily: "Poppins_600SemiBold",
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  section: {
-    marginBottom: 20,
-    paddingLeft: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.gray300,
-  },
-  sectionTitle: {
-    ...Typography.caption,
-    fontWeight: "700",
-    color: Colors.gray600,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginBottom: 10,
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 4,
-  },
-  button: {
-    width: "47%",
-    minWidth: 140,
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  iconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  buttonLabel: {
-    ...Typography.caption,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-    textAlign: "center",
-  },
-  boostHint: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: Colors.primaryViolet,
-    textAlign: "center",
-    marginTop: 6,
-    fontWeight: "500",
-  },
-});
+function makeStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    scroll: { flex: 1 },
+    content: {
+      paddingHorizontal: theme.spacing.xl,
+      paddingBottom: theme.spacing.xxl,
+    },
+    title: {
+      ...theme.type.h3,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.sm,
+    },
+    section: {
+      marginBottom: theme.spacing.xl,
+      paddingLeft: theme.spacing.md,
+      borderLeftWidth: 4,
+      borderLeftColor: theme.colors.border,
+    },
+    sectionTitle: {
+      ...theme.type.caption,
+      fontWeight: "700",
+      color: theme.colors.textSecondary,
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+      marginBottom: theme.spacing.sm,
+    },
+    grid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: theme.spacing.md,
+      marginBottom: theme.spacing.xs,
+    },
+    button: {
+      width: "47%",
+      minWidth: 140,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      paddingVertical: theme.spacing.xl,
+      paddingHorizontal: theme.spacing.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+      ...theme.elevation(1),
+    },
+    iconWrap: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: theme.spacing.md,
+    },
+    buttonLabel: {
+      ...theme.type.caption,
+      fontWeight: "600",
+      color: theme.colors.textPrimary,
+      textAlign: "center",
+    },
+    boostHint: {
+      ...theme.type.caption,
+      fontSize: 11,
+      color: theme.colors.primary,
+      textAlign: "center",
+      marginTop: theme.spacing.xs,
+      fontWeight: "500",
+    },
+  });
+}

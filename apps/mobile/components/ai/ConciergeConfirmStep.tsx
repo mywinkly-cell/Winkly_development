@@ -19,9 +19,8 @@ import { useRouter } from "expo-router";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Layout, Shadow, Typography } from "@/constants/tokens";
 import { Card, PrimaryButton } from "@/components/ds";
-import { useAppTheme } from "@/constants/design-system";
+import { useAppTheme, accentYellow, type AppTheme } from "@/constants/design-system";
 import { PlanCardMapLink } from "@/components/plans/PlanCard";
 import {
   callWinklyPlan,
@@ -236,6 +235,7 @@ export function ConciergeConfirmStep({
   showInlineBack = true,
 }: ConciergeConfirmStepProps) {
   const theme = useAppTheme();
+  const styles = React.useMemo(() => makeStyles(theme), [theme]);
   const router = useRouter();
   const scrollRef = useRef<React.ComponentRef<typeof GestureScrollView>>(null);
   const [saving, setSaving] = useState(false);
@@ -717,7 +717,7 @@ export function ConciergeConfirmStep({
         ]}
       >
         <View style={styles.detailIconWrap}>
-          <Ionicons name={row.icon} size={17} color={Colors.primaryViolet} />
+          <Ionicons name={row.icon} size={17} color={theme.colors.primary} />
         </View>
 
         <View style={styles.detailBody}>
@@ -733,7 +733,7 @@ export function ConciergeConfirmStep({
               value={draftText}
               onChangeText={setDraftText}
               placeholder={row.placeholder}
-              placeholderTextColor={Colors.gray500}
+              placeholderTextColor={theme.colors.textMuted}
               autoFocus
               multiline={row.multiline}
               blurOnSubmit={!row.multiline}
@@ -791,7 +791,7 @@ export function ConciergeConfirmStep({
                 accessibilityRole="button"
                 accessibilityLabel={`Discard ${row.label.toLowerCase()} change`}
               >
-                <Ionicons name="close" size={18} color={Colors.gray600} />
+                <Ionicons name="close" size={18} color={theme.colors.textSecondary} />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.detailConfirmBtn}
@@ -801,7 +801,7 @@ export function ConciergeConfirmStep({
                 accessibilityRole="button"
                 accessibilityLabel={`Apply ${row.label.toLowerCase()}`}
               >
-                <Ionicons name="checkmark" size={19} color={Colors.white} />
+                <Ionicons name="checkmark" size={19} color={theme.colors.onPrimary} />
               </TouchableOpacity>
             </>
           ) : (
@@ -817,7 +817,7 @@ export function ConciergeConfirmStep({
               <Ionicons
                 name="pencil"
                 size={16}
-                color={editingField !== null ? Colors.gray400 : Colors.primaryViolet}
+                color={editingField !== null ? theme.colors.textMuted : theme.colors.primary}
               />
             </TouchableOpacity>
           )}
@@ -830,7 +830,7 @@ export function ConciergeConfirmStep({
     <GestureScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.scrollContent}>
       {showInlineBack ? (
         <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={22} color={Colors.primaryViolet} />
+          <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
           <Text style={styles.backText}>{allowEditDetails ? "Close" : "Back to options"}</Text>
         </TouchableOpacity>
       ) : null}
@@ -846,7 +846,7 @@ export function ConciergeConfirmStep({
 
           {retimeRequested && conflictingItems.length > 0 ? (
             <View style={styles.retimeBanner}>
-              <Ionicons name="time-outline" size={18} color={Colors.primaryViolet} />
+              <Ionicons name="time-outline" size={18} color={theme.colors.primary} />
               <Text style={styles.retimeBannerText}>
                 {`“${conflictingItems[0].title}” is already in your Planner then. Adjust the date or time below.`}
               </Text>
@@ -994,7 +994,7 @@ export function ConciergeConfirmStep({
         }}
         activeOpacity={0.8}
       >
-        <Ionicons name="share-outline" size={20} color={Colors.primaryViolet} />
+        <Ionicons name="share-outline" size={20} color={theme.colors.primary} />
         <Text style={styles.sharePlanBtnText}>Share this plan</Text>
       </TouchableOpacity>
 
@@ -1008,7 +1008,7 @@ export function ConciergeConfirmStep({
             <Ionicons
               name={inviteToo ? "checkbox" : "square-outline"}
               size={24}
-              color={inviteToo ? Colors.primaryViolet : Colors.gray500}
+              color={inviteToo ? theme.colors.primary : theme.colors.textMuted}
             />
             <Text style={styles.inviteToggleText}>Invite {partner.displayName} to this plan</Text>
           </TouchableOpacity>
@@ -1060,9 +1060,9 @@ export function ConciergeConfirmStep({
           activeOpacity={0.85}
           accessibilityRole="button"
         >
-          <Ionicons name="person-add-outline" size={20} color={Colors.primaryViolet} />
+          <Ionicons name="person-add-outline" size={20} color={theme.colors.primary} />
           <Text style={styles.inviteSomeoneBtnText}>Invite someone</Text>
-          <Ionicons name="chevron-forward" size={18} color={Colors.gray400} />
+          <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
         </TouchableOpacity>
       ) : null}
 
@@ -1116,7 +1116,7 @@ export function ConciergeConfirmStep({
       {conflictChecked && conflictingItems.length === 0 && nearbyItems.length > 0 && (
         <View style={styles.tightGapSection}>
           <View style={styles.tightGapHeader}>
-            <Ionicons name="alert-circle-outline" size={18} color={Colors.primaryViolet} />
+            <Ionicons name="alert-circle-outline" size={18} color={theme.colors.primary} />
             <Text style={styles.tightGapTitle}>Tight schedule</Text>
           </View>
           {nearbyItems.slice(0, 2).map((n) => (
@@ -1174,7 +1174,7 @@ export function ConciergeConfirmStep({
             <TextInput
               style={styles.refinementInput}
               placeholder="Or type your own (e.g. quieter place)"
-              placeholderTextColor={Colors.gray500}
+              placeholderTextColor={theme.colors.textMuted}
               value={refinementCustom}
               onChangeText={setRefinementCustom}
               onSubmitEditing={() => {
@@ -1216,7 +1216,8 @@ export function ConciergeConfirmStep({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: AppTheme) {
+  return StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 24, paddingBottom: 24 },
   backRow: {
@@ -1226,14 +1227,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   backText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
+    ...theme.type.caption,
+    color: theme.colors.primary,
     fontWeight: "600",
   },
   editBlock: { marginBottom: 20 },
   editIntro: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     marginBottom: 12,
   },
   detailCard: {
@@ -1248,17 +1249,17 @@ const styles = StyleSheet.create({
   },
   detailRowDivided: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.gray200,
+    borderTopColor: theme.colors.border,
   },
-  detailRowEditing: { backgroundColor: Colors.primaryViolet + "0A" },
-  detailRowFlagged: { backgroundColor: Colors.accentYellow + "1F" },
+  detailRowEditing: { backgroundColor: theme.colors.primary + "0A" },
+  detailRowFlagged: { backgroundColor: accentYellow + "1F" },
   detailIconWrap: {
     width: 32,
     height: 32,
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: Colors.primaryViolet + "12",
+    backgroundColor: theme.colors.primary + "12",
     marginTop: 2,
   },
   detailBody: { flex: 1, gap: 2 },
@@ -1268,35 +1269,35 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.6,
     textTransform: "uppercase",
-    color: Colors.gray600,
+    color: theme.colors.textSecondary,
   },
   detailValue: {
-    ...Typography.body,
-    color: Colors.textPrimary,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
     fontWeight: "500",
   },
-  detailValuePlaceholder: { color: Colors.gray500, fontWeight: "400" },
+  detailValuePlaceholder: { color: theme.colors.textMuted, fontWeight: "400" },
   detailInput: {
-    ...Typography.body,
-    color: Colors.textPrimary,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
     borderWidth: 1,
-    borderColor: Colors.primaryViolet + "55",
-    borderRadius: Layout.radii.control,
-    backgroundColor: Colors.white,
+    borderColor: theme.colors.primary + "55",
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginTop: 4,
   },
   detailInputMultiline: { minHeight: 76, textAlignVertical: "top" },
   detailPickAgain: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
+    ...theme.type.caption,
+    color: theme.colors.primary,
     fontWeight: "600",
     marginTop: 6,
   },
   detailError: {
-    ...Typography.caption,
-    color: Colors.errorRed,
+    ...theme.type.caption,
+    color: theme.colors.error,
     marginTop: 4,
   },
   detailActions: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
@@ -1306,7 +1307,7 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
   },
   detailEditBtnMuted: { opacity: 0.5 },
   detailCancelBtn: {
@@ -1315,7 +1316,7 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
   },
   detailConfirmBtn: {
     width: 34,
@@ -1323,12 +1324,12 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: Colors.primaryViolet,
-    ...Shadow.button,
+    backgroundColor: theme.colors.primary,
+    ...theme.elevation(2),
   },
   pendingEditHint: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     textAlign: "center",
     marginTop: 8,
   },
@@ -1338,24 +1339,24 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 12,
     marginBottom: 12,
-    borderRadius: Layout.radii.control,
-    backgroundColor: Colors.primaryViolet + "12",
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.primary + "12",
   },
   retimeBannerText: {
-    ...Typography.caption,
+    ...theme.type.caption,
     flex: 1,
-    color: Colors.textPrimary,
+    color: theme.colors.textPrimary,
     lineHeight: 18,
   },
   correctDetailsSection: {
     marginBottom: 16,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: Colors.gray200,
+    borderTopColor: theme.colors.border,
   },
   correctDetailsLabel: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     fontWeight: "600",
     marginBottom: 8,
   },
@@ -1368,13 +1369,13 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 16,
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
     marginRight: 8,
     marginBottom: 6,
   },
   refinementChipText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
+    ...theme.type.caption,
+    color: theme.colors.primary,
     fontWeight: "500",
   },
   refinementCustomRow: {
@@ -1384,9 +1385,9 @@ const styles = StyleSheet.create({
   refinementInput: {
     flex: 1,
     marginRight: 8,
-    ...Typography.body,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.gray100,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
+    backgroundColor: theme.colors.backgroundMuted,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1395,35 +1396,35 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 10,
-    backgroundColor: Colors.primaryViolet,
+    backgroundColor: theme.colors.primary,
   },
   refinementSubmitBtnDisabled: { opacity: 0.5 },
   refinementSubmitText: {
-    ...Typography.caption,
-    color: Colors.white,
+    ...theme.type.caption,
+    color: theme.colors.onPrimary,
     fontWeight: "600",
   },
   tripTimeline: { gap: 12, marginBottom: 16 },
   tripDayCard: {
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
     borderRadius: 12,
     padding: 14,
     borderLeftWidth: 4,
-    borderLeftColor: Colors.primaryViolet,
+    borderLeftColor: theme.colors.primary,
   },
   tripDayTitle: {
-    ...Typography.caption,
+    ...theme.type.caption,
     fontWeight: "700",
-    color: Colors.textPrimary,
+    color: theme.colors.textPrimary,
     marginBottom: 8,
   },
   tripSlot: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     marginBottom: 6,
   },
   scheduleBlock: {
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
     borderRadius: 10,
     padding: 12,
     marginBottom: 16,
@@ -1435,13 +1436,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sharePlanBtnText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
+    ...theme.type.caption,
+    color: theme.colors.primary,
     fontWeight: "600",
   },
   scheduleLine: {
-    ...Typography.caption,
-    color: Colors.textPrimary,
+    ...theme.type.caption,
+    color: theme.colors.textPrimary,
     marginBottom: 4,
   },
   invitePartnerBlock: { marginBottom: 16, gap: 10 },
@@ -1451,25 +1452,25 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   inviteToggleText: {
-    ...Typography.body,
-    color: Colors.textPrimary,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
     flex: 1,
   },
   changeInviteeBtn: { paddingVertical: 4, paddingLeft: 34 },
   changeInviteeText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
+    ...theme.type.caption,
+    color: theme.colors.primary,
     fontWeight: "600",
   },
   inviteModeSection: { gap: 6, paddingLeft: 2 },
   inviteModeLabel: {
-    ...Typography.caption,
+    ...theme.type.caption,
     fontWeight: "700",
-    color: Colors.gray700,
+    color: theme.colors.textSecondary,
   },
   inviteModeHint: {
-    ...Typography.caption,
-    color: Colors.gray500,
+    ...theme.type.caption,
+    color: theme.colors.textMuted,
     marginBottom: 4,
   },
   inviteModeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
@@ -1478,19 +1479,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.gray200,
-    backgroundColor: Colors.gray100,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.backgroundMuted,
   },
   inviteModeChipActive: {
-    borderColor: Colors.primaryViolet,
-    backgroundColor: Colors.primaryViolet + "18",
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primary + "18",
   },
   inviteModeChipText: {
-    ...Typography.caption,
+    ...theme.type.caption,
     fontWeight: "600",
-    color: Colors.gray700,
+    color: theme.colors.textSecondary,
   },
-  inviteModeChipTextActive: { color: Colors.primaryViolet },
+  inviteModeChipTextActive: { color: theme.colors.primary },
   inviteSomeoneBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1500,19 +1501,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.primaryViolet + "55",
-    backgroundColor: Colors.primaryViolet + "10",
+    borderColor: theme.colors.primary + "55",
+    backgroundColor: theme.colors.primary + "10",
   },
   inviteSomeoneBtnText: {
-    ...Typography.body,
+    ...theme.type.body,
     fontWeight: "600",
-    color: Colors.primaryViolet,
+    color: theme.colors.primary,
     flex: 1,
   },
   recurrenceSection: { marginBottom: 16 },
   recurrenceLabel: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     fontWeight: "600",
     marginBottom: 8,
   },
@@ -1521,26 +1522,26 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 20,
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
   },
-  recurrenceChipActive: { backgroundColor: Colors.primaryViolet },
+  recurrenceChipActive: { backgroundColor: theme.colors.primary },
   recurrenceChipText: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     fontWeight: "500",
   },
-  recurrenceChipTextActive: { color: Colors.white },
+  recurrenceChipTextActive: { color: theme.colors.onPrimary },
   conflictSection: {
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
     borderRadius: 12,
     padding: 14,
     marginBottom: 16,
     borderLeftWidth: 4,
-    borderLeftColor: Colors.accentYellow,
+    borderLeftColor: accentYellow,
   },
   conflictText: {
-    ...Typography.body,
-    color: Colors.textPrimary,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
     marginBottom: 10,
   },
   conflictActions: { flexDirection: "row", gap: 10, alignItems: "center" },
@@ -1548,46 +1549,47 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 10,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: Colors.gray300,
+    borderColor: theme.colors.borderStrong,
   },
   conflictSecondaryText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
+    ...theme.type.caption,
+    color: theme.colors.primary,
     fontWeight: "600",
   },
   conflictLinkBtn: { marginTop: 10, alignSelf: "flex-start" },
   conflictLinkText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
+    ...theme.type.caption,
+    color: theme.colors.primary,
     fontWeight: "600",
     textDecorationLine: "underline",
   },
   tightGapSection: {
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
     borderRadius: 12,
     padding: 14,
     marginBottom: 16,
     borderLeftWidth: 4,
-    borderLeftColor: Colors.primaryViolet,
+    borderLeftColor: theme.colors.primary,
     gap: 6,
   },
   tightGapHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
   tightGapTitle: {
-    ...Typography.caption,
+    ...theme.type.caption,
     fontWeight: "700",
-    color: Colors.textPrimary,
+    color: theme.colors.textPrimary,
   },
   tightGapText: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     lineHeight: 18,
   },
   tightGapActions: { flexDirection: "row", gap: 10, alignItems: "center", marginTop: 4, flexWrap: "wrap" },
   errorText: {
-    ...Typography.caption,
-    color: Colors.errorRed,
+    ...theme.type.caption,
+    color: theme.colors.error,
     marginBottom: 12,
   },
-});
+  });
+}

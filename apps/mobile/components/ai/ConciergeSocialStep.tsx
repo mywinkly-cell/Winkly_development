@@ -4,11 +4,12 @@
  * Share is only available after the plan is confirmed (Add to planner step).
  */
 
-import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
+import React, { useMemo } from "react";
+import { View, Text, StyleSheet, ScrollView } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { Card, ListRow, TextButton } from "@/components/ds";
 import type { Mode } from "@/types";
 import type { WhoJoining } from "@/lib/ai/conciergePlanningFlow";
 import { Avatar } from "@/components/ui/Avatar";
@@ -48,6 +49,9 @@ export function ConciergeSocialStep({
   onBack,
   showInlineBack = true,
 }: ConciergeSocialStepProps) {
+  const theme = useAppTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+
   return (
     <ScrollView
       style={styles.scroll}
@@ -55,10 +59,12 @@ export function ConciergeSocialStep({
       showsVerticalScrollIndicator={false}
     >
       {showInlineBack ? (
-        <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={22} color={Colors.primaryViolet} />
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
+        <TextButton
+          title="Back"
+          icon={<Ionicons name="arrow-back" size={20} color={theme.colors.primary} />}
+          onPress={onBack}
+          style={styles.backRow}
+        />
       ) : null}
 
       <Text style={styles.title}>Who is joining you?</Text>
@@ -69,105 +75,72 @@ export function ConciergeSocialStep({
       {suggestedPeople.length > 0 ? (
         <View style={styles.suggestedSection}>
           <Text style={styles.suggestedLabel}>Suggested</Text>
-          {suggestedPeople.slice(0, 2).map((p) => (
-            <TouchableOpacity
-              key={p.id}
-              style={styles.suggestedCard}
-              onPress={() => {
-                Haptics.selectionAsync();
-                onSelect(
-                  mode === "romance" ? "invite_match" : mode === "business" ? "invite_business" : "invite_friends",
-                  p.id
-                );
-              }}
-              activeOpacity={0.85}
-            >
-              <Avatar uri={p.avatar_url} size={40} />
-              <View style={styles.suggestedTextWrap}>
-                <Text style={styles.suggestedName} numberOfLines={1}>{p.displayName}</Text>
-                <Text style={styles.suggestedMeta}>
-                  {p.type === "match" ? "Recent match" : p.type === "business" ? "Business contact" : "Friend nearby"}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
-            </TouchableOpacity>
-          ))}
+          <Card elevation={0} padding="none">
+            {suggestedPeople.slice(0, 2).map((p, i) => (
+              <ListRow
+                key={p.id}
+                title={p.displayName}
+                subtitle={p.type === "match" ? "Recent match" : p.type === "business" ? "Business contact" : "Friend nearby"}
+                leading={<Avatar uri={p.avatar_url} size={40} />}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  onSelect(
+                    mode === "romance" ? "invite_match" : mode === "business" ? "invite_business" : "invite_friends",
+                    p.id
+                  );
+                }}
+                style={i > 0 ? { ...styles.row, ...styles.rowBorder } : styles.row}
+              />
+            ))}
+          </Card>
         </View>
       ) : null}
 
-      <View style={styles.options}>
-        {OPTIONS.map((opt) => (
-          <TouchableOpacity
+      <Card elevation={0} padding="none">
+        {OPTIONS.map((opt, i) => (
+          <ListRow
             key={opt.key}
-            style={styles.optionCard}
+            title={opt.label}
+            leading={
+              <View style={styles.optionIconWrap}>
+                <Ionicons name={opt.icon as any} size={22} color={theme.colors.primary} />
+              </View>
+            }
+            showChevron={false}
             onPress={() => {
               Haptics.selectionAsync();
               onSelect(opt.key, undefined);
             }}
-            activeOpacity={0.85}
-          >
-            <View style={styles.optionIconWrap}>
-              <Ionicons name={opt.icon as any} size={24} color={Colors.primaryViolet} />
-            </View>
-            <Text style={styles.optionLabel}>{opt.label}</Text>
-          </TouchableOpacity>
+            style={i > 0 ? { ...styles.row, ...styles.rowBorder } : styles.row}
+          />
         ))}
-      </View>
+      </Card>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  content: { paddingHorizontal: Layout.spacing.xl, paddingBottom: Layout.spacing.xxl },
-  backRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 16,
-  },
-  backText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
-  title: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 8 },
-  subtitle: { ...Typography.caption, color: Colors.gray600, marginBottom: 24 },
-  options: { gap: 12 },
-  optionCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  optionIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
-  },
-  optionLabel: { ...Typography.body, fontWeight: "600", color: Colors.textPrimary, flex: 1 },
-  optionHint: { ...Typography.caption, color: Colors.gray500 },
-  suggestedSection: { marginBottom: 20 },
-  suggestedLabel: {
-    ...Typography.caption,
-    fontWeight: "600",
-    color: Colors.gray600,
-    marginBottom: 10,
-  },
-  suggestedCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  suggestedTextWrap: { flex: 1, marginLeft: 12 },
-  suggestedName: { ...Typography.body, fontWeight: "600", color: Colors.textPrimary },
-  suggestedMeta: { ...Typography.caption, color: Colors.gray500, marginTop: 2 },
-});
+function makeStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    scroll: { flex: 1 },
+    content: { paddingHorizontal: theme.spacing.xl, paddingBottom: theme.spacing.xxl },
+    backRow: { alignSelf: "flex-start", marginBottom: theme.spacing.lg, paddingLeft: 0 },
+    title: { ...theme.type.h3, color: theme.colors.textPrimary, marginBottom: theme.spacing.sm },
+    subtitle: { ...theme.type.caption, color: theme.colors.textSecondary, marginBottom: theme.spacing.xxl },
+    row: { paddingHorizontal: theme.spacing.lg },
+    rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
+    optionIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: theme.radii.pill,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    suggestedSection: { marginBottom: theme.spacing.xl, gap: theme.spacing.sm },
+    suggestedLabel: {
+      ...theme.type.caption,
+      fontWeight: "600",
+      color: theme.colors.textSecondary,
+    },
+  });
+}

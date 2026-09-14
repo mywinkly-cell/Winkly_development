@@ -17,7 +17,8 @@ import MapView, { Circle, Marker, PROVIDER_GOOGLE, type Region } from "react-nat
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { PrimaryButton, SecondaryButton } from "@/components/ds";
 import { reverseGeocodeToDisplay } from "@/lib/location/deviceLocation";
 import { geocodeCityCountry } from "@/lib/weatherClient";
 
@@ -71,6 +72,8 @@ export function MapPinPickerModal({
   onClear,
   onClose,
 }: MapPinPickerModalProps) {
+  const theme = useAppTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [loading, setLoading] = useState(false);
   const [pin, setPin] = useState<MapPinValue | null>(initialPin ?? null);
   const [region, setRegion] = useState<Region>(DEFAULT_REGION);
@@ -141,7 +144,7 @@ export function MapPinPickerModal({
       <View style={styles.wrap}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} hitSlop={12} accessibilityLabel="Close map">
-            <Ionicons name="close" size={24} color={Colors.gray600} />
+            <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
           </TouchableOpacity>
           <Text style={styles.title}>Set precise spot</Text>
           <View style={{ width: 24 }} />
@@ -156,7 +159,7 @@ export function MapPinPickerModal({
         <View style={styles.mapWrap}>
           {loading ? (
             <View style={styles.loading}>
-              <ActivityIndicator color={Colors.primaryViolet} />
+              <ActivityIndicator color={theme.colors.primary} />
             </View>
           ) : (
             <MapView
@@ -185,8 +188,8 @@ export function MapPinPickerModal({
                 <Circle
                   center={{ latitude: pin.latitude, longitude: pin.longitude }}
                   radius={radiusKm * 1000}
-                  strokeColor={Colors.primaryViolet}
-                  fillColor={Colors.primaryViolet + "22"}
+                  strokeColor={theme.colors.primary}
+                  fillColor={theme.colors.primary + "22"}
                   strokeWidth={2}
                 />
               ) : null}
@@ -198,95 +201,71 @@ export function MapPinPickerModal({
 
         <View style={styles.actions}>
           {onClear && (initialPin || pin) ? (
-            <TouchableOpacity
-              style={styles.secondaryBtn}
+            <SecondaryButton
+              title="Clear pin"
               onPress={() => {
-                Haptics.selectionAsync();
                 onClear();
                 onClose();
               }}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.secondaryBtnText}>Clear pin</Text>
-            </TouchableOpacity>
+            />
           ) : null}
-          <TouchableOpacity
-            style={[styles.primaryBtn, !pin && styles.primaryBtnDisabled]}
-            disabled={!pin}
-            onPress={() => {
-              if (!pin) return;
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onConfirm(pin);
-              onClose();
-            }}
-            activeOpacity={0.9}
-          >
-            <Ionicons name="checkmark" size={18} color={Colors.white} />
-            <Text style={styles.primaryBtnText}>Use this spot</Text>
-          </TouchableOpacity>
+          <View style={styles.primaryBtnWrap}>
+            <PrimaryButton
+              title="Use this spot"
+              disabled={!pin}
+              icon={<Ionicons name="checkmark" size={18} color={theme.colors.onPrimary} />}
+              onPress={() => {
+                if (!pin) return;
+                onConfirm(pin);
+                onClose();
+              }}
+            />
+          </View>
         </View>
       </View>
     </Modal>
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: Colors.white, paddingTop: Platform.OS === "ios" ? 54 : 24 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Layout.spacing.lg,
-    marginBottom: 8,
-  },
-  title: { ...Typography.h3, color: Colors.textPrimary },
-  subtitle: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    paddingHorizontal: Layout.spacing.lg,
-    marginBottom: 12,
-  },
-  mapWrap: {
-    flex: 1,
-    marginHorizontal: Layout.spacing.lg,
-    borderRadius: 16,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    backgroundColor: Colors.gray100,
-  },
-  loading: { flex: 1, alignItems: "center", justifyContent: "center" },
-  hint: {
-    ...Typography.caption,
-    color: Colors.gray700,
-    paddingHorizontal: Layout.spacing.lg,
-    paddingTop: 10,
-  },
-  actions: {
-    flexDirection: "row",
-    gap: 10,
-    padding: Layout.spacing.lg,
-    paddingBottom: Platform.OS === "ios" ? 28 : 16,
-  },
-  secondaryBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    backgroundColor: Colors.white,
-  },
-  secondaryBtnText: { ...Typography.caption, color: Colors.gray700, fontWeight: "700" },
-  primaryBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 14,
-    paddingVertical: 14,
-  },
-  primaryBtnDisabled: { opacity: 0.45 },
-  primaryBtnText: { ...Typography.button, color: Colors.white },
-});
+function makeStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    wrap: { flex: 1, backgroundColor: theme.colors.surface, paddingTop: Platform.OS === "ios" ? 54 : 24 },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: theme.spacing.lg,
+      marginBottom: theme.spacing.sm,
+    },
+    title: { ...theme.type.h3, color: theme.colors.textPrimary },
+    subtitle: {
+      ...theme.type.caption,
+      color: theme.colors.textSecondary,
+      paddingHorizontal: theme.spacing.lg,
+      marginBottom: theme.spacing.md,
+    },
+    mapWrap: {
+      flex: 1,
+      marginHorizontal: theme.spacing.lg,
+      borderRadius: theme.radii.lg,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.backgroundMuted,
+    },
+    loading: { flex: 1, alignItems: "center", justifyContent: "center" },
+    hint: {
+      ...theme.type.caption,
+      color: theme.colors.textSecondary,
+      paddingHorizontal: theme.spacing.lg,
+      paddingTop: theme.spacing.sm,
+    },
+    actions: {
+      flexDirection: "row",
+      gap: theme.spacing.sm,
+      padding: theme.spacing.lg,
+      paddingBottom: Platform.OS === "ios" ? 28 : 16,
+    },
+    primaryBtnWrap: { flex: 1 },
+  });
+}
