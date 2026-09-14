@@ -11,7 +11,8 @@ import { View, Text, TouchableOpacity, StyleSheet, Share } from "react-native";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Card, ListRow } from "@/components/ds";
+import { useAppTheme } from "@/constants/design-system";
 import type { Mode } from "@/types";
 
 export type InviteSourceChoice = "matches" | "friends" | "business" | "contacts" | "share_external" | "skip";
@@ -54,6 +55,7 @@ export function ConciergeInviteStep({
   onBack,
   showInlineBack = true,
 }: ConciergeInviteStepProps) {
+  const theme = useAppTheme();
   const modeLabel = MODE_LABEL[mode] ?? "this plan";
 
   const handleShareExternal = () => {
@@ -73,72 +75,72 @@ export function ConciergeInviteStep({
   };
 
   return (
-    <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+    <GestureScrollView style={styles.scroll} contentContainerStyle={{ paddingHorizontal: theme.spacing.xl, paddingBottom: theme.spacing.xxl }}>
       {showInlineBack ? (
         <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={22} color={Colors.primaryViolet} />
-          <Text style={styles.backText}>Back</Text>
+          <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
+          <Text style={[theme.type.caption, { color: theme.colors.primary, fontFamily: theme.type.caption.fontFamily, fontWeight: "600" }]}>
+            Back
+          </Text>
         </TouchableOpacity>
       ) : null}
 
-      <Text style={styles.title}>Invite someone?</Text>
-      <Text style={styles.subtitle}>
+      <Text style={[theme.type.h3, { color: theme.colors.textPrimary, fontFamily: theme.type.h3.fontFamily, marginBottom: theme.spacing.sm }]}>
+        Invite someone?
+      </Text>
+      <Text
+        style={[
+          theme.type.caption,
+          { color: theme.colors.textSecondary, fontFamily: theme.type.caption.fontFamily, marginBottom: theme.spacing.xxl, lineHeight: 20 },
+        ]}
+      >
         This plan is tagged as {modeLabel}. You can still invite a romance match, a friend, a business
         contact, or anyone on Winkly — the invite mode follows who you pick (you can change it next).
       </Text>
 
-      <View style={styles.options}>
+      <View style={{ gap: theme.spacing.md }}>
         {OPTIONS.map((opt) => {
-          if (opt.key === "share_external") {
-            return (
-              <TouchableOpacity
-                key={opt.key}
-                style={styles.optionCard}
-                onPress={handleShareExternal}
-                activeOpacity={0.85}
-              >
-                <View style={styles.optionIconWrap}>
-                  <Ionicons name={opt.icon as keyof typeof Ionicons.glyphMap} size={24} color={Colors.primaryViolet} />
-                </View>
-                <View style={styles.optionTextCol}>
-                  <Text style={styles.optionLabel}>{opt.label}</Text>
-                  {opt.hint ? <Text style={styles.optionHint}>{opt.hint}</Text> : null}
-                </View>
-              </TouchableOpacity>
-            );
-          }
+          const leading = (
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: theme.radii.pill,
+                backgroundColor: theme.colors.backgroundMuted,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name={opt.icon as keyof typeof Ionicons.glyphMap} size={24} color={theme.colors.primary} />
+            </View>
+          );
+
           if (opt.key === "skip") {
             return (
-              <TouchableOpacity
-                key={opt.key}
-                style={[styles.optionCard, styles.optionCardSecondary]}
-                onPress={() => { Haptics.selectionAsync(); onSelect("skip"); }}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.optionLabelSecondary}>{opt.label}</Text>
-                <Ionicons name={opt.icon as keyof typeof Ionicons.glyphMap} size={20} color={Colors.gray600} />
-              </TouchableOpacity>
+              <Card key={opt.key} elevation={0} padding="none" style={{ backgroundColor: theme.colors.backgroundMuted }}>
+                <ListRow
+                  title={opt.label}
+                  onPress={() => { Haptics.selectionAsync(); onSelect("skip"); }}
+                  trailing={<Ionicons name={opt.icon as keyof typeof Ionicons.glyphMap} size={20} color={theme.colors.textSecondary} />}
+                  style={{ paddingHorizontal: theme.spacing.lg }}
+                />
+              </Card>
             );
           }
+
+          const onPress = opt.key === "share_external" ? handleShareExternal : () => { Haptics.selectionAsync(); onSelect(opt.key); };
+
           return (
-            <TouchableOpacity
-              key={opt.key}
-              style={styles.optionCard}
-              onPress={() => {
-                Haptics.selectionAsync();
-                onSelect(opt.key);
-              }}
-              activeOpacity={0.85}
-            >
-              <View style={styles.optionIconWrap}>
-                <Ionicons name={opt.icon as keyof typeof Ionicons.glyphMap} size={24} color={Colors.primaryViolet} />
-              </View>
-              <View style={styles.optionTextCol}>
-                <Text style={styles.optionLabel}>{opt.label}</Text>
-                {opt.hint ? <Text style={styles.optionHint}>{opt.hint}</Text> : null}
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.gray400} />
-            </TouchableOpacity>
+            <Card key={opt.key} elevation={0} padding="none">
+              <ListRow
+                title={opt.label}
+                subtitle={opt.hint}
+                leading={leading}
+                onPress={onPress}
+                showChevron
+                style={{ paddingHorizontal: theme.spacing.lg }}
+              />
+            </Card>
           );
         })}
       </View>
@@ -148,41 +150,5 @@ export function ConciergeInviteStep({
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  content: { paddingHorizontal: Layout.spacing.xl, paddingBottom: Layout.spacing.xxl },
-  backRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 16,
-  },
-  backText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
-  title: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 8 },
-  subtitle: { ...Typography.caption, color: Colors.gray600, marginBottom: 24, lineHeight: 20 },
-  options: { gap: 12 },
-  optionCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  optionCardSecondary: {
-    justifyContent: "center",
-    backgroundColor: Colors.gray100,
-  },
-  optionIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
-  },
-  optionTextCol: { flex: 1, gap: 2 },
-  optionLabel: { ...Typography.body, fontWeight: "600", color: Colors.textPrimary },
-  optionLabelSecondary: { ...Typography.body, fontWeight: "600", color: Colors.gray700, flex: 1 },
-  optionHint: { ...Typography.caption, color: Colors.gray500 },
+  backRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 16 },
 });

@@ -8,7 +8,8 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Card, Chip, PrimaryButton } from "@/components/ds";
+import { useAppTheme } from "@/constants/design-system";
 import {
   type ActivityDetails,
   type TripPlanningAnswers,
@@ -101,6 +102,7 @@ function buildCompleteAnswers(a: Partial<TripPlanningAnswers>): TripPlanningAnsw
 }
 
 export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPlanningFlowProps) {
+  const theme = useAppTheme();
   const [answers, setAnswers] = useState<Partial<TripPlanningAnswers>>({});
   const visible = useMemo(() => visibleTripCards(answers), [answers]);
   const [stepIndex, setStepIndex] = useState(0);
@@ -142,63 +144,83 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
     }
   }, [answers, cardId]);
 
+  const cardTitleStyle = [theme.type.body, { color: theme.colors.textPrimary, fontFamily: theme.type.body.fontFamily, fontWeight: "600" as const, marginBottom: theme.spacing.sm }];
+  const cardSubtitleStyle = [theme.type.caption, { color: theme.colors.textSecondary, fontFamily: theme.type.caption.fontFamily, marginBottom: theme.spacing.lg }];
+
+  const optionRow = (opt: { id: string; label: string; hint?: string }, active: boolean, onPress: () => void) => (
+    <TouchableOpacity
+      key={opt.id}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        paddingVertical: theme.spacing.md,
+        paddingHorizontal: theme.spacing.md,
+        borderRadius: theme.radii.md,
+        borderWidth: 1,
+        borderColor: active ? theme.colors.primary : theme.colors.border,
+        backgroundColor: active ? theme.colors.surface : theme.colors.backgroundMuted,
+      }}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={[theme.type.body, { color: active ? theme.colors.primary : theme.colors.textPrimary, fontFamily: theme.type.body.fontFamily, fontWeight: "600" }]}>
+          {opt.label}
+        </Text>
+        {opt.hint ? (
+          <Text style={[theme.type.caption, { color: theme.colors.textSecondary, fontFamily: theme.type.caption.fontFamily, marginTop: 2 }]}>
+            {opt.hint}
+          </Text>
+        ) : null}
+      </View>
+      <Ionicons
+        name={active ? "checkmark-circle" : "ellipse-outline"}
+        size={22}
+        color={active ? theme.colors.primary : theme.colors.textMuted}
+      />
+    </TouchableOpacity>
+  );
+
   const renderCard = () => {
     switch (cardId) {
       case "scope":
         return (
           <>
-            <Text style={styles.cardTitle}>Where is this trip?</Text>
-            <Text style={styles.cardSubtitle}>Pick what best describes your plan</Text>
-            <View style={styles.optionCol}>
-              {SCOPE_OPTIONS.map((o) => (
-                <TouchableOpacity
-                  key={o.id}
-                  style={[styles.optionRow, answers.scope === o.id && styles.optionRowActive]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setAnswers((prev) => {
-                      const next = { ...prev, scope: o.id };
-                      if (o.id !== "new_destination") {
-                        delete next.destinationDecided;
-                        delete next.travelRadius;
-                        next.mustHaves = [];
-                      }
-                      return next;
-                    });
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.optionTitle, answers.scope === o.id && styles.optionTitleActive]}>{o.label}</Text>
-                    <Text style={styles.optionHint}>{o.hint}</Text>
-                  </View>
-                  {answers.scope === o.id ? (
-                    <Ionicons name="checkmark-circle" size={22} color={Colors.primaryViolet} />
-                  ) : (
-                    <Ionicons name="ellipse-outline" size={22} color={Colors.gray400} />
-                  )}
-                </TouchableOpacity>
-              ))}
+            <Text style={cardTitleStyle}>Where is this trip?</Text>
+            <Text style={cardSubtitleStyle}>Pick what best describes your plan</Text>
+            <View style={{ gap: theme.spacing.sm }}>
+              {SCOPE_OPTIONS.map((o) =>
+                optionRow(o, answers.scope === o.id, () => {
+                  Haptics.selectionAsync();
+                  setAnswers((prev) => {
+                    const next = { ...prev, scope: o.id };
+                    if (o.id !== "new_destination") {
+                      delete next.destinationDecided;
+                      delete next.travelRadius;
+                      next.mustHaves = [];
+                    }
+                    return next;
+                  });
+                })
+              )}
             </View>
           </>
         );
       case "vibe":
         return (
           <>
-            <Text style={styles.cardTitle}>What vibe are you after?</Text>
-            <View style={styles.chipsWrap}>
+            <Text style={cardTitleStyle}>What vibe are you after?</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm }}>
               {VIBE_OPTIONS.map((o) => (
-                <TouchableOpacity
+                <Chip
                   key={o.id}
-                  style={[styles.chip, answers.vibe === o.id && styles.chipActive]}
+                  label={o.label}
+                  selected={answers.vibe === o.id}
                   onPress={() => {
                     Haptics.selectionAsync();
                     setAnswers((prev) => ({ ...prev, vibe: o.id }));
                   }}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[styles.chipText, answers.vibe === o.id && styles.chipTextActive]}>{o.label}</Text>
-                </TouchableOpacity>
+                />
               ))}
             </View>
           </>
@@ -206,51 +228,58 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
       case "destination_decided":
         return (
           <>
-            <Text style={styles.cardTitle}>Do you already know where you’re going?</Text>
-            <View style={styles.binaryRow}>
-              <TouchableOpacity
-                style={[styles.binaryBtn, answers.destinationDecided === true && styles.binaryBtnActive]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setAnswers((prev) => ({
-                    ...prev,
-                    destinationDecided: true,
-                    travelRadius: undefined,
-                    mustHaves: [],
-                  }));
-                }}
-              >
-                <Text style={[styles.binaryText, answers.destinationDecided === true && styles.binaryTextActive]}>Yes</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.binaryBtn, answers.destinationDecided === false && styles.binaryBtnActive]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setAnswers((prev) => ({ ...prev, destinationDecided: false }));
-                }}
-              >
-                <Text style={[styles.binaryText, answers.destinationDecided === false && styles.binaryTextActive]}>Not yet</Text>
-              </TouchableOpacity>
+            <Text style={cardTitleStyle}>Do you already know where you’re going?</Text>
+            <View style={{ flexDirection: "row", gap: theme.spacing.md }}>
+              {([
+                { value: true, label: "Yes" },
+                { value: false, label: "Not yet" },
+              ] as const).map((opt) => {
+                const active = answers.destinationDecided === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.label}
+                    style={{
+                      flex: 1,
+                      paddingVertical: theme.spacing.md,
+                      borderRadius: theme.radii.md,
+                      backgroundColor: active ? theme.colors.surface : theme.colors.backgroundMuted,
+                      alignItems: "center",
+                      borderWidth: 1,
+                      borderColor: active ? theme.colors.primary : theme.colors.border,
+                    }}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setAnswers((prev) =>
+                        opt.value
+                          ? { ...prev, destinationDecided: true, travelRadius: undefined, mustHaves: [] }
+                          : { ...prev, destinationDecided: false }
+                      );
+                    }}
+                  >
+                    <Text style={[theme.type.body, { color: active ? theme.colors.primary : theme.colors.textSecondary, fontFamily: theme.type.body.fontFamily, fontWeight: "600" }]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </>
         );
       case "activity_level":
         return (
           <>
-            <Text style={styles.cardTitle}>How intense should days be?</Text>
-            <View style={styles.chipsWrap}>
+            <Text style={cardTitleStyle}>How intense should days be?</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm }}>
               {LEVEL_OPTIONS.map((o) => (
-                <TouchableOpacity
+                <Chip
                   key={o.id}
-                  style={[styles.chip, answers.activityLevel === o.id && styles.chipActive]}
+                  label={o.label}
+                  selected={answers.activityLevel === o.id}
                   onPress={() => {
                     Haptics.selectionAsync();
                     setAnswers((prev) => ({ ...prev, activityLevel: o.id }));
                   }}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[styles.chipText, answers.activityLevel === o.id && styles.chipTextActive]}>{o.label}</Text>
-                </TouchableOpacity>
+                />
               ))}
             </View>
           </>
@@ -258,15 +287,16 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
       case "must_haves":
         return (
           <>
-            <Text style={styles.cardTitle}>Any must-haves?</Text>
-            <Text style={styles.cardSubtitle}>Select any that apply — optional</Text>
-            <View style={styles.chipsWrap}>
+            <Text style={cardTitleStyle}>Any must-haves?</Text>
+            <Text style={cardSubtitleStyle}>Select any that apply — optional</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm }}>
               {MUST_HAVE_CHIPS.map((label) => {
                 const selected = answers.mustHaves?.includes(label);
                 return (
-                  <TouchableOpacity
+                  <Chip
                     key={label}
-                    style={[styles.chip, selected && styles.chipActive]}
+                    label={label}
+                    selected={selected}
                     onPress={() => {
                       Haptics.selectionAsync();
                       setAnswers((prev) => {
@@ -275,10 +305,7 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
                         return { ...prev, mustHaves: next };
                       });
                     }}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.chipText, selected && styles.chipTextActive]}>{label}</Text>
-                  </TouchableOpacity>
+                  />
                 );
               })}
             </View>
@@ -287,26 +314,14 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
       case "travel_radius":
         return (
           <>
-            <Text style={styles.cardTitle}>How far are you willing to travel?</Text>
-            <View style={styles.optionCol}>
-              {RADIUS_OPTIONS.map((o) => (
-                <TouchableOpacity
-                  key={o.id}
-                  style={[styles.optionRow, answers.travelRadius === o.id && styles.optionRowActive]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setAnswers((prev) => ({ ...prev, travelRadius: o.id }));
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <Text style={[styles.optionTitle, answers.travelRadius === o.id && styles.optionTitleActive]}>{o.label}</Text>
-                  {answers.travelRadius === o.id ? (
-                    <Ionicons name="checkmark-circle" size={22} color={Colors.primaryViolet} />
-                  ) : (
-                    <Ionicons name="ellipse-outline" size={22} color={Colors.gray400} />
-                  )}
-                </TouchableOpacity>
-              ))}
+            <Text style={cardTitleStyle}>How far are you willing to travel?</Text>
+            <View style={{ gap: theme.spacing.sm }}>
+              {RADIUS_OPTIONS.map((o) =>
+                optionRow(o, answers.travelRadius === o.id, () => {
+                  Haptics.selectionAsync();
+                  setAnswers((prev) => ({ ...prev, travelRadius: o.id }));
+                })
+              )}
             </View>
           </>
         );
@@ -316,100 +331,35 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
   };
 
   return (
-    <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+    <GestureScrollView style={styles.scroll} contentContainerStyle={{ paddingHorizontal: theme.spacing.xl, paddingBottom: theme.spacing.xxl }}>
       <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
-        <Ionicons name="arrow-back" size={22} color={Colors.primaryViolet} />
-        <Text style={styles.backText}>Back</Text>
+        <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
+        <Text style={[theme.type.caption, { color: theme.colors.primary, fontFamily: theme.type.caption.fontFamily, fontWeight: "600" }]}>
+          Back
+        </Text>
       </TouchableOpacity>
 
-      <Text style={styles.title}>Plan your trip</Text>
-      <Text style={styles.progress}>{progressLabel}</Text>
+      <Text style={[theme.type.h3, { color: theme.colors.textPrimary, fontFamily: theme.type.h3.fontFamily, marginBottom: theme.spacing.xxs }]}>
+        Plan your trip
+      </Text>
+      <Text style={[theme.type.caption, { color: theme.colors.textMuted, fontFamily: theme.type.caption.fontFamily, marginBottom: theme.spacing.lg }]}>
+        {progressLabel}
+      </Text>
 
-      <View style={styles.card}>{renderCard()}</View>
+      <Card elevation={0} padding="lg" style={{ marginBottom: theme.spacing.xl }}>
+        {renderCard()}
+      </Card>
 
-      <TouchableOpacity
-        style={[styles.nextBtn, !canAdvance && styles.nextBtnDisabled]}
+      <PrimaryButton
+        title={stepIndex >= visible.length - 1 ? "Continue to details" : "Next"}
         onPress={goNext}
         disabled={!canAdvance}
-        activeOpacity={0.9}
-      >
-        <Text style={styles.nextBtnText}>{stepIndex >= visible.length - 1 ? "Continue to details" : "Next"}</Text>
-      </TouchableOpacity>
+      />
     </GestureScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  content: { paddingHorizontal: Layout.spacing.xl, paddingBottom: Layout.spacing.xxl },
-  backRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 12,
-  },
-  backText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
-  title: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 4 },
-  progress: { ...Typography.caption, color: Colors.gray500, marginBottom: 16 },
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  cardTitle: { ...Typography.body, fontWeight: "600", color: Colors.textPrimary, marginBottom: 8 },
-  cardSubtitle: { ...Typography.caption, color: Colors.gray600, marginBottom: 16 },
-  optionCol: { gap: 10 },
-  optionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    backgroundColor: Colors.gray100,
-  },
-  optionRowActive: {
-    borderColor: Colors.primaryViolet,
-    backgroundColor: Colors.white,
-  },
-  optionTitle: { ...Typography.body, color: Colors.textPrimary, fontWeight: "600" },
-  optionTitleActive: { color: Colors.primaryViolet },
-  optionHint: { ...Typography.caption, color: Colors.gray600, marginTop: 2 },
-  chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: Colors.gray100,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  chipActive: { backgroundColor: Colors.primaryViolet, borderColor: Colors.primaryViolet },
-  chipText: { ...Typography.caption, color: Colors.gray700, fontWeight: "500" },
-  chipTextActive: { color: Colors.white },
-  binaryRow: { flexDirection: "row", gap: 12 },
-  binaryBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  binaryBtnActive: { borderColor: Colors.primaryViolet, backgroundColor: Colors.white },
-  binaryText: { ...Typography.body, color: Colors.gray700, fontWeight: "600" },
-  binaryTextActive: { color: Colors.primaryViolet },
-  nextBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  nextBtnDisabled: { opacity: 0.45 },
-  nextBtnText: { ...Typography.button, color: Colors.white },
+  backRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 },
 });

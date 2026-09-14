@@ -4,11 +4,12 @@
  */
 
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Card, PrimaryButton } from "@/components/ds";
+import { useAppTheme } from "@/constants/design-system";
 import type { ActivityDetails } from "@/lib/ai/conciergePlanningFlow";
 import { useNormalizedLocation } from "@/lib/location/useLocationDisplay";
 
@@ -43,6 +44,7 @@ export function ConciergeSummaryStep({
   loading = false,
   showInlineBack = true,
 }: ConciergeSummaryStepProps) {
+  const theme = useAppTheme();
   const locationDisplay = useNormalizedLocation(details.location);
   const dateStr =
     details.date && details.singleDay === false && details.dateEnd && !sameCalendarDay(details.date, details.dateEnd)
@@ -71,117 +73,84 @@ export function ConciergeSummaryStep({
         ? details.budgetCurrency
         : "";
 
+  const rowStyle = { flexDirection: "row" as const, alignItems: "center" as const, gap: theme.spacing.md, marginBottom: theme.spacing.md };
+  const rowTextStyle = [theme.type.body, { color: theme.colors.textPrimary, fontFamily: theme.type.body.fontFamily, flex: 1 }];
+
   return (
-    <View style={styles.wrap}>
+    <View style={{ flex: 1, paddingHorizontal: theme.spacing.xl, paddingBottom: theme.spacing.xxl }}>
       {showInlineBack ? (
         <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={22} color={Colors.primaryViolet} />
-          <Text style={styles.backText}>Back</Text>
+          <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
+          <Text style={[theme.type.caption, { color: theme.colors.primary, fontFamily: theme.type.caption.fontFamily, fontWeight: "600" }]}>
+            Back
+          </Text>
         </TouchableOpacity>
       ) : null}
 
-      <Text style={styles.title}>Plan summary</Text>
-      <Text style={styles.subtitle}>Confirm and generate your plans</Text>
+      <Text style={[theme.type.h3, { color: theme.colors.textPrimary, fontFamily: theme.type.h3.fontFamily, marginBottom: theme.spacing.sm }]}>
+        Plan summary
+      </Text>
+      <Text
+        style={[
+          theme.type.caption,
+          { color: theme.colors.textSecondary, fontFamily: theme.type.caption.fontFamily, marginBottom: theme.spacing.xxl },
+        ]}
+      >
+        Confirm and generate your plans
+      </Text>
 
-      <View style={styles.card}>
+      <Card elevation={1} padding="lg" style={{ marginBottom: theme.spacing.xxl }}>
         {dateStr ? (
-          <View style={styles.row}>
-            <Ionicons name="calendar-outline" size={20} color={Colors.gray600} />
-            <Text style={styles.cardText}>
+          <View style={rowStyle}>
+            <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={rowTextStyle}>
               {dateStr}
               {timeLabel ? ` · ${timeLabel}` : ""}
             </Text>
           </View>
         ) : null}
         {locationDisplay ? (
-          <View style={styles.row}>
-            <Ionicons name="location-outline" size={20} color={Colors.gray600} />
-            <Text style={styles.cardText} numberOfLines={1}>{locationDisplay}</Text>
+          <View style={rowStyle}>
+            <Ionicons name="location-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={rowTextStyle} numberOfLines={1}>{locationDisplay}</Text>
           </View>
         ) : null}
         {budgetStr ? (
-          <View style={styles.row}>
-            <Ionicons name="wallet-outline" size={20} color={Colors.gray600} />
-            <Text style={styles.cardText}>Budget {budgetStr}</Text>
+          <View style={rowStyle}>
+            <Ionicons name="wallet-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={rowTextStyle}>Budget {budgetStr}</Text>
           </View>
         ) : null}
         {details.cuisine ? (
-          <View style={styles.row}>
-            <Ionicons name="restaurant-outline" size={20} color={Colors.gray600} />
-            <Text style={styles.cardText}>{details.cuisine} cuisine</Text>
+          <View style={rowStyle}>
+            <Ionicons name="restaurant-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={rowTextStyle}>{details.cuisine} cuisine</Text>
           </View>
         ) : null}
         {whoLabel ? (
-          <View style={styles.row}>
-            <Ionicons name="people-outline" size={20} color={Colors.gray600} />
-            <Text style={styles.cardText}>{whoLabel}</Text>
+          <View style={rowStyle}>
+            <Ionicons name="people-outline" size={20} color={theme.colors.textSecondary} />
+            <Text style={rowTextStyle}>{whoLabel}</Text>
           </View>
         ) : null}
         {activityLabel ? (
-          <View style={styles.row}>
-            <SparklesIcon size={20} color={Colors.primaryViolet} />
-            <Text style={[styles.cardText, styles.activityText]}>{activityLabel}</Text>
+          <View style={[rowStyle, { marginBottom: 0 }]}>
+            <SparklesIcon size={20} color={theme.colors.primary} />
+            <Text style={[...rowTextStyle, { fontWeight: "600", color: theme.colors.primary }]}>{activityLabel}</Text>
           </View>
         ) : null}
-      </View>
+      </Card>
 
-      <TouchableOpacity
-        style={[styles.generateBtn, loading && styles.generateBtnDisabled]}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          onGenerate();
-        }}
-        disabled={loading}
-        activeOpacity={0.9}
-      >
-        {loading ? (
-          <ActivityIndicator color={Colors.white} />
-        ) : (
-          <Text style={styles.generateBtnText}>Plan</Text>
-        )}
-      </TouchableOpacity>
+      <PrimaryButton title="Plan" onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onGenerate(); }} loading={loading} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, paddingHorizontal: Layout.spacing.xl, paddingBottom: Layout.spacing.xxl },
   backRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     marginBottom: 16,
   },
-  backText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
-  title: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 8 },
-  subtitle: { ...Typography.caption, color: Colors.gray600, marginBottom: 24 },
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 12,
-  },
-  cardText: { ...Typography.body, color: Colors.textPrimary, flex: 1 },
-  activityText: { fontWeight: "600", color: Colors.primaryViolet },
-  generateBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
-  },
-  generateBtnDisabled: { opacity: 0.7 },
-  generateBtnText: { ...Typography.button, color: Colors.white },
 });

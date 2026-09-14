@@ -4,18 +4,12 @@
  */
 
 import React, { useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-} from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
+import { PrimaryButton } from "@/components/ds";
+import { useAppTheme } from "@/constants/design-system";
 import {
   PlanningLocationFields,
   type PlanningLocationValue,
@@ -49,6 +43,7 @@ export function ConciergeQuickRequestStep({
   showInlineBack = true,
   generating = false,
 }: ConciergeQuickRequestStepProps) {
+  const theme = useAppTheme();
   const [query, setQuery] = useState(initialQuery);
 
   const cityReady = useMemo(() => {
@@ -64,21 +59,48 @@ export function ConciergeQuickRequestStep({
   };
 
   return (
-    <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <GestureScrollView
+      style={styles.scroll}
+      contentContainerStyle={{ paddingHorizontal: theme.spacing.xl, paddingBottom: theme.spacing.xxl, paddingTop: 4 }}
+      keyboardShouldPersistTaps="handled"
+    >
       {showInlineBack ? (
         <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={22} color={Colors.primaryViolet} />
-          <Text style={styles.backText}>Back</Text>
+          <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
+          <Text style={[theme.type.caption, { color: theme.colors.primary, fontFamily: theme.type.caption.fontFamily, fontWeight: "600" }]}>
+            Back
+          </Text>
         </TouchableOpacity>
       ) : null}
 
-      <View style={styles.pill}>
-        <Ionicons name="flash" size={16} color={Colors.primaryViolet} />
-        <Text style={styles.pillText}>Quick plan</Text>
+      <View
+        style={{
+          alignSelf: "flex-start",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: theme.spacing.xs,
+          backgroundColor: theme.colors.backgroundMuted,
+          borderRadius: theme.radii.pill,
+          paddingVertical: theme.spacing.xs,
+          paddingHorizontal: theme.spacing.md,
+          marginBottom: theme.spacing.lg,
+        }}
+      >
+        <Ionicons name="flash" size={16} color={theme.colors.primary} />
+        <Text style={[theme.type.caption, { color: theme.colors.primary, fontFamily: theme.type.caption.fontFamily, fontWeight: "700" }]}>
+          Quick plan
+        </Text>
       </View>
 
-      <Text style={styles.title}>What do you want to do?</Text>
-      <Text style={styles.subtitle}>
+      <Text style={[theme.type.h2, { color: theme.colors.textPrimary, fontFamily: theme.type.h2.fontFamily, marginBottom: theme.spacing.sm }]}>
+        What do you want to do?
+      </Text>
+      <Text
+        style={[
+          theme.type.body,
+          { color: theme.colors.textSecondary, fontFamily: theme.type.body.fontFamily, marginBottom: theme.spacing.lg },
+        ]}
+      >
         Type it like a search — we&apos;ll suggest real places in your chosen city
         {location.searchRadiusKm ? ` within ${location.searchRadiusKm} km` : ""}.
       </Text>
@@ -91,22 +113,41 @@ export function ConciergeQuickRequestStep({
       />
 
       <TextInput
-        style={styles.input}
+        style={[
+          theme.type.body,
+          {
+            fontFamily: theme.type.body.fontFamily,
+            minHeight: 110,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            borderRadius: theme.radii.md,
+            padding: theme.spacing.md,
+            color: theme.colors.textPrimary,
+            backgroundColor: theme.colors.surface,
+            marginBottom: theme.spacing.md,
+            marginTop: theme.spacing.sm,
+          },
+        ]}
         value={query}
         onChangeText={setQuery}
         placeholder="e.g. relaxing massage nearby"
-        placeholderTextColor={Colors.gray500}
+        placeholderTextColor={theme.colors.textMuted}
         multiline
         textAlignVertical="top"
         editable={!generating}
         accessibilityLabel="Quick plan request"
       />
 
-      <View style={styles.examples}>
+      <View style={{ gap: theme.spacing.sm, marginBottom: theme.spacing.md }}>
         {EXAMPLES.map((ex) => (
           <TouchableOpacity
             key={ex}
-            style={styles.exampleChip}
+            style={{
+              backgroundColor: theme.colors.backgroundMuted,
+              borderRadius: theme.radii.md,
+              paddingVertical: theme.spacing.sm,
+              paddingHorizontal: theme.spacing.md,
+            }}
             onPress={() => {
               Haptics.selectionAsync();
               setQuery(ex);
@@ -114,116 +155,40 @@ export function ConciergeQuickRequestStep({
             disabled={generating}
             activeOpacity={0.85}
           >
-            <Text style={styles.exampleText} numberOfLines={2}>{ex}</Text>
+            <Text
+              numberOfLines={2}
+              style={[theme.type.caption, { color: theme.colors.textSecondary, fontFamily: theme.type.caption.fontFamily, fontWeight: "600" }]}
+            >
+              {ex}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
 
       {!cityReady ? (
-        <Text style={styles.needCity}>Set a city to search.</Text>
+        <Text
+          style={[
+            theme.type.caption,
+            { color: theme.colors.error, fontFamily: theme.type.caption.fontFamily, marginBottom: theme.spacing.sm, fontWeight: "600" },
+          ]}
+        >
+          Set a city to search.
+        </Text>
       ) : null}
 
-      <TouchableOpacity
-        style={[styles.cta, (!query.trim() || !cityReady || generating) && styles.ctaDisabled]}
+      <PrimaryButton
+        title="Find options"
         onPress={submit}
-        disabled={!query.trim() || !cityReady || generating}
-        activeOpacity={0.9}
-        accessibilityRole="button"
+        loading={generating}
+        disabled={!query.trim() || !cityReady}
+        icon={!generating ? <Ionicons name="search" size={18} color={theme.colors.onPrimary} /> : undefined}
         accessibilityLabel="Find options"
-      >
-        {generating ? (
-          <ActivityIndicator color={Colors.white} />
-        ) : (
-          <>
-            <Ionicons name="search" size={20} color={Colors.white} />
-            <Text style={styles.ctaText}>Find options</Text>
-          </>
-        )}
-      </TouchableOpacity>
+      />
     </GestureScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  content: {
-    paddingHorizontal: Layout.spacing.xl,
-    paddingBottom: Layout.spacing.xxl,
-    paddingTop: 4,
-  },
   backRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 16 },
-  backText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
-  pill: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: Colors.secondaryViolet,
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginBottom: 14,
-  },
-  pillText: {
-    ...Typography.caption,
-    fontWeight: "700",
-    color: Colors.primaryViolet,
-  },
-  title: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 26,
-    lineHeight: 32,
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  subtitle: {
-    ...Typography.body,
-    color: Colors.gray600,
-    marginBottom: 16,
-    lineHeight: 22,
-  },
-  input: {
-    minHeight: 110,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    borderRadius: 16,
-    padding: 14,
-    ...Typography.body,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.white,
-    marginBottom: 14,
-    marginTop: 8,
-  },
-  examples: { gap: 8, marginBottom: 12 },
-  exampleChip: {
-    backgroundColor: Colors.gray100,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  exampleText: {
-    ...Typography.caption,
-    color: Colors.gray700,
-    fontWeight: "600",
-  },
-  needCity: {
-    ...Typography.caption,
-    color: Colors.errorRed,
-    marginBottom: 8,
-    fontWeight: "600",
-  },
-  cta: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 14,
-    paddingVertical: 14,
-  },
-  ctaDisabled: { opacity: 0.45 },
-  ctaText: {
-    ...Typography.button,
-    color: Colors.white,
-  },
 });

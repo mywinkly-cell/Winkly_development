@@ -7,7 +7,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import type { Mode } from "@/types";
 import type { IntentSection, RankedCard } from "@/lib/ai/conciergePlanningFlow";
 
@@ -26,90 +26,148 @@ export type ConciergeIntentStepProps = {
   onContinue: (payload: IntentContinuePayload) => void;
 };
 
+function accentForSection(theme: AppTheme, labelStyle: IntentSection["labelStyle"]): string {
+  switch (labelStyle) {
+    case "romance":
+      return theme.modeAccent("romance").primary;
+    case "friends":
+      return theme.modeAccent("friends").primary;
+    case "business":
+      return theme.modeAccent("business").primary;
+    case "boosted":
+      return theme.colors.primary;
+    case "muted":
+      return theme.colors.textMuted;
+    default:
+      return theme.colors.border;
+  }
+}
+
 export function ConciergeIntentStep({
   mode,
   sections,
   onContinue,
 }: ConciergeIntentStepProps) {
+  const theme = useAppTheme();
   const derived = useMemo(() => sections ?? [], [sections]);
 
   return (
-    <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>What would you like to plan?</Text>
+    <GestureScrollView style={styles.scroll} contentContainerStyle={{ paddingHorizontal: theme.spacing.xl, paddingBottom: theme.spacing.xxl }}>
+      <Text style={[theme.type.h3, { color: theme.colors.textPrimary, fontFamily: theme.type.h3.fontFamily, marginBottom: theme.spacing.sm }]}>
+        What would you like to plan?
+      </Text>
 
-      {derived.map((section) => (
-        <View
-          key={section.key}
-          style={[
-            styles.section,
-            section.labelStyle === "romance"
-              ? { borderLeftColor: Colors.romance.primary }
-              : section.labelStyle === "friends"
-                ? { borderLeftColor: Colors.friends.primary }
-                : section.labelStyle === "business"
-                  ? { borderLeftColor: Colors.business.primary }
-                  : section.labelStyle === "boosted"
-                    ? { borderLeftColor: Colors.primaryViolet }
-                    : { borderLeftColor: Colors.gray300 },
-          ]}
-        >
-          <Text
-            style={[
-              styles.sectionTitle,
-              section.labelStyle === "muted" ? { color: Colors.gray600 } : undefined,
-              section.labelStyle === "boosted" ? { color: Colors.primaryViolet } : undefined,
-              section.labelStyle === "romance" ? { color: Colors.romance.primary } : undefined,
-              section.labelStyle === "friends" ? { color: Colors.friends.primary } : undefined,
-              section.labelStyle === "business" ? { color: Colors.business.primary } : undefined,
-            ]}
+      {derived.map((section) => {
+        const accent = accentForSection(theme, section.labelStyle);
+        return (
+          <View
+            key={section.key}
+            style={{
+              marginBottom: theme.spacing.xxl,
+              paddingLeft: theme.spacing.md,
+              borderLeftWidth: 4,
+              borderLeftColor: accent,
+            }}
           >
-            {section.label}
-          </Text>
-          <View style={styles.grid}>
-            {section.cards.map((card) => (
-              <CardButton
-                key={`${section.key}-${card.key}`}
-                card={card}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  onContinue({
-                    key: card.key,
-                    label: card.label,
-                    sectionLabel: section.label,
-                    flowMode: mode,
-                  });
-                }}
-              />
-            ))}
+            <Text
+              style={[
+                theme.type.overline,
+                {
+                  fontFamily: theme.type.overline.fontFamily,
+                  color: section.labelStyle ? accent : theme.colors.textSecondary,
+                  marginBottom: theme.spacing.sm,
+                },
+              ]}
+            >
+              {section.label}
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.md }}>
+              {section.cards.map((card) => (
+                <CardButton
+                  key={`${section.key}-${card.key}`}
+                  card={card}
+                  theme={theme}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    onContinue({
+                      key: card.key,
+                      label: card.label,
+                      sectionLabel: section.label,
+                      flowMode: mode,
+                    });
+                  }}
+                />
+              ))}
+            </View>
           </View>
-        </View>
-      ))}
+        );
+      })}
     </GestureScrollView>
   );
 }
 
 const CardButton = React.memo(function CardButton({
   card,
+  theme,
   onPress,
 }: {
   card: RankedCard;
+  theme: AppTheme;
   onPress: () => void;
 }) {
   return (
     <TouchableOpacity
-      style={[styles.button]}
+      style={{
+        width: "47%",
+        minWidth: 140,
+        backgroundColor: theme.colors.surface,
+        borderRadius: theme.radii.lg,
+        paddingVertical: theme.spacing.xl,
+        paddingHorizontal: theme.spacing.lg,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        alignItems: "center",
+        justifyContent: "center",
+        ...theme.elevation(1),
+      }}
       onPress={onPress}
       activeOpacity={0.85}
       accessibilityLabel={card.label}
     >
-      <View style={styles.iconWrap}>
-        <Ionicons name={card.icon as never} size={28} color={Colors.primaryViolet} />
+      <View
+        style={{
+          width: 52,
+          height: 52,
+          borderRadius: 26,
+          backgroundColor: theme.colors.backgroundMuted,
+          alignItems: "center",
+          justifyContent: "center",
+          marginBottom: theme.spacing.md,
+        }}
+      >
+        <Ionicons name={card.icon as never} size={28} color={theme.colors.primary} />
       </View>
-      <Text style={styles.buttonLabel} numberOfLines={2}>
+      <Text
+        numberOfLines={2}
+        style={[theme.type.caption, { color: theme.colors.textPrimary, fontFamily: theme.type.caption.fontFamily, fontWeight: "600", textAlign: "center" }]}
+      >
         {card.label}
       </Text>
       {card.boosted && card.boostReason ? (
-        <Text style={styles.boostHint} numberOfLines={2}>
+        <Text
+          numberOfLines={2}
+          style={[
+            theme.type.caption,
+            {
+              fontFamily: theme.type.caption.fontFamily,
+              fontSize: 11,
+              color: theme.colors.primary,
+              textAlign: "center",
+              marginTop: theme.spacing.xs,
+              fontWeight: "500",
+            },
+          ]}
+        >
           {card.boostReason}
         </Text>
       ) : null}
@@ -119,74 +177,4 @@ const CardButton = React.memo(function CardButton({
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  content: {
-    paddingHorizontal: Layout.spacing.xl,
-    paddingBottom: Layout.spacing.xxl,
-  },
-  title: {
-    ...Typography.h3,
-    fontFamily: "Poppins_600SemiBold",
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  section: {
-    marginBottom: 20,
-    paddingLeft: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.gray300,
-  },
-  sectionTitle: {
-    ...Typography.caption,
-    fontWeight: "700",
-    color: Colors.gray600,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginBottom: 10,
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 4,
-  },
-  button: {
-    width: "47%",
-    minWidth: 140,
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  iconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  buttonLabel: {
-    ...Typography.caption,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-    textAlign: "center",
-  },
-  boostHint: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: Colors.primaryViolet,
-    textAlign: "center",
-    marginTop: 6,
-    fontWeight: "500",
-  },
 });
