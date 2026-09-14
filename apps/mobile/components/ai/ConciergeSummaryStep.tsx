@@ -3,13 +3,13 @@
  * Confirms intent before running AI generation.
  */
 
-import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useMemo } from "react";
+import { View, Text, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
-import { Card, PrimaryButton } from "@/components/ds";
-import { useAppTheme } from "@/constants/design-system";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { Card, PrimaryButton, TextButton } from "@/components/ds";
 import type { ActivityDetails } from "@/lib/ai/conciergePlanningFlow";
 import { useNormalizedLocation } from "@/lib/location/useLocationDisplay";
 
@@ -45,6 +45,7 @@ export function ConciergeSummaryStep({
   showInlineBack = true,
 }: ConciergeSummaryStepProps) {
   const theme = useAppTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const locationDisplay = useNormalizedLocation(details.location);
   const dateStr =
     details.date && details.singleDay === false && details.dateEnd && !sameCalendarDay(details.date, details.dateEnd)
@@ -73,70 +74,58 @@ export function ConciergeSummaryStep({
         ? details.budgetCurrency
         : "";
 
-  const rowStyle = { flexDirection: "row" as const, alignItems: "center" as const, gap: theme.spacing.md, marginBottom: theme.spacing.md };
-  const rowTextStyle = [theme.type.body, { color: theme.colors.textPrimary, fontFamily: theme.type.body.fontFamily, flex: 1 }];
-
   return (
-    <View style={{ flex: 1, paddingHorizontal: theme.spacing.xl, paddingBottom: theme.spacing.xxl }}>
+    <View style={styles.wrap}>
       {showInlineBack ? (
-        <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
-          <Text style={[theme.type.caption, { color: theme.colors.primary, fontFamily: theme.type.caption.fontFamily, fontWeight: "600" }]}>
-            Back
-          </Text>
-        </TouchableOpacity>
+        <TextButton
+          title="Back"
+          icon={<Ionicons name="arrow-back" size={20} color={theme.colors.primary} />}
+          onPress={onBack}
+          style={styles.backRow}
+        />
       ) : null}
 
-      <Text style={[theme.type.h3, { color: theme.colors.textPrimary, fontFamily: theme.type.h3.fontFamily, marginBottom: theme.spacing.sm }]}>
-        Plan summary
-      </Text>
-      <Text
-        style={[
-          theme.type.caption,
-          { color: theme.colors.textSecondary, fontFamily: theme.type.caption.fontFamily, marginBottom: theme.spacing.xxl },
-        ]}
-      >
-        Confirm and generate your plans
-      </Text>
+      <Text style={styles.title}>Plan summary</Text>
+      <Text style={styles.subtitle}>Confirm and generate your plans</Text>
 
-      <Card elevation={1} padding="lg" style={{ marginBottom: theme.spacing.xxl }}>
+      <Card style={styles.card} elevation={1}>
         {dateStr ? (
-          <View style={rowStyle}>
+          <View style={styles.row}>
             <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
-            <Text style={rowTextStyle}>
+            <Text style={styles.cardText}>
               {dateStr}
               {timeLabel ? ` · ${timeLabel}` : ""}
             </Text>
           </View>
         ) : null}
         {locationDisplay ? (
-          <View style={rowStyle}>
+          <View style={styles.row}>
             <Ionicons name="location-outline" size={20} color={theme.colors.textSecondary} />
-            <Text style={rowTextStyle} numberOfLines={1}>{locationDisplay}</Text>
+            <Text style={styles.cardText} numberOfLines={1}>{locationDisplay}</Text>
           </View>
         ) : null}
         {budgetStr ? (
-          <View style={rowStyle}>
+          <View style={styles.row}>
             <Ionicons name="wallet-outline" size={20} color={theme.colors.textSecondary} />
-            <Text style={rowTextStyle}>Budget {budgetStr}</Text>
+            <Text style={styles.cardText}>Budget {budgetStr}</Text>
           </View>
         ) : null}
         {details.cuisine ? (
-          <View style={rowStyle}>
+          <View style={styles.row}>
             <Ionicons name="restaurant-outline" size={20} color={theme.colors.textSecondary} />
-            <Text style={rowTextStyle}>{details.cuisine} cuisine</Text>
+            <Text style={styles.cardText}>{details.cuisine} cuisine</Text>
           </View>
         ) : null}
         {whoLabel ? (
-          <View style={rowStyle}>
+          <View style={styles.row}>
             <Ionicons name="people-outline" size={20} color={theme.colors.textSecondary} />
-            <Text style={rowTextStyle}>{whoLabel}</Text>
+            <Text style={styles.cardText}>{whoLabel}</Text>
           </View>
         ) : null}
         {activityLabel ? (
-          <View style={[rowStyle, { marginBottom: 0 }]}>
+          <View style={[styles.row, styles.rowLast]}>
             <SparklesIcon size={20} color={theme.colors.primary} />
-            <Text style={[...rowTextStyle, { fontWeight: "600", color: theme.colors.primary }]}>{activityLabel}</Text>
+            <Text style={[styles.cardText, styles.activityText]}>{activityLabel}</Text>
           </View>
         ) : null}
       </Card>
@@ -146,11 +135,23 @@ export function ConciergeSummaryStep({
   );
 }
 
-const styles = StyleSheet.create({
-  backRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 16,
-  },
-});
+function makeStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    wrap: { flex: 1, paddingHorizontal: theme.spacing.xl, paddingBottom: theme.spacing.xxl },
+    backRow: { alignSelf: "flex-start", marginBottom: theme.spacing.lg, paddingLeft: 0 },
+    title: { ...theme.type.h3, color: theme.colors.textPrimary, marginBottom: theme.spacing.sm },
+    subtitle: { ...theme.type.caption, color: theme.colors.textSecondary, marginBottom: theme.spacing.xxl },
+    card: {
+      marginBottom: theme.spacing.xxl,
+    },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.md,
+      marginBottom: theme.spacing.md,
+    },
+    rowLast: { marginBottom: 0 },
+    cardText: { ...theme.type.body, color: theme.colors.textPrimary, flex: 1 },
+    activityText: { fontWeight: "600", color: theme.colors.primary },
+  });
+}

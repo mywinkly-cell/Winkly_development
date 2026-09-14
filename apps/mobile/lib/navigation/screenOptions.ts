@@ -4,7 +4,7 @@
 // — Drill-down (profile, chat thread, filters): simple_push (iOS) / slide (Android).
 
 import { Platform } from "react-native";
-import type { NativeStackNavigationOptions } from "@react-navigation/native-stack";
+import type { NativeStackNavigationOptions } from "expo-router/native-stack";
 
 export const NAV_ANIMATION_DURATION_MS = Platform.select({
   ios: 280,

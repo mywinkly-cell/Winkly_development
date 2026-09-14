@@ -78,8 +78,7 @@ import { getMergedDeviceWhiteSpaceSlots, formatCalendarWhiteSpaceForGateway } fr
 import { buildBookingContextForAi } from "@/lib/integrations/bookingLinks";
 import { Avatar } from "@/components/ui/Avatar";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
-import { Colors, Typography } from "@/constants/tokens";
-import { useAppTheme } from "@/constants/design-system";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { Header } from "@/components/ds";
 import { PlanCard, PlanCardBadge, PlanCardMeta, PlanCardMapLink, PlanCardIconAction } from "@/components/plans/PlanCard";
 import type { Mode } from "@/types";
@@ -143,6 +142,7 @@ export function ConciergePlanningFlow({
   onBack,
 }: ConciergePlanningFlowProps) {
   const theme = useAppTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const { i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
   const router = useRouter();
@@ -1211,7 +1211,7 @@ export function ConciergePlanningFlow({
                 .slice(0, 2)
                 .map((p: any, idx) => {
                 const isOptionA = p.option_id === "A" || idx === 0;
-                const modeAccent = (Colors as any)[effectiveMode]?.primary ?? theme.colors.primary;
+                const modeAccent = theme.modeAccent(effectiveMode).primary;
                 const characterLabel = p.character_label || (isOptionA ? "Bolder pick" : "Classic choice");
                 const venueLine = [p.venue?.name, p.venue?.address, p.venue?.estimated_cost].filter(Boolean).join(" • ");
                 return (
@@ -1280,7 +1280,7 @@ export function ConciergePlanningFlow({
               })}
               <View style={styles.conciergeUpsell}>
                 <View style={styles.conciergeUpsellHeader}>
-                  <Ionicons name="sparkles-outline" size={16} color={Colors.primaryViolet} />
+                  <Ionicons name="sparkles-outline" size={16} color={theme.colors.primary} />
                   <Text style={styles.conciergeUpsellTitle}>
                     {hasFullConcierge ? "Want even more depth?" : "Unlock the full Experience Menu"}
                   </Text>
@@ -1297,7 +1297,7 @@ export function ConciergePlanningFlow({
                     activeOpacity={0.9}
                   >
                     <Text style={styles.conciergeUpsellBtnText}>See Premium</Text>
-                    <Ionicons name="arrow-forward" size={16} color={Colors.white} />
+                    <Ionicons name="arrow-forward" size={16} color={theme.colors.onPrimary} />
                   </TouchableOpacity>
                 ) : null}
               </View>
@@ -1397,7 +1397,7 @@ export function ConciergePlanningFlow({
           {loading ? (
             <Animated.View style={[styles.loadingOverlay, { opacity: loadingFade }]}>
               <View style={styles.loadingOverlayCard}>
-                <ActivityIndicator size="large" color={Colors.primaryViolet} />
+                <ActivityIndicator size="large" color={theme.colors.primary} />
                 <Text style={styles.loadingOverlayTitle}>Winkly is thinking</Text>
                 <Text style={styles.loadingOverlaySub}>
                   {loadingPhaseIdx === 0
@@ -1448,18 +1448,18 @@ export function ConciergePlanningFlow({
                       : "Choose a contact"}
               </Text>
               <TouchableOpacity onPress={() => setInvitePickerChoice(null)} hitSlop={12}>
-                <Ionicons name="close" size={24} color={Colors.gray600} />
+                <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
               </TouchableOpacity>
             </View>
             {invitePickerChoice === "contacts" ? (
               <View style={styles.pickerSearchRow}>
-                <Ionicons name="search-outline" size={18} color={Colors.gray500} />
+                <Ionicons name="search-outline" size={18} color={theme.colors.textMuted} />
                 <TextInput
                   style={styles.pickerSearchInput}
                   value={contactsQuery}
                   onChangeText={setContactsQuery}
                   placeholder="Search Winkly users"
-                  placeholderTextColor={Colors.gray500}
+                  placeholderTextColor={theme.colors.textMuted}
                   autoCorrect={false}
                   autoCapitalize="none"
                 />
@@ -1489,7 +1489,7 @@ export function ConciergePlanningFlow({
                     >
                       <Avatar uri={p.avatar_url} size={48} />
                       <Text style={styles.pickerRowName} numberOfLines={1}>{p.displayName}</Text>
-                      <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
+                      <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
                     </TouchableOpacity>
                   ))
                 )
@@ -1518,7 +1518,7 @@ export function ConciergePlanningFlow({
                   >
                     <Avatar uri={p.avatar_url} size={48} />
                     <Text style={styles.pickerRowName} numberOfLines={1}>{p.displayName}</Text>
-                    <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
+                    <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
                   </TouchableOpacity>
                 ))
               )}
@@ -1585,15 +1585,16 @@ export function ConciergePlanningFlow({
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: AppTheme) {
+  return StyleSheet.create({
   container: { flex: 1 },
   stepBody: { flex: 1, minHeight: 0 },
   suggestionsWrap: { flex: 1 },
   loadingWrap: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
-  loadingText: { ...Typography.caption, color: Colors.gray600 },
+  loadingText: { ...theme.type.caption, color: theme.colors.textSecondary },
   loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(255,255,255,0.78)",
+    ...StyleSheet.absoluteFill,
+    backgroundColor: theme.colors.overlay,
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
@@ -1601,92 +1602,88 @@ const styles = StyleSheet.create({
   loadingOverlayCard: {
     width: "100%",
     maxWidth: 320,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: 20,
     paddingVertical: 20,
     paddingHorizontal: 18,
     alignItems: "center",
     gap: 10,
     borderWidth: 1,
-    borderColor: Colors.gray200,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 6,
+    borderColor: theme.colors.border,
+    ...theme.elevation(3),
   },
-  loadingOverlayTitle: { ...Typography.h3, color: Colors.textPrimary },
-  loadingOverlaySub: { ...Typography.caption, color: Colors.gray600, textAlign: "center" },
+  loadingOverlayTitle: { ...theme.type.h3, color: theme.colors.textPrimary },
+  loadingOverlaySub: { ...theme.type.caption, color: theme.colors.textSecondary, textAlign: "center" },
   errorContent: { padding: 24 },
-  errorText: { ...Typography.body, color: Colors.errorRed, marginBottom: 12 },
+  errorText: { ...theme.type.body, color: theme.colors.error, marginBottom: 12 },
   retryBtn: {
     alignSelf: "flex-start",
-    backgroundColor: Colors.primaryViolet,
+    backgroundColor: theme.colors.primary,
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 12,
   },
-  retryBtnText: { ...Typography.caption, color: Colors.white, fontWeight: "600" },
+  retryBtnText: { ...theme.type.caption, color: theme.colors.onPrimary, fontWeight: "600" },
   emptyContent: { padding: 24 },
   emptyActionsRow: { flexDirection: "row", gap: 12, marginTop: 8, flexWrap: "wrap" },
-  messageText: { ...Typography.body, color: Colors.textPrimary, marginBottom: 8 },
-  noOptionsReason: { ...Typography.caption, color: Colors.gray600, fontStyle: "italic", marginBottom: 16 },
+  messageText: { ...theme.type.body, color: theme.colors.textPrimary, marginBottom: 8 },
+  noOptionsReason: { ...theme.type.caption, color: theme.colors.textSecondary, fontStyle: "italic", marginBottom: 16 },
   tryAgainBtn: {
-    backgroundColor: Colors.primaryViolet,
+    backgroundColor: theme.colors.primary,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",
   },
-  tryAgainBtnText: { ...Typography.button, color: Colors.white },
+  tryAgainBtnText: { ...theme.type.button, color: theme.colors.onPrimary },
   optionsScroll: { flex: 1 },
   optionsContent: { paddingHorizontal: 24, paddingBottom: 24 },
-  optionsIntro: { ...Typography.body, color: Colors.textPrimary, marginBottom: 16 },
+  optionsIntro: { ...theme.type.body, color: theme.colors.textPrimary, marginBottom: 16 },
   optionsHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 },
   tryDifferentBtn: {
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 14,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: Colors.gray200,
+    borderColor: theme.colors.border,
   },
-  tryDifferentBtnText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "700" },
+  tryDifferentBtnText: { ...theme.type.caption, color: theme.colors.primary, fontWeight: "700" },
   conciergeUpsell: {
-    backgroundColor: Colors.primaryViolet + "12",
+    backgroundColor: theme.colors.primary + "12",
     borderRadius: 16,
     padding: 16,
     marginTop: 4,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: Colors.primaryViolet + "33",
+    borderColor: theme.colors.primary + "33",
   },
   conciergeUpsellHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
-  conciergeUpsellTitle: { ...Typography.caption, fontWeight: "800", color: Colors.primaryViolet },
-  conciergeUpsellBody: { ...Typography.caption, color: Colors.gray600, marginBottom: 12 },
+  conciergeUpsellTitle: { ...theme.type.caption, fontWeight: "800", color: theme.colors.primary },
+  conciergeUpsellBody: { ...theme.type.caption, color: theme.colors.textSecondary, marginBottom: 12 },
   conciergeUpsellBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: Colors.primaryViolet,
+    backgroundColor: theme.colors.primary,
     borderRadius: 12,
     paddingVertical: 11,
   },
-  conciergeUpsellBtnText: { ...Typography.button, color: Colors.white },
+  conciergeUpsellBtnText: { ...theme.type.button, color: theme.colors.onPrimary },
   backRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     marginBottom: 12,
   },
-  backRowText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
+  backRowText: { ...theme.type.caption, color: theme.colors.primary, fontWeight: "600" },
   pickerBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: theme.colors.overlay,
     justifyContent: "flex-end",
   },
   pickerSheet: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: "70%",
@@ -1698,7 +1695,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.gray200,
+    borderBottomColor: theme.colors.border,
   },
   pickerSearchRow: {
     flexDirection: "row",
@@ -1707,24 +1704,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.gray100,
-    backgroundColor: Colors.white,
+    borderBottomColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
   },
   pickerSearchInput: {
     flex: 1,
-    ...Typography.body,
-    color: Colors.textPrimary,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
     paddingVertical: 8,
   },
   pickerTitle: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
+    ...theme.type.h3,
+    color: theme.colors.textPrimary,
   },
   pickerScroll: { maxHeight: 400 },
   pickerScrollContent: { paddingHorizontal: 20, paddingVertical: 12, paddingBottom: 24 },
   pickerEmpty: {
-    ...Typography.body,
-    color: Colors.gray500,
+    ...theme.type.body,
+    color: theme.colors.textMuted,
     textAlign: "center",
     paddingVertical: 24,
   },
@@ -1734,12 +1731,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.gray100,
+    borderBottomColor: theme.colors.border,
   },
   pickerRowName: {
-    ...Typography.body,
-    color: Colors.textPrimary,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
     flex: 1,
     fontWeight: "500",
   },
-});
+  });
+}

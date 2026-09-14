@@ -1,12 +1,12 @@
 // apps/mobile/lib/auth/postAuthRouting.ts
 // Shared post-authentication routing (email, OAuth, deep link).
 
-import type { Router } from "expo-router";
+import type { ImperativeRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { Routes } from "@/constants/routes";
 import { isBusinessProfileComplete, isPersonalProfileComplete } from "@/lib/routing/splash";
 
-export async function routeAfterAuthentication(router: Router): Promise<void> {
+export async function routeAfterAuthentication(router: ImperativeRouter): Promise<void> {
   const { data: userData, error: userErr } = await supabase.auth.getUser();
   if (userErr) throw userErr;
 

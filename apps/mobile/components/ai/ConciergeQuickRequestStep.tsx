@@ -4,12 +4,18 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+} from "react-native";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { PrimaryButton } from "@/components/ds";
-import { useAppTheme } from "@/constants/design-system";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { PrimaryButton, TextButton } from "@/components/ds";
 import {
   PlanningLocationFields,
   type PlanningLocationValue,
@@ -44,6 +50,7 @@ export function ConciergeQuickRequestStep({
   generating = false,
 }: ConciergeQuickRequestStepProps) {
   const theme = useAppTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [query, setQuery] = useState(initialQuery);
 
   const cityReady = useMemo(() => {
@@ -59,48 +66,23 @@ export function ConciergeQuickRequestStep({
   };
 
   return (
-    <GestureScrollView
-      style={styles.scroll}
-      contentContainerStyle={{ paddingHorizontal: theme.spacing.xl, paddingBottom: theme.spacing.xxl, paddingTop: 4 }}
-      keyboardShouldPersistTaps="handled"
-    >
+    <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {showInlineBack ? (
-        <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
-          <Text style={[theme.type.caption, { color: theme.colors.primary, fontFamily: theme.type.caption.fontFamily, fontWeight: "600" }]}>
-            Back
-          </Text>
-        </TouchableOpacity>
+        <TextButton
+          title="Back"
+          icon={<Ionicons name="arrow-back" size={20} color={theme.colors.primary} />}
+          onPress={onBack}
+          style={styles.backRow}
+        />
       ) : null}
 
-      <View
-        style={{
-          alignSelf: "flex-start",
-          flexDirection: "row",
-          alignItems: "center",
-          gap: theme.spacing.xs,
-          backgroundColor: theme.colors.backgroundMuted,
-          borderRadius: theme.radii.pill,
-          paddingVertical: theme.spacing.xs,
-          paddingHorizontal: theme.spacing.md,
-          marginBottom: theme.spacing.lg,
-        }}
-      >
+      <View style={styles.pill}>
         <Ionicons name="flash" size={16} color={theme.colors.primary} />
-        <Text style={[theme.type.caption, { color: theme.colors.primary, fontFamily: theme.type.caption.fontFamily, fontWeight: "700" }]}>
-          Quick plan
-        </Text>
+        <Text style={styles.pillText}>Quick plan</Text>
       </View>
 
-      <Text style={[theme.type.h2, { color: theme.colors.textPrimary, fontFamily: theme.type.h2.fontFamily, marginBottom: theme.spacing.sm }]}>
-        What do you want to do?
-      </Text>
-      <Text
-        style={[
-          theme.type.body,
-          { color: theme.colors.textSecondary, fontFamily: theme.type.body.fontFamily, marginBottom: theme.spacing.lg },
-        ]}
-      >
+      <Text style={styles.title}>What do you want to do?</Text>
+      <Text style={styles.subtitle}>
         Type it like a search — we&apos;ll suggest real places in your chosen city
         {location.searchRadiusKm ? ` within ${location.searchRadiusKm} km` : ""}.
       </Text>
@@ -113,21 +95,7 @@ export function ConciergeQuickRequestStep({
       />
 
       <TextInput
-        style={[
-          theme.type.body,
-          {
-            fontFamily: theme.type.body.fontFamily,
-            minHeight: 110,
-            borderWidth: 1,
-            borderColor: theme.colors.border,
-            borderRadius: theme.radii.md,
-            padding: theme.spacing.md,
-            color: theme.colors.textPrimary,
-            backgroundColor: theme.colors.surface,
-            marginBottom: theme.spacing.md,
-            marginTop: theme.spacing.sm,
-          },
-        ]}
+        style={styles.input}
         value={query}
         onChangeText={setQuery}
         placeholder="e.g. relaxing massage nearby"
@@ -138,16 +106,11 @@ export function ConciergeQuickRequestStep({
         accessibilityLabel="Quick plan request"
       />
 
-      <View style={{ gap: theme.spacing.sm, marginBottom: theme.spacing.md }}>
+      <View style={styles.examples}>
         {EXAMPLES.map((ex) => (
           <TouchableOpacity
             key={ex}
-            style={{
-              backgroundColor: theme.colors.backgroundMuted,
-              borderRadius: theme.radii.md,
-              paddingVertical: theme.spacing.sm,
-              paddingHorizontal: theme.spacing.md,
-            }}
+            style={styles.exampleChip}
             onPress={() => {
               Haptics.selectionAsync();
               setQuery(ex);
@@ -155,25 +118,13 @@ export function ConciergeQuickRequestStep({
             disabled={generating}
             activeOpacity={0.85}
           >
-            <Text
-              numberOfLines={2}
-              style={[theme.type.caption, { color: theme.colors.textSecondary, fontFamily: theme.type.caption.fontFamily, fontWeight: "600" }]}
-            >
-              {ex}
-            </Text>
+            <Text style={styles.exampleText} numberOfLines={2}>{ex}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
       {!cityReady ? (
-        <Text
-          style={[
-            theme.type.caption,
-            { color: theme.colors.error, fontFamily: theme.type.caption.fontFamily, marginBottom: theme.spacing.sm, fontWeight: "600" },
-          ]}
-        >
-          Set a city to search.
-        </Text>
+        <Text style={styles.needCity}>Set a city to search.</Text>
       ) : null}
 
       <PrimaryButton
@@ -181,14 +132,79 @@ export function ConciergeQuickRequestStep({
         onPress={submit}
         loading={generating}
         disabled={!query.trim() || !cityReady}
-        icon={!generating ? <Ionicons name="search" size={18} color={theme.colors.onPrimary} /> : undefined}
-        accessibilityLabel="Find options"
+        icon={<Ionicons name="search" size={20} color={theme.colors.onPrimary} />}
       />
     </GestureScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  backRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 16 },
-});
+function makeStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    scroll: { flex: 1 },
+    content: {
+      paddingHorizontal: theme.spacing.xl,
+      paddingBottom: theme.spacing.xxl,
+      paddingTop: theme.spacing.xs,
+    },
+    backRow: { alignSelf: "flex-start", marginBottom: theme.spacing.lg, paddingLeft: 0 },
+    pill: {
+      alignSelf: "flex-start",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.xs,
+      backgroundColor: theme.colors.backgroundMuted,
+      borderRadius: theme.radii.pill,
+      paddingVertical: theme.spacing.xs,
+      paddingHorizontal: theme.spacing.md,
+      marginBottom: theme.spacing.md,
+    },
+    pillText: {
+      ...theme.type.caption,
+      fontWeight: "700",
+      color: theme.colors.primary,
+    },
+    title: {
+      ...theme.type.h1,
+      fontSize: 26,
+      lineHeight: 32,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.sm,
+    },
+    subtitle: {
+      ...theme.type.body,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.lg,
+      lineHeight: 22,
+    },
+    input: {
+      minHeight: 110,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.lg,
+      padding: theme.spacing.lg,
+      ...theme.type.body,
+      color: theme.colors.textPrimary,
+      backgroundColor: theme.colors.surface,
+      marginBottom: theme.spacing.md,
+      marginTop: theme.spacing.sm,
+    },
+    examples: { gap: theme.spacing.sm, marginBottom: theme.spacing.md },
+    exampleChip: {
+      backgroundColor: theme.colors.backgroundMuted,
+      borderRadius: theme.radii.md,
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+    },
+    exampleText: {
+      ...theme.type.caption,
+      color: theme.colors.textSecondary,
+      fontWeight: "600",
+    },
+    needCity: {
+      ...theme.type.caption,
+      color: theme.colors.error,
+      marginBottom: theme.spacing.sm,
+      fontWeight: "600",
+    },
+  });
+}

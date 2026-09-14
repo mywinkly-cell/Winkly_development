@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     opacity: 0.38,
   },
   glowRing: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: 16,
     borderWidth: 2,
     borderColor: Colors.primaryViolet + "66",

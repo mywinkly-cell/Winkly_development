@@ -1,5 +1,5 @@
 import * as Crypto from "expo-crypto";
-import type * as Contacts from "expo-contacts";
+import type * as Contacts from "expo-contacts/legacy";
 
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();

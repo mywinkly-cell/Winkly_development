@@ -3,7 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { useAppTheme } from "@/constants/design-system";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { TextButton } from "@/components/ds";
 import type { ActivityCategory } from "@/lib/ai/conciergePlanningFlow";
 
 export type SubActivityContinuePayload = {
@@ -112,6 +113,7 @@ export function ConciergeSubActivityStep({
   showInlineBack = true,
 }: ConciergeSubActivityStepProps) {
   const theme = useAppTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const options = useMemo(() => {
     const list = category.subActivities ?? [];
     if (!list.length) {
@@ -131,112 +133,51 @@ export function ConciergeSubActivityStep({
   };
 
   return (
-    <GestureScrollView
-      style={styles.scroll}
-      contentContainerStyle={{ paddingHorizontal: theme.spacing.xl, paddingBottom: theme.spacing.xxl, paddingTop: 4 }}
-    >
+    <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       {showInlineBack ? (
-        <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
-          <Text style={[theme.type.caption, { color: theme.colors.primary, fontFamily: theme.type.caption.fontFamily, fontWeight: "600" }]}>
-            Back
-          </Text>
-        </TouchableOpacity>
+        <TextButton
+          title="Back"
+          icon={<Ionicons name="arrow-back" size={20} color={theme.colors.primary} />}
+          onPress={onBack}
+          style={styles.backRow}
+        />
       ) : null}
 
-      <View
-        style={{
-          alignSelf: "flex-start",
-          flexDirection: "row",
-          alignItems: "center",
-          gap: theme.spacing.sm,
-          backgroundColor: theme.colors.surface,
-          borderRadius: theme.radii.pill,
-          paddingVertical: theme.spacing.sm,
-          paddingHorizontal: theme.spacing.md,
-          marginBottom: theme.spacing.lg,
-          borderWidth: 1,
-          borderColor: theme.colors.secondary,
-          ...theme.elevation(1),
-        }}
-      >
-        <View
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 14,
-            backgroundColor: theme.colors.backgroundMuted,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
+      <View style={styles.categoryPill}>
+        <View style={styles.categoryIconWrap}>
           <Ionicons name={category.icon as never} size={18} color={theme.colors.primary} />
         </View>
-        <Text
-          numberOfLines={1}
-          style={[theme.type.caption, { color: theme.colors.primary, fontFamily: theme.type.caption.fontFamily, fontWeight: "700", maxWidth: 220 }]}
-        >
+        <Text style={styles.categoryPillText} numberOfLines={1}>
           {category.label}
         </Text>
       </View>
 
-      <Text
-        numberOfLines={3}
-        style={[theme.type.h1, { color: theme.colors.textPrimary, fontFamily: theme.type.h1.fontFamily, marginBottom: theme.spacing.sm }]}
-      >
+      <Text style={styles.title} numberOfLines={3}>
         {prompt}
       </Text>
-      <Text style={[theme.type.body, { color: theme.colors.textSecondary, fontFamily: theme.type.body.fontFamily, marginBottom: theme.spacing.xl }]}>
-        Pick the vibe — we&apos;ll handle the rest
-      </Text>
+      <Text style={styles.subtitle}>Pick the vibe — we&apos;ll handle the rest</Text>
 
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.md }}>
+      <View style={styles.grid}>
         {options.map((opt) => {
           const meta = getSubActivityMeta(opt.label, category);
           return (
             <TouchableOpacity
               key={opt.key}
-              style={{
-                width: "47.5%",
-                flexGrow: 1,
-                backgroundColor: theme.colors.surface,
-                borderRadius: theme.radii.lg,
-                padding: theme.spacing.md,
-                borderWidth: 1,
-                borderColor: theme.colors.border,
-                minHeight: 118,
-                ...theme.elevation(1),
-              }}
+              style={styles.gridCard}
               onPress={() => handleSelect(opt)}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel={opt.label}
               accessibilityHint={meta.hint}
             >
-              <View
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: theme.colors.backgroundMuted,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginBottom: theme.spacing.sm,
-                }}
-              >
+              <View style={styles.gridIconWrap}>
                 <Ionicons name={meta.icon as never} size={26} color={theme.colors.primary} />
               </View>
-              <Text
-                numberOfLines={2}
-                style={[theme.type.body, { color: theme.colors.textPrimary, fontFamily: theme.type.body.fontFamily, fontWeight: "700", marginBottom: theme.spacing.xxs }]}
-              >
+              <Text style={styles.gridLabel} numberOfLines={2}>
                 {opt.label}
               </Text>
               {meta.hint ? (
-                <Text
-                  numberOfLines={2}
-                  style={[theme.type.caption, { color: theme.colors.textSecondary, fontFamily: theme.type.caption.fontFamily, lineHeight: 16 }]}
-                >
+                <Text style={styles.gridHint} numberOfLines={2}>
                   {meta.hint}
                 </Text>
               ) : null}
@@ -248,7 +189,90 @@ export function ConciergeSubActivityStep({
   );
 }
 
-const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  backRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 16 },
-});
+function makeStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    scroll: { flex: 1 },
+    content: {
+      paddingHorizontal: theme.spacing.xl,
+      paddingBottom: theme.spacing.xxl,
+      paddingTop: theme.spacing.xs,
+    },
+    backRow: { alignSelf: "flex-start", marginBottom: theme.spacing.lg, paddingLeft: 0 },
+    categoryPill: {
+      alignSelf: "flex-start",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.pill,
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      marginBottom: theme.spacing.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      ...theme.elevation(1),
+    },
+    categoryIconWrap: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    categoryPillText: {
+      ...theme.type.caption,
+      fontWeight: "700",
+      color: theme.colors.primary,
+      maxWidth: 220,
+    },
+    title: {
+      ...theme.type.h1,
+      fontSize: 26,
+      lineHeight: 32,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.sm,
+    },
+    subtitle: {
+      ...theme.type.body,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.xl,
+    },
+    grid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: theme.spacing.md,
+    },
+    gridCard: {
+      width: "47.5%",
+      flexGrow: 1,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      padding: theme.spacing.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      minHeight: 118,
+      ...theme.elevation(1),
+    },
+    gridIconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: theme.spacing.sm,
+    },
+    gridLabel: {
+      ...theme.type.body,
+      fontWeight: "700",
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.xs,
+    },
+    gridHint: {
+      ...theme.type.caption,
+      color: theme.colors.textSecondary,
+      lineHeight: 16,
+    },
+  });
+}

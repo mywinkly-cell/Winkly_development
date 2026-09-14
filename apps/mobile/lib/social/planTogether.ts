@@ -1,6 +1,6 @@
 // Unified "Plan together" entry → co-create a Winkly event with a chat partner
 
-import type { Router } from "expo-router";
+import type { ImperativeRouter } from "expo-router";
 import type { Mode } from "@/types";
 
 export type PlanTogetherParams = {
@@ -22,6 +22,6 @@ export function planTogetherCreateEventHref(p: PlanTogetherParams) {
   };
 }
 
-export function openPlanTogetherCreateEvent(router: Router, p: PlanTogetherParams) {
-  router.push(planTogetherCreateEventHref(p) as Parameters<Router["push"]>[0]);
+export function openPlanTogetherCreateEvent(router: ImperativeRouter, p: PlanTogetherParams) {
+  router.push(planTogetherCreateEventHref(p) as Parameters<ImperativeRouter["push"]>[0]);
 }
