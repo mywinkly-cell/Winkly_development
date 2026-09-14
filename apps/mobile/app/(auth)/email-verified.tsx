@@ -7,11 +7,12 @@ import { SafeScreenView } from "@/components/SafeScreenView";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
-import { Colors, Typography, FontFamily } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 
 export default function EmailVerified() {
   const router = useRouter();
   const { t } = useTranslation();
+  const theme = useAppTheme();
 
   useEffect(() => {
     const goToOnboarding = async () => {
@@ -30,14 +31,14 @@ export default function EmailVerified() {
   }, [router]);
 
   return (
-    <SafeScreenView style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24, backgroundColor: Colors.backgroundMuted }}>
-      <Text style={{ fontFamily: FontFamily.headingBold, fontSize: 24, color: Colors.primaryViolet, textAlign: "center", marginBottom: 12 }}>
+    <SafeScreenView style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24, backgroundColor: theme.colors.backgroundMuted }}>
+      <Text style={{ fontFamily: theme.type.h1.fontFamily, fontSize: 24, color: theme.colors.primary, textAlign: "center", marginBottom: 12 }}>
         ✅ {t("auth.emailVerified.title")}
       </Text>
-      <Text style={{ ...Typography.body, color: Colors.textSecondary, textAlign: "center", marginBottom: 24 }}>
+      <Text style={{ ...theme.type.body, color: theme.colors.textSecondary, textAlign: "center", marginBottom: 24 }}>
         {t("auth.emailVerified.subtitle")}
       </Text>
-      <ActivityIndicator size="large" color={Colors.primaryViolet} />
+      <ActivityIndicator size="large" color={theme.colors.primary} />
     </SafeScreenView>
   );
 }

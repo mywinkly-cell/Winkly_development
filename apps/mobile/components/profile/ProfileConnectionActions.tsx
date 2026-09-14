@@ -1,7 +1,8 @@
 import React from "react";
+import { PrimaryButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
 import type { ProfileSwipeMode } from "./ProfileSwipeActions";
 
 type Props = {
@@ -26,66 +27,56 @@ export function ProfileConnectionActions({
   onChat,
   onRemove,
 }: Props) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const chatLabel = hasChat ? "Chat" : "Start chat";
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity
+      <PrimaryButton
+        title={chatLabel}
         onPress={onChat}
         disabled={busy}
-        style={[styles.chatBtn, { backgroundColor: primaryColor }, busy && styles.disabled]}
-        activeOpacity={0.9}
-        accessibilityLabel={chatLabel}
-      >
-        <Ionicons name="chatbubble-outline" size={20} color={Colors.white} />
-        <Text style={styles.chatText}>{chatLabel}</Text>
-      </TouchableOpacity>
+        style={{ backgroundColor: primaryColor }}
+        icon={<Ionicons name="chatbubble-outline" size={20} color={theme.colors.onPrimary} />}
+      />
 
       <TouchableOpacity
         onPress={onRemove}
         disabled={busy}
-        style={[styles.removeBtn, busy && styles.disabled]}
+        style={{ ...styles.removeBtn, ...(busy ? styles.disabled : null) }}
         activeOpacity={0.9}
       >
-        <Ionicons name="person-remove-outline" size={20} color={Colors.errorRed} />
+        <Ionicons name="person-remove-outline" size={20} color={theme.colors.error} />
         <Text style={styles.removeText}>{removeLabel(mode)}</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    gap: 12,
-    paddingTop: 16,
-    paddingBottom: 28,
-  },
-  chatBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 14,
-  },
-  chatText: {
-    ...Typography.button,
-    color: Colors.white,
-  },
-  removeBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: Colors.errorRed + "55",
-    backgroundColor: Colors.white,
-  },
-  removeText: {
-    ...Typography.button,
-    color: Colors.errorRed,
-  },
-  disabled: { opacity: 0.6 },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      gap: theme.spacing.md,
+      paddingTop: theme.spacing.lg,
+      paddingBottom: theme.spacing.xxl,
+    },
+    removeBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: theme.spacing.sm,
+      borderRadius: theme.radii.md,
+      paddingVertical: theme.spacing.md,
+      borderWidth: 1,
+      borderColor: theme.colors.errorBorder,
+      backgroundColor: theme.colors.surface,
+    },
+    removeText: {
+      ...theme.type.button,
+      fontFamily: theme.type.button.fontFamily,
+      color: theme.colors.error,
+    },
+    disabled: { opacity: 0.6 },
+  });
+}

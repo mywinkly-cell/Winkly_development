@@ -15,6 +15,7 @@
  */
 
 import { supabase } from "@/lib/supabase";
+import { isFutureIso } from "@/lib/ai/planTimeValidation";
 
 export type SparkSlot = "solo" | "date" | "meetup";
 export type SparkSource = "ai" | "winkly_event" | "sponsored";
@@ -222,8 +223,8 @@ function notExpiredFilter(nowIso: string): string {
  * The current (latest, non-expired) Weekly Spark for the signed-in user, with its plans ordered
  * by slot rank. Returns null when there is no live Spark.
  */
-export async function getCurrentWeeklySpark(): Promise<WeeklySpark | null> {
-  const nowIso = new Date().toISOString();
+export async function getCurrentWeeklySpark(now: Date = new Date()): Promise<WeeklySpark | null> {
+  const nowIso = now.toISOString();
   const { data: spark, error } = await supabase
     .from("weekly_sparks")
     .select("id, week_start, seen_at, expires_at")
@@ -242,7 +243,11 @@ export async function getCurrentWeeklySpark(): Promise<WeeklySpark | null> {
     .eq("spark_id", s.id)
     .order("rank", { ascending: true });
 
-  const plans = Array.isArray(planRows) ? planRows.map((r) => mapPlanRow(r as Record<string, unknown>)) : [];
+  // Never surface a plan whose scheduled start has already passed — e.g. a slot the cron
+  // generated for earlier in the week that the user simply hasn't opened yet.
+  const plans = Array.isArray(planRows)
+    ? planRows.map((r) => mapPlanRow(r as Record<string, unknown>)).filter((p) => isFutureIso(p.startsAt, now))
+    : [];
   return {
     id: String(s.id),
     weekStart: String(s.week_start),

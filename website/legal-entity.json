@@ -1,12 +1,13 @@
 {
-  "legalName": "Winkly Technologies UG (haftungsbeschränkt)",
-  "streetAddress": "[Registered street address — update legal-entity.json before launch]",
-  "postalCode": "[PLZ]",
-  "city": "[City]",
+  "legalName": "Kateryna Shyshkalova",
+  "streetAddress": "",
+  "postalCode": "",
+  "city": "Olching",
   "country": "Germany",
-  "managingDirector": "[Managing director name — update before launch]",
-  "registerCourt": "[Amtsgericht, e.g. Amtsgericht Berlin-Charlottenburg]",
-  "registerNumber": "[HRB number]",
-  "vatId": "[USt-IdNr., or “not yet assigned”]",
-  "contactEmail": "info@mywinkly.de"
+  "managingDirector": "",
+  "registerCourt": "",
+  "registerNumber": "",
+  "vatId": "",
+  "contactEmail": "info@mywinkly.de",
+  "_note": "Interim: operated by a private individual (no legal entity until ~Dec 2026). To publish the full postal address, fill streetAddress + postalCode here and the Impressum/Privacy pages pick it up automatically on the next build. After the UG is incorporated: set legalName to 'Winkly Technologies UG (haftungsbeschränkt)', fill managingDirector/registerCourt/registerNumber/vatId, and restore the Handelsregister + Geschäftsführer sections in docs/IMPRINT.md."
 }

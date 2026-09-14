@@ -4,9 +4,14 @@ import { SafeScreenView } from "@/components/SafeScreenView";
 import { PlannerHeader } from "@/components/layout/PlannerHeader";
 import { FriendsBottomNav } from "@/components/layout/FriendsBottomNav";
 import PlannerIndex, { type PlannerIndexHandle } from "@/app/(tabs)/planner";
-import { Colors } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 
 export default function FriendsPlanner() {
+  const theme = useAppTheme();
+  const styles = StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    content: { flex: 1 },
+  });
   const plannerRef = useRef<PlannerIndexHandle>(null);
   const [sparkActive, setSparkActive] = useState(false);
   const onWeeklySparkPress = useCallback(() => {
@@ -34,8 +39,3 @@ export default function FriendsPlanner() {
     </SafeScreenView>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  content: { flex: 1 },
-});

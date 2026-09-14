@@ -11,14 +11,22 @@ import {
   Alert,
   TouchableOpacity,
   Modal,
+  Switch,
 } from "react-native";
 import { FilterAgeRangeSlider } from "@/components/filters/FilterAgeRangeSlider";
 import { FilterDistanceSlider } from "@/components/filters/FilterDistanceSlider";
+import {
+  FILTER_SLIDER_FIELD_GAP,
+  FILTER_SLIDER_VALUE_ROW_STYLE,
+  filterSliderValuePillStyle,
+  filterSliderValueTextStyle,
+} from "@/lib/filters/filterSliderStyle";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { RomanceBottomNav } from "@/components/layout/RomanceBottomNav";
-import { Colors, Typography, Layout, FontFamily, HEADER } from "@/constants/tokens";
+import { Card, Chip, Header, PrimaryButton, TextButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import {
   LANGUAGE_OPTIONS,
   RELATIONSHIP_GOALS_OPTIONS,
@@ -96,6 +104,9 @@ export default function RomanceFiltersScreen() {
   const { user } = useAuth();
   const { i18n } = useTranslation();
   const { context } = useModeContext();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
+  const romanceAccent = theme.modeAccent("romance").primary;
   const HAS_SUBSCRIPTION = context.subscription_tier !== "free";
   const HAS_AI_MATCHING = canUseAIFeature(context.subscription_tier, "smart_matching");
 
@@ -273,25 +284,19 @@ export default function RomanceFiltersScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Filtering</Text>
-        <View style={styles.headerRight} />
-      </View>
+      <Header title="Filtering" onBack={() => router.back()} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/* —— Basic settings (all users, all tariffs) —— */}
-        <View style={[styles.sectionCard, styles.sectionCardBasic]}>
+        <Card style={{ ...styles.sectionCard, ...styles.sectionCardBasic }}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Basic settings</Text>
-            <View style={styles.badgeFree}>
-              <Ionicons name="checkmark-circle" size={14} color={Colors.white} />
-              <Text style={styles.badgeFreeText}>All users</Text>
+            <View style={{ ...styles.badge, backgroundColor: romanceAccent }}>
+              <Ionicons name="checkmark-circle" size={14} color={theme.colors.onPrimary} />
+              <Text style={styles.badgeText}>All users</Text>
             </View>
           </View>
           <Text style={styles.sectionHint}>Distance and age — available on all tariffs.</Text>
@@ -299,30 +304,28 @@ export default function RomanceFiltersScreen() {
           <Text style={styles.label}>Distance (max)</Text>
           {distanceKm === DISTANCE_KM_ANY ? (
             <View style={styles.chipRow}>
-              <Text style={[styles.chipText, { marginRight: 8 }]}>Any distance</Text>
-              <Pressable
+              <Text style={{ ...styles.chipText, marginRight: theme.spacing.sm }}>Any distance</Text>
+              <Chip
+                label="Set limit"
                 onPress={() => {
                   Haptics.selectionAsync();
                   setDistanceKm(50);
                 }}
-                style={styles.chip}
-              >
-                <Text style={styles.chipText}>Set limit</Text>
-              </Pressable>
+              />
             </View>
           ) : (
             <>
-              <View style={styles.sliderValueRow}>
-                <Text style={styles.sliderValue}>{distanceKm} km</Text>
-                <Pressable
+              <View style={FILTER_SLIDER_VALUE_ROW_STYLE}>
+                <View style={filterSliderValuePillStyle(theme)}>
+                  <Text style={filterSliderValueTextStyle(theme)}>{distanceKm} km</Text>
+                </View>
+                <Chip
+                  label="Any"
                   onPress={() => {
                     Haptics.selectionAsync();
                     setDistanceKm(DISTANCE_KM_ANY);
                   }}
-                  style={styles.chip}
-                >
-                  <Text style={styles.chipText}>Any</Text>
-                </Pressable>
+                />
               </View>
               <FilterDistanceSlider
                 min={DISTANCE_MIN}
@@ -333,36 +336,36 @@ export default function RomanceFiltersScreen() {
                   setDistanceKm(Math.round(v));
                   Haptics.selectionAsync();
                 }}
-                primaryColor={Colors.romance.primary}
+                primaryColor={romanceAccent}
               />
             </>
           )}
 
-          <Text style={[styles.label, { marginTop: 20 }]}>Show me</Text>
+          <Text style={{ ...styles.label, marginTop: theme.spacing.xl }}>Show me</Text>
           <View style={styles.segmentRow}>
             {GENDER_PREFERENCE_OPTIONS.map((opt) => {
               const selected = genderKeyFromValues(seekingGenders) === opt.key;
               return (
-                <Pressable
+                <Chip
                   key={opt.key}
+                  label={opt.label}
+                  mode="romance"
+                  selected={selected}
                   onPress={() => {
                     Haptics.selectionAsync();
                     setSeekingGenders(opt.values);
                   }}
-                  style={[styles.segment, selected && styles.segmentSelected]}
-                  accessibilityLabel={`Show ${opt.label}`}
-                >
-                  <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
-                    {opt.label}
-                  </Text>
-                </Pressable>
+                  style={styles.segment}
+                />
               );
             })}
           </View>
 
-          <Text style={[styles.label, { marginTop: 20 }]}>Age range</Text>
-          <View style={styles.sliderValueRow}>
-            <Text style={styles.sliderValue}>{ageMin} – {ageMax}</Text>
+          <Text style={{ ...styles.label, marginTop: FILTER_SLIDER_FIELD_GAP }}>Age range</Text>
+          <View style={FILTER_SLIDER_VALUE_ROW_STYLE}>
+            <View style={filterSliderValuePillStyle(theme)}>
+              <Text style={filterSliderValueTextStyle(theme)}>{ageMin} – {ageMax}</Text>
+            </View>
           </View>
           <FilterAgeRangeSlider
             min={AGE_MIN_LIMIT}
@@ -377,10 +380,10 @@ export default function RomanceFiltersScreen() {
               setAgeMax(Math.round(v));
               Haptics.selectionAsync();
             }}
-            primaryColor={Colors.romance.primary}
+            primaryColor={romanceAccent}
           />
 
-          <Text style={[styles.label, { marginTop: 20 }]}>Language</Text>
+          <Text style={{ ...styles.label, marginTop: theme.spacing.xl }}>Language</Text>
           <Pressable
             onPress={() => {
               Haptics.selectionAsync();
@@ -391,7 +394,7 @@ export default function RomanceFiltersScreen() {
             <Text style={styles.languageDropdownText} numberOfLines={1}>
               {languageLabel}
             </Text>
-            <Ionicons name="chevron-down" size={20} color={Colors.gray600} />
+            <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary} />
           </Pressable>
           <Text style={styles.languageHint}>Up to {MAX_LANGUAGES} languages. Your profile languages appear first.</Text>
 
@@ -415,7 +418,7 @@ export default function RomanceFiltersScreen() {
                     hitSlop={12}
                     accessibilityLabel="Close"
                   >
-                    <Ionicons name="close" size={24} color={Colors.gray600} />
+                    <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
                   </TouchableOpacity>
                 </View>
                 <ScrollView
@@ -451,37 +454,37 @@ export default function RomanceFiltersScreen() {
                           {lang}
                         </Text>
                         {selected && (
-                          <Ionicons name="checkmark-circle" size={22} color={Colors.romance.primary} />
+                          <Ionicons name="checkmark-circle" size={22} color={romanceAccent} />
                         )}
                       </Pressable>
                     );
                   })}
                 </ScrollView>
                 <View style={styles.languageModalFooter}>
-                  <Pressable
+                  <TextButton
+                    title="Done"
                     onPress={() => {
                       Haptics.selectionAsync();
                       setLanguageModalVisible(false);
                     }}
                     style={styles.languageModalDoneBtn}
-                  >
-                    <Text style={styles.languageModalDoneText}>Done</Text>
-                  </Pressable>
+                    textStyle={{ color: theme.colors.onPrimary }}
+                  />
                 </View>
               </Pressable>
             </Pressable>
           </Modal>
-        </View>
+        </Card>
 
         {/* —— Subscription: AI-powered matching —— */}
-        <View style={[styles.sectionCard, styles.sectionCardSubscription]}>
+        <Card style={{ ...styles.sectionCard, ...styles.sectionCardSubscription }}>
           <View style={styles.sectionHeaderRowWithBadge}>
             <View style={styles.sectionHeaderTitleWrap}>
-              <WinklyAISpark feature="smart_matching" size={HEADER.iconSize} style={{ marginRight: 4 }} />
+              <WinklyAISpark feature="smart_matching" size={24} style={{ marginRight: theme.spacing.xxs }} />
               <Text style={styles.sectionTitle} numberOfLines={2}>AI-powered matching</Text>
             </View>
-            <View style={[styles.badge, styles.badgeSubscription]}>
-              <Ionicons name="lock-closed" size={12} color={Colors.white} />
+            <View style={{ ...styles.badge, backgroundColor: romanceAccent }}>
+              <Ionicons name="lock-closed" size={12} color={theme.colors.onPrimary} />
               <Text style={styles.badgeText}>Subscription</Text>
             </View>
           </View>
@@ -493,27 +496,26 @@ export default function RomanceFiltersScreen() {
 
           {HAS_AI_MATCHING ? (
             <View style={styles.toggleRow}>
-              <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 12 }}>
-                <View style={{ marginRight: 8 }}>
-                  <SparklesIcon size={16} color={Colors.romance.primary} />
+              <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: theme.spacing.md }}>
+                <View style={{ marginRight: theme.spacing.sm }}>
+                  <SparklesIcon size={16} color={romanceAccent} />
                 </View>
                 <Text style={styles.toggleLabel}>Use AI to improve my match order</Text>
               </View>
-              <Pressable
-                onPress={() => {
+              <Switch
+                value={aiMatchingEnabled}
+                onValueChange={(next) => {
                   Haptics.selectionAsync();
-                  const next = !aiMatchingEnabled;
                   setAiMatchingEnabled(next);
                   setRomanceAiMatchingEnabled(next);
                 }}
-                style={[styles.toggleTrack, aiMatchingEnabled && styles.toggleTrackOn]}
-              >
-                <View style={[styles.toggleThumb, aiMatchingEnabled && styles.toggleThumbOn]} />
-              </Pressable>
+                trackColor={{ false: theme.colors.border, true: romanceAccent }}
+                thumbColor={theme.colors.onPrimary}
+              />
             </View>
           ) : (
             <TouchableOpacity style={styles.upsellCard} onPress={lockAI} activeOpacity={0.9}>
-              <SparklesIcon size={28} color={Colors.gray400} />
+              <SparklesIcon size={28} color={theme.colors.textMuted} />
               <Text style={styles.upsellTitle}>Better matches with AI</Text>
               <Text style={styles.upsellText}>
                 Super and Premium use AI to rank and suggest people who are a better fit for you.
@@ -521,16 +523,16 @@ export default function RomanceFiltersScreen() {
               <Text style={styles.upsellCta}>See plans</Text>
             </TouchableOpacity>
           )}
-        </View>
+        </Card>
 
         {/* —— Subscription: more filters —— */}
-        <View style={[styles.sectionCard, styles.sectionCardSubscription]}>
+        <Card style={{ ...styles.sectionCard, ...styles.sectionCardSubscription }}>
           <View style={styles.sectionHeaderRowWithBadge}>
             <View style={styles.sectionHeaderTitleWrap}>
               <Text style={styles.sectionTitle} numberOfLines={2}>More filters</Text>
             </View>
-            <View style={[styles.badge, styles.badgeSubscription]}>
-              <Ionicons name="lock-closed" size={12} color={Colors.white} />
+            <View style={{ ...styles.badge, backgroundColor: romanceAccent }}>
+              <Ionicons name="lock-closed" size={12} color={theme.colors.onPrimary} />
               <Text style={styles.badgeText}>Subscription</Text>
             </View>
           </View>
@@ -545,149 +547,75 @@ export default function RomanceFiltersScreen() {
               <Text style={styles.label}>Interests</Text>
               <View style={styles.chipRowWrap}>
                 {INTEREST_POPULAR_ROMANCE.map((i) => (
-                  <Pressable
-                    key={i}
-                    onPress={() => toggleChip(interests, i, setInterests, 8)}
-                    style={[styles.chipSmall, interests.includes(i) && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, interests.includes(i) && styles.chipTextSelected]}>{i}</Text>
-                  </Pressable>
+                  <Chip key={i} label={i} mode="romance" selected={interests.includes(i)} onPress={() => toggleChip(interests, i, setInterests, 8)} />
                 ))}
               </View>
               <Text style={styles.label}>Relationship goals (up to 2)</Text>
               <View style={styles.chipRowWrap}>
                 {RELATIONSHIP_GOALS_OPTIONS.map((g) => (
-                  <Pressable
-                    key={g}
-                    onPress={() => toggleChip(relationshipGoals, g, setRelationshipGoals, 2)}
-                    style={[styles.chipSmall, relationshipGoals.includes(g) && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, relationshipGoals.includes(g) && styles.chipTextSelected]}>
-                      {g}
-                    </Text>
-                  </Pressable>
+                  <Chip key={g} label={g} mode="romance" selected={relationshipGoals.includes(g)} onPress={() => toggleChip(relationshipGoals, g, setRelationshipGoals, 2)} />
                 ))}
               </View>
               <Text style={styles.label}>Lifestyle</Text>
               <View style={styles.chipRowWrap}>
                 {LIFESTYLE_ROMANCE.map((l) => (
-                  <Pressable
-                    key={l}
-                    onPress={() => setLifestyle(lifestyle === l ? "" : l)}
-                    style={[styles.chipSmall, lifestyle === l && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, lifestyle === l && styles.chipTextSelected]}>{l}</Text>
-                  </Pressable>
+                  <Chip key={l} label={l} mode="romance" selected={lifestyle === l} onPress={() => setLifestyle(lifestyle === l ? "" : l)} />
                 ))}
               </View>
               <Text style={styles.label}>Smoking · Alcohol · Kids</Text>
               <View style={styles.chipRowWrap}>
                 {SMOKING_OPTIONS.slice(0, 4).map((s) => (
-                  <Pressable
-                    key={s}
-                    onPress={() => setSmoking(smoking === s ? "" : s)}
-                    style={[styles.chipSmall, smoking === s && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, smoking === s && styles.chipTextSelected]}>{s}</Text>
-                  </Pressable>
+                  <Chip key={s} label={s} mode="romance" selected={smoking === s} onPress={() => setSmoking(smoking === s ? "" : s)} />
                 ))}
               </View>
               <View style={styles.chipRowWrap}>
                 {ALCOHOL_OPTIONS.slice(0, 4).map((a) => (
-                  <Pressable
-                    key={a}
-                    onPress={() => setAlcohol(alcohol === a ? "" : a)}
-                    style={[styles.chipSmall, alcohol === a && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, alcohol === a && styles.chipTextSelected]}>{a}</Text>
-                  </Pressable>
+                  <Chip key={a} label={a} mode="romance" selected={alcohol === a} onPress={() => setAlcohol(alcohol === a ? "" : a)} />
                 ))}
               </View>
               <View style={styles.chipRowWrap}>
                 {KIDS_OPTIONS.slice(0, 5).map((k) => (
-                  <Pressable
-                    key={k}
-                    onPress={() => setKids(kids === k ? "" : k)}
-                    style={[styles.chipSmall, kids === k && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, kids === k && styles.chipTextSelected]}>{k}</Text>
-                  </Pressable>
+                  <Chip key={k} label={k} mode="romance" selected={kids === k} onPress={() => setKids(kids === k ? "" : k)} />
                 ))}
               </View>
               <Text style={styles.label}>Values (up to 3)</Text>
               <View style={styles.chipRowWrap}>
                 {VALUES_OPTIONS.slice(0, 8).map((v) => (
-                  <Pressable
-                    key={v}
-                    onPress={() => toggleChip(values, v, setValues, 3)}
-                    style={[styles.chipSmall, values.includes(v) && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, values.includes(v) && styles.chipTextSelected]}>{v}</Text>
-                  </Pressable>
+                  <Chip key={v} label={v} mode="romance" selected={values.includes(v)} onPress={() => toggleChip(values, v, setValues, 3)} />
                 ))}
               </View>
               <Text style={styles.label}>Sexual orientation</Text>
               <View style={styles.chipRowWrap}>
                 {SEXUAL_VIEWS_OPTIONS.slice(0, 5).map((s) => (
-                  <Pressable
-                    key={s}
-                    onPress={() => setSexualViews(sexualViews === s ? "" : s)}
-                    style={[styles.chipSmall, sexualViews === s && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, sexualViews === s && styles.chipTextSelected]}>{s}</Text>
-                  </Pressable>
+                  <Chip key={s} label={s} mode="romance" selected={sexualViews === s} onPress={() => setSexualViews(sexualViews === s ? "" : s)} />
                 ))}
               </View>
               <Text style={styles.label}>Religion · Politics · Food</Text>
               <View style={styles.chipRowWrap}>
                 {RELIGION_OPTIONS.slice(0, 5).map((r) => (
-                  <Pressable
-                    key={r}
-                    onPress={() => setReligion(religion === r ? "" : r)}
-                    style={[styles.chipSmall, religion === r && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, religion === r && styles.chipTextSelected]}>{r}</Text>
-                  </Pressable>
+                  <Chip key={r} label={r} mode="romance" selected={religion === r} onPress={() => setReligion(religion === r ? "" : r)} />
                 ))}
               </View>
               <View style={styles.chipRowWrap}>
                 {POLITICAL_VIEWS_OPTIONS.map((p) => (
-                  <Pressable
-                    key={p}
-                    onPress={() => setPoliticalViews(politicalViews === p ? "" : p)}
-                    style={[styles.chipSmall, politicalViews === p && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, politicalViews === p && styles.chipTextSelected]}>{p}</Text>
-                  </Pressable>
+                  <Chip key={p} label={p} mode="romance" selected={politicalViews === p} onPress={() => setPoliticalViews(politicalViews === p ? "" : p)} />
                 ))}
               </View>
               <View style={styles.chipRowWrap}>
                 {FOOD_OPTIONS.slice(0, 6).map((f) => (
-                  <Pressable
-                    key={f}
-                    onPress={() => setFood(food === f ? "" : f)}
-                    style={[styles.chipSmall, food === f && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, food === f && styles.chipTextSelected]}>{f}</Text>
-                  </Pressable>
+                  <Chip key={f} label={f} mode="romance" selected={food === f} onPress={() => setFood(food === f ? "" : f)} />
                 ))}
               </View>
               <Text style={styles.label}>Pets (up to 2)</Text>
               <View style={styles.chipRowWrap}>
                 {PETS_OPTIONS.map((p) => (
-                  <Pressable
-                    key={p}
-                    onPress={() => toggleChip(pets, p, setPets, 2)}
-                    style={[styles.chipSmall, pets.includes(p) && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, pets.includes(p) && styles.chipTextSelected]}>{p}</Text>
-                  </Pressable>
+                  <Chip key={p} label={p} mode="romance" selected={pets.includes(p)} onPress={() => toggleChip(pets, p, setPets, 2)} />
                 ))}
               </View>
             </>
           ) : (
             <TouchableOpacity style={styles.upsellCard} onPress={lockSubscription} activeOpacity={0.9}>
-              <Ionicons name="lock-closed" size={28} color={Colors.gray500} />
+              <Ionicons name="lock-closed" size={28} color={theme.colors.textMuted} />
               <Text style={styles.upsellTitle}>Unlock more filters</Text>
               <Text style={styles.upsellText}>
                 Filter by interests, relationship goals, lifestyle, religion, values, and more.
@@ -695,432 +623,259 @@ export default function RomanceFiltersScreen() {
               <Text style={styles.upsellCta}>View subscription plans</Text>
             </TouchableOpacity>
           )}
-        </View>
+        </Card>
 
-        <Pressable onPress={handleApply} style={styles.applyBtn} android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
-          <Text style={styles.applyBtnText}>Apply filters</Text>
-        </Pressable>
-        <View style={{ height: 40 }} />
+        <PrimaryButton title="Apply filters" onPress={handleApply} style={{ backgroundColor: romanceAccent }} />
+        <View style={{ height: theme.spacing.huge }} />
       </ScrollView>
       <RomanceBottomNav />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.backgroundMuted },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    ...Layout.topHeaderBar,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  backBtn: {
-    width: HEADER.buttonSize,
-    height: HEADER.buttonSize,
-    borderRadius: HEADER.buttonRadius,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    ...Typography.headerTitle,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
-  },
-  headerRight: { width: HEADER.buttonSize, height: HEADER.buttonSize },
-  scroll: { flex: 1 },
-  scrollContent: { padding: 20, paddingTop: 20, paddingBottom: 24 },
-  section: { marginBottom: 28 },
-  sectionCard: {
-    marginBottom: 24,
-    backgroundColor: Colors.white,
-    borderRadius: Layout.radii.card,
-    padding: 20,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  sectionCardBasic: {
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.romance.primary,
-  },
-  sectionCardSubscription: {
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.romance.primary,
-  },
-  sectionHeaderRowWithBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
-    gap: 12,
-  },
-  sectionHeaderTitleWrap: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    minWidth: 0,
-  },
-  sectionHeaderRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 },
-  badgeFree: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    backgroundColor: Colors.romance.primary,
-  },
-  badgeFreeText: {
-    ...Typography.caption,
-    fontSize: 11,
-    fontWeight: "600",
-    color: Colors.white,
-  },
-  badgeSubscription: {
-    backgroundColor: Colors.romance.primary,
-  },
-  sectionTitle: {
-    ...Typography.h3,
-    fontSize: 18,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
-  },
-  sectionHint: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  label: {
-    ...Typography.caption,
-    fontWeight: "600",
-    color: Colors.gray700,
-    marginBottom: 10,
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 18,
-  },
-  chipRowWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 14,
-  },
-  chip: {
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-  },
-  chipSmall: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: Colors.gray100,
-  },
-  chipSelected: {
-    backgroundColor: Colors.romance.primary,
-  },
-  chipText: {
-    ...Typography.caption,
-    color: Colors.textPrimary,
-    fontWeight: "500",
-  },
-  chipTextSmall: {
-    ...Typography.caption,
-    fontSize: 13,
-    color: Colors.textPrimary,
-  },
-  chipTextSelected: {
-    color: Colors.white,
-  },
-  segmentRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  segment: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  segmentSelected: {
-    backgroundColor: Colors.romance.primary,
-    borderColor: Colors.romance.primary,
-  },
-  segmentText: {
-    ...Typography.caption,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-  },
-  segmentTextSelected: {
-    color: Colors.white,
-  },
-  sliderValueRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  sliderValue: {
-    ...Typography.body,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-  },
-  sliderMinLabel: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginBottom: 4,
-  },
-  languageDropdownTrigger: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    minHeight: 48,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: Layout.radii.control,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    backgroundColor: Colors.backgroundLight,
-    marginTop: 8,
-  },
-  languageDropdownText: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    flex: 1,
-    marginRight: 8,
-  },
-  languageHint: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginTop: 6,
-    marginLeft: 2,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  languageModalContent: {
-    width: "100%",
-    maxWidth: 400,
-    maxHeight: "80%",
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: Layout.radii.card,
-    overflow: "hidden",
-    shadowColor: Colors.softBlack,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 12,
-  },
-  languageModalHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-  },
-  languageModalTitle: {
-    ...Typography.h3,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
-    marginBottom: 4,
-  },
-  languageModalSubtitle: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginBottom: 8,
-  },
-  languageModalClose: {
-    position: "absolute",
-    top: 16,
-    right: 16,
-    padding: 4,
-  },
-  languageModalList: {
-    maxHeight: 320,
-    paddingVertical: 8,
-  },
-  languageModalRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-  },
-  languageModalRowSelected: {
-    backgroundColor: Colors.romance.secondary,
-  },
-  languageModalRowDisabled: {
-    opacity: 0.5,
-  },
-  languageModalRowText: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    flex: 1,
-  },
-  languageModalRowTextSelected: {
-    fontWeight: "600",
-    color: Colors.romance.primary,
-  },
-  languageModalRowTextDisabled: {
-    color: Colors.gray500,
-  },
-  languageModalFooter: {
-    padding: 20,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.gray200,
-  },
-  languageModalDoneBtn: {
-    backgroundColor: Colors.romance.primary,
-    paddingVertical: 14,
-    borderRadius: Layout.radii.control,
-    alignItems: "center",
-  },
-  languageModalDoneText: {
-    ...Typography.button,
-    color: Colors.white,
-    fontFamily: FontFamily.heading,
-  },
-  badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    backgroundColor: Colors.romance.primary,
-  },
-  badgeText: {
-    ...Typography.caption,
-    fontSize: 11,
-    fontWeight: "600",
-    color: Colors.white,
-  },
-  badgePremium: {
-    backgroundColor: Colors.accentYellow,
-  },
-  badgeTextPremium: {
-    ...Typography.caption,
-    fontSize: 11,
-    fontWeight: "600",
-    color: Colors.softBlack,
-  },
-  upsellCard: {
-    padding: 24,
-    borderRadius: Layout.radii.card,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  upsellTitle: {
-    ...Typography.h3,
-    fontSize: 18,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
-    marginTop: 14,
-    marginBottom: 8,
-  },
-  upsellText: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    textAlign: "center",
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  upsellCta: {
-    ...Typography.button,
-    fontSize: 14,
-    color: Colors.romance.primary,
-    fontFamily: FontFamily.heading,
-  },
-  toggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    borderRadius: 14,
-    backgroundColor: Colors.gray100,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  toggleLabel: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    flex: 1,
-    marginRight: 14,
-  },
-  toggleTrack: {
-    width: 52,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: Colors.gray300,
-    justifyContent: "center",
-    paddingHorizontal: 4,
-  },
-  toggleTrackOn: {
-    backgroundColor: Colors.romance.primary,
-  },
-  toggleThumb: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.white,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  toggleThumbOn: {
-    alignSelf: "flex-end",
-  },
-  applyBtn: {
-    paddingVertical: 18,
-    borderRadius: 16,
-    backgroundColor: Colors.romance.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: Colors.romance.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  applyBtnText: {
-    ...Typography.button,
-    fontFamily: FontFamily.heading,
-    color: Colors.white,
-    fontSize: 17,
-  },
-});
+function createStyles(theme: AppTheme) {
+  const romanceAccent = theme.modeAccent("romance").primary;
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    scroll: { flex: 1 },
+    scrollContent: { padding: theme.spacing.xl, paddingTop: theme.spacing.xl, paddingBottom: theme.spacing.xxl },
+    sectionCard: { marginBottom: theme.spacing.xxl },
+    sectionCardBasic: {
+      borderLeftWidth: 4,
+      borderLeftColor: romanceAccent,
+    },
+    sectionCardSubscription: {
+      borderLeftWidth: 4,
+      borderLeftColor: romanceAccent,
+    },
+    sectionHeaderRowWithBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: theme.spacing.xxs,
+      gap: theme.spacing.md,
+    },
+    sectionHeaderTitleWrap: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      minWidth: 0,
+    },
+    sectionHeaderRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, marginBottom: theme.spacing.xxs },
+    badge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.xxs,
+      paddingVertical: 5,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.sm,
+    },
+    badgeText: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontSize: 11,
+      fontWeight: "600",
+      color: theme.colors.onPrimary,
+    },
+    sectionTitle: {
+      ...theme.type.h3,
+      fontFamily: theme.type.h3.fontFamily,
+      color: theme.colors.textPrimary,
+    },
+    sectionHint: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.md,
+    },
+    label: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontWeight: "600",
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.sm,
+    },
+    chipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      marginBottom: theme.spacing.lg,
+    },
+    chipRowWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: theme.spacing.sm,
+      marginBottom: theme.spacing.md,
+    },
+    chipText: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textPrimary,
+      fontWeight: "500",
+    },
+    segmentRow: {
+      flexDirection: "row",
+      gap: theme.spacing.sm,
+    },
+    segment: { flex: 1, alignItems: "center" },
+    languageDropdownTrigger: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      minHeight: 48,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      borderRadius: theme.radii.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.background,
+      marginTop: theme.spacing.sm,
+    },
+    languageDropdownText: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textPrimary,
+      flex: 1,
+      marginRight: theme.spacing.sm,
+    },
+    languageHint: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.xs,
+      marginLeft: 2,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: theme.colors.overlay,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: theme.spacing.xl,
+    },
+    languageModalContent: {
+      width: "100%",
+      maxWidth: 400,
+      maxHeight: "80%",
+      backgroundColor: theme.colors.background,
+      borderRadius: theme.radii.lg,
+      overflow: "hidden",
+      ...theme.elevation(3),
+    },
+    languageModalHeader: {
+      paddingHorizontal: theme.spacing.xl,
+      paddingTop: theme.spacing.xl,
+      paddingBottom: theme.spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    languageModalTitle: {
+      ...theme.type.h3,
+      fontFamily: theme.type.h3.fontFamily,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.xxs,
+    },
+    languageModalSubtitle: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.sm,
+    },
+    languageModalClose: {
+      position: "absolute",
+      top: theme.spacing.md,
+      right: theme.spacing.md,
+      padding: theme.spacing.xxs,
+    },
+    languageModalList: {
+      maxHeight: 320,
+      paddingVertical: theme.spacing.sm,
+    },
+    languageModalRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.xl,
+    },
+    languageModalRowSelected: {
+      backgroundColor: theme.modeAccent("romance").bg,
+    },
+    languageModalRowDisabled: {
+      opacity: 0.5,
+    },
+    languageModalRowText: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textPrimary,
+      flex: 1,
+    },
+    languageModalRowTextSelected: {
+      fontWeight: "600",
+      color: romanceAccent,
+    },
+    languageModalRowTextDisabled: {
+      color: theme.colors.textMuted,
+    },
+    languageModalFooter: {
+      padding: theme.spacing.xl,
+      paddingTop: theme.spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
+    languageModalDoneBtn: {
+      backgroundColor: romanceAccent,
+      paddingVertical: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      alignItems: "center",
+      alignSelf: "stretch",
+    },
+    upsellCard: {
+      padding: theme.spacing.xxl,
+      borderRadius: theme.radii.lg,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    upsellTitle: {
+      ...theme.type.h3,
+      fontFamily: theme.type.h3.fontFamily,
+      color: theme.colors.textPrimary,
+      marginTop: theme.spacing.md,
+      marginBottom: theme.spacing.sm,
+    },
+    upsellText: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      textAlign: "center",
+      marginBottom: theme.spacing.md,
+    },
+    upsellCta: {
+      ...theme.type.button,
+      fontFamily: theme.type.button.fontFamily,
+      fontSize: 14,
+      color: romanceAccent,
+    },
+    toggleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      borderRadius: theme.radii.sm,
+      backgroundColor: theme.colors.backgroundMuted,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    toggleLabel: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textPrimary,
+      flex: 1,
+      marginRight: theme.spacing.md,
+    },
+  });
+}

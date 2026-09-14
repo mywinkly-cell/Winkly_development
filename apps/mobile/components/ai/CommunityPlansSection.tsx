@@ -9,8 +9,9 @@
  */
 
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { Colors, Typography } from "@/constants/tokens";
+import { View } from "react-native";
+import { useAppTheme } from "@/constants/design-system";
+import { SectionHeader } from "@/components/ds";
 import { CommunityPlanCard } from "@/components/ai/CommunityPlanCard";
 import { getTopCommunityPlans, type CommunityPlan } from "@/lib/ai/sharedPlans";
 import type { AppMode } from "@/types/database";
@@ -51,33 +52,19 @@ export function CommunityPlansSection({
     void load();
   }, [load]);
 
+  const appTheme = useAppTheme();
+
   if (plans.length === 0) return null;
 
   return (
-    <View style={styles.wrap}>
-      <Text style={styles.heading}>Plans people actually did</Text>
-      <Text style={styles.sub}>
-        Rated by Winkly members who ran them{city ? ` in ${city}` : ""}.
-      </Text>
+    <View style={{ marginVertical: appTheme.spacing.md, gap: appTheme.spacing.sm }}>
+      <SectionHeader
+        title="Plans people actually did"
+        subtitle={`Rated by Winkly members who ran them${city ? ` in ${city}` : ""}.`}
+      />
       {plans.map((plan) => (
         <CommunityPlanCard key={plan.id} plan={plan} onUse={onUsePlan} />
       ))}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    marginVertical: 12,
-    gap: 2,
-  },
-  heading: {
-    ...Typography.sectionTitle,
-    color: Colors.textPrimary,
-  },
-  sub: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginBottom: 4,
-  },
-});

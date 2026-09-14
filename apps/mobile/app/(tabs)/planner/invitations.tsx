@@ -7,16 +7,17 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   Alert,
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  Pressable,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Card, Header, PrimaryButton, SecondaryButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { EventReminderModal } from "@/components/planner/EventReminderModal";
 import {
   getPlannerInvitationsForUser,
@@ -36,6 +37,8 @@ const SOURCE_LABEL: Record<string, string> = {
 
 export default function PlannerInvitations() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const [reminderForId, setReminderForId] = useState<string | null>(null);
   const [items, setItems] = useState<PlannerInvitationWithItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,28 +133,21 @@ export default function PlannerInvitations() {
 
   return (
     <View style={styles.screen}>
+      <Header title="Invitations" onBack={() => router.back()} />
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Invitations</Text>
-          <View style={{ width: 44 }} />
-        </View>
-
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <Text style={styles.title}>Requests & RSVPs</Text>
           <Text style={styles.subtitle}>
             Accept, decline, or propose a different option. Set a reminder so you don&apos;t forget to respond.
           </Text>
-        </View>
+        </Card>
 
         {loading ? (
-          <ActivityIndicator size="large" color={Colors.primaryViolet} style={{ marginVertical: 24 }} />
+          <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginVertical: theme.spacing.xxl }} />
         ) : pendingFirst.length === 0 ? (
           <Text style={styles.empty}>No invitations yet.</Text>
         ) : (
@@ -174,10 +170,10 @@ export default function PlannerInvitations() {
             const isActing = actingId === it.id;
 
             return (
-              <View key={it.id} style={styles.itemCard}>
+              <Card key={it.id} style={styles.itemCard}>
                 <View style={styles.itemCardHeader}>
                   <Text style={styles.itemTitle}>{it.planner_item?.title ?? "Invitation"}</Text>
-                  <TouchableOpacity
+                  <Pressable
                     onPress={() => {
                       Haptics.selectionAsync();
                       setReminderForId(it.id);
@@ -186,48 +182,42 @@ export default function PlannerInvitations() {
                     hitSlop={12}
                     accessibilityLabel="Set reminder"
                   >
-                    <Ionicons name="notifications-outline" size={22} color={Colors.primaryViolet} />
-                  </TouchableOpacity>
+                    <Ionicons name="notifications-outline" size={22} color={theme.colors.primary} />
+                  </Pressable>
                 </View>
                 <Text style={styles.itemMeta}>{meta}</Text>
                 {it.inviter?.first_name && (
                   <Text style={styles.inviter}>From {it.inviter.first_name}</Text>
                 )}
                 {it.status !== "pending" && (
-                  <Text style={[styles.statusBadge, it.status === "accepted" && styles.statusAccepted]}>
+                  <Text style={{ ...styles.statusBadge, ...(it.status === "accepted" ? styles.statusAccepted : null) }}>
                     {it.status === "accepted" ? "Accepted" : it.status === "declined" ? "Declined" : "Reschedule requested"}
                   </Text>
                 )}
 
                 {isPending && (
                   <View style={styles.rowActions}>
-                    <TouchableOpacity
+                    <SecondaryButton
+                      title={isActing ? "…" : "Decline"}
                       onPress={() => handleDecline(it.id)}
                       disabled={isActing}
-                      style={styles.secondaryBtn}
-                      activeOpacity={0.9}
-                    >
-                      <Text style={styles.secondaryText}>{isActing ? "…" : "Decline"}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                      style={styles.rowActionBtn}
+                    />
+                    <SecondaryButton
+                      title={isActing ? "…" : "Propose different"}
                       onPress={() => handleReschedule(it.id)}
                       disabled={isActing}
-                      style={styles.secondaryBtn}
-                      activeOpacity={0.9}
-                    >
-                      <Text style={styles.secondaryText}>{isActing ? "…" : "Propose different"}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                      style={styles.rowActionBtn}
+                    />
+                    <PrimaryButton
+                      title={isActing ? "…" : "Accept"}
                       onPress={() => handleAccept(it.id)}
                       disabled={isActing}
-                      style={styles.primaryBtn}
-                      activeOpacity={0.9}
-                    >
-                      <Text style={styles.primaryText}>{isActing ? "…" : "Accept"}</Text>
-                    </TouchableOpacity>
+                      style={styles.rowActionBtn}
+                    />
                   </View>
                 )}
-              </View>
+              </Card>
             );
           })
         )}
@@ -246,79 +236,30 @@ export default function PlannerInvitations() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { padding: 20, paddingBottom: 40 },
-
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
-
-  card: {
-    backgroundColor: "#FFF",
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 16,
-    marginBottom: 12,
-  },
-  title: { ...Typography.h2, color: Colors.textPrimary, marginBottom: 6 },
-  subtitle: { ...Typography.body, color: Colors.gray700 },
-
-  empty: { ...Typography.body, color: Colors.gray600, textAlign: "center", marginTop: 24 },
-
-  itemCard: {
-    backgroundColor: "#FFF",
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 16,
-    marginBottom: 12,
-  },
-  itemCardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
-  itemTitle: { ...Typography.h3, color: Colors.textPrimary, flex: 1, paddingRight: 12 },
-  bellBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primaryViolet + "15",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  itemMeta: { ...Typography.body, color: Colors.gray700 },
-  inviter: { ...Typography.caption, color: Colors.gray600, marginTop: 2 },
-  statusBadge: { ...Typography.caption, color: Colors.gray600, marginTop: 6, fontStyle: "italic" },
-  statusAccepted: { color: Colors.successGreen },
-
-  rowActions: { flexDirection: "row", gap: 10, marginTop: 12 },
-  primaryBtn: {
-    flex: 1,
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  primaryText: { ...Typography.button, color: Colors.accentYellow },
-  secondaryBtn: {
-    flex: 1,
-    backgroundColor: Colors.gray100,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  secondaryText: { ...Typography.button, color: Colors.textPrimary },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { padding: theme.spacing.xl, paddingBottom: theme.spacing.huge },
+    card: { marginBottom: theme.spacing.md },
+    title: { ...theme.type.h2, fontFamily: theme.type.h2.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.xxs },
+    subtitle: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary },
+    empty: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, textAlign: "center", marginTop: theme.spacing.xxl },
+    itemCard: { marginBottom: theme.spacing.md },
+    itemCardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: theme.spacing.sm },
+    itemTitle: { ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textPrimary, flex: 1, paddingRight: theme.spacing.md },
+    bellBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: theme.radii.pill,
+      backgroundColor: theme.colors.primary + "15",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    itemMeta: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary },
+    inviter: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.xxs },
+    statusBadge: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.sm, fontStyle: "italic" },
+    statusAccepted: { color: theme.colors.success },
+    rowActions: { flexDirection: "row", gap: theme.spacing.sm, marginTop: theme.spacing.md },
+    rowActionBtn: { flex: 1 },
+  });
+}

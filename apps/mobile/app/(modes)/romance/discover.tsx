@@ -14,10 +14,11 @@ import { usePostHog } from "posthog-react-native";
 
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { RomanceBottomNav } from "@/components/layout/RomanceBottomNav";
-import { Colors } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 import { type RomanceProfile } from "@/lib/ai/romanceInsights";
 import { romanceLikeProfile, blockUser, reportUser } from "@/lib/chats";
+import { showReportReceivedNotice } from "@/lib/safety/reportNotice";
 import { useModeContext } from "@/providers";
 import { DiscoverHorizontalSection } from "@/components/discover/DiscoverHorizontalSection";
 import { DiscoverBusinessOffersSection } from "@/components/business/DiscoverBusinessOffersSection";
@@ -60,6 +61,7 @@ type RomanceLikeReceived = {
 
 export default function RomanceDiscover() {
   const router = useRouter();
+  const theme = useAppTheme();
   const posthog = usePostHog();
   const { context } = useModeContext();
 
@@ -272,19 +274,19 @@ export default function RomanceDiscover() {
       await reportUser(item.id, "other", "Reported from Discover");
       discoverProfileReport(posthog ?? null, "romance", item.id);
       removeFromAll(item.id);
-      Alert.alert("Report sent", "Thanks for helping keep Winkly safe.");
+      showReportReceivedNotice("Report: profile (discover)");
     } catch (e) {
       Alert.alert("Error", (e as Error).message ?? "Could not report.");
     }
   };
 
-  const primaryColor = Colors.romance.primary;
+  const primaryColor = theme.modeAccent("romance").primary;
   const openProfile = (item: DiscoverProfileItem) =>
     router.push(`/(modes)/romance/profile-view?id=${item.id}&source=discover`);
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
+      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
         <ModeHeader currentMode="romance" />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator size="large" color={primaryColor} />
@@ -295,7 +297,7 @@ export default function RomanceDiscover() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <ModeHeader currentMode="romance" />
 
       <DiscoverModeToggle value={viewMode} onChange={setViewMode} primaryColor={primaryColor} />

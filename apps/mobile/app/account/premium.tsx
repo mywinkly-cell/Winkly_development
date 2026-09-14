@@ -1,105 +1,59 @@
 // apps/mobile/app/account/premium.tsx
 // Winkly – Account: Premium (marketing + CTA)
 
-import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
+import { Text, ScrollView, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { SafeScreenView } from "@/components/SafeScreenView";
+import { Card, Header, PrimaryButton, SecondaryButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 export default function Premium() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
 
   return (
-    <View style={styles.screen}>
+    <SafeScreenView style={styles.screen}>
+      <Header title="Premium" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9}>
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Premium</Text>
-          <View style={{ width: 60 }} />
-        </View>
-
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <Text style={styles.title}>Winkly Premium</Text>
           <Text style={styles.subtitle}>
             Upgrade for better discovery, smarter suggestions, and more control. (UI placeholder — pricing later)
           </Text>
 
-          <View style={styles.featureBox}>
-            <Text style={styles.featureTitle}>What you’ll get</Text>
+          <Card padding="md" elevation={0} style={styles.featureBox}>
+            <Text style={styles.featureTitle}>What you'll get</Text>
             <Text style={styles.featureText}>• More daily recommendations</Text>
             <Text style={styles.featureText}>• Advanced filters in Friends & Business</Text>
             <Text style={styles.featureText}>• Priority AI matches</Text>
             <Text style={styles.featureText}>• See who viewed / liked you (future)</Text>
-          </View>
+          </Card>
 
-          <TouchableOpacity
-            onPress={() => router.push("/account/subscription")}
-            style={styles.primaryBtn}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.primaryText}>View plans</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => router.push("/account/payments")}
-            style={styles.secondaryBtn}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.secondaryText}>Payment methods</Text>
-          </TouchableOpacity>
+          <PrimaryButton title="View plans" onPress={() => router.push("/account/subscription")} style={styles.actionBtn} />
+          <SecondaryButton title="Payment methods" onPress={() => router.push("/account/payments")} />
 
           <Text style={styles.note}>
             Next step: integrate billing (App Store / Play / Stripe) and store entitlement in Supabase.
           </Text>
-        </View>
+        </Card>
       </ScrollView>
-    </View>
+    </SafeScreenView>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { padding: 20, paddingBottom: 40 },
-
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
-
-  card: { backgroundColor: "#FFF", borderRadius: Layout.radii.card, borderWidth: 1, borderColor: Colors.gray200, padding: 16 },
-  title: { ...Typography.h2, color: Colors.textPrimary, marginBottom: 6 },
-  subtitle: { ...Typography.body, color: Colors.gray700, marginBottom: 14 },
-
-  featureBox: {
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 14,
-    marginBottom: 14,
-  },
-  featureTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 8 },
-  featureText: { ...Typography.body, color: Colors.gray700, marginBottom: 4 },
-
-  primaryBtn: { backgroundColor: Colors.primaryViolet, borderRadius: Layout.radii.control, paddingVertical: 12, alignItems: "center", marginBottom: 10 },
-  primaryText: { ...Typography.button, color: Colors.accentYellow },
-
-  secondaryBtn: { backgroundColor: Colors.gray100, borderRadius: Layout.radii.control, paddingVertical: 12, alignItems: "center", borderWidth: 1, borderColor: Colors.gray200 },
-  secondaryText: { ...Typography.button, color: Colors.textPrimary },
-
-  note: { ...Typography.caption, color: Colors.gray600, marginTop: 12, textAlign: "center" },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    scroll: { padding: theme.spacing.xl, paddingBottom: theme.spacing.huge },
+    card: {},
+    title: { ...theme.type.h2, fontFamily: theme.type.h2.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.xxs },
+    subtitle: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.md },
+    featureBox: { marginBottom: theme.spacing.md },
+    featureTitle: { ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.sm },
+    featureText: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.xxs },
+    actionBtn: { marginBottom: theme.spacing.sm },
+    note: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.md, textAlign: "center" },
+  });
+}

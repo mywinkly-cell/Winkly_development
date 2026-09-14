@@ -20,6 +20,8 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout, Shadow } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
+import { PrimaryButton } from "@/components/ds";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import {
   getWeatherForCityAndDate,
@@ -48,6 +50,7 @@ import {
   buildProfileAwareSuggestionChips,
   loadProfileAwareSuggestionChips,
 } from "@/lib/ai/customPlanPresets";
+import { clampTimeOfDayToFutureIfToday, getMinimumPlanDateTime, isSameCalendarDay } from "@/lib/ai/planTimeValidation";
 
 function dayKey(d: Date): string {
   const y = d.getFullYear();
@@ -146,6 +149,7 @@ export function ConciergeActivityDetailsStep({
   whoJoining = "decide_later",
   onWhoJoiningChange,
 }: ConciergeActivityDetailsStepProps) {
+  const theme = useAppTheme();
   const { i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
   const [location, setLocation] = useState(() =>
@@ -216,7 +220,8 @@ export function ConciergeActivityDetailsStep({
     if (typeof hm === "string" && /^\d{2}:\d{2}$/.test(hm)) {
       d.setHours(parseInt(hm.slice(0, 2), 10), parseInt(hm.slice(3, 5), 10), 0, 0);
     }
-    return d;
+    // Never default/restore a time that's already passed today — a user can't select the past.
+    return clampTimeOfDayToFutureIfToday(initialDetails.date ?? new Date(), d);
   });
   const [showExactTimePicker, setShowExactTimePicker] = useState(false);
 
@@ -291,6 +296,12 @@ export function ConciergeActivityDetailsStep({
       }),
     [timeOfDay, exactTimeHm]
   );
+
+  // If the chosen day is (or becomes) today, keep the exact-time selection from silently
+  // sitting in the past — e.g. switching the date preset back to "today" after time has passed.
+  useEffect(() => {
+    setExactTime((prev) => clampTimeOfDayToFutureIfToday(date, prev));
+  }, [date]);
 
   // Sync location when parent passes pre-set location (e.g. profile city loaded after mount)
   useEffect(() => {
@@ -443,8 +454,10 @@ export function ConciergeActivityDetailsStep({
     const locLine = normalizeLocationDisplayString(location, appLanguage);
     const parsed = parseLocation(locLine, appLanguage);
     const pad = (n: number) => String(n).padStart(2, "0");
+    // Final guard: never hand a past time to the AI request even if state somehow drifted stale.
+    const safeExactTime = clampTimeOfDayToFutureIfToday(date, exactTime);
     const exactTimeHm =
-      singleDay && exactTimeEnabled ? `${pad(exactTime.getHours())}:${pad(exactTime.getMinutes())}` : undefined;
+      singleDay && exactTimeEnabled ? `${pad(safeExactTime.getHours())}:${pad(safeExactTime.getMinutes())}` : undefined;
     onNext({
       location: locLine,
       city: parsed.city || undefined,
@@ -901,7 +914,8 @@ export function ConciergeActivityDetailsStep({
                   value={exactTime}
                   mode="time"
                   display="spinner"
-                  onChange={(_, d) => d && setExactTime(d)}
+                  onChange={(_, d) => d && setExactTime(clampTimeOfDayToFutureIfToday(date, d))}
+                  minimumDate={isSameCalendarDay(date, new Date()) ? getMinimumPlanDateTime() : undefined}
                 />
                 <TouchableOpacity onPress={() => setShowExactTimePicker(false)} style={styles.pickerDone}>
                   <Text style={styles.pickerDoneText}>Done</Text>
@@ -914,9 +928,10 @@ export function ConciergeActivityDetailsStep({
             value={exactTime}
             mode="time"
             display="default"
+            minimumDate={isSameCalendarDay(date, new Date()) ? getMinimumPlanDateTime() : undefined}
             onChange={(event, d) => {
               setShowExactTimePicker(false);
-              if (event.type === "set" && d) setExactTime(d);
+              if (event.type === "set" && d) setExactTime(clampTimeOfDayToFutureIfToday(date, d));
             }}
           />
         ))}
@@ -1150,18 +1165,11 @@ export function ConciergeActivityDetailsStep({
       ) : null}
 
       {!cityPart.trim() ? (
-        <Text style={{ ...Typography.caption, color: Colors.errorRed, marginBottom: 8, fontWeight: "600" }}>
+        <Text style={[theme.type.caption, { color: theme.colors.error, marginBottom: theme.spacing.sm, fontWeight: "600" }]}>
           City is required to continue.
         </Text>
       ) : null}
-      <TouchableOpacity
-        style={[styles.nextBtn, !cityPart.trim() && { opacity: 0.45 }]}
-        onPress={handleNext}
-        disabled={!cityPart.trim()}
-        activeOpacity={0.92}
-      >
-        <Text style={styles.nextBtnText}>Continue</Text>
-      </TouchableOpacity>
+      <PrimaryButton title="Continue" onPress={handleNext} disabled={!cityPart.trim()} />
     </GestureScrollView>
   );
 }
@@ -1489,12 +1497,4 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
   },
-  nextBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  nextBtnText: { ...Typography.button, color: Colors.white },
 });

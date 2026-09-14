@@ -6,15 +6,14 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
+import { Chip, Header, TextButton } from "@/components/ds";
+import { useAppTheme, type AppTheme, type ModeName } from "@/constants/design-system";
 import { useAuth } from "@/providers";
 import { getOwnProfileMode } from "@/lib/access/profiles";
 import {
@@ -27,17 +26,19 @@ import {
 } from "@/lib/profile/publicModeProfile";
 import { ModeProfilePublicView } from "@/components/profile/ModeProfilePublicView";
 
-const MODES: { key: PublicProfileMode; label: string; color: string }[] = [
-  { key: "romance", label: "Romance", color: Colors.romance.primary },
-  { key: "friends", label: "Friends", color: Colors.friends.primary },
-  { key: "business", label: "Business", color: Colors.business.primary },
-  { key: "events", label: "Events", color: Colors.events.primary },
+const MODES: { key: PublicProfileMode; label: string }[] = [
+  { key: "romance", label: "Romance" },
+  { key: "friends", label: "Friends" },
+  { key: "business", label: "Business" },
+  { key: "events", label: "Events" },
 ];
 
 export default function ViewProfile() {
   const router = useRouter();
   const { user } = useAuth();
   const { i18n } = useTranslation();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const [loading, setLoading] = useState(true);
   const [activeMode, setActiveMode] = useState<PublicProfileMode>("romance");
   const [core, setCore] = useState<PublicCoreProfile | null>(null);
@@ -78,7 +79,7 @@ export default function ViewProfile() {
   const activeModeRow =
     activeMode === "events" ? null : (modeProfiles[activeMode] ?? null);
 
-  const modeColor = MODES.find((m) => m.key === activeMode)?.color ?? Colors.primaryViolet;
+  const modeColor = theme.modeAccent(activeMode as ModeName).primary;
 
   const coreForView = useMemo(
     () => core ?? emptyPublicCoreProfile(),
@@ -87,30 +88,23 @@ export default function ViewProfile() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => {
-            Haptics.selectionAsync();
-            router.back();
-          }}
-          style={styles.backBtn}
-          activeOpacity={0.9}
-          accessibilityLabel="Back"
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile preview</Text>
-        <TouchableOpacity
-          onPress={() => {
-            Haptics.selectionAsync();
-            router.push("/(onboarding-personal)/profile-core?edit=1");
-          }}
-          style={styles.editBtn}
-          activeOpacity={0.9}
-        >
-          <Text style={styles.editText}>Edit</Text>
-        </TouchableOpacity>
-      </View>
+      <Header
+        title="Profile preview"
+        onBack={() => {
+          Haptics.selectionAsync();
+          router.back();
+        }}
+        trailing={
+          <TextButton
+            title="Edit"
+            onPress={() => {
+              Haptics.selectionAsync();
+              router.push("/(onboarding-personal)/profile-core?edit=1");
+            }}
+            style={styles.editBtn}
+          />
+        }
+      />
 
       <Text style={styles.hint}>How others see you in each mode</Text>
 
@@ -121,35 +115,22 @@ export default function ViewProfile() {
         contentContainerStyle={styles.tabBarContent}
       >
         {MODES.map((m) => (
-          <TouchableOpacity
+          <Chip
             key={m.key}
+            label={m.label}
+            mode={m.key as ModeName}
+            selected={activeMode === m.key}
             onPress={() => {
               Haptics.selectionAsync();
               setActiveMode(m.key);
             }}
-            style={[
-              styles.tab,
-              activeMode === m.key && {
-                backgroundColor: m.color + "20",
-                borderColor: m.color,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.tabLabel,
-                activeMode === m.key && { color: m.color, fontWeight: "700" },
-              ]}
-            >
-              {m.label}
-            </Text>
-          </TouchableOpacity>
+          />
         ))}
       </ScrollView>
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primaryViolet} />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.loadingText}>Loading…</Text>
         </View>
       ) : (
@@ -172,58 +153,23 @@ export default function ViewProfile() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundMuted },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    ...Layout.topHeaderBar,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    ...Typography.headerTitle,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
-  },
-  editBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.primaryViolet,
-  },
-  editText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "700" },
-  hint: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    textAlign: "center",
-    marginTop: 12,
-    marginHorizontal: 20,
-  },
-  tabBar: { maxHeight: 48, marginTop: 8 },
-  tabBarContent: { flexDirection: "row", paddingHorizontal: 16, gap: 8 },
-  tab: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: Colors.gray200,
-  },
-  tabLabel: { ...Typography.caption, fontWeight: "600", color: Colors.gray600 },
-  scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 48 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 60 },
-  loadingText: { ...Typography.caption, color: Colors.gray600, marginTop: 10 },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    editBtn: { paddingHorizontal: 0 },
+    hint: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      textAlign: "center",
+      marginTop: theme.spacing.md,
+      marginHorizontal: theme.spacing.xl,
+    },
+    tabBar: { maxHeight: 48, marginTop: theme.spacing.sm },
+    tabBarContent: { flexDirection: "row", paddingHorizontal: theme.spacing.lg, gap: theme.spacing.sm },
+    scroll: { flex: 1 },
+    scrollContent: { paddingBottom: theme.spacing.massive },
+    center: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 60 },
+    loadingText: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.sm },
+  });
+}

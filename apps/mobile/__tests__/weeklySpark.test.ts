@@ -180,7 +180,9 @@ describe("weeklySpark", () => {
         error: null,
       });
 
-      const spark = await getCurrentWeeklySpark();
+      // Fixed reference "now" inside the fixture's own week — the plan's starts_at (Jun 26) is
+      // future relative to this, independent of whatever date the test suite actually runs on.
+      const spark = await getCurrentWeeklySpark(new Date("2026-06-22T08:00:00Z"));
       expect(spark).not.toBeNull();
       expect(spark?.id).toBe("s1");
       expect(spark?.plans).toHaveLength(1);
@@ -192,6 +194,46 @@ describe("weeklySpark", () => {
       expect(plan.approxPriceCents).toBe(2000);
       expect(plan.sponsored).toBe(true);
       expect(plan.sponsorDisclosureLabel).toBe("Partner pick");
+    });
+
+    it("never surfaces a plan whose scheduled start has already passed", async () => {
+      mockResultQueue.push({
+        data: { id: "s1", week_start: "2026-06-22", seen_at: null, expires_at: null },
+        error: null,
+      });
+      mockResultQueue.push({
+        data: [
+          {
+            id: "past",
+            slot: "solo",
+            rank: 0,
+            title: "Already elapsed",
+            fit_reason: "y",
+            starts_at: "2026-06-22T09:00:00Z",
+          },
+          {
+            id: "future",
+            slot: "date",
+            rank: 1,
+            title: "Still ahead",
+            fit_reason: "y",
+            starts_at: "2026-06-26T17:30:00Z",
+          },
+          {
+            id: "untimed",
+            slot: "meetup",
+            rank: 2,
+            title: "No fixed time",
+            fit_reason: "y",
+            starts_at: null,
+          },
+        ],
+        error: null,
+      });
+
+      const spark = await getCurrentWeeklySpark(new Date("2026-06-23T10:00:00Z"));
+      const ids = spark?.plans.map((p) => p.id) ?? [];
+      expect(ids).toEqual(["future", "untimed"]);
     });
   });
 

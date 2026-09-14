@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
   ActivityIndicator,
   RefreshControl,
@@ -12,7 +12,8 @@ import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { EventsBottomNav } from "@/components/layout/EventsBottomNav";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Card, Chip, PrimaryButton, TextButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 import { DiscoverModeToggle, type DiscoverViewMode } from "@/components/discover/DiscoverModeToggle";
 import { TopPicksSection } from "@/components/discover/TopPicksSection";
@@ -44,6 +45,8 @@ function formatDateTime(iso: string) {
 
 export default function EventsDiscover() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const fmtLoc = useFormatLocationDisplay();
 
   const [query, setQuery] = useState("");
@@ -161,34 +164,25 @@ export default function EventsDiscover() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      <View style={[styles.screen, { flex: 1, backgroundColor: Colors.background }]}>
+    <View style={styles.screen}>
+      <View style={{ flex: 1 }}>
       <ModeHeader currentMode="events" rightSlot="filterSettings" />
       <View style={styles.header}>
-        <Text style={[styles.title, Typography.h2]}>Events</Text>
-        <View style={{ flexDirection: "row", gap: 10 }}>
-          <TouchableOpacity
-            onPress={() => router.push("/(modes)/events/planner")}
-            style={[styles.pill, { backgroundColor: Colors.card }]}
-            activeOpacity={0.9}
-          >
-            <Text style={[styles.pillText, { color: Colors.text }]}>Planner</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
+        <Text style={styles.title}>Events</Text>
+        <View style={{ flexDirection: "row", gap: theme.spacing.sm }}>
+          <TextButton title="Planner" onPress={() => router.push("/(modes)/events/planner")} style={styles.pillGhost} />
+          <PrimaryButton
+            title="Create"
             onPress={() => router.push("/(modes)/events/create-event")}
-            style={[styles.pill, { backgroundColor: Colors.primary }]}
-            activeOpacity={0.9}
-          >
-            <Text style={[styles.pillText, { color: Colors.onPrimary }]}>Create</Text>
-          </TouchableOpacity>
+            style={{ ...styles.pill, backgroundColor: theme.modeAccent("events").primary }}
+          />
         </View>
       </View>
 
       <DiscoverModeToggle
         value={viewMode}
         onChange={setViewMode}
-        primaryColor={Colors.events.primary}
+        primaryColor={theme.modeAccent("events").primary}
         allLabel="All events"
         allCount={filtered.length}
       />
@@ -197,12 +191,12 @@ export default function EventsDiscover() {
         <ScrollView
           style={styles.list}
           contentContainerStyle={{ paddingBottom: 32 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.text} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.textPrimary} />}
         >
           <TopPicksSection
             picks={topPicks}
             loading={loading || topLoading}
-            primaryColor={Colors.events.primary}
+            primaryColor={theme.modeAccent("events").primary}
             subheading="A few events worth your time — picked so you don't have to scroll."
             emptyText="No events to pick from yet. Tap See all events to browse or create one."
             placeholderEmoji="🎟️"
@@ -215,71 +209,55 @@ export default function EventsDiscover() {
         <>
       {/* Search */}
       <View style={styles.searchRow}>
-        <View style={[styles.searchBox, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-          <Text style={[styles.searchIcon, { color: Colors.mutedText }]}>⌕</Text>
+        <View style={styles.searchBox}>
+          <Text style={styles.searchIcon}>⌕</Text>
           <TextInput
             value={query}
             onChangeText={setQuery}
             placeholder="Search events, city, category…"
-            placeholderTextColor={Colors.mutedText}
-            style={[styles.searchInput, { color: Colors.text }]}
+            placeholderTextColor={theme.colors.textMuted}
+            style={styles.searchInput}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
           />
           {!!query && (
-            <TouchableOpacity onPress={() => setQuery("")} style={styles.clearBtn}>
-              <Text style={{ color: Colors.mutedText }}>✕</Text>
-            </TouchableOpacity>
+            <Pressable onPress={() => setQuery("")} style={styles.clearBtn}>
+              <Text style={{ color: theme.colors.textMuted }}>✕</Text>
+            </Pressable>
           )}
         </View>
       </View>
 
       {/* Quick filters */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersRow}>
-        {(["all", "Munich", "Berlin", "Hamburg"] as const).map((c) => {
-          const active = activeCity === c;
-          return (
-            <TouchableOpacity
-              key={c}
-              onPress={() => setActiveCity(c)}
-              style={[
-                styles.filterChip,
-                { backgroundColor: active ? Colors.primary : Colors.card, borderColor: Colors.border },
-              ]}
-              activeOpacity={0.9}
-            >
-              <Text style={{ color: active ? Colors.onPrimary : Colors.text, fontWeight: "700" }}>
-                {c === "all" ? "All Cities" : c}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+        {(["all", "Munich", "Berlin", "Hamburg"] as const).map((c) => (
+          <Chip
+            key={c}
+            label={c === "all" ? "All Cities" : c}
+            mode="events"
+            selected={activeCity === c}
+            onPress={() => setActiveCity(c)}
+            style={styles.filterChip}
+          />
+        ))}
 
-        {(["all", "Social", "Business", "Fitness", "Culture"] as const).map((cat) => {
-          const active = activeCategory === cat;
-          return (
-            <TouchableOpacity
-              key={cat}
-              onPress={() => setActiveCategory(cat)}
-              style={[
-                styles.filterChip,
-                { backgroundColor: active ? Colors.primary : Colors.card, borderColor: Colors.border },
-              ]}
-              activeOpacity={0.9}
-            >
-              <Text style={{ color: active ? Colors.onPrimary : Colors.text, fontWeight: "700" }}>
-                {cat === "all" ? "All Types" : cat}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+        {(["all", "Social", "Business", "Fitness", "Culture"] as const).map((cat) => (
+          <Chip
+            key={cat}
+            label={cat === "all" ? "All Types" : cat}
+            mode="events"
+            selected={activeCategory === cat}
+            onPress={() => setActiveCategory(cat)}
+            style={styles.filterChip}
+          />
+        ))}
       </ScrollView>
 
       <ScrollView
         style={styles.list}
         contentContainerStyle={{ paddingBottom: 32 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.text} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.textPrimary} />}
         onScroll={({ nativeEvent }) => {
           const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
           const nearBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 650;
@@ -289,66 +267,61 @@ export default function EventsDiscover() {
       >
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color={Colors.events.primary} />
-            <Text style={{ marginTop: 10, color: Colors.mutedText }}>Loading events…</Text>
+            <ActivityIndicator size="large" color={theme.modeAccent("events").primary} />
+            <Text style={{ marginTop: theme.spacing.sm, color: theme.colors.textMuted }}>Loading events…</Text>
           </View>
         ) : filtered.length === 0 ? (
-          <View style={[styles.empty, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-            <Text style={{ color: Colors.text, fontWeight: "900" }}>No events yet</Text>
-            <Text style={{ color: Colors.mutedText, marginTop: 6, lineHeight: 18 }}>
+          <Card style={styles.empty}>
+            <Text style={styles.emptyTitle}>No events yet</Text>
+            <Text style={styles.emptyText}>
               Create your first event or connect the `events` table + RLS to see results here.
             </Text>
 
-            <TouchableOpacity
+            <PrimaryButton
+              title="Create Event"
               onPress={() => router.push("/(modes)/events/create-event")}
-              style={[styles.cta, { backgroundColor: Colors.primary }]}
-              activeOpacity={0.9}
-            >
-              <Text style={{ color: Colors.onPrimary, fontWeight: "900" }}>Create Event</Text>
-            </TouchableOpacity>
-          </View>
+              style={{ backgroundColor: theme.modeAccent("events").primary }}
+            />
+          </Card>
         ) : (
-          <View style={{ gap: 12 }}>
+          <View style={{ gap: theme.spacing.md }}>
             {filtered.map((e) => (
-              <TouchableOpacity
-                key={e.id}
-                onPress={() => openDetails(e.id)}
-                activeOpacity={0.9}
-                style={[styles.card, { backgroundColor: Colors.card, borderColor: Colors.border }]}
-              >
-                <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+              <Pressable key={e.id} onPress={() => openDetails(e.id)}>
+                <Card style={styles.card}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", gap: theme.spacing.md }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: Colors.text, fontWeight: "900", fontSize: 16 }} numberOfLines={1}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>
                       {e.title}
                     </Text>
 
-                    <Text style={{ color: Colors.mutedText, marginTop: 4 }} numberOfLines={1}>
+                    <Text style={{ color: theme.colors.textMuted, marginTop: theme.spacing.xxs }} numberOfLines={1}>
                       {formatDateTime(e.starts_at)}
                       {e.city ? ` · ${fmtLoc(e.city)}` : ""}
                       {e.venue_name ? ` · ${e.venue_name}` : ""}
                     </Text>
 
-                    <Text style={{ color: Colors.text, marginTop: 8 }} numberOfLines={2}>
+                    <Text style={{ color: theme.colors.textPrimary, marginTop: theme.spacing.sm }} numberOfLines={2}>
                       {(e.category ? `${e.category} · ` : "") +
                         ((e.tags ?? []).slice(0, 3).join(" · ") || "Winkly event")}
                     </Text>
                   </View>
 
                   <View style={{ alignItems: "flex-end" }}>
-                    <View style={[styles.badge, { backgroundColor: Colors.background }]}>
-                      <Text style={{ color: Colors.mutedText, fontSize: 12 }}>
+                    <View style={styles.badge}>
+                      <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>
                         {e.price_eur != null ? `€${e.price_eur}` : "Free"}
                       </Text>
                     </View>
-                    <Text style={{ color: Colors.mutedText, marginTop: 10 }}>›</Text>
+                    <Text style={{ color: theme.colors.textMuted, marginTop: theme.spacing.sm }}>›</Text>
                   </View>
                 </View>
-              </TouchableOpacity>
+                </Card>
+              </Pressable>
             ))}
 
             {loadingMore && (
-              <View style={[styles.center, { paddingVertical: 12 }]}>
-                <ActivityIndicator size="large" color={Colors.events.primary} />
+              <View style={{ ...styles.center, paddingVertical: theme.spacing.md }}>
+                <ActivityIndicator size="large" color={theme.modeAccent("events").primary} />
               </View>
             )}
           </View>
@@ -362,41 +335,47 @@ export default function EventsDiscover() {
   );
 }
 
-const styles: any = {
-  screen: { flex: 1, paddingTop: Layout?.screenTopPadding ?? 16 },
-  header: {
-    paddingHorizontal: Layout?.screenPadding ?? 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    paddingBottom: 12,
-  },
-  title: { fontWeight: "900" },
-  pill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
-  pillText: { fontWeight: "800" },
+function createStyles(theme: AppTheme) {
+  return {
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    header: {
+      paddingHorizontal: theme.spacing.lg,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      gap: theme.spacing.md,
+      paddingBottom: theme.spacing.md,
+    },
+    title: { ...theme.type.h2, fontFamily: theme.type.h2.fontFamily, color: theme.colors.textPrimary },
+    pill: { paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, borderRadius: theme.radii.pill },
+    pillGhost: { paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, backgroundColor: theme.colors.surface, borderRadius: theme.radii.pill },
 
-  searchRow: { paddingHorizontal: Layout?.screenPadding ?? 16, paddingBottom: 10 },
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    height: 46,
-  },
-  searchIcon: { marginRight: 8, fontSize: 16 },
-  searchInput: { flex: 1, fontSize: 15 },
-  clearBtn: { padding: 6, marginLeft: 4 },
+    searchRow: { paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.sm },
+    searchBox: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.md,
+      paddingHorizontal: theme.spacing.md,
+      height: 46,
+    },
+    searchIcon: { marginRight: theme.spacing.sm, fontSize: 16, color: theme.colors.textMuted },
+    searchInput: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
+    clearBtn: { padding: theme.spacing.xs, marginLeft: theme.spacing.xxs },
 
-  filtersRow: { paddingHorizontal: Layout?.screenPadding ?? 16, paddingBottom: 10 },
-  filterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, marginRight: 10 },
+    filtersRow: { paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.sm },
+    filterChip: { marginRight: theme.spacing.sm },
 
-  list: { flex: 1, paddingHorizontal: Layout?.screenPadding ?? 16 },
-  card: { borderWidth: 1, borderRadius: 18, padding: 14 },
-  badge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+    list: { flex: 1, paddingHorizontal: theme.spacing.lg },
+    card: {},
+    cardTitle: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily, fontWeight: "900" as const, color: theme.colors.textPrimary },
+    badge: { paddingHorizontal: theme.spacing.sm, paddingVertical: theme.spacing.xs, borderRadius: theme.radii.pill, backgroundColor: theme.colors.background },
 
-  center: { paddingVertical: 30, alignItems: "center", justifyContent: "center" },
-  empty: { marginTop: 16, borderWidth: 1, borderRadius: 18, padding: 16 },
-  cta: { marginTop: 12, borderRadius: 14, paddingVertical: 12, alignItems: "center" },
-};
+    center: { paddingVertical: theme.spacing.xxl, alignItems: "center" as const, justifyContent: "center" as const },
+    empty: { marginTop: theme.spacing.lg },
+    emptyTitle: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily, fontWeight: "900" as const, color: theme.colors.textPrimary, marginBottom: theme.spacing.xs },
+    emptyText: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textMuted, marginBottom: theme.spacing.md },
+  };
+}

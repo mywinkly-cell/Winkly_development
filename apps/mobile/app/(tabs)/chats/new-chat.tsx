@@ -3,14 +3,13 @@ import {
   View,
   Text,
   FlatList,
-  TextInput,
-  Pressable,
   ActivityIndicator,
   Image,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { SafeScreenView } from "@/components/SafeScreenView";
-import { Colors, Typography } from "@/constants/tokens";
+import { Header, Input, ListRow } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { chatRoutes, useModeHub } from "@/lib/navigation/modeHub";
 import { supabase } from "@/lib/supabase";
@@ -78,6 +77,7 @@ async function loadRomanceMatches(userId: string): Promise<UserMini[]> {
 
 export default function NewChat() {
   const router = useRouter();
+  const theme = useAppTheme();
   const chatHub = useModeHub();
   const fmtLoc = useFormatLocationDisplay();
   const params = useLocalSearchParams<{ mode?: string }>();
@@ -197,175 +197,67 @@ export default function NewChat() {
     }
   }
 
+  const styles = createStyles(theme);
+
   return (
-    <SafeScreenView style={{ flex: 1 }}>
-      {/* Top bar */}
-      <View
-        style={{
-          padding: 14,
-          borderBottomWidth: 1,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 10,
-        }}
-      >
-        <Pressable
-          onPress={() => router.back()}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: Colors.gray100,
-            alignItems: "center",
-            justifyContent: "center",
-            shadowColor: "#1C1C1E",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.15,
-            shadowRadius: 4,
-            elevation: 4,
-          }}
-          accessibilityLabel="Back"
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </Pressable>
+    <SafeScreenView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <Header
+        title={isRomance ? "Message a match" : "New chat"}
+        onBack={() => router.back()}
+      />
+      <Text style={styles.subtitle}>
+        {isRomance
+          ? "Romance is 1:1 only — pick someone you have already matched with."
+          : `Start a 1:1 chat or create a group — ${mode}`}
+      </Text>
 
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontWeight: "900", fontSize: 16 }}>
-            {isRomance ? "Message a match" : "New chat"}
-          </Text>
-          <Text style={{ opacity: 0.65, marginTop: 2, fontSize: 12 }}>
-            {isRomance
-              ? "Romance is 1:1 only — pick someone you have already matched with."
-              : `Start a 1:1 chat or create a group — ${mode}`}
-          </Text>
-        </View>
-      </View>
-
-      <View style={{ flex: 1, padding: 14 }}>
-        {error ? <Text style={{ color: "crimson", marginBottom: 10 }}>Error: {error}</Text> : null}
+      <View style={styles.content}>
+        {error ? <Text style={styles.errorText}>Error: {error}</Text> : null}
 
         {!isRomance && (
-          <Pressable
+          <ListRow
+            title="Create group chat"
+            subtitle="Invite matches & contacts — planning made easy"
             onPress={() => router.replace("/groups/create-group")}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 10,
-              paddingVertical: 14,
-              paddingHorizontal: 16,
-              borderRadius: 14,
-              backgroundColor: Colors.gray100,
-              marginBottom: 14,
-              borderWidth: 1,
-              borderColor: Colors.gray200,
-            }}
-          >
-            <Ionicons name="people" size={24} color={Colors.primaryViolet} />
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: "600", fontSize: 15 }}>Create group chat</Text>
-              <Text style={{ fontSize: 12, color: Colors.gray600, marginTop: 2 }}>
-                Invite matches & contacts — planning made easy
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.gray500} />
-          </Pressable>
+            style={styles.groupRow}
+            leading={<Ionicons name="people" size={24} color={theme.colors.primary} />}
+          />
         )}
 
         {!isRomance && (
-          <TextInput
+          <Input
             value={q}
             onChangeText={setQ}
             placeholder="Search by name or city…"
             autoCorrect={false}
             autoCapitalize="none"
-            style={{
-              borderWidth: 1,
-              borderRadius: 14,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              marginBottom: 12,
-            }}
           />
         )}
 
-        {creating ? <Text style={{ opacity: 0.7, marginBottom: 8 }}>Creating chat…</Text> : null}
+        {creating ? <Text style={styles.creatingText}>Creating chat…</Text> : null}
 
         {loading ? (
           <View style={{ flex: 1, justifyContent: "center" }}>
-            <ActivityIndicator size="large" color={Colors.primaryViolet} />
-            <Text style={{ textAlign: "center", marginTop: 8, opacity: 0.7 }}>Loading…</Text>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={styles.loadingText}>Loading…</Text>
           </View>
         ) : (
           <FlatList
             data={filtered}
             keyExtractor={(u) => u.id}
-            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+            ItemSeparatorComponent={() => <View style={{ height: theme.spacing.sm }} />}
             renderItem={({ item }) => (
-              <Pressable
+              <ListRow
+                title={formatName(item)}
+                subtitle={fmtLoc(item.city) || "—"}
                 onPress={() => handleCreateDirectChat(item)}
                 disabled={creating}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  padding: 14,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: Colors.gray200,
-                  opacity: creating ? 0.6 : 1,
-                  backgroundColor: Colors.white,
-                  shadowColor: "#1C1C1E",
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.06,
-                  shadowRadius: 4,
-                  elevation: 2,
-                }}
-              >
-                <View
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 24,
-                    backgroundColor: Colors.gray100,
-                    overflow: "hidden",
-                    marginRight: 12,
-                  }}
-                >
-                  {(item.main_photo_url || (item as UserMini).romance_photos?.[0] || (item as UserMini).core_photos?.[0]) ? (
-                    <Image
-                      source={{
-                        uri:
-                          item.main_photo_url ??
-                          (item as UserMini).romance_photos?.[0] ??
-                          (item as UserMini).core_photos?.[0] ??
-                          "",
-                      }}
-                      style={{ width: 48, height: 48 }}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View
-                      style={{
-                        width: 48,
-                        height: 48,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Ionicons name="person" size={24} color={Colors.gray500} />
-                    </View>
-                  )}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ ...Typography.body, fontWeight: "600" }}>{formatName(item)}</Text>
-                  <Text style={{ fontSize: 13, color: Colors.gray600, marginTop: 2 }}>
-                    {fmtLoc(item.city) || "—"}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
-              </Pressable>
+                style={styles.contactRow}
+                leading={<ContactAvatar item={item} theme={theme} />}
+              />
             )}
             ListEmptyComponent={
-              <Text style={{ opacity: 0.7, textAlign: "center", marginTop: 24 }}>
+              <Text style={styles.emptyText}>
                 {isRomance
                   ? "No matches yet. Discover people and let the spark happen."
                   : q.trim()
@@ -378,4 +270,58 @@ export default function NewChat() {
       </View>
     </SafeScreenView>
   );
+}
+
+function ContactAvatar({ item, theme }: { item: UserMini; theme: AppTheme }) {
+  const uri = item.main_photo_url || item.romance_photos?.[0] || item.core_photos?.[0];
+  return (
+    <View
+      style={{
+        width: 48,
+        height: 48,
+        borderRadius: theme.radii.pill,
+        backgroundColor: theme.colors.backgroundMuted,
+        overflow: "hidden",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {uri ? (
+        <Image source={{ uri }} style={{ width: 48, height: 48 }} resizeMode="cover" />
+      ) : (
+        <Ionicons name="person" size={24} color={theme.colors.textMuted} />
+      )}
+    </View>
+  );
+}
+
+function createStyles(theme: AppTheme) {
+  return {
+    subtitle: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      paddingHorizontal: theme.spacing.lg,
+      paddingTop: theme.spacing.sm,
+      paddingBottom: theme.spacing.xs,
+    },
+    content: { flex: 1, padding: theme.spacing.md },
+    errorText: { color: theme.colors.error, marginBottom: theme.spacing.sm },
+    creatingText: { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm },
+    loadingText: { textAlign: "center" as const, marginTop: theme.spacing.sm, color: theme.colors.textSecondary },
+    groupRow: {
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.backgroundMuted,
+      marginBottom: theme.spacing.md,
+    },
+    contactRow: {
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    emptyText: { textAlign: "center" as const, marginTop: theme.spacing.xxl, color: theme.colors.textSecondary },
+  };
 }

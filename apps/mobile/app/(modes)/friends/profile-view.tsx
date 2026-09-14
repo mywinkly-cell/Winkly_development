@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
   ScrollView,
   ActivityIndicator,
   Alert,
@@ -36,7 +35,8 @@ import { ModeProfilePublicView } from "@/components/profile/ModeProfilePublicVie
 import { ProfileViewHeader } from "@/components/profile/ProfileViewHeader";
 import { ProfileSwipeActions } from "@/components/profile/ProfileSwipeActions";
 import { ProfileConnectionActions } from "@/components/profile/ProfileConnectionActions";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { ListRow, TextButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 type FriendProfile = {
   id: string; // profile id
@@ -71,6 +71,8 @@ function isUuid(v: string) {
 export default function FriendsProfileView() {
   const { i18n } = useTranslation();
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const params = useLocalSearchParams<{ user_id?: string }>();
 
   const userId = useMemo(() => (typeof params.user_id === "string" ? params.user_id : ""), [params.user_id]);
@@ -262,33 +264,31 @@ export default function FriendsProfileView() {
   );
 
   return (
-    <View style={[styles.screen, { backgroundColor: Colors.backgroundLight }]}>
+    <View style={styles.screen}>
       <ProfileViewHeader
         onBack={() => router.back()}
         mode="friends"
         onPlannerPress={handlePlannerPress}
       />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: theme.spacing.xxl }}>
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color={Colors.friends.primary} />
-            <Text style={{ marginTop: 10, color: Colors.mutedText }}>Loading profile…</Text>
+            <ActivityIndicator size="large" color={theme.modeAccent("friends").primary} />
+            <Text style={styles.loadingText}>Loading profile…</Text>
           </View>
         ) : !profile ? (
-          <View style={[styles.empty, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-            <Text style={{ color: Colors.text, fontWeight: "900" }}>Profile not found</Text>
-            <Text style={{ color: Colors.mutedText, marginTop: 6, lineHeight: 18 }}>
-              This usually means the Friends profile table isn’t connected yet or the user_id is missing.
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>Profile not found</Text>
+            <Text style={styles.emptyBody}>
+              This usually means the Friends profile table isn't connected yet or the user_id is missing.
             </Text>
 
-            <TouchableOpacity
+            <TextButton
+              title="Back to Discover"
               onPress={() => router.push("/(modes)/friends/discover")}
-              style={[styles.cta, { backgroundColor: Colors.friends.primary }]}
-              activeOpacity={0.9}
-            >
-              <Text style={{ color: Colors.onPrimary, fontWeight: "900" }}>Back to Discover</Text>
-            </TouchableOpacity>
+              style={styles.cta}
+            />
           </View>
         ) : (
           <>
@@ -300,32 +300,30 @@ export default function FriendsProfileView() {
             />
 
             {isConnected ? (
-              <View style={{ paddingHorizontal: Layout?.screenPadding ?? 16, marginTop: 8 }}>
+              <View style={{ paddingHorizontal: theme.spacing.lg, marginTop: theme.spacing.sm }}>
                 <ProfileConnectionActions
                   mode="friends"
-                  primaryColor={Colors.friends.primary}
+                  primaryColor={theme.modeAccent("friends").primary}
                   busy={actionBusy}
                   hasChat={!!chatId}
                   onChat={() => void handleChat()}
                   onRemove={handleRemoveConnection}
                 />
-                <TouchableOpacity
+                <ListRow
+                  title="Add to a group"
                   onPress={() =>
                     router.push({
                       pathname: "/groups/create-group",
                       params: { mode: "friends", preselect: targetUserId },
                     })
                   }
-                  style={[styles.linkRow, { borderColor: Colors.border, backgroundColor: Colors.card, marginTop: 10 }]}
-                  activeOpacity={0.9}
-                >
-                  <Text style={{ color: Colors.text, fontWeight: "700" }}>Add to a group</Text>
-                </TouchableOpacity>
+                  style={styles.linkRow}
+                />
               </View>
             ) : (
               <ProfileSwipeActions
                 mode="friends"
-                primaryColor={Colors.friends.primary}
+                primaryColor={theme.modeAccent("friends").primary}
                 disabled={actionBusy}
                 onPass={() => void handlePass()}
                 onSuper={() => void handleSuperConnect()}
@@ -350,51 +348,30 @@ export default function FriendsProfileView() {
   );
 }
 
-const styles: any = {
-  screen: { flex: 1 },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  center: { paddingVertical: 40, alignItems: "center", justifyContent: "center" },
-
-  empty: {
-    marginHorizontal: Layout?.screenPadding ?? 16,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 10,
-  },
-  cta: { marginTop: 12, borderRadius: 14, paddingVertical: 12, alignItems: "center" },
-
-  profileCard: {
-    marginHorizontal: Layout?.screenPadding ?? 16,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 8,
-  },
-  name: { fontSize: 20, fontWeight: "900" },
-
-  block: {
-    marginHorizontal: Layout?.screenPadding ?? 16,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 12,
-  },
-  blockTitle: { fontSize: 16, fontWeight: "900" },
-
-  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-
-  linkRow: {
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-};
+function createStyles(theme: AppTheme) {
+  return {
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    center: { paddingVertical: theme.spacing.huge, alignItems: "center" as const, justifyContent: "center" as const },
+    loadingText: { marginTop: theme.spacing.sm, color: theme.colors.textSecondary },
+    empty: {
+      marginHorizontal: theme.spacing.lg,
+      borderWidth: 1,
+      borderRadius: theme.radii.lg,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      padding: theme.spacing.lg,
+      marginTop: theme.spacing.sm,
+    },
+    emptyTitle: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily, fontWeight: "900" as const, color: theme.colors.textPrimary },
+    emptyBody: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.xs },
+    cta: { marginTop: theme.spacing.md },
+    linkRow: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.md,
+      paddingHorizontal: theme.spacing.md,
+      marginTop: theme.spacing.sm,
+    },
+  };
+}

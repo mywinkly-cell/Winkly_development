@@ -2,8 +2,7 @@
 // Winkly – Profile: Edit Business. Personal → profiles_mode (business). Business account → profiles_business.
 
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, Text, ScrollView, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/providers";
 import {
@@ -12,7 +11,8 @@ import {
   getOwnProfileBusiness,
   upsertOwnProfileBusiness,
 } from "@/lib/access/profiles";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Card, Chip, Header, Input, TextButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import type { BusinessProfileType } from "@/types";
 import { BUSINESS_ORG_SUBTYPE_OPTIONS, normalizeBusinessType } from "@/lib/business/businessTypes";
 
@@ -44,6 +44,8 @@ export default function EditBusiness() {
   const router = useRouter();
   const { user, accountType } = useAuth();
   const isBusinessAccount = accountType === "business";
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -115,168 +117,97 @@ export default function EditBusiness() {
   if (!user) return null;
   if (loading) {
     return (
-      <View style={[styles.screen, styles.centered]}>
-        <ActivityIndicator size="large" color={Colors.primaryViolet} />
+      <View style={{ ...styles.screen, ...styles.centered }}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
 
   return (
     <View style={styles.screen}>
+      <Header
+        title="Edit business"
+        onBack={() => router.back()}
+        trailing={<TextButton title={saving ? "Saving…" : "Save"} onPress={save} disabled={saving} style={styles.saveBtn} />}
+      />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Header title="Edit business" onBack={() => router.back()} onSave={save} saving={saving} />
-
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <Text style={styles.title}>Business</Text>
           <Text style={styles.subtitle}>Your professional identity for networking mode.</Text>
 
           {!isBusinessAccount && (
-            <>
-              <Label text="Role / Title" />
-              <TextInput
-                value={role}
-                onChangeText={setRole}
-                placeholder="e.g. IT Project Manager"
-                placeholderTextColor={Colors.gray500}
-                style={styles.input}
-                editable={!saving}
-              />
-            </>
+            <Input
+              label="Role / Title"
+              value={role}
+              onChangeText={setRole}
+              placeholder="e.g. IT Project Manager"
+              editable={!saving}
+            />
           )}
 
           {isBusinessAccount ? (
             <>
-              <Label text="Profile type" />
+              <Text style={styles.label}>Profile type</Text>
               <View style={styles.typeRow}>
-                {BUSINESS_TYPE_OPTIONS.map((opt) => {
-                  const selected = businessType === opt.value;
-                  return (
-                    <TouchableOpacity
-                      key={opt.value}
-                      onPress={() => setBusinessType(opt.value)}
-                      style={[styles.typeChip, selected && styles.typeChipSelected]}
-                      activeOpacity={0.9}
-                      disabled={saving}
-                    >
-                      <Text style={[styles.typeChipText, selected && styles.typeChipTextSelected]}>
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                {BUSINESS_TYPE_OPTIONS.map((opt) => (
+                  <Chip
+                    key={opt.value}
+                    label={opt.label}
+                    selected={businessType === opt.value}
+                    onPress={() => setBusinessType(opt.value)}
+                    disabled={saving}
+                  />
+                ))}
               </View>
             </>
           ) : null}
 
-          <Label text={isBusinessAccount ? "Business name" : "Company (optional)"} />
-          <TextInput
+          <Input
+            label={isBusinessAccount ? "Business name" : "Company (optional)"}
             value={company}
             onChangeText={setCompany}
             placeholder="e.g. Winkly Technologies"
-            placeholderTextColor={Colors.gray500}
-            style={styles.input}
             editable={!saving}
           />
-
-          <Label text="Networking goal" />
-          <TextInput
+          <Input
+            label="Networking goal"
             value={networkingGoal}
             onChangeText={setNetworkingGoal}
             placeholder="e.g. partnerships, hiring, mentorship..."
-            placeholderTextColor={Colors.gray500}
-            style={[styles.input, { minHeight: 90, textAlignVertical: "top" }]}
+            style={{ minHeight: 90, textAlignVertical: "top" }}
             multiline
             editable={!saving}
           />
-
-          <Label text="Skills / Focus (optional)" />
-          <TextInput
+          <Input
+            label="Skills / Focus (optional)"
             value={skills}
             onChangeText={setSkills}
             placeholder="e.g. PM, agile, analytics, automation..."
-            placeholderTextColor={Colors.gray500}
-            style={[styles.input, { minHeight: 90, textAlignVertical: "top" }]}
+            style={{ minHeight: 90, textAlignVertical: "top" }}
             multiline
             editable={!saving}
           />
-        </View>
+        </Card>
       </ScrollView>
     </View>
   );
 }
 
-function Header({
-  title,
-  onBack,
-  onSave,
-  saving,
-}: { title: string; onBack: () => void; onSave: () => void; saving?: boolean }) {
-  return (
-    <View style={styles.headerRow}>
-      <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back" disabled={saving}>
-        <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-      </TouchableOpacity>
-      <Text style={styles.headerTitle}>{title}</Text>
-      <TouchableOpacity onPress={onSave} style={[styles.saveBtn, saving && styles.saveBtnDisabled]} activeOpacity={0.9} disabled={saving}>
-        <Text style={styles.saveText}>{saving ? "Saving…" : "Save"}</Text>
-      </TouchableOpacity>
-    </View>
-  );
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    centered: { justifyContent: "center", alignItems: "center" },
+    scroll: { padding: theme.spacing.xl, paddingBottom: theme.spacing.huge },
+    saveBtn: { paddingHorizontal: 0 },
+    card: {},
+    title: { ...theme.type.h2, fontFamily: theme.type.h2.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.xxs },
+    subtitle: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.md },
+    label: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.xs,
+    },
+    typeRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.md },
+  });
 }
-
-function Label({ text }: { text: string }) {
-  return <Text style={styles.label}>{text}</Text>;
-}
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { padding: 20, paddingBottom: 40 },
-
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
-  saveBtn: { width: 70, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.primaryViolet, alignItems: "center" },
-  saveBtnDisabled: { opacity: 0.7 },
-  saveText: { ...Typography.caption, color: Colors.accentYellow },
-  centered: { justifyContent: "center", alignItems: "center" },
-
-  card: { backgroundColor: "#FFF", borderRadius: Layout.radii.card, borderWidth: 1, borderColor: Colors.gray200, padding: 16 },
-  title: { ...Typography.h2, color: Colors.textPrimary, marginBottom: 6 },
-  subtitle: { ...Typography.body, color: Colors.gray700, marginBottom: 14 },
-
-  label: { ...Typography.caption, color: Colors.gray600, marginBottom: 6 },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.gray300,
-    borderRadius: Layout.radii.control,
-    backgroundColor: "#FFF",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: Colors.textPrimary,
-    marginBottom: 12,
-  },
-  typeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
-  typeChip: {
-    borderWidth: 1,
-    borderColor: Colors.gray300,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: "#FFF",
-  },
-  typeChipSelected: { borderColor: Colors.primaryViolet, backgroundColor: "#F5F1FF" },
-  typeChipText: { ...Typography.caption, color: Colors.gray700 },
-  typeChipTextSelected: { color: Colors.primaryViolet, fontWeight: "700" },
-});

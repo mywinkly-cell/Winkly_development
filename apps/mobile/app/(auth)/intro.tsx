@@ -6,10 +6,12 @@ import { View, Text, Image, TouchableOpacity, StyleSheet, Animated } from "react
 import { SafeScreenView } from "@/components/SafeScreenView";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 export default function Intro() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -68,61 +70,63 @@ export default function Intro() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.backgroundMuted },
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.backgroundMuted,
-    paddingHorizontal: Layout.spacing.xl,
-    paddingTop: Layout.spacing.xxl,
-    paddingBottom: Layout.spacing.xl,
-    justifyContent: "space-between",
-  },
-  content: { alignItems: "center", justifyContent: "center", flex: 1 },
-  wordmark: { width: 220, height: 80, marginBottom: 32 },
-  title: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 26,
-    lineHeight: 36,
-    color: Colors.textPrimary,
-    textAlign: "center",
-    marginBottom: 16,
-    letterSpacing: 0.3,
-  },
-  subtitle: {
-    ...Typography.body,
-    color: Colors.gray600,
-    textAlign: "center",
-    marginBottom: 32,
-    maxWidth: 340,
-    lineHeight: 24,
-  },
-  primaryBtn: {
-    width: "100%",
-    maxWidth: 360,
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginBottom: 12,
-    minHeight: Layout.touchTargetMin,
-    justifyContent: "center",
-    ...Shadow.button,
-  },
-  primaryText: { ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.headingBold },
-  secondaryBtn: {
-    width: "100%",
-    maxWidth: 360,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 14,
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: Colors.gray200,
-    backgroundColor: Colors.white,
-    minHeight: 48,
-    justifyContent: "center",
-  },
-  secondaryText: { ...Typography.button, color: Colors.primaryViolet, fontFamily: FontFamily.headingBold },
-  legal: { ...Typography.caption, color: Colors.gray600, textAlign: "center", paddingHorizontal: 16, lineHeight: 20 },
-  link: { color: Colors.primaryViolet, fontWeight: "600" },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    safe: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    screen: {
+      flex: 1,
+      backgroundColor: theme.colors.backgroundMuted,
+      paddingHorizontal: theme.spacing.xxl,
+      paddingTop: theme.spacing.xxxl,
+      paddingBottom: theme.spacing.xxl,
+      justifyContent: "space-between",
+    },
+    content: { alignItems: "center", justifyContent: "center", flex: 1 },
+    wordmark: { width: 220, height: 80, marginBottom: 32 },
+    title: {
+      fontFamily: theme.type.h1.fontFamily,
+      fontSize: 26,
+      lineHeight: 36,
+      color: theme.colors.textPrimary,
+      textAlign: "center",
+      marginBottom: 16,
+      letterSpacing: 0.3,
+    },
+    subtitle: {
+      ...theme.type.body,
+      color: theme.colors.textSecondary,
+      textAlign: "center",
+      marginBottom: 32,
+      maxWidth: 340,
+      lineHeight: 24,
+    },
+    primaryBtn: {
+      width: "100%",
+      maxWidth: 360,
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.radii.md,
+      paddingVertical: 16,
+      alignItems: "center",
+      marginBottom: 12,
+      minHeight: 44,
+      justifyContent: "center",
+      ...theme.elevation(2),
+    },
+    primaryText: { ...theme.type.button, color: theme.colors.onPrimary, fontFamily: theme.type.button.fontFamily },
+    secondaryBtn: {
+      width: "100%",
+      maxWidth: 360,
+      borderRadius: theme.radii.md,
+      paddingVertical: 14,
+      alignItems: "center",
+      borderWidth: 2,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      minHeight: 48,
+      justifyContent: "center",
+    },
+    secondaryText: { ...theme.type.button, color: theme.colors.primary, fontFamily: theme.type.button.fontFamily },
+    legal: { ...theme.type.caption, color: theme.colors.textSecondary, textAlign: "center", paddingHorizontal: 16, lineHeight: 20 },
+    link: { color: theme.colors.primary, fontWeight: "600" },
+  });
+}

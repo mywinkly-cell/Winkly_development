@@ -13,8 +13,8 @@ import { formatChatInboxTimestamp, loadChatInbox, sortChatInboxItems } from "@/l
 import { ChatModeTabBar } from "@/components/chats/ChatModeTabBar";
 import { ChatPreviewCard } from "@/components/chats/ChatPreviewCard";
 import { ChatsHeader } from "@/components/layout/ChatsHeader";
-import { Button } from "@/components/ui/Button";
-import { Colors, Layout } from "@/constants/tokens";
+import { SecondaryButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { useModeContext } from "@/providers";
 
 function isChatMode(x: unknown): x is AppMode {
@@ -32,6 +32,8 @@ function formatName(u: UserMini | null | undefined, unknownLabel: string) {
 export default function ChatsHome() {
   const router = useRouter();
   const { t } = useTranslation();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const chatTabs = useChatTabConfig();
   const params = useLocalSearchParams<{ mode?: string }>();
   const { context: modeContext } = useModeContext();
@@ -169,9 +171,9 @@ export default function ChatsHome() {
       <View style={styles.screen}>
         <ChatsHeader mode={modeContext.active_mode ?? undefined} />
         <ChatModeTabBar tabs={chatTabs} activeTab="all" onTabPress={() => {}} />
-        <View style={{ flex: 1, paddingHorizontal: Layout.screenPadding, justifyContent: "center" }}>
-          <ActivityIndicator size="large" color={Colors.primaryViolet} />
-          <Text style={{ textAlign: "center", marginTop: 8 }}>{t("chat.loadingChats")}</Text>
+        <View style={{ flex: 1, paddingHorizontal: theme.spacing.xl, justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={{ textAlign: "center", marginTop: theme.spacing.sm, color: theme.colors.textSecondary }}>{t("chat.loadingChats")}</Text>
         </View>
       </View>
     );
@@ -189,7 +191,7 @@ export default function ChatsHome() {
       />
 
       <View style={styles.contentArea}>
-        <Button title={t("chat.newChatButton")} variant="secondary" onPress={goNewChat} style={styles.newChatBtn} />
+        <SecondaryButton title={t("chat.newChatButton")} onPress={goNewChat} style={styles.newChatBtn} />
         {useDemoPreview ? (
           <FlatList<DemoChatPreviewRow>
             style={{ flex: 1 }}
@@ -269,20 +271,24 @@ export default function ChatsHome() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  contentArea: {
-    flex: 1,
-    paddingTop: Layout.screenPadding,
-  },
-  newChatBtn: {
-    marginBottom: 12,
-    marginHorizontal: Layout.screenPadding,
-  },
-  emptyText: {
-    opacity: 0.7,
-    textAlign: "center",
-    paddingHorizontal: Layout.screenPadding,
-    paddingTop: 24,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    contentArea: {
+      flex: 1,
+      paddingTop: theme.spacing.xl,
+    },
+    newChatBtn: {
+      marginBottom: theme.spacing.md,
+      marginHorizontal: theme.spacing.xl,
+    },
+    emptyText: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textSecondary,
+      textAlign: "center",
+      paddingHorizontal: theme.spacing.xl,
+      paddingTop: theme.spacing.xxl,
+    },
+  });
+}

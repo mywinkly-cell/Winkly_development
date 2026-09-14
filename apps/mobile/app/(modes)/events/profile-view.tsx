@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
   ScrollView,
   ActivityIndicator,
 } from "react-native";
@@ -15,7 +14,8 @@ import {
 import { emptyPublicCoreProfile } from "@/lib/profile/publicModeProfile";
 import { ModeProfilePublicView } from "@/components/profile/ModeProfilePublicView";
 import { ProfileViewHeader } from "@/components/profile/ProfileViewHeader";
-import { Colors, Layout } from "@/constants/tokens";
+import { PrimaryButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 function isUuid(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
@@ -24,6 +24,8 @@ function isUuid(v: string) {
 export default function EventsProfileView() {
   const { i18n } = useTranslation();
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const params = useLocalSearchParams<{ user_id?: string }>();
 
   const userId = useMemo(
@@ -65,29 +67,27 @@ export default function EventsProfileView() {
   );
 
   return (
-    <View style={[styles.screen, { backgroundColor: Colors.backgroundLight }]}>
+    <View style={styles.screen}>
       <ProfileViewHeader onBack={() => router.back()} mode="events" rightSlot="none" />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: theme.spacing.xxl }}>
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color={Colors.events.primary} />
-            <Text style={{ marginTop: 10, color: Colors.mutedText }}>Loading profile…</Text>
+            <ActivityIndicator size="large" color={theme.modeAccent("events").primary} />
+            <Text style={styles.loadingText}>Loading profile…</Text>
           </View>
         ) : !coreFields ? (
-          <View style={[styles.empty, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-            <Text style={{ color: Colors.text, fontWeight: "900" }}>Profile not found</Text>
-            <Text style={{ color: Colors.mutedText, marginTop: 6, lineHeight: 18 }}>
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>Profile not found</Text>
+            <Text style={styles.emptyBody}>
               This user may not have a public profile yet.
             </Text>
 
-            <TouchableOpacity
+            <PrimaryButton
+              title="Back to Events"
               onPress={() => router.push("/(modes)/events/discover")}
-              style={[styles.cta, { backgroundColor: Colors.events.primary }]}
-              activeOpacity={0.9}
-            >
-              <Text style={{ color: Colors.onPrimary, fontWeight: "900" }}>Back to Events</Text>
-            </TouchableOpacity>
+              style={{ ...styles.cta, backgroundColor: theme.modeAccent("events").primary }}
+            />
           </View>
         ) : (
           <ModeProfilePublicView
@@ -102,15 +102,22 @@ export default function EventsProfileView() {
   );
 }
 
-const styles: Record<string, object> = {
-  screen: { flex: 1 },
-  center: { paddingVertical: 40, alignItems: "center", justifyContent: "center" },
-  empty: {
-    marginHorizontal: Layout?.screenPadding ?? 16,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 10,
-  },
-  cta: { marginTop: 12, borderRadius: 14, paddingVertical: 12, alignItems: "center" },
-};
+function createStyles(theme: AppTheme) {
+  return {
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    center: { paddingVertical: theme.spacing.huge, alignItems: "center" as const, justifyContent: "center" as const },
+    loadingText: { marginTop: theme.spacing.sm, color: theme.colors.textSecondary },
+    empty: {
+      marginHorizontal: theme.spacing.lg,
+      borderWidth: 1,
+      borderRadius: theme.radii.lg,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      padding: theme.spacing.lg,
+      marginTop: theme.spacing.sm,
+    },
+    emptyTitle: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily, fontWeight: "900" as const, color: theme.colors.textPrimary },
+    emptyBody: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.xs },
+    cta: { marginTop: theme.spacing.md },
+  };
+}

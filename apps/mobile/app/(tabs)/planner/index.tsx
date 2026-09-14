@@ -25,7 +25,7 @@ import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { useAppTheme, type AppTheme, type ModeName } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 import { getPlannerItems } from "@/lib/access/planner";
 import { getSavedIdeas } from "@/lib/ai/conciergeStorage";
@@ -48,6 +48,7 @@ import {
 } from "@/lib/ai/weekendIdeasPlans";
 import { useDefaultLocation } from "@/lib/ai/useDefaultCity";
 import { WeekendIdeasBlock } from "@/components/planner/WeekendIdeasBlock";
+import { PlanCard, PlanCardBadge, PlanCardMeta, PlanCardIconAction } from "@/components/plans/PlanCard";
 import type { WeeklySparkSettingsSave } from "@/components/planner/WeeklySparkSettingsBar";
 import { SparkPlanConfirmModal } from "@/components/planner/SparkPlanConfirmModal";
 import {
@@ -140,13 +141,15 @@ const DETAIL_ACTION_ICON_RESCHEDULE = 38;
 const DETAIL_ACTION_ICON_CANCEL = 36;
 
 function AvatarImage({ photoUrl, size }: { photoUrl?: string | null; size: number }) {
+  const theme = useAppTheme();
+  const avatarStyles = createAvatarStyles(theme);
   const [loadFailed, setLoadFailed] = useState(false);
   const showPlaceholder = !photoUrl || loadFailed;
   return (
     <View style={[avatarStyles.avatarWrap, { width: size, height: size, borderRadius: size / 2 }]}>
       {showPlaceholder ? (
         <View style={[avatarStyles.placeholderBg, { width: size, height: size, borderRadius: size / 2 }]}>
-          <Ionicons name="person" size={size * 0.5} color={Colors.gray500} />
+          <Ionicons name="person" size={size * 0.5} color={theme.colors.textMuted} />
         </View>
       ) : (
         <Image
@@ -160,14 +163,16 @@ function AvatarImage({ photoUrl, size }: { photoUrl?: string | null; size: numbe
   );
 }
 
-const TAB_CONFIG: { key: TabKey; labelKey: string; accent: string; secondary: string }[] = [
-  { key: "all", labelKey: "planner.allTab", accent: Colors.primaryViolet, secondary: Colors.white },
-  { key: "dates", labelKey: "planner.dates", accent: Colors.romance.primary, secondary: Colors.romance.secondary },
-  { key: "meetups", labelKey: "planner.meetups", accent: Colors.friends.primary, secondary: Colors.friends.secondary },
-  { key: "business", labelKey: "planner.business", accent: Colors.business.primary, secondary: Colors.business.secondary },
-  { key: "events", labelKey: "planner.events", accent: Colors.events.primary, secondary: Colors.events.secondary },
-  { key: "archive", labelKey: "planner.archive", accent: Colors.gray600, secondary: Colors.gray200 },
-];
+function getTabConfig(theme: AppTheme): { key: TabKey; labelKey: string; accent: string; secondary: string }[] {
+  return [
+    { key: "all", labelKey: "planner.allTab", accent: theme.colors.primary, secondary: theme.colors.surface },
+    { key: "dates", labelKey: "planner.dates", accent: theme.modeAccent("romance").primary, secondary: theme.modeAccent("romance").bg },
+    { key: "meetups", labelKey: "planner.meetups", accent: theme.modeAccent("friends").primary, secondary: theme.modeAccent("friends").bg },
+    { key: "business", labelKey: "planner.business", accent: theme.modeAccent("business").primary, secondary: theme.modeAccent("business").bg },
+    { key: "events", labelKey: "planner.events", accent: theme.modeAccent("events").primary, secondary: theme.modeAccent("events").bg },
+    { key: "archive", labelKey: "planner.archive", accent: theme.colors.textSecondary, secondary: theme.colors.border },
+  ];
+}
 
 const TIME_RANGE_KEYS: { key: TimeRange; labelKey: string }[] = [
   { key: "all", labelKey: "planner.allTime" },
@@ -306,6 +311,8 @@ function ParticipantAvatars({
   source?: TabKey;
   myPhotoBySource?: Partial<Record<TabKey, string | null>>;
 }) {
+  const theme = useAppTheme();
+  const avatarStyles = createAvatarStyles(theme);
   const list = participants?.length ? participants : [{ id: "p1", photoUrl: null }, { id: "p2", photoUrl: null }];
   const display = list.length <= 2 ? list : list.slice(0, 3);
   const extra = list.length > 3 ? list.length - 3 : 0;
@@ -329,35 +336,38 @@ function ParticipantAvatars({
   );
 }
 
-const avatarStyles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center" },
-  avatarWrap: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
-    borderWidth: 2,
-    borderColor: Colors.white,
-    overflow: "hidden",
-    backgroundColor: Colors.gray200,
-    ...Shadow.card,
-  },
-  avatar: { width: "100%", height: "100%" },
-  placeholderBg: {
-    backgroundColor: Colors.gray200,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  extraBadge: {
-    backgroundColor: Colors.gray400,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  extraText: {
-    ...Typography.caption,
-    color: Colors.white,
-    fontWeight: "700",
-  },
-});
+function createAvatarStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    row: { flexDirection: "row", alignItems: "center" },
+    avatarWrap: {
+      width: AVATAR_SIZE,
+      height: AVATAR_SIZE,
+      borderRadius: AVATAR_SIZE / 2,
+      borderWidth: 2,
+      borderColor: theme.colors.surface,
+      overflow: "hidden",
+      backgroundColor: theme.colors.border,
+      ...theme.elevation(1),
+    },
+    avatar: { width: "100%", height: "100%" },
+    placeholderBg: {
+      backgroundColor: theme.colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    extraBadge: {
+      backgroundColor: theme.colors.textMuted,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    extraText: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: "#FFFFFF",
+      fontWeight: "700",
+    },
+  });
+}
 
 const ARCHIVE_DAYS = 14;
 
@@ -379,13 +389,15 @@ export type PlannerIndexHandle = {
   hideWeeklySparks: () => void;
 };
 
-const BOTTOM_BAR_HEIGHT = Layout.bottomBarHeight ?? 76;
-
 const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function PlannerIndex({ embedded, initialTab, onWeeklySparkVisibilityChange }, ref) {
   const router = useRouter();
   const { t } = useTranslation();
   const appLocale = useAppLocaleTag();
   const fmtLocationLine = useFormatLocationDisplay();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
+  const TAB_CONFIG = useMemo(() => getTabConfig(theme), [theme]);
+  const BOTTOM_BAR_HEIGHT = theme.spacing.jumbo + theme.spacing.huge;
   const insets = useSafeAreaInsets();
   const filterModalBottomPadding = BOTTOM_BAR_HEIGHT + insets.bottom;
   // Deep-link from the mode-selection Spark nudge: focus + reveal the Spark section.
@@ -947,6 +959,23 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
           : it
       )
     );
+    // Persist cancellation on planner_items.meta so it's authoritative server-side — this is
+    // what keeps a cancelled plan from ever surfacing a post-plan review prompt.
+    void (async () => {
+      const { data: row } = await supabase
+        .from("planner_items")
+        .select("meta")
+        .eq("id", item.id)
+        .maybeSingle();
+      const prevMeta =
+        row?.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
+          ? (row.meta as Record<string, unknown>)
+          : {};
+      await supabase
+        .from("planner_items")
+        .update({ meta: { ...prevMeta, cancelled_at: new Date().toISOString() } })
+        .eq("id", item.id);
+    })();
     closeDetails();
     closeCancelModal();
   }, [closeDetails, closeCancelModal]);
@@ -958,6 +987,20 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         it.id === item.id ? { ...it, status: "active" as const, archivedAt: undefined } : it
       )
     );
+    void (async () => {
+      const { data: row } = await supabase
+        .from("planner_items")
+        .select("meta")
+        .eq("id", item.id)
+        .maybeSingle();
+      const prevMeta =
+        row?.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
+          ? (row.meta as Record<string, unknown>)
+          : {};
+      if (prevMeta.cancelled_at == null) return;
+      const { cancelled_at: _cancelledAt, ...rest } = prevMeta;
+      await supabase.from("planner_items").update({ meta: rest }).eq("id", item.id);
+    })();
     closeDetails();
   }, [closeDetails]);
 
@@ -1149,7 +1192,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     >
       <View style={styles.conciergePromoRow}>
         <View style={styles.conciergePromoAvatar}>
-          <SparklesIcon size={22} color={Colors.white} />
+          <SparklesIcon size={22} color={theme.colors.onPrimary} />
         </View>
         <View style={styles.conciergePromoTextWrap}>
           <Text style={styles.conciergePromoText}>{t("planner.conciergePromo.title")}</Text>
@@ -1158,67 +1201,57 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
       </View>
       <View style={styles.conciergePromoCta}>
         <Text style={styles.conciergePromoCtaText}>{t("planner.conciergePromo.cta")}</Text>
-        <Ionicons name="arrow-forward" size={16} color={Colors.white} />
+        <Ionicons name="arrow-forward" size={16} color={theme.colors.onPrimary} />
       </View>
     </TouchableOpacity>
   ) : null;
 
-  const _accentColor = TAB_CONFIG.find((t) => t.key === activeTab)?.accent ?? Colors.primaryViolet;
-
   const renderItemCard = useCallback((it: PlannerItem) => {
     const past = isItemPast(it.dateStr);
+    // Color by item's mode (source) so the All tab shows dates/meetups/business/events each with their own accent.
+    const accent = TAB_CONFIG.find((t) => t.key === it.source)?.accent ?? theme.colors.primary;
+
     return (
-      <View key={it.id} style={[styles.itemCard, past && styles.itemCardPast]}>
-        <View style={styles.itemCardRow}>
-          <TouchableOpacity onPress={() => openDetails(it)} activeOpacity={0.85} style={styles.itemCardContent} accessibilityLabel={`${it.title}, ${it.dateStr}`}>
-            <View style={styles.itemTop}>
-              <Text style={[styles.dateLabel, past && styles.dateLabelPast]}>{it.dateStr}</Text>
-              {past && (
-                <View style={styles.pastChip}>
-                  <Text style={styles.pastChipText}>Past</Text>
-                </View>
+      <PlanCard
+        key={it.id}
+        accentColor={accent}
+        dimmed={past}
+        onPress={() => openDetails(it)}
+        title={it.title}
+        badges={
+          <>
+            <PlanCardBadge label={it.dateStr} />
+            {past ? <PlanCardBadge label="Past" /> : null}
+            <PlanCardBadge label={it.topic} variant="outlined" color={accent} />
+          </>
+        }
+        meta={<PlanCardMeta icon="time-outline">{it.timeLabel}</PlanCardMeta>}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <ParticipantAvatars participants={it.participants ?? []} source={it.source} myPhotoBySource={myPhotoBySource} />
+          {!past && (
+            <View style={{ flexDirection: "row", gap: theme.spacing.sm }}>
+              {it.status === "archived" ? (
+                <PlanCardIconAction icon="arrow-undo" tone="primary" accessibilityLabel="Restore" onPress={() => restoreItem(it)} />
+              ) : (
+                <>
+                  <TouchableOpacity onPress={() => { Haptics.selectionAsync(); openDetails(it); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel="Confirm">
+                    <Image source={require("@/assets/icons/confirm-icon.png")} style={{ width: CARD_ACTION_ICON_CONFIRM, height: CARD_ACTION_ICON_CONFIRM }} resizeMode="contain" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => { Haptics.selectionAsync(); openDetails(it); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel="Reschedule">
+                    <Image source={require("@/assets/icons/reschedule-icon.png")} style={{ width: CARD_ACTION_ICON_RESCHEDULE, height: CARD_ACTION_ICON_RESCHEDULE }} resizeMode="contain" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setSelectedItem(it); setDetailsModalVisible(false); openCancelModal(); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel="Cancel">
+                    <Image source={require("@/assets/icons/decline-icon.png")} style={{ width: CARD_ACTION_ICON_CANCEL, height: CARD_ACTION_ICON_CANCEL }} resizeMode="contain" />
+                  </TouchableOpacity>
+                </>
               )}
             </View>
-            <View style={styles.itemTitleRow}>
-              {/* Color by item's mode (source) so All tab shows dates/meetups/business/events each with their own color */}
-              <View style={[styles.sourceDot, { backgroundColor: TAB_CONFIG.find((t) => t.key === it.source)?.accent ?? Colors.primaryViolet }]} />
-              <Text style={[styles.itemTitle, past && styles.itemTitlePast]}>{it.title}</Text>
-            </View>
-            <View style={styles.topicChip}>
-              <Text style={styles.topicChipText}>{it.topic}</Text>
-            </View>
-            <Text style={[styles.itemSub, past && styles.itemSubPast]}>{it.timeLabel}</Text>
-          </TouchableOpacity>
-          <View style={styles.cardRightColumn}>
-            <View style={styles.cardAvatarsWrap}>
-              <ParticipantAvatars participants={it.participants ?? []} source={it.source} myPhotoBySource={myPhotoBySource} />
-            </View>
-            {!past && (
-              <View style={styles.cardActions}>
-                {it.status === "archived" ? (
-                  <TouchableOpacity onPress={() => { Haptics.selectionAsync(); restoreItem(it); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel="Restore">
-                    <Ionicons name="arrow-undo" size={CARD_ACTION_ICON_CANCEL} color={Colors.events.primary} />
-                  </TouchableOpacity>
-                ) : (
-                  <>
-                    <TouchableOpacity onPress={() => { Haptics.selectionAsync(); openDetails(it); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel="Confirm">
-                      <Image source={require("@/assets/icons/confirm-icon.png")} style={{ width: CARD_ACTION_ICON_CONFIRM, height: CARD_ACTION_ICON_CONFIRM }} resizeMode="contain" />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => { Haptics.selectionAsync(); openDetails(it); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel="Reschedule">
-                      <Image source={require("@/assets/icons/reschedule-icon.png")} style={{ width: CARD_ACTION_ICON_RESCHEDULE, height: CARD_ACTION_ICON_RESCHEDULE }} resizeMode="contain" />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setSelectedItem(it); setDetailsModalVisible(false); openCancelModal(); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel="Cancel">
-                      <Image source={require("@/assets/icons/decline-icon.png")} style={{ width: CARD_ACTION_ICON_CANCEL, height: CARD_ACTION_ICON_CANCEL }} resizeMode="contain" />
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-            )}
-          </View>
+          )}
         </View>
-      </View>
+      </PlanCard>
     );
-  }, [openDetails, restoreItem, myPhotoBySource, openCancelModal]);
+  }, [openDetails, restoreItem, myPhotoBySource, openCancelModal, theme, styles, TAB_CONFIG]);
 
   return (
     <View style={styles.screen}>
@@ -1248,7 +1281,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
           >
           {TAB_CONFIG.map((tab) => {
             const isActive = activeTab === tab.key;
-            const bgColor = tab.key === "all" ? Colors.white : tab.secondary;
+            const bgColor = tab.key === "all" ? theme.colors.surface : tab.secondary;
             return (
               <TouchableOpacity
                 key={tab.key}
@@ -1334,9 +1367,9 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
             onPress={() => { Haptics.selectionAsync(); openConcierge(); }}
             activeOpacity={0.8}
           >
-            <Ionicons name="bookmark" size={20} color={Colors.primaryViolet} />
+            <Ionicons name="bookmark" size={20} color={theme.colors.primary} />
             <Text style={styles.savedIdeasRowText}>Saved ideas ({savedIdeasCount})</Text>
-            <Ionicons name="chevron-forward" size={20} color={Colors.gray500} />
+            <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
           </TouchableOpacity>
         )}
         {overviewMode === "list" && (
@@ -1344,7 +1377,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
             {conciergePromoCard}
             {items.length === 0 ? (
               <View style={styles.emptyState}>
-                <Ionicons name={activeTab === "archive" ? "archive-outline" : "calendar-outline"} size={48} color={Colors.gray400} style={{ marginBottom: 12 }} />
+                <Ionicons name={activeTab === "archive" ? "archive-outline" : "calendar-outline"} size={48} color={theme.colors.textMuted} style={{ marginBottom: 12 }} />
                 <Text style={styles.emptyTitle}>{activeTab === "archive" ? t("planner.noArchivedPlans") : t("planner.noPlansYet")}</Text>
                 <Text style={styles.emptySub}>{activeTab === "archive" ? t("planner.archivedEmptySub") : t("planner.upcomingEmptySub")}</Text>
               </View>
@@ -1356,13 +1389,13 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
           <>
             <View style={styles.weekNav}>
               <TouchableOpacity onPress={() => { Haptics.selectionAsync(); const prev = new Date(viewedWeekStart); prev.setDate(prev.getDate() - 7); setViewedWeekStart(prev); }} style={styles.weekNavBtn} hitSlop={12}>
-                <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
               </TouchableOpacity>
               <Text style={styles.weekNavTitle}>
                 {viewedWeekStart.toLocaleDateString(appLocale, { month: "short", day: "numeric" })} – {weekDays[6].toLocaleDateString(appLocale, { month: "short", day: "numeric", year: "numeric" })}
               </Text>
               <TouchableOpacity onPress={() => { Haptics.selectionAsync(); const next = new Date(viewedWeekStart); next.setDate(next.getDate() + 7); setViewedWeekStart(next); }} style={styles.weekNavBtn} hitSlop={12}>
-                <Ionicons name="chevron-forward" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-forward" size={24} color={theme.colors.textPrimary} />
               </TouchableOpacity>
             </View>
             <View style={styles.weekStrip}>
@@ -1394,7 +1427,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
             {conciergePromoCard ? <View style={styles.viewPromoWrap}>{conciergePromoCard}</View> : null}
             {visibleItemCount === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons name="calendar-outline" size={48} color={Colors.gray400} style={{ marginBottom: 12 }} />
+              <Ionicons name="calendar-outline" size={48} color={theme.colors.textMuted} style={{ marginBottom: 12 }} />
               <Text style={styles.emptyTitle}>{t("planner.noPlansThisWeek")}</Text>
               <Text style={styles.emptySub}>{t("planner.upcomingEmptySub")}</Text>
             </View>
@@ -1421,11 +1454,11 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
           <>
             <View style={styles.monthNav}>
               <TouchableOpacity onPress={() => { Haptics.selectionAsync(); const prev = new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() - 1); setViewedMonth(prev); }} style={styles.weekNavBtn} hitSlop={12}>
-                <Ionicons name="chevron-back" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
               </TouchableOpacity>
               <Text style={styles.weekNavTitle}>{viewedMonth.toLocaleDateString(appLocale, { month: "long", year: "numeric" })}</Text>
               <TouchableOpacity onPress={() => { Haptics.selectionAsync(); const next = new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() + 1); setViewedMonth(next); }} style={styles.weekNavBtn} hitSlop={12}>
-                <Ionicons name="chevron-forward" size={24} color={Colors.textPrimary} />
+                <Ionicons name="chevron-forward" size={24} color={theme.colors.textPrimary} />
               </TouchableOpacity>
             </View>
             <View style={styles.monthGrid}>
@@ -1461,7 +1494,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                               key={src}
                               style={[
                                 styles.monthCellModeDot,
-                                { backgroundColor: TAB_CONFIG.find((t) => t.key === src)?.accent ?? Colors.primaryViolet },
+                                { backgroundColor: TAB_CONFIG.find((t) => t.key === src)?.accent ?? theme.colors.primary },
                               ]}
                             />
                           ))}
@@ -1477,7 +1510,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                 <View style={styles.monthEventsDivider} />
                 {conciergePromoCard ? <View style={styles.viewPromoWrap}>{conciergePromoCard}</View> : null}
                 <View style={styles.emptyState}>
-                  <Ionicons name="calendar-outline" size={48} color={Colors.gray400} style={{ marginBottom: 12 }} />
+                  <Ionicons name="calendar-outline" size={48} color={theme.colors.textMuted} style={{ marginBottom: 12 }} />
                   <Text style={styles.emptyTitle}>{t("planner.noPlansThisMonth")}</Text>
                   <Text style={styles.emptySub}>{t("planner.upcomingEmptySub")}</Text>
                 </View>
@@ -1494,7 +1527,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                         {d && <Text style={styles.weekDayBlockTitle}>{d.toLocaleDateString(appLocale, { day: "numeric", month: "short" })}</Text>}
                         {dayItems.length === 0 ? (
                           <View style={styles.emptyState}>
-                            <Ionicons name="calendar-outline" size={48} color={Colors.gray400} style={{ marginBottom: 12 }} />
+                            <Ionicons name="calendar-outline" size={48} color={theme.colors.textMuted} style={{ marginBottom: 12 }} />
                             <Text style={styles.emptyTitle}>Nothing planned yet.</Text>
                             <Text style={styles.emptySub}>Let&apos;s turn this date into something worth remembering.</Text>
                           </View>
@@ -1546,7 +1579,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>{t("planner.filtersAndViewsTitle")}</Text>
                   <TouchableOpacity onPress={() => setFilterModalVisible(false)} hitSlop={12}>
-                    <Ionicons name="close" size={24} color={Colors.textPrimary} />
+                    <Ionicons name="close" size={24} color={theme.colors.textPrimary} />
                   </TouchableOpacity>
                 </View>
 
@@ -1625,7 +1658,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                       <Text style={styles.dateDisplayText}>
                         {selectedDate.toLocaleDateString(appLocale, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
                       </Text>
-                      <Ionicons name={showDatePicker ? "chevron-up" : "calendar-outline"} size={20} color={Colors.primaryViolet} />
+                      <Ionicons name={showDatePicker ? "chevron-up" : "calendar-outline"} size={20} color={theme.colors.primary} />
                     </TouchableOpacity>
                     {showDatePicker && (
                       <DateTimePicker
@@ -1663,10 +1696,10 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                           onPress={() => { Haptics.selectionAsync(); setSelectedWeek(w.key); }}
                           style={[styles.dropdownRow, selectedWeek === w.key && styles.topicRowActive]}
                         >
-                          <Text style={[styles.topicText, selectedWeek === w.key && { color: Colors.primaryViolet, fontWeight: "600" }]}>
+                          <Text style={[styles.topicText, selectedWeek === w.key && { color: theme.colors.primary, fontWeight: "600" }]}>
                             {w.label}
                           </Text>
-                          {selectedWeek === w.key && <Ionicons name="checkmark-circle" size={20} color={Colors.primaryViolet} />}
+                          {selectedWeek === w.key && <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} />}
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
@@ -1695,10 +1728,10 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                           onPress={() => { Haptics.selectionAsync(); setSelectedMonth(m.key); }}
                           style={[styles.dropdownRow, selectedMonth === m.key && styles.topicRowActive]}
                         >
-                          <Text style={[styles.topicText, selectedMonth === m.key && { color: Colors.primaryViolet, fontWeight: "600" }]}>
+                          <Text style={[styles.topicText, selectedMonth === m.key && { color: theme.colors.primary, fontWeight: "600" }]}>
                             {m.label}
                           </Text>
-                          {selectedMonth === m.key && <Ionicons name="checkmark-circle" size={20} color={Colors.primaryViolet} />}
+                          {selectedMonth === m.key && <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} />}
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
@@ -1718,10 +1751,10 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                       onPress={() => { Haptics.selectionAsync(); setTopic(t); }}
                       style={[styles.topicRow, topic === t && styles.topicRowActive]}
                     >
-                      <Text style={[styles.topicText, topic === t && { color: Colors.primaryViolet, fontWeight: "600" }]}>
+                      <Text style={[styles.topicText, topic === t && { color: theme.colors.primary, fontWeight: "600" }]}>
                         {t}
                       </Text>
-                      {topic === t && <Ionicons name="checkmark-circle" size={20} color={Colors.primaryViolet} />}
+                      {topic === t && <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} />}
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -1759,21 +1792,21 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                         hitSlop={12}
                         accessibilityLabel="Set reminders"
                       >
-                        <Ionicons name="notifications-outline" size={22} color={Colors.primaryViolet} />
+                        <Ionicons name="notifications-outline" size={22} color={theme.colors.primary} />
                       </TouchableOpacity>
                       <TouchableOpacity onPress={closeDetails} hitSlop={12} accessibilityLabel="Close">
-                        <Ionicons name="close" size={24} color={Colors.textPrimary} />
+                        <Ionicons name="close" size={24} color={theme.colors.textPrimary} />
                       </TouchableOpacity>
                     </View>
                   </View>
                   <ScrollView style={styles.detailsScroll} showsVerticalScrollIndicator={false}>
-                    <View style={[styles.topicChip, { marginBottom: 12 }]}>
-                      <Text style={styles.topicChipText}>{selectedItem.topic}</Text>
+                    <View style={{ alignSelf: "flex-start", marginBottom: 12 }}>
+                      <PlanCardBadge label={selectedItem.topic} variant="outlined" color={theme.colors.primary} />
                     </View>
                     <Text style={styles.detailsMeta}>{selectedItem.dateStr} · {selectedItem.timeLabel}</Text>
                     {selectedItem.location && (
                       <View style={styles.detailsRow}>
-                        <Ionicons name="location-outline" size={18} color={Colors.gray600} style={{ marginRight: 8 }} />
+                        <Ionicons name="location-outline" size={18} color={theme.colors.textSecondary} style={{ marginRight: 8 }} />
                         <Text style={styles.detailsText}>{fmtLocationLine(selectedItem.location)}</Text>
                       </View>
                     )}
@@ -1862,7 +1895,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                           style={[styles.detailActionBtn, { flex: 1 }]}
                           accessibilityLabel="Restore"
                         >
-                          <Ionicons name="arrow-undo" size={DETAIL_ACTION_ICON_CANCEL} color={Colors.events.primary} />
+                          <Ionicons name="arrow-undo" size={DETAIL_ACTION_ICON_CANCEL} color={theme.modeAccent("events").primary} />
                           <Text style={styles.detailActionLabel}>{t("planner.restore")}</Text>
                         </TouchableOpacity>
                       ) : (
@@ -1920,15 +1953,15 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                   style={[styles.cancelOptionRow, selectedCancelResponse === label && styles.cancelOptionActive]}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.cancelOptionText, selectedCancelResponse === label && { color: Colors.primaryViolet, fontWeight: "600" }]}>{label}</Text>
-                  {selectedCancelResponse === label && <Ionicons name="checkmark" size={20} color={Colors.primaryViolet} />}
+                  <Text style={[styles.cancelOptionText, selectedCancelResponse === label && { color: theme.colors.primary, fontWeight: "600" }]}>{label}</Text>
+                  {selectedCancelResponse === label && <Ionicons name="checkmark" size={20} color={theme.colors.primary} />}
                 </TouchableOpacity>
               );})}
               <Text style={[styles.cancelLabel, { marginTop: 16 }]}>{t("planner.orWriteYourOwn")}</Text>
               <TextInput
                 style={styles.cancelInput}
                 placeholder={t("planner.addPersonalMessage")}
-                placeholderTextColor={Colors.gray500}
+                placeholderTextColor={theme.colors.textMuted}
                 value={cancelCustomMessage}
                 onChangeText={(t) => { setCancelCustomMessage(t); setSelectedCancelResponse(null); }}
                 multiline
@@ -1964,564 +1997,481 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   );
 });
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  contentWrapper: { flex: 1 },
-  filterSheetWrapper: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: "flex-end",
-    paddingBottom: 0,
-  },
-  tabBar: {
-    backgroundColor: Colors.white,
-    minHeight: 48,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  tabBarScroll: { flex: 1 },
-  tabBarContent: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
-  },
-  tab: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 20,
-    minHeight: 36,
-  },
-  tabActive: {},
-  tabLabel: {
-    ...Typography.caption,
-    fontSize: 13,
-    color: Colors.textPrimary,
-  },
-  scroll: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 40 },
-  savedIdeasRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: Colors.white,
-    borderRadius: Layout.radii.card,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  savedIdeasRowText: {
-    ...Typography.body,
-    flex: 1,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-  },
-  viewPromoWrap: { paddingTop: 16 },
-  conciergePromoCard: {
-    marginBottom: 16,
-    padding: 16,
-    borderRadius: Layout.radii.card,
-    backgroundColor: Colors.primaryViolet + "14",
-    borderWidth: 1,
-    borderColor: Colors.primaryViolet + "44",
-  },
-  conciergePromoRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-  },
-  conciergePromoAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primaryViolet,
-    alignItems: "center",
-    justifyContent: "center",
-    ...Shadow.card,
-  },
-  conciergePromoTextWrap: { flex: 1, minWidth: 0 },
-  conciergePromoText: {
-    ...Typography.body,
-    fontFamily: FontFamily.headingBold,
-    color: Colors.primaryViolet,
-    fontWeight: "800",
-    marginBottom: 6,
-  },
-  conciergePromoSub: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    lineHeight: 18,
-  },
-  conciergePromoCta: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 14,
-    marginLeft: 52,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: Layout.radii.control,
-    backgroundColor: Colors.primaryViolet,
-  },
-  conciergePromoCtaText: {
-    ...Typography.button,
-    fontSize: 14,
-    color: Colors.white,
-  },
-  itemCard: {
-    backgroundColor: Colors.white,
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 20,
-    marginBottom: 16,
-    minHeight: 168,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  itemCardPast: { opacity: 0.92, borderColor: Colors.gray300 },
-  itemCardRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    minHeight: 128,
-    flex: 1,
-  },
-  itemCardContent: { flex: 1, marginRight: 16, minWidth: 0 },
-  cardRightColumn: {
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    minWidth: 110,
-    alignSelf: "stretch",
-    minHeight: 128,
-  },
-  cardAvatarsWrap: { flexShrink: 0, marginBottom: 16 },
-  cardActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    alignItems: "center",
-    gap: 8,
-    marginRight: -4,
-    marginBottom: -11,
-  },
-  cardActionBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.gray100,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.14,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  itemTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 5,
-  },
-  dateLabel: {
-    fontSize: 12,
-    lineHeight: 15,
-    color: Colors.gray600,
-    fontWeight: "600",
-  },
-  dateLabelPast: { color: Colors.gray500 },
-  pastChip: {
-    backgroundColor: Colors.gray200,
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-  },
-  pastChipText: { fontSize: 11, fontWeight: "600", color: Colors.gray600 },
-  itemTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 5,
-  },
-  sourceDot: { width: 7, height: 7, borderRadius: 4, marginRight: 7 },
-  itemTitle: { fontSize: 14, lineHeight: 19, fontWeight: "600", color: Colors.textPrimary, flex: 1 },
-  itemTitlePast: { color: Colors.gray600 },
-  itemSubPast: { color: Colors.gray500 },
-  topicChip: {
-    alignSelf: "flex-start",
-    backgroundColor: Colors.backgroundMuted,
-    paddingVertical: 3,
-    paddingHorizontal: 9,
-    borderRadius: 11,
-    marginBottom: 5,
-  },
-  topicChipText: {
-    fontSize: 12,
-    lineHeight: 15,
-    color: Colors.primaryViolet,
-    fontWeight: "600",
-  },
-  itemSub: { fontSize: 13, lineHeight: 18, color: Colors.gray700 },
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    contentWrapper: { flex: 1 },
+    filterSheetWrapper: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      justifyContent: "flex-end",
+      paddingBottom: 0,
+    },
+    tabBar: {
+      backgroundColor: theme.colors.surface,
+      minHeight: 48,
+      paddingVertical: theme.spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      ...theme.elevation(1),
+    },
+    tabBarScroll: { flex: 1 },
+    tabBarContent: {
+      flexDirection: "row",
+      gap: theme.spacing.sm,
+      alignItems: "center",
+    },
+    tab: {
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: theme.radii.pill,
+      minHeight: 36,
+    },
+    tabActive: {},
+    tabLabel: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontSize: 13,
+      color: theme.colors.textPrimary,
+    },
+    scroll: { flex: 1 },
+    scrollContent: { padding: theme.spacing.xl, paddingBottom: theme.spacing.huge },
+    savedIdeasRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      padding: theme.spacing.md,
+      marginBottom: theme.spacing.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    savedIdeasRowText: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      flex: 1,
+      fontWeight: "600",
+      color: theme.colors.textPrimary,
+    },
+    viewPromoWrap: { paddingTop: theme.spacing.lg },
+    conciergePromoCard: {
+      marginBottom: theme.spacing.lg,
+      padding: theme.spacing.lg,
+      borderRadius: theme.radii.lg,
+      backgroundColor: theme.colors.primary + "14",
+      borderWidth: 1,
+      borderColor: theme.colors.primary + "44",
+    },
+    conciergePromoRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: theme.spacing.md,
+    },
+    conciergePromoAvatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: theme.colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      ...theme.elevation(1),
+    },
+    conciergePromoTextWrap: { flex: 1, minWidth: 0 },
+    conciergePromoText: {
+      ...theme.type.body,
+      fontFamily: theme.type.h3.fontFamily,
+      color: theme.colors.primary,
+      fontWeight: "800",
+      marginBottom: theme.spacing.xs,
+    },
+    conciergePromoSub: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+    },
+    conciergePromoCta: {
+      alignSelf: "flex-start",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      marginTop: theme.spacing.md,
+      marginLeft: 52,
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.primary,
+    },
+    conciergePromoCtaText: {
+      ...theme.type.button,
+      fontFamily: theme.type.button.fontFamily,
+      fontSize: 14,
+      color: theme.colors.onPrimary,
+    },
+    cardActionBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
 
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 48,
-  },
-  emptyTitle: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
-    marginBottom: 6,
-  },
-  emptySub: {
-    ...Typography.body,
-    color: Colors.gray600,
-    textAlign: "center",
-    maxWidth: 260,
-  },
+    emptyState: {
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: theme.spacing.massive,
+    },
+    emptyTitle: {
+      ...theme.type.h3,
+      fontFamily: theme.type.h3.fontFamily,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.xs,
+    },
+    emptySub: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textSecondary,
+      textAlign: "center",
+      maxWidth: 260,
+    },
 
-  detailsModalContent: {
-    backgroundColor: Colors.white,
-    padding: 24,
-    paddingBottom: 40,
-    maxHeight: "90%",
-    marginTop: "auto",
-  },
-  detailsHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 16,
-  },
-  detailsTitle: {
-    ...Typography.h2,
-    color: Colors.textPrimary,
-    fontFamily: FontFamily.heading,
-    flex: 1,
-    paddingRight: 12,
-  },
-  detailsHeaderIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  detailsScroll: { maxHeight: 200, marginBottom: 20 },
-  detailsMeta: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-  detailsRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
-  detailsText: { ...Typography.body, color: Colors.textPrimary },
-  detailsDescription: { ...Typography.body, color: Colors.gray700, marginTop: 8 },
-  detailsSectionTitle: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
-    fontFamily: FontFamily.heading,
-    marginBottom: 12,
-  },
-  detailsHint: {
-    ...Typography.caption,
-    color: Colors.gray500,
-    marginTop: 16,
-    fontStyle: "italic",
-  },
-  detailsActions: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    gap: 12,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: Colors.gray200,
-  },
-  detailActionBtn: {
-    flex: 1,
-    minWidth: 0,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    borderRadius: Layout.radii.control,
-    backgroundColor: Colors.gray100,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  detailActionBtnConfirm: {
-    backgroundColor: Colors.primaryViolet + "12",
-    borderColor: Colors.primaryViolet + "30",
-  },
-  detailActionBtnReschedule: {
-    backgroundColor: Colors.gray100,
-    borderColor: Colors.gray200,
-  },
-  detailActionBtnCancel: {
-    backgroundColor: Colors.gray100,
-    borderColor: Colors.gray200,
-  },
-  detailActionLabel: {
-    ...Typography.caption,
-    fontSize: 12,
-    color: Colors.gray700,
-    marginTop: 6,
-    fontWeight: "600",
-  },
+    detailsModalContent: {
+      backgroundColor: theme.colors.surface,
+      padding: theme.spacing.xxl,
+      paddingBottom: theme.spacing.huge,
+      maxHeight: "90%",
+      marginTop: "auto",
+    },
+    detailsHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      marginBottom: theme.spacing.lg,
+    },
+    detailsTitle: {
+      ...theme.type.h2,
+      fontFamily: theme.type.h2.fontFamily,
+      color: theme.colors.textPrimary,
+      flex: 1,
+      paddingRight: theme.spacing.md,
+    },
+    detailsHeaderIconBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    detailsScroll: { maxHeight: 200, marginBottom: theme.spacing.xl },
+    detailsMeta: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      fontWeight: "600",
+      marginBottom: theme.spacing.md,
+    },
+    detailsRow: { flexDirection: "row", alignItems: "center", marginBottom: theme.spacing.sm },
+    detailsText: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textPrimary },
+    detailsDescription: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.sm },
+    detailsSectionTitle: {
+      ...theme.type.h3,
+      fontFamily: theme.type.h3.fontFamily,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.md,
+    },
+    detailsHint: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textMuted,
+      marginTop: theme.spacing.lg,
+      fontStyle: "italic",
+    },
+    detailsActions: {
+      flexDirection: "row",
+      alignItems: "stretch",
+      gap: theme.spacing.md,
+      paddingTop: theme.spacing.xl,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
+    detailActionBtn: {
+      flex: 1,
+      minWidth: 0,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.sm,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.backgroundMuted,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    detailActionBtnConfirm: {
+      backgroundColor: theme.colors.primary + "12",
+      borderColor: theme.colors.primary + "30",
+    },
+    detailActionBtnReschedule: {
+      backgroundColor: theme.colors.backgroundMuted,
+      borderColor: theme.colors.border,
+    },
+    detailActionBtnCancel: {
+      backgroundColor: theme.colors.backgroundMuted,
+      borderColor: theme.colors.border,
+    },
+    detailActionLabel: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontSize: 12,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.xs,
+      fontWeight: "600",
+    },
 
-  cancelModalContent: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
-    maxHeight: "85%",
-    marginTop: "auto",
-  },
-  cancelModalTitle: {
-    ...Typography.h2,
-    color: Colors.textPrimary,
-    fontFamily: FontFamily.heading,
-    marginBottom: 8,
-  },
-  cancelModalSub: {
-    ...Typography.body,
-    color: Colors.gray600,
-    marginBottom: 20,
-  },
-  cancelLabel: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  cancelOptionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    backgroundColor: Colors.gray100,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  cancelOptionActive: { backgroundColor: Colors.primaryViolet + "15", borderWidth: 1, borderColor: Colors.primaryViolet + "40" },
-  cancelOptionText: { ...Typography.body, color: Colors.textPrimary, flex: 1 },
-  cancelInput: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.gray100,
-    borderRadius: 12,
-    padding: 14,
-    minHeight: 80,
-    textAlignVertical: "top",
-  },
-  cancelModalActions: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 24,
-  },
-  cancelSecondaryBtn: {
-    flex: 1,
-    backgroundColor: Colors.gray100,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  cancelSecondaryText: { ...Typography.button, color: Colors.textPrimary },
-  cancelPrimaryBtn: {
-    flex: 1,
-    backgroundColor: Colors.romance.primary,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  cancelPrimaryText: { ...Typography.button, color: Colors.white },
+    cancelModalContent: {
+      backgroundColor: theme.colors.surface,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: theme.spacing.xxl,
+      paddingBottom: theme.spacing.huge,
+      maxHeight: "85%",
+      marginTop: "auto",
+    },
+    cancelModalTitle: {
+      ...theme.type.h2,
+      fontFamily: theme.type.h2.fontFamily,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.sm,
+    },
+    cancelModalSub: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.xl,
+    },
+    cancelLabel: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      fontWeight: "600",
+      marginBottom: theme.spacing.sm,
+    },
+    cancelOptionRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.md,
+      backgroundColor: theme.colors.backgroundMuted,
+      borderRadius: theme.radii.sm,
+      marginBottom: theme.spacing.sm,
+    },
+    cancelOptionActive: { backgroundColor: theme.colors.primary + "15", borderWidth: 1, borderColor: theme.colors.primary + "40" },
+    cancelOptionText: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textPrimary, flex: 1 },
+    cancelInput: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textPrimary,
+      backgroundColor: theme.colors.backgroundMuted,
+      borderRadius: theme.radii.sm,
+      padding: theme.spacing.md,
+      minHeight: 80,
+      textAlignVertical: "top",
+    },
+    cancelModalActions: {
+      flexDirection: "row",
+      gap: theme.spacing.md,
+      marginTop: theme.spacing.xxl,
+    },
+    cancelSecondaryBtn: {
+      flex: 1,
+      backgroundColor: theme.colors.backgroundMuted,
+      borderRadius: theme.radii.md,
+      paddingVertical: theme.spacing.md,
+      alignItems: "center",
+    },
+    cancelSecondaryText: { ...theme.type.button, fontFamily: theme.type.button.fontFamily, color: theme.colors.textPrimary },
+    cancelPrimaryBtn: {
+      flex: 1,
+      backgroundColor: theme.modeAccent("romance").primary,
+      borderRadius: theme.radii.md,
+      paddingVertical: theme.spacing.md,
+      alignItems: "center",
+    },
+    cancelPrimaryText: { ...theme.type.button, fontFamily: theme.type.button.fontFamily, color: "#FFFFFF" },
 
-  modalOverlayWrapper: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "flex-end",
-  },
-  sheetDimOverlay: {
-    backgroundColor: "rgba(0,0,0,0.35)",
-  },
-  sheetPanel: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1,
-    borderColor: Colors.gray300,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 12,
-    overflow: "visible",
-  },
-  modalContent: {
-    backgroundColor: Colors.white,
-    padding: 24,
-    paddingBottom: 40,
-    maxHeight: "85%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  modalTitle: {
-    ...Typography.h2,
-    color: Colors.textPrimary,
-    fontFamily: FontFamily.heading,
-  },
-  filterSection: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-  overviewRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 16 },
-  overviewChip: {
-    minHeight: 44,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  filterRow: { marginBottom: 4, minHeight: 52 },
-  filterRowContent: { paddingVertical: 4, alignItems: "center" },
-  dateDisplayBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: Colors.gray100,
-    borderRadius: Layout.radii.control,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  dateDisplayText: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    fontWeight: "500",
-  },
-  pickerSection: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: Colors.gray200,
-  },
-  pickerLabel: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  yearRow: { marginBottom: 4 },
-  yearChip: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: Colors.gray100,
-    marginRight: 8,
-  },
-  dropdownList: { maxHeight: 180 },
-  dropdownRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-  },
-  filterChip: {
-    minHeight: 44,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    marginRight: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  filterChipActive: { backgroundColor: Colors.primaryViolet },
-  filterChipText: { ...Typography.caption, fontSize: 14, lineHeight: 20, color: Colors.textPrimary },
-  filterChipTextActive: { color: Colors.white },
-  topicList: { maxHeight: 200 },
-  topicRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-  },
-  topicRowActive: { backgroundColor: Colors.backgroundMuted },
-  topicText: { ...Typography.body, color: Colors.textPrimary },
-  applyBtn: {
-    marginTop: 24,
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: "center",
-    shadowColor: "#5A189A",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 5,
-  },
-  applyBtnText: { ...Typography.button, color: Colors.white, fontFamily: FontFamily.heading },
-  weekNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 8, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.gray200 },
-  weekNavBtn: { padding: 4 },
-  weekNavTitle: { ...Typography.caption, fontWeight: "600", color: Colors.textPrimary },
-  weekStrip: { flexDirection: "row", paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: Colors.gray200 },
-  weekDayCell: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 12, marginHorizontal: 2 },
-  weekDayToday: { backgroundColor: Colors.primaryViolet },
-  weekDaySelected: { backgroundColor: Colors.primaryViolet + "18" },
-  weekDayName: { ...Typography.caption, color: Colors.gray600, marginBottom: 4 },
-  weekDayNum: { ...Typography.body, fontWeight: "700", color: Colors.textPrimary },
-  weekDayTodayText: { color: Colors.white },
-  weekDayBlock: { marginTop: 4, paddingTop: 3, borderTopWidth: 1, borderTopColor: Colors.gray200 },
-  weekDayBlockSelected: { borderTopColor: Colors.primaryViolet, borderTopWidth: 2 },
-  weekDayBlockTitle: { ...Typography.caption, fontWeight: "600", color: Colors.gray600, marginBottom: 12 },
-  weekDayEmpty: { ...Typography.caption, color: Colors.gray500, fontStyle: "italic", marginBottom: 8 },
-  monthNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 8, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.gray200 },
-  monthGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 4, paddingTop: 12, paddingBottom: 4 },
-  monthWeekdayHeader: { width: "14.28%", textAlign: "center", ...Typography.caption, color: Colors.gray600, fontWeight: "600", marginBottom: 8 },
-  monthCell: { width: "14.28%", aspectRatio: 1, maxWidth: 48, maxHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 24, margin: 2 },
-  monthCellToday: { backgroundColor: Colors.primaryViolet },
-  monthCellSelected: { backgroundColor: Colors.primaryViolet + "20", borderWidth: 2, borderColor: Colors.primaryViolet },
-  monthCellDay: { ...Typography.caption, fontWeight: "400", color: Colors.textPrimary, marginBottom: 10 },
-  monthCellTodayText: { color: Colors.white },
-  monthCellSelectedText: { color: Colors.primaryViolet, fontWeight: "600" },
-  monthCellIndicator: { position: "absolute", bottom: 3, left: 0, right: 0, alignItems: "center", justifyContent: "center" },
-  monthCellDotsRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2 },
-  monthCellModeDot: { width: 9, height: 9, borderRadius: 4.5, borderWidth: 1.5, borderColor: "rgba(0,0,0,0.15)" },
-  monthEvents: { marginTop: 0 },
-  monthEventsDivider: { height: 1, backgroundColor: Colors.gray200, marginBottom: 4 },
-});
+    modalOverlayWrapper: {
+      flex: 1,
+      justifyContent: "flex-end",
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: theme.colors.overlay,
+      justifyContent: "flex-end",
+    },
+    sheetDimOverlay: {
+      backgroundColor: theme.colors.overlay,
+    },
+    sheetPanel: {
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      ...theme.elevation(3),
+      overflow: "visible",
+    },
+    modalContent: {
+      backgroundColor: theme.colors.surface,
+      padding: theme.spacing.xxl,
+      paddingBottom: theme.spacing.huge,
+      maxHeight: "85%",
+    },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: theme.spacing.xxl,
+    },
+    modalTitle: {
+      ...theme.type.h2,
+      fontFamily: theme.type.h2.fontFamily,
+      color: theme.colors.textPrimary,
+    },
+    filterSection: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      fontWeight: "600",
+      marginBottom: theme.spacing.md,
+    },
+    overviewRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.lg },
+    overviewChip: {
+      minHeight: 44,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      borderRadius: theme.radii.pill,
+      backgroundColor: theme.colors.backgroundMuted,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    filterRow: { marginBottom: theme.spacing.xxs, minHeight: 52 },
+    filterRowContent: { paddingVertical: theme.spacing.xxs, alignItems: "center" },
+    dateDisplayBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      backgroundColor: theme.colors.backgroundMuted,
+      borderRadius: theme.radii.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    dateDisplayText: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textPrimary,
+      fontWeight: "500",
+    },
+    pickerSection: {
+      marginTop: theme.spacing.lg,
+      paddingTop: theme.spacing.lg,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
+    pickerLabel: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      fontWeight: "600",
+      marginBottom: theme.spacing.sm,
+    },
+    yearRow: { marginBottom: theme.spacing.xxs },
+    yearChip: {
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.pill,
+      backgroundColor: theme.colors.backgroundMuted,
+      marginRight: theme.spacing.sm,
+    },
+    dropdownList: { maxHeight: 180 },
+    dropdownRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: theme.spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    filterChip: {
+      minHeight: 44,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      borderRadius: theme.radii.pill,
+      backgroundColor: theme.colors.backgroundMuted,
+      marginRight: theme.spacing.sm,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    filterChipActive: { backgroundColor: theme.colors.primary },
+    filterChipText: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, fontSize: 14, lineHeight: 20, color: theme.colors.textPrimary },
+    filterChipTextActive: { color: theme.colors.onPrimary },
+    topicList: { maxHeight: 200 },
+    topicRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: theme.spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    topicRowActive: { backgroundColor: theme.colors.backgroundMuted },
+    topicText: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textPrimary },
+    applyBtn: {
+      marginTop: theme.spacing.xxl,
+      backgroundColor: theme.colors.primary,
+      borderRadius: 16,
+      paddingVertical: theme.spacing.md,
+      alignItems: "center",
+      ...theme.elevation(2),
+    },
+    applyBtnText: { ...theme.type.button, fontFamily: theme.type.button.fontFamily, color: theme.colors.onPrimary },
+    weekNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: theme.spacing.sm, paddingVertical: theme.spacing.md, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+    weekNavBtn: { padding: theme.spacing.xs },
+    weekNavTitle: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, fontWeight: "600", color: theme.colors.textPrimary },
+    weekStrip: { flexDirection: "row", paddingVertical: theme.spacing.md, paddingHorizontal: theme.spacing.xxs, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+    weekDayCell: { flex: 1, alignItems: "center", paddingVertical: theme.spacing.sm, borderRadius: theme.radii.sm, marginHorizontal: 2 },
+    weekDayToday: { backgroundColor: theme.colors.primary },
+    weekDaySelected: { backgroundColor: theme.colors.primary + "18" },
+    weekDayName: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.xs },
+    weekDayNum: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, fontWeight: "700", color: theme.colors.textPrimary },
+    weekDayTodayText: { color: theme.colors.onPrimary },
+    weekDayBlock: { marginTop: theme.spacing.xxs, paddingTop: 3, borderTopWidth: 1, borderTopColor: theme.colors.border },
+    weekDayBlockSelected: { borderTopColor: theme.colors.primary, borderTopWidth: 2 },
+    weekDayBlockTitle: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, fontWeight: "600", color: theme.colors.textSecondary, marginBottom: theme.spacing.md },
+    weekDayEmpty: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textMuted, fontStyle: "italic", marginBottom: theme.spacing.sm },
+    monthNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: theme.spacing.sm, paddingVertical: theme.spacing.md, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+    monthGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: theme.spacing.xxs, paddingTop: theme.spacing.md, paddingBottom: theme.spacing.xxs },
+    monthWeekdayHeader: { width: "14.28%", textAlign: "center", ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, fontWeight: "600", marginBottom: theme.spacing.sm },
+    monthCell: { width: "14.28%", aspectRatio: 1, maxWidth: 48, maxHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 24, margin: 2 },
+    monthCellToday: { backgroundColor: theme.colors.primary },
+    monthCellSelected: { backgroundColor: theme.colors.primary + "20", borderWidth: 2, borderColor: theme.colors.primary },
+    monthCellDay: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, fontWeight: "400", color: theme.colors.textPrimary, marginBottom: theme.spacing.sm },
+    monthCellTodayText: { color: theme.colors.onPrimary },
+    monthCellSelectedText: { color: theme.colors.primary, fontWeight: "600" },
+    monthCellIndicator: { position: "absolute", bottom: 3, left: 0, right: 0, alignItems: "center", justifyContent: "center" },
+    monthCellDotsRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2 },
+    monthCellModeDot: { width: 9, height: 9, borderRadius: 4.5, borderWidth: 1.5, borderColor: "rgba(0,0,0,0.15)" },
+    monthEvents: { marginTop: 0 },
+    monthEventsDivider: { height: 1, backgroundColor: theme.colors.border, marginBottom: theme.spacing.xxs },
+  });
+}
 
 export default PlannerIndex;

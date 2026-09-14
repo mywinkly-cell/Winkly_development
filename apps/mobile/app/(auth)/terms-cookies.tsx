@@ -17,7 +17,7 @@ import * as Haptics from "expo-haptics";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { getTermsAndCookiesAccepted, setTermsAndCookiesAccepted } from "@/lib/legalFlags";
 import { LanguageGlobeButton } from "@/components/i18n/LanguageGlobeButton";
 
@@ -28,6 +28,8 @@ const COOKIES_URL = "https://mywinkly.de/privacy#cookies";
 export default function TermsCookiesScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const params = useLocalSearchParams<{ next?: string }>();
   const next =
     params.next === "signin"
@@ -86,7 +88,7 @@ export default function TermsCookiesScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.iconWrap}>
-            <Ionicons name="document-text" size={48} color={Colors.primaryViolet} />
+            <Ionicons name="document-text" size={48} color={theme.colors.primary} />
           </View>
           <Text style={styles.title}>{t("legal.termsTitle")}</Text>
           <Text style={styles.subtitle}>{t("legal.termsSubtitle")}</Text>
@@ -100,7 +102,7 @@ export default function TermsCookiesScreen() {
             activeOpacity={0.8}
           >
             <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
-              {acceptedTerms && <Ionicons name="checkmark" size={18} color={Colors.white} />}
+              {acceptedTerms && <Ionicons name="checkmark" size={18} color={theme.colors.onPrimary} />}
             </View>
             <Text style={styles.checkLabel}>
               {t("legal.acceptTermsPrefix")}{" "}
@@ -119,7 +121,7 @@ export default function TermsCookiesScreen() {
             activeOpacity={0.8}
           >
             <View style={[styles.checkbox, acceptedCookies && styles.checkboxChecked]}>
-              {acceptedCookies && <Ionicons name="checkmark" size={18} color={Colors.white} />}
+              {acceptedCookies && <Ionicons name="checkmark" size={18} color={theme.colors.onPrimary} />}
             </View>
             <Text style={styles.checkLabel}>
               {t("legal.acceptCookiesPrefix")}{" "}
@@ -153,105 +155,112 @@ export default function TermsCookiesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.backgroundMuted },
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    ...Layout.topHeaderBar,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-  },
-  topBarSide: { width: 44 },
-  topBarSideEnd: { alignItems: "flex-end" },
-  topBarTitle: {
-    ...Typography.headerWinklyTitle,
-    color: Colors.primaryViolet,
-    fontFamily: FontFamily.headingBold,
-    textAlign: "center",
-  },
-  container: { flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24 },
-  scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 24 },
-  iconWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.primaryViolet + "18",
-    alignItems: "center",
-    justifyContent: "center",
-    alignSelf: "center",
-    marginBottom: 20,
-  },
-  title: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 26,
-    lineHeight: 34,
-    color: Colors.textPrimary,
-    textAlign: "center",
-    marginBottom: 12,
-  },
-  subtitle: {
-    ...Typography.body,
-    color: Colors.gray600,
-    lineHeight: 24,
-    marginBottom: 28,
-    textAlign: "center",
-  },
-  checkRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 16,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: Colors.gray400,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-    marginTop: 2,
-  },
-  checkboxChecked: {
-    backgroundColor: Colors.primaryViolet,
-    borderColor: Colors.primaryViolet,
-  },
-  checkLabel: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    flex: 1,
-    lineHeight: 22,
-  },
-  link: {
-    color: Colors.primaryViolet,
-    fontWeight: "600",
-  },
-  footerSpacer: { height: 16 },
-  footer: { paddingTop: 16 },
-  cta: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 52,
-    ...Shadow.button,
-  },
-  ctaDisabled: {
-    backgroundColor: Colors.gray300,
-    opacity: 0.9,
-  },
-  ctaText: {
-    ...Typography.button,
-    color: Colors.accentYellow,
-    fontFamily: FontFamily.headingBold,
-  },
-  ctaTextDisabled: {
-    color: Colors.gray500,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    safe: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    topBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      paddingTop: theme.spacing.sm,
+      paddingBottom: theme.spacing.md,
+      minHeight: 56,
+      backgroundColor: theme.colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    topBarSide: { width: 44 },
+    topBarSideEnd: { alignItems: "flex-end" },
+    topBarTitle: {
+      ...theme.type.h2,
+      fontSize: 22,
+      lineHeight: 31,
+      fontWeight: "700",
+      color: theme.colors.primary,
+      fontFamily: theme.type.h1.fontFamily,
+      textAlign: "center",
+    },
+    container: { flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24 },
+    scroll: { flex: 1 },
+    scrollContent: { paddingBottom: 24 },
+    iconWrap: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: theme.colors.primary + "18",
+      alignItems: "center",
+      justifyContent: "center",
+      alignSelf: "center",
+      marginBottom: 20,
+    },
+    title: {
+      fontFamily: theme.type.h1.fontFamily,
+      fontSize: 26,
+      lineHeight: 34,
+      color: theme.colors.textPrimary,
+      textAlign: "center",
+      marginBottom: 12,
+    },
+    subtitle: {
+      ...theme.type.body,
+      color: theme.colors.textSecondary,
+      lineHeight: 24,
+      marginBottom: 28,
+      textAlign: "center",
+    },
+    checkRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      marginBottom: 16,
+    },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderRadius: 6,
+      borderWidth: 2,
+      borderColor: theme.colors.textMuted,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 12,
+      marginTop: 2,
+    },
+    checkboxChecked: {
+      backgroundColor: theme.colors.primary,
+      borderColor: theme.colors.primary,
+    },
+    checkLabel: {
+      ...theme.type.body,
+      color: theme.colors.textPrimary,
+      flex: 1,
+      lineHeight: 22,
+    },
+    link: {
+      color: theme.colors.primary,
+      fontWeight: "600",
+    },
+    footerSpacer: { height: 16 },
+    footer: { paddingTop: 16 },
+    cta: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.radii.md,
+      paddingVertical: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: 52,
+      ...theme.elevation(2),
+    },
+    ctaDisabled: {
+      backgroundColor: theme.colors.border,
+      opacity: 0.9,
+    },
+    ctaText: {
+      ...theme.type.button,
+      color: theme.colors.onPrimary,
+      fontFamily: theme.type.button.fontFamily,
+    },
+    ctaTextDisabled: {
+      color: theme.colors.textMuted,
+    },
+  });
+}

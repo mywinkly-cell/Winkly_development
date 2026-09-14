@@ -14,7 +14,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { BusinessBottomNav } from "@/components/layout/BusinessBottomNav";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { ACTIVITY_PREFERENCE_OPTIONS } from "@/constants/profileOptions";
 import { supabase } from "@/lib/supabase";
 import { getOwnProfileBusiness } from "@/lib/access/profiles";
@@ -33,7 +33,9 @@ type FormStep = 1 | 2 | 3;
 
 export default function CreateBusinessOffer() {
   const router = useRouter();
-  const primary = Colors.business.primary;
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
+  const primary = theme.modeAccent("business").primary;
   const [step, setStep] = useState<FormStep>(1);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -121,7 +123,7 @@ export default function CreateBusinessOffer() {
       <ModeHeader currentMode="business" leftSlot="filters" rightSlot="ai" />
       <ScrollView contentContainerStyle={styles.scroll}>
         <TouchableOpacity onPress={() => (step > 1 ? setStep((step - 1) as FormStep) : router.back())} style={styles.backRow}>
-          <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={22} color={theme.colors.textPrimary} />
           <Text style={styles.backText}>{step > 1 ? "Back" : "Cancel"}</Text>
         </TouchableOpacity>
 
@@ -237,77 +239,79 @@ export default function CreateBusinessOffer() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { paddingHorizontal: Layout.screenPadding, paddingBottom: 120 },
-  backRow: { flexDirection: "row", alignItems: "center", gap: 6, marginVertical: 12 },
-  backText: { ...Typography.body, color: Colors.textPrimary },
-  title: { ...Typography.h2, color: Colors.textPrimary, marginBottom: 4 },
-  subtitle: { ...Typography.body, color: Colors.gray600, marginBottom: 20 },
-  label: { ...Typography.body, fontWeight: "600", color: Colors.gray700, marginBottom: 6, marginTop: 8 },
-  hint: { ...Typography.caption, color: Colors.gray500, marginBottom: 10 },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.gray300,
-    borderRadius: Layout.radii.control,
-    padding: 12,
-    backgroundColor: "#FFF",
-    marginBottom: 8,
-  },
-  imagePicker: {
-    height: 160,
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray300,
-    borderStyle: "dashed",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-    overflow: "hidden",
-  },
-  imagePreview: { width: "100%", height: "100%" },
-  imagePlaceholder: { color: Colors.gray500 },
-  tagGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
-  tagChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.gray300,
-    backgroundColor: "#FFF",
-  },
-  tagEmoji: { fontSize: 16 },
-  tagLabel: { fontSize: 13, color: Colors.textPrimary },
-  radiusRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
-  radiusChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.gray300,
-    backgroundColor: "#FFF",
-  },
-  radiusChipOn: { borderColor: Colors.business.primary, backgroundColor: Colors.business.primary + "18" },
-  radiusText: { color: Colors.textPrimary, fontSize: 14 },
-  radiusTextOn: { color: Colors.business.primary, fontWeight: "700" },
-  summary: {
-    backgroundColor: "#FFF",
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 14,
-    marginBottom: 16,
-  },
-  summaryTitle: { ...Typography.h3, color: Colors.textPrimary },
-  summaryMeta: { ...Typography.caption, color: Colors.gray600, marginTop: 4 },
-  cta: {
-    borderRadius: Layout.radii.control,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  ctaText: { ...Typography.button, color: "#FFF" },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { paddingHorizontal: theme.spacing.xl, paddingBottom: 120 },
+    backRow: { flexDirection: "row", alignItems: "center", gap: 6, marginVertical: 12 },
+    backText: { ...theme.type.body, color: theme.colors.textPrimary },
+    title: { ...theme.type.h2, color: theme.colors.textPrimary, marginBottom: 4 },
+    subtitle: { ...theme.type.body, color: theme.colors.textSecondary, marginBottom: 20 },
+    label: { ...theme.type.body, fontWeight: "600", color: theme.colors.textSecondary, marginBottom: 6, marginTop: 8 },
+    hint: { ...theme.type.caption, color: theme.colors.textMuted, marginBottom: 10 },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.md,
+      padding: 12,
+      backgroundColor: theme.colors.surface,
+      marginBottom: 8,
+    },
+    imagePicker: {
+      height: 160,
+      borderRadius: theme.radii.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderStyle: "dashed",
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 12,
+      overflow: "hidden",
+    },
+    imagePreview: { width: "100%", height: "100%" },
+    imagePlaceholder: { color: theme.colors.textMuted },
+    tagGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
+    tagChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    tagEmoji: { fontSize: 16 },
+    tagLabel: { fontSize: 13, color: theme.colors.textPrimary },
+    radiusRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
+    radiusChip: {
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    radiusChipOn: { borderColor: theme.modeAccent("business").primary, backgroundColor: theme.modeAccent("business").primary + "18" },
+    radiusText: { color: theme.colors.textPrimary, fontSize: 14 },
+    radiusTextOn: { color: theme.modeAccent("business").primary, fontWeight: "700" },
+    summary: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: 14,
+      marginBottom: 16,
+    },
+    summaryTitle: { ...theme.type.h3, color: theme.colors.textPrimary },
+    summaryMeta: { ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 4 },
+    cta: {
+      borderRadius: theme.radii.md,
+      paddingVertical: 16,
+      alignItems: "center",
+      marginTop: 8,
+    },
+    ctaText: { ...theme.type.button, color: "#FFFFFF" },
+  });
+}

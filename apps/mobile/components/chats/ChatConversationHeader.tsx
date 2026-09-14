@@ -6,7 +6,7 @@ import React from "react";
 import { View, Text, Pressable, Image, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "@/components/ui/Avatar";
-import { Colors } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 type ParticipantAvatar = {
   uri?: string | null;
@@ -29,10 +29,14 @@ function GroupAvatarStack({
   groupAvatarUri,
   participantAvatars,
   displayName,
+  styles,
+  theme,
 }: {
   groupAvatarUri?: string | null;
   participantAvatars: ParticipantAvatar[];
   displayName: string;
+  styles: ReturnType<typeof createStyles>;
+  theme: AppTheme;
 }) {
   if (groupAvatarUri) {
     return <Avatar uri={groupAvatarUri} initials={displayName.slice(0, 2)} size={40} />;
@@ -66,7 +70,7 @@ function GroupAvatarStack({
 
   return (
     <View style={styles.groupIconWrap}>
-      <Ionicons name="people" size={22} color={Colors.primaryViolet} />
+      <Ionicons name="people" size={22} color={theme.colors.primary} />
     </View>
   );
 }
@@ -82,6 +86,9 @@ export function ChatConversationHeader({
   onPress,
   accessibilityLabel,
 }: ChatConversationHeaderProps) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
+
   return (
     <Pressable
       style={styles.container}
@@ -94,6 +101,8 @@ export function ChatConversationHeader({
           groupAvatarUri={groupAvatarUri}
           participantAvatars={participantAvatars}
           displayName={displayName}
+          styles={styles}
+          theme={theme}
         />
       ) : (
         <Avatar uri={peerAvatarUri} initials={peerInitials} size={40} />
@@ -108,75 +117,78 @@ export function ChatConversationHeader({
         </Text>
       </View>
 
-      <Ionicons name="chevron-forward" size={18} color={Colors.gray500} />
+      <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 2,
-  },
-  textWrap: {
-    flex: 1,
-    minWidth: 0,
-  },
-  title: {
-    fontWeight: "900",
-    fontSize: 16,
-    color: Colors.textPrimary,
-  },
-  subtitle: {
-    opacity: 0.65,
-    fontSize: 12,
-    color: Colors.textPrimary,
-    marginTop: 1,
-  },
-  groupIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primaryViolet + "18",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarStack: {
-    width: 44,
-    height: 40,
-    position: "relative",
-  },
-  stackedAvatarWrap: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    overflow: "hidden",
-    borderWidth: 2,
-    borderColor: Colors.backgroundLight,
-  },
-  stackedAvatarOverlap: {
-    left: 16,
-    top: 12,
-  },
-  stackedAvatar: {
-    width: "100%",
-    height: "100%",
-  },
-  stackedPlaceholder: {
-    backgroundColor: Colors.gray200,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stackedInitials: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: Colors.gray600,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      minWidth: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      paddingVertical: theme.spacing.xxs,
+    },
+    textWrap: {
+      flex: 1,
+      minWidth: 0,
+    },
+    title: {
+      ...theme.type.bodyMedium,
+      fontFamily: theme.type.bodyMedium.fontFamily,
+      fontWeight: "700",
+      color: theme.colors.textPrimary,
+    },
+    subtitle: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      marginTop: 1,
+    },
+    groupIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: theme.radii.pill,
+      backgroundColor: theme.colors.primary + "18",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    avatarStack: {
+      width: 44,
+      height: 40,
+      position: "relative",
+    },
+    stackedAvatarWrap: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      overflow: "hidden",
+      borderWidth: 2,
+      borderColor: theme.colors.background,
+    },
+    stackedAvatarOverlap: {
+      left: 16,
+      top: 12,
+    },
+    stackedAvatar: {
+      width: "100%",
+      height: "100%",
+    },
+    stackedPlaceholder: {
+      backgroundColor: theme.colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    stackedInitials: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: theme.colors.textSecondary,
+    },
+  });
+}

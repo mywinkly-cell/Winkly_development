@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
   ScrollView,
   ActivityIndicator,
   Alert,
@@ -38,7 +37,8 @@ import {
 } from "@/lib/profile/publicModeProfile";
 import { ModeProfilePublicView } from "@/components/profile/ModeProfilePublicView";
 import { recordBusinessAnalyticsEvent } from "@/lib/business/analyticsStore";
-import { Colors, Layout } from "@/constants/tokens";
+import { PrimaryButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import type { BusinessConnectionStatus } from "@/types/business";
 
 type BusinessProfile = {
@@ -77,6 +77,8 @@ function fullName(p: BusinessProfile) {
 export default function BusinessProfileView() {
   const { i18n } = useTranslation();
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const params = useLocalSearchParams<{ user_id?: string }>();
 
   const userId = useMemo(() => (typeof params.user_id === "string" ? params.user_id : ""), [params.user_id]);
@@ -302,33 +304,27 @@ export default function BusinessProfileView() {
   );
 
   return (
-    <View style={[styles.screen, { backgroundColor: Colors.backgroundLight }]}>
+    <View style={styles.screen}>
       <ProfileViewHeader
         onBack={() => router.back()}
         mode="business"
         onPlannerPress={handlePlannerPress}
       />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: theme.spacing.xxl }}>
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color={Colors.business.primary} />
-            <Text style={{ marginTop: 10, color: Colors.mutedText }}>Loading profile…</Text>
+            <ActivityIndicator size="large" color={theme.modeAccent("business").primary} />
+            <Text style={styles.loadingText}>Loading profile…</Text>
           </View>
         ) : !profile ? (
-          <View style={[styles.empty, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-            <Text style={{ color: Colors.text, fontWeight: "900" }}>Profile not found</Text>
-            <Text style={{ color: Colors.mutedText, marginTop: 6, lineHeight: 18 }}>
-              This usually means the Business profile table isn’t connected yet or the user_id is missing.
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>Profile not found</Text>
+            <Text style={styles.emptyBody}>
+              This usually means the Business profile table isn't connected yet or the user_id is missing.
             </Text>
 
-            <TouchableOpacity
-              onPress={() => router.push("/(modes)/business/discover")}
-              style={[styles.cta, { backgroundColor: Colors.primary }]}
-              activeOpacity={0.9}
-            >
-              <Text style={{ color: Colors.onPrimary, fontWeight: "800" }}>Back to Discover</Text>
-            </TouchableOpacity>
+            <PrimaryButton title="Back to Discover" onPress={() => router.push("/(modes)/business/discover")} style={styles.cta} />
           </View>
         ) : (
           <>
@@ -340,10 +336,10 @@ export default function BusinessProfileView() {
             />
 
             {isConnected ? (
-              <View style={{ paddingHorizontal: Layout?.screenPadding ?? 16 }}>
+              <View style={{ paddingHorizontal: theme.spacing.lg }}>
                 <ProfileConnectionActions
                   mode="business"
-                  primaryColor={Colors.business.primary}
+                  primaryColor={theme.modeAccent("business").primary}
                   busy={actionBusy}
                   hasChat={!!chatId}
                   onChat={() => void handleChat()}
@@ -353,7 +349,7 @@ export default function BusinessProfileView() {
             ) : (
               <ProfileSwipeActions
                 mode="business"
-                primaryColor={Colors.business.primary}
+                primaryColor={theme.modeAccent("business").primary}
                 disabled={actionBusy || connectionStatus === "pending_sent"}
                 superDisabled={connectionStatus === "pending_sent"}
                 onPass={() => router.back()}
@@ -391,46 +387,22 @@ export default function BusinessProfileView() {
   );
 }
 
-const styles: any = {
-  screen: { flex: 1 },
-  center: { paddingVertical: 40, alignItems: "center", justifyContent: "center" },
-
-  empty: {
-    marginHorizontal: Layout?.screenPadding ?? 16,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 10,
-  },
-  cta: { marginTop: 12, borderRadius: 14, paddingVertical: 12, alignItems: "center" },
-
-  profileCard: {
-    marginHorizontal: Layout?.screenPadding ?? 16,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 8,
-  },
-  name: { fontSize: 20, fontWeight: "900" },
-
-  block: {
-    marginHorizontal: Layout?.screenPadding ?? 16,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 12,
-  },
-  blockTitle: { fontSize: 16, fontWeight: "900" },
-
-  skillChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-
-  linkRow: {
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-};
+function createStyles(theme: AppTheme) {
+  return {
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    center: { paddingVertical: theme.spacing.huge, alignItems: "center" as const, justifyContent: "center" as const },
+    loadingText: { marginTop: theme.spacing.sm, color: theme.colors.textSecondary },
+    empty: {
+      marginHorizontal: theme.spacing.lg,
+      borderWidth: 1,
+      borderRadius: theme.radii.lg,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      padding: theme.spacing.lg,
+      marginTop: theme.spacing.sm,
+    },
+    emptyTitle: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily, fontWeight: "900" as const, color: theme.colors.textPrimary },
+    emptyBody: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.xs },
+    cta: { marginTop: theme.spacing.md },
+  };
+}

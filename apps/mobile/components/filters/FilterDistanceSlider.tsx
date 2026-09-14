@@ -1,7 +1,7 @@
 import React from "react";
 import { View } from "react-native";
 import { Slider as FilterSlider } from "react-native-range-slider-expo";
-import { Colors } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 import {
   FILTER_SLIDER_CONTAINER_STYLE,
   FILTER_SLIDER_KNOB_SIZE,
@@ -25,6 +25,7 @@ export function FilterDistanceSlider({
   onChange,
   primaryColor,
 }: FilterDistanceSliderProps) {
+  const theme = useAppTheme();
   return (
     <View style={FILTER_SLIDER_WRAP_STYLE}>
       <FilterSlider
@@ -36,7 +37,7 @@ export function FilterDistanceSlider({
         styleSize={FILTER_SLIDER_KNOB_SIZE}
         knobColor={primaryColor}
         inRangeBarColor={primaryColor}
-        outOfRangeBarColor={Colors.gray300}
+        outOfRangeBarColor={theme.colors.border}
         showRangeLabels={false}
         showValueLabels={false}
         containerStyle={FILTER_SLIDER_CONTAINER_STYLE}

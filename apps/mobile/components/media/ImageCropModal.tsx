@@ -11,8 +11,7 @@ import { Modal, View, ActivityIndicator, Text, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ImageEditor } from "expo-dynamic-image-crop";
 import * as ImageManipulator from "expo-image-manipulator";
-import * as FileSystem from "expo-file-system";
-import { cacheDirectory } from "expo-file-system/legacy";
+import * as FileSystem from "expo-file-system/legacy";
 import { Colors } from "@/constants/tokens";
 
 type ImageCropModalProps = {
@@ -33,7 +32,7 @@ async function normalizeUriForCrop(uri: string): Promise<string> {
     return result.uri;
   } catch {
     try {
-      const cacheDir = cacheDirectory;
+      const cacheDir = FileSystem.cacheDirectory;
       if (cacheDir) {
         const ext = uri.toLowerCase().includes(".png") ? "png" : "jpg";
         const dest = `${cacheDir}winkly_crop_src_${Date.now()}.${ext}`;

@@ -15,7 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { decode } from "base64-arraybuffer";
 import { SafeScreenView } from "@/components/SafeScreenView";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { useAuth } from "@/providers";
 import { supabase } from "@/lib/supabase";
 import { submitPhotoVerification } from "@/lib/safety/photoVerification";
@@ -24,6 +24,8 @@ import { getOwnProfileCore } from "@/lib/access/profiles";
 export default function PhotoVerificationScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const [busy, setBusy] = useState(false);
   const [lastStatus, setLastStatus] = useState<string | null>(null);
 
@@ -86,7 +88,7 @@ export default function PhotoVerificationScreen() {
     <SafeScreenView style={styles.screen}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} accessibilityLabel="Back">
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Photo verification</Text>
         <View style={{ width: 44 }} />
@@ -104,10 +106,10 @@ export default function PhotoVerificationScreen() {
           disabled={busy}
         >
           {busy ? (
-            <ActivityIndicator color="#FFF" />
+            <ActivityIndicator color={theme.colors.onPrimary} />
           ) : (
             <>
-              <Ionicons name="scan-outline" size={22} color="#FFF" style={{ marginRight: 8 }} />
+              <Ionicons name="scan-outline" size={22} color={theme.colors.onPrimary} style={{ marginRight: 8 }} />
               <Text style={styles.primaryBtnText}>Start verification</Text>
             </>
           )}
@@ -121,35 +123,37 @@ export default function PhotoVerificationScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
-  scroll: { padding: 20, paddingBottom: 40 },
-  lead: { ...Typography.body, color: Colors.gray700, marginBottom: 20, lineHeight: 22 },
-  primaryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.primaryViolet,
-    paddingVertical: 14,
-    borderRadius: Layout.radii.card,
-  },
-  primaryBtnText: { ...Typography.body, color: "#FFF", fontWeight: "700" },
-  disabled: { opacity: 0.7 },
-  status: { ...Typography.caption, color: Colors.gray600, marginTop: 16 },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    backBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary },
+    scroll: { padding: 20, paddingBottom: 40 },
+    lead: { ...theme.type.body, color: theme.colors.textSecondary, marginBottom: 20, lineHeight: 22 },
+    primaryBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.colors.primary,
+      paddingVertical: 14,
+      borderRadius: theme.radii.lg,
+    },
+    primaryBtnText: { ...theme.type.body, color: theme.colors.onPrimary, fontWeight: "700" },
+    disabled: { opacity: 0.7 },
+    status: { ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 16 },
+  });
+}

@@ -1,7 +1,8 @@
 import React from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Switch, Image } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Switch, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Chip, Input } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import {
   LIFESTYLE_ROMANCE,
   SMOKING_OPTIONS,
@@ -15,18 +16,6 @@ import {
   PETS_OPTIONS,
   FOOD_OPTIONS,
 } from "@/constants/profileOptions";
-
-const inputStyle = {
-  borderWidth: 1,
-  borderColor: Colors.gray400,
-  borderRadius: Layout.radii.control,
-  padding: 12,
-  backgroundColor: "#FFF",
-  marginBottom: 12,
-};
-
-const label = { ...Typography.body, color: Colors.gray700, marginBottom: 6 };
-const requiredMark = { color: Colors.errorRed, fontWeight: "700" as const };
 
 function ChipSelect({
   options,
@@ -51,20 +40,14 @@ function ChipSelect({
             : !selected.includes(exclusiveOption) && (!max || selected.length < max || isSelected)
           : !max || selected.length < max || isSelected;
         return (
-          <TouchableOpacity
+          <Chip
             key={o}
+            label={o}
+            selected={isSelected}
             onPress={() => canToggle && onToggle(o)}
-            style={{
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderRadius: 20,
-              marginRight: 8,
-              marginBottom: 8,
-              backgroundColor: isSelected ? Colors.primaryViolet : Colors.gray100,
-            }}
-          >
-            <Text style={{ ...Typography.caption, color: isSelected ? "#FFF" : Colors.textPrimary }}>{o}</Text>
-          </TouchableOpacity>
+            disabled={!canToggle && !isSelected}
+            style={{ marginRight: 8, marginBottom: 8 }}
+          />
         );
       })}
     </View>
@@ -82,28 +65,27 @@ function SingleSelect({
   onSelect: (v: string) => void;
   label: string;
 }) {
+  const theme = useAppTheme();
   return (
     <View style={{ marginBottom: 12 }}>
-      <Text style={label}>{lbl}</Text>
+      <Text style={fieldLabelStyle(theme)}>{lbl}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 4 }}>
         {options.map((o) => (
-          <TouchableOpacity
+          <Chip
             key={o}
+            label={o}
+            selected={selected === o}
             onPress={() => onSelect(o)}
-            style={{
-              paddingVertical: 10,
-              paddingHorizontal: 16,
-              borderRadius: 20,
-              marginRight: 8,
-              backgroundColor: selected === o ? Colors.primaryViolet : Colors.gray100,
-            }}
-          >
-            <Text style={{ ...Typography.caption, color: selected === o ? "#FFF" : Colors.textPrimary }}>{o}</Text>
-          </TouchableOpacity>
+            style={{ marginRight: 8 }}
+          />
         ))}
       </ScrollView>
     </View>
   );
+}
+
+function fieldLabelStyle(theme: AppTheme) {
+  return { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.xs };
 }
 
 export function RomanceSubProfile(props: {
@@ -144,37 +126,52 @@ export function RomanceSubProfile(props: {
   toggleMulti: (arr: string[], val: string, setter: (v: string[]) => void, max: number) => void;
   onPetsToggle?: (v: string) => void;
   hideToggle?: boolean;
+  /** When set, only that section's fields render (used by the onboarding wizard's short steps). Omit to render everything (edit flow). */
+  section?: "photosBio" | "details" | "goals";
+  /** When rendering a single section for the wizard, hide the repeated "💖 Romance" header row. */
+  hideHeader?: boolean;
 }) {
-  const { enabled, toggle, photos, onPickPhoto, video, onPickVideo, bio, onBioChange, hideToggle } = props;
+  const theme = useAppTheme();
+  const { enabled, toggle, photos, onPickPhoto, video, onPickVideo, bio, onBioChange, hideToggle, section, hideHeader } = props;
   const { height, onHeightChange, weight, onWeightChange } = props;
   const { lifestyle, onLifestyleChange, smoking, onSmokingChange, alcohol, onAlcoholChange, kids, onKidsChange } = props;
   const { sexualViews, onSexualViewsChange } = props;
   const { relationshipGoals, onRelationshipGoalsChange, religion, onReligionChange } = props;
   const { politicalViews, onPoliticalViewsChange, values, onValuesChange, pets, onPetsChange, food, onFoodChange, toggleMulti, onPetsToggle } = props;
+  const showPhotosBio = !section || section === "photosBio";
+  const showDetails = !section || section === "details";
+  const showGoals = !section || section === "goals";
+
+  const label = fieldLabelStyle(theme);
+  const requiredMark = { color: theme.colors.error, fontWeight: "700" as const };
 
   if (!enabled) {
     return (
-      <View style={{ marginBottom: 28 }}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>💖 Romance</Text>
-          {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />}
+      <View style={{ marginBottom: theme.spacing.xxl }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: theme.spacing.sm }}>
+          <Text style={{ ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textPrimary }}>💖 Romance</Text>
+          {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: theme.colors.border, true: theme.colors.primary }} thumbColor={theme.colors.onPrimary} />}
         </View>
       </View>
     );
   }
 
   return (
-    <View style={{ marginBottom: 28 }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>💖 Romance</Text>
-        {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />}
-      </View>
+    <View style={{ marginBottom: theme.spacing.xxl }}>
+      {!hideHeader && (
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: theme.spacing.md }}>
+          <Text style={{ ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textPrimary }}>💖 Romance</Text>
+          {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: theme.colors.border, true: theme.colors.primary }} thumbColor={theme.colors.onPrimary} />}
+        </View>
+      )}
 
+      {showPhotosBio && (
+      <>
       <Text style={label}>Photos <Text style={requiredMark}>*</Text></Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 16 }}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: theme.spacing.lg }}>
         {photos.map((p, i) => {
           const isFirst = i === 0;
-          const frameStyle = isFirst ? { borderWidth: 3, borderColor: Colors.romance.primary } : {};
+          const frameStyle = isFirst ? { borderWidth: 3, borderColor: theme.modeAccent("romance").primary } : {};
           return (
             <TouchableOpacity
               key={i}
@@ -182,37 +179,44 @@ export function RomanceSubProfile(props: {
               style={{
                 width: 100,
                 height: 100,
-                borderRadius: 12,
-                backgroundColor: Colors.gray100,
+                borderRadius: theme.radii.md,
+                backgroundColor: theme.colors.backgroundMuted,
                 justifyContent: "center",
                 alignItems: "center",
                 overflow: "hidden",
-                marginRight: 8,
-                marginBottom: 8,
+                marginRight: theme.spacing.sm,
+                marginBottom: theme.spacing.sm,
                 ...frameStyle,
               }}
             >
-              {p ? <Image source={{ uri: p }} style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : <Text style={{ fontSize: 28, color: Colors.gray400 }}>＋</Text>}
+              {p ? <Image source={{ uri: p }} style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : <Text style={{ fontSize: 28, color: theme.colors.textMuted }}>＋</Text>}
             </TouchableOpacity>
           );
         })}
         <TouchableOpacity
           onPress={onPickVideo}
-          style={{ width: 100, height: 100, borderRadius: 12, backgroundColor: Colors.gray100, justifyContent: "center", alignItems: "center", marginRight: 8, marginBottom: 8 }}
+          style={{ width: 100, height: 100, borderRadius: theme.radii.md, backgroundColor: theme.colors.backgroundMuted, justifyContent: "center", alignItems: "center", marginRight: theme.spacing.sm, marginBottom: theme.spacing.sm }}
         >
-          {video ? <Ionicons name="videocam" size={32} color={Colors.primaryViolet} /> : <Ionicons name="videocam-outline" size={28} color={Colors.gray400} />}
-          <Text style={{ ...Typography.caption, color: Colors.gray500, marginTop: 4 }}>Video</Text>
+          {video ? <Ionicons name="videocam" size={32} color={theme.colors.primary} /> : <Ionicons name="videocam-outline" size={28} color={theme.colors.textMuted} />}
+          <Text style={{ ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textMuted, marginTop: theme.spacing.xxs }}>Video</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={label}>Bio <Text style={requiredMark}>*</Text></Text>
-      <TextInput placeholder="About you and what you seek..." value={bio} onChangeText={onBioChange} multiline style={[inputStyle, { height: 100, textAlignVertical: "top" }]} placeholderTextColor={Colors.gray500} />
+      <Input
+        label="Bio *"
+        placeholder="About you and what you seek..."
+        value={bio}
+        onChangeText={onBioChange}
+        multiline
+        style={{ height: 100, textAlignVertical: "top" }}
+      />
+      </>
+      )}
 
-      <Text style={label}>Height</Text>
-      <TextInput placeholder="e.g. 175 cm" value={height} onChangeText={onHeightChange} style={inputStyle} placeholderTextColor={Colors.gray500} keyboardType="numeric" />
-
-      <Text style={label}>Weight</Text>
-      <TextInput placeholder="e.g. 70 kg" value={weight} onChangeText={onWeightChange} style={inputStyle} placeholderTextColor={Colors.gray500} keyboardType="numeric" />
+      {showDetails && (
+      <>
+      <Input label="Height" placeholder="e.g. 175 cm" value={height} onChangeText={onHeightChange} keyboardType="numeric" />
+      <Input label="Weight" placeholder="e.g. 70 kg" value={weight} onChangeText={onWeightChange} keyboardType="numeric" />
 
       <SingleSelect options={LIFESTYLE_ROMANCE} selected={lifestyle} onSelect={onLifestyleChange} label="Lifestyle (fitness / sport activity)" />
       <SingleSelect options={SMOKING_OPTIONS} selected={smoking} onSelect={onSmokingChange} label="Smoking" />
@@ -227,7 +231,11 @@ export function RomanceSubProfile(props: {
         exclusiveOption="No pets"
       />
       <SingleSelect options={FOOD_OPTIONS} selected={food} onSelect={onFoodChange} label="Food habits" />
+      </>
+      )}
 
+      {showGoals && (
+      <>
       <SingleSelect options={SEXUAL_VIEWS_OPTIONS} selected={sexualViews} onSelect={onSexualViewsChange} label="Sexual orientation" />
       <Text style={label}>Relationship goals (up to 2) <Text style={requiredMark}>*</Text></Text>
       <ChipSelect options={RELATIONSHIP_GOALS_OPTIONS} selected={relationshipGoals} onToggle={(v) => toggleMulti(relationshipGoals, v, onRelationshipGoalsChange, 2)} />
@@ -235,6 +243,8 @@ export function RomanceSubProfile(props: {
       <SingleSelect options={POLITICAL_VIEWS_OPTIONS} selected={politicalViews} onSelect={onPoliticalViewsChange} label="Political views" />
       <Text style={label}>Values (up to 5)</Text>
       <ChipSelect options={VALUES_OPTIONS} selected={values} onToggle={(v) => toggleMulti(values, v, onValuesChange, 5)} />
+      </>
+      )}
     </View>
   );
 }

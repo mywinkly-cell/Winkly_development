@@ -30,7 +30,7 @@ import { ChatComposer } from "@/components/chats/ChatComposer";
 import { ChatConversationHeader } from "@/components/chats/ChatConversationHeader";
 import { keyboardAvoidingProps } from "@/lib/ui/keyboardAvoiding";
 import { RomanceChatInviteBanner } from "@/components/chats/RomanceChatInviteBanner";
-import { Colors } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import {
@@ -46,6 +46,7 @@ import {
   getReadReceiptsPreference,
   setReadReceiptsPreference,
 } from "@/lib/chats/api";
+import { showReportReceivedNotice } from "@/lib/safety/reportNotice";
 import {
   useMessages,
   useMessageSubscription,
@@ -203,6 +204,8 @@ export default function ChatView({
   const { matchBridge: matchBridgeQuery } = useLocalSearchParams<{ matchBridge?: string }>();
   const matchBridgeParam = matchBridgeProp ?? matchBridgeQuery;
   const fmtLocationLine = useFormatLocationDisplay();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const convId = useMemo(() => String(conversationId), [conversationId]);
 
   const [meId, setMeId] = useState<string | null>(null);
@@ -319,7 +322,7 @@ export default function ChatView({
           : `${conversation.mode} • direct`
         : "";
   const isRomance = conversation?.mode === "romance";
-  const accentColor = isRomance ? Colors.romance.primary : Colors.primaryViolet;
+  const accentColor = isRomance ? theme.modeAccent("romance").primary : theme.colors.primary;
   const conversationMode = (conversation?.mode ?? "romance") as Mode;
   const isDm = conversation?.type === "dm";
   const isPendingRomanceInvite =
@@ -1430,6 +1433,7 @@ export default function ChatView({
             try {
               await reportMessage(messageId, r.key, "User reported");
               refetch();
+              showReportReceivedNotice("Report: message");
             } catch {
               setError("Could not report");
             }
@@ -1559,7 +1563,7 @@ export default function ChatView({
           }}
         >
           {senderLabel ? (
-            <Text style={{ fontSize: 11, fontWeight: "700", color: Colors.gray600, marginBottom: 2, marginLeft: 4 }}>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: theme.colors.textSecondary, marginBottom: 2, marginLeft: 4 }}>
               {senderLabel}
             </Text>
           ) : null}
@@ -1569,10 +1573,10 @@ export default function ChatView({
                 paddingVertical: 8,
                 paddingHorizontal: 12,
                 borderRadius: 14,
-                backgroundColor: Colors.gray100,
+                backgroundColor: theme.colors.backgroundMuted,
               }}
             >
-              <Text style={{ fontSize: 13, color: Colors.gray600, fontStyle: "italic" }}>
+              <Text style={{ fontSize: 13, color: theme.colors.textSecondary, fontStyle: "italic" }}>
                 You deleted this message
               </Text>
             </View>
@@ -1582,10 +1586,10 @@ export default function ChatView({
                 paddingVertical: 8,
                 paddingHorizontal: 12,
                 borderRadius: 14,
-                backgroundColor: Colors.gray100,
+                backgroundColor: theme.colors.backgroundMuted,
               }}
             >
-              <Text style={{ fontSize: 13, color: Colors.gray600, fontStyle: "italic" }}>
+              <Text style={{ fontSize: 13, color: theme.colors.textSecondary, fontStyle: "italic" }}>
                 This message was deleted
               </Text>
             </View>
@@ -1595,7 +1599,7 @@ export default function ChatView({
                 try {
                   const p = JSON.parse(item.content);
                   if (p.type === "match_bridge") {
-                    const accent = Colors.romance.primary;
+                    const accent = theme.modeAccent("romance").primary;
                     return (
                       <View
                         style={{
@@ -1613,7 +1617,7 @@ export default function ChatView({
                         </View>
                         <Text style={{ fontSize: 15, lineHeight: 22, marginBottom: 8 }}>{p.bridge_message}</Text>
                         {p.disclaimer ? (
-                          <Text style={{ fontSize: 11, color: Colors.gray600, marginBottom: 10 }}>{p.disclaimer}</Text>
+                          <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginBottom: 10 }}>{p.disclaimer}</Text>
                         ) : null}
                         <Pressable
                           onPress={() => {
@@ -1633,7 +1637,7 @@ export default function ChatView({
                             borderRadius: 10,
                           }}
                         >
-                          <Text style={{ fontSize: 14, fontWeight: "700", color: Colors.accentYellow }}>Tap to confirm</Text>
+                          <Text style={{ fontSize: 14, fontWeight: "700", color: "#FFFFFF" }}>Tap to confirm</Text>
                         </Pressable>
                       </View>
                     );
@@ -1645,12 +1649,12 @@ export default function ChatView({
                           padding: 14,
                           borderRadius: 14,
                           borderWidth: 1,
-                          borderColor: Colors.gray300,
-                          backgroundColor: Colors.gray100,
+                          borderColor: theme.colors.border,
+                          backgroundColor: theme.colors.backgroundMuted,
                           minWidth: 240,
                         }}
                       >
-                        <Text style={{ fontSize: 15, lineHeight: 22, color: Colors.textPrimary }}>
+                        <Text style={{ fontSize: 15, lineHeight: 22, color: theme.colors.textPrimary }}>
                           {typeof p.body === "string"
                             ? p.body
                             : "Unfortunately, they declined your chat invite."}
@@ -1662,10 +1666,10 @@ export default function ChatView({
                     const pma = p as MatchAgentCtaPayload;
                     const accentMa =
                       conversationMode === "romance"
-                        ? Colors.romance.primary
+                        ? theme.modeAccent("romance").primary
                         : conversationMode === "friends"
-                          ? Colors.friends.primary
-                          : Colors.primaryViolet;
+                          ? theme.modeAccent("friends").primary
+                          : theme.colors.primary;
                     const proposalId =
                       typeof pma.proposal_id === "string" && pma.proposal_id.length > 0 ? pma.proposal_id : null;
                     const stage = proposalId ? matchAgentApprovalStage[proposalId] : undefined;
@@ -1697,7 +1701,7 @@ export default function ChatView({
                         </View>
                         <Text style={{ fontSize: 15, lineHeight: 22, marginBottom: 8 }}>{pma.agent_message}</Text>
                         {venue ? (
-                          <Text style={{ fontSize: 13, color: Colors.gray700, marginBottom: 4 }}>
+                          <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginBottom: 4 }}>
                             {venue}
                             {timeCap ? ` · ${timeCap}` : ""}
                           </Text>
@@ -1708,15 +1712,15 @@ export default function ChatView({
                           style={{ marginBottom: 10 }}
                         />
                         {privacyLine ? (
-                          <Text style={{ fontSize: 11, color: Colors.gray600, marginBottom: 10 }}>{privacyLine}</Text>
+                          <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginBottom: 10 }}>{privacyLine}</Text>
                         ) : null}
                         {proposalId && stage === "confirmed" ? (
-                          <Text style={{ fontSize: 13, fontWeight: "600", color: Colors.successGreen }}>
+                          <Text style={{ fontSize: 13, fontWeight: "600", color: theme.colors.success }}>
                             Both confirmed — plan saved in Winkly.
                           </Text>
                         ) : null}
                         {proposalId && stage === "waiting_other" ? (
-                          <Text style={{ fontSize: 13, color: Colors.gray600, textAlign: "center" }}>
+                          <Text style={{ fontSize: 13, color: theme.colors.textSecondary, textAlign: "center" }}>
                             Waiting for the other person to confirm.
                           </Text>
                         ) : null}
@@ -1730,11 +1734,11 @@ export default function ChatView({
                               borderRadius: 10,
                             }}
                           >
-                            <Text style={{ fontSize: 14, fontWeight: "700", color: Colors.accentYellow }}>I&apos;m in</Text>
+                            <Text style={{ fontSize: 14, fontWeight: "700", color: "#FFFFFF" }}>I&apos;m in</Text>
                           </Pressable>
                         ) : null}
                         {!proposalId ? (
-                          <Text style={{ fontSize: 11, color: Colors.gray600, marginTop: 4 }}>
+                          <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 4 }}>
                             Draft only — run the flow again after migration if proposals are not saving.
                           </Text>
                         ) : null}
@@ -1777,19 +1781,19 @@ export default function ChatView({
                           padding: 14,
                           borderRadius: 14,
                           borderWidth: 1,
-                          borderColor: Colors.primaryViolet + "55",
-                          backgroundColor: Colors.primaryViolet + "0A",
+                          borderColor: theme.colors.primary + "55",
+                          backgroundColor: theme.colors.primary + "0A",
                           minWidth: 240,
                         }}
                       >
-                        <Text style={{ fontSize: 12, fontWeight: "800", color: Colors.primaryViolet, marginBottom: 6 }}>
+                        <Text style={{ fontSize: 12, fontWeight: "800", color: theme.colors.primary, marginBottom: 6 }}>
                           Winkly plan (needs confirmation)
                         </Text>
                         <Text style={{ fontWeight: "700", fontSize: 15, marginBottom: 4 }}>
                           {String(p.topic ?? "Plan")}
                         </Text>
-                        {dateStr ? <Text style={{ fontSize: 13, color: Colors.gray700, marginBottom: 2 }}>{dateStr}</Text> : null}
-                        {loc ? <Text style={{ fontSize: 13, color: Colors.gray600, marginBottom: 10 }}>{loc}</Text> : null}
+                        {dateStr ? <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginBottom: 2 }}>{dateStr}</Text> : null}
+                        {loc ? <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginBottom: 10 }}>{loc}</Text> : null}
 
                         {pendingPlanId && imInvitee && status !== "confirmed" ? (
                           <Pressable
@@ -1811,22 +1815,22 @@ export default function ChatView({
                               paddingVertical: 10,
                               alignItems: "center",
                               backgroundColor:
-                                status === "confirming" ? Colors.gray200 : Colors.primaryViolet,
+                                status === "confirming" ? theme.colors.border : theme.colors.primary,
                               borderRadius: 10,
                             }}
                           >
-                            <Text style={{ fontSize: 14, fontWeight: "700", color: Colors.white }}>
+                            <Text style={{ fontSize: 14, fontWeight: "700", color: "#FFFFFF" }}>
                               {status === "confirming" ? "Confirming..." : "Confirm"}
                             </Text>
                           </Pressable>
                         ) : null}
                         {pendingPlanId && imInvitee && status === "waiting_other" ? (
-                          <Text style={{ fontSize: 12, color: Colors.gray600, marginTop: 8, textAlign: "center" }}>
+                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 8, textAlign: "center" }}>
                             Confirmed — waiting for the other person.
                           </Text>
                         ) : null}
                         {pendingPlanId && status === "confirmed" ? (
-                          <Text style={{ fontSize: 12, color: Colors.successGreen, marginTop: 8, textAlign: "center" }}>
+                          <Text style={{ fontSize: 12, color: theme.colors.success, marginTop: 8, textAlign: "center" }}>
                             Both confirmed — saved in Planner.
                           </Text>
                         ) : null}
@@ -1887,10 +1891,10 @@ export default function ChatView({
                         ) : null}
                         <Text style={{ fontWeight: "600", fontSize: 15, marginBottom: 4 }}>{p.title}</Text>
                         {dateStr ? (
-                          <Text style={{ fontSize: 13, color: Colors.gray700, marginBottom: 2 }}>{dateStr}</Text>
+                          <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginBottom: 2 }}>{dateStr}</Text>
                         ) : null}
                         {locationLine ? (
-                          <Text style={{ fontSize: 13, color: Colors.gray600, marginBottom: whyLine ? 8 : 10 }}>{locationLine}</Text>
+                          <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginBottom: whyLine ? 8 : 10 }}>{locationLine}</Text>
                         ) : null}
                         {whyLine ? (
                           <FitReasonLine reason={whyLine} accentColor={accentColor} style={{ marginBottom: 10 }} />
@@ -1899,7 +1903,7 @@ export default function ChatView({
                           <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
                             <Pressable
                               onPress={() => onSwapProposal(p)}
-                              style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: Colors.gray100, borderRadius: 10 }}
+                              style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: theme.colors.backgroundMuted, borderRadius: 10 }}
                             >
                               <Text style={{ fontSize: 13, fontWeight: "600" }}>Swap</Text>
                             </Pressable>
@@ -1907,7 +1911,7 @@ export default function ChatView({
                               onPress={acceptInvite}
                               style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: accentColor, borderRadius: 10 }}
                             >
-                              <Text style={{ fontSize: 13, fontWeight: "600", color: Colors.accentYellow }}>Accept</Text>
+                              <Text style={{ fontSize: 13, fontWeight: "600", color: "#FFFFFF" }}>Accept</Text>
                             </Pressable>
                           </View>
                         )}
@@ -1920,7 +1924,7 @@ export default function ChatView({
                                   refetch();
                                 });
                               }}
-                              style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: Colors.gray100, borderRadius: 10 }}
+                              style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: theme.colors.backgroundMuted, borderRadius: 10 }}
                             >
                               <Text style={{ fontSize: 13, fontWeight: "600" }}>Decline</Text>
                             </Pressable>
@@ -1931,7 +1935,7 @@ export default function ChatView({
                                   refetch();
                                 });
                               }}
-                              style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: Colors.gray100, borderRadius: 10 }}
+                              style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: theme.colors.backgroundMuted, borderRadius: 10 }}
                             >
                               <Text style={{ fontSize: 13, fontWeight: "600" }}>Reschedule</Text>
                             </Pressable>
@@ -1939,30 +1943,30 @@ export default function ChatView({
                               onPress={acceptInvite}
                               style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: accentColor, borderRadius: 10 }}
                             >
-                              <Text style={{ fontSize: 13, fontWeight: "600", color: Colors.accentYellow }}>Accept</Text>
+                              <Text style={{ fontSize: 13, fontWeight: "600", color: "#FFFFFF" }}>Accept</Text>
                             </Pressable>
                           </View>
                         )}
                         {!imInvitee && isProactive && !status ? (
-                          <Text style={{ fontSize: 12, color: Colors.gray600, marginTop: 4 }}>
+                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>
                             Sent — they can Accept or Swap.
                           </Text>
                         ) : null}
                         {imInvitee && status === "accepted" && (
-                          <Text style={{ fontSize: 12, color: Colors.successGreen, marginTop: 4 }}>You accepted</Text>
+                          <Text style={{ fontSize: 12, color: theme.colors.success, marginTop: 4 }}>You accepted</Text>
                         )}
                         {imInvitee && status === "declined" && (
-                          <Text style={{ fontSize: 12, color: Colors.gray600, marginTop: 4 }}>You declined</Text>
+                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>You declined</Text>
                         )}
                         {imInvitee && status === "reschedule" && (
-                          <Text style={{ fontSize: 12, color: Colors.gray600, marginTop: 4 }}>You asked to reschedule</Text>
+                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>You asked to reschedule</Text>
                         )}
                       </View>
                     );
                   }
                 } catch {}
                 return (
-                  <View style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 14, backgroundColor: Colors.gray100 }}>
+                  <View style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 14, backgroundColor: theme.colors.backgroundMuted }}>
                     <Text style={{ fontSize: 15 }}>{item.content}</Text>
                   </View>
                 );
@@ -1978,12 +1982,12 @@ export default function ChatView({
                         padding: 14,
                         borderRadius: 14,
                         borderWidth: 1,
-                        borderColor: Colors.primaryViolet + "55",
-                        backgroundColor: Colors.primaryViolet + "12",
+                        borderColor: theme.colors.primary + "55",
+                        backgroundColor: theme.colors.primary + "12",
                         maxWidth: 300,
                       }}
                     >
-                      <Text style={{ fontSize: 11, fontWeight: "800", color: Colors.primaryViolet, marginBottom: 6 }}>
+                      <Text style={{ fontSize: 11, fontWeight: "800", color: theme.colors.primary, marginBottom: 6 }}>
                         Icebreaker
                       </Text>
                       <Text style={{ fontSize: 15, lineHeight: 22 }}>{prompt}</Text>
@@ -1991,7 +1995,7 @@ export default function ChatView({
                   );
                 } catch {
                   return (
-                    <View style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 14, backgroundColor: Colors.gray100 }}>
+                    <View style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 14, backgroundColor: theme.colors.backgroundMuted }}>
                       <Text style={{ fontSize: 15 }}>{item.content}</Text>
                     </View>
                   );
@@ -2010,7 +2014,7 @@ export default function ChatView({
                     borderLeftColor: accentColor,
                   }}
                 >
-                  <Text numberOfLines={1} style={{ fontSize: 12, color: Colors.gray600 }}>
+                  <Text numberOfLines={1} style={{ fontSize: 12, color: theme.colors.textSecondary }}>
                     Reply to message
                   </Text>
                 </View>
@@ -2030,7 +2034,7 @@ export default function ChatView({
                     }
                   />
                 ) : (
-                  <Text style={{ fontSize: 13, color: Colors.gray600 }}>Voice message unavailable</Text>
+                  <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>Voice message unavailable</Text>
                 )
               ) : item.message_type !== "cta" && item.message_type !== "icebreaker" && (item.message_type === "image" || item.message_type === "gif") ? (
                 <View style={{ borderRadius: 14, overflow: "hidden" }}>
@@ -2050,8 +2054,8 @@ export default function ChatView({
                     paddingHorizontal: 12,
                     borderRadius: 14,
                     borderWidth: 1,
-                    borderColor: mine ? accentColor + "40" : Colors.gray200,
-                    backgroundColor: mine ? accentColor + "12" : Colors.backgroundLight,
+                    borderColor: mine ? accentColor + "40" : theme.colors.border,
+                    backgroundColor: mine ? accentColor + "12" : theme.colors.background,
                   }}
                 >
                   <Text style={{ fontSize: 15 }}>{item.content}</Text>
@@ -2059,16 +2063,16 @@ export default function ChatView({
               ) : null}
 
               <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4, gap: 8 }}>
-                <Text style={{ fontSize: 11, color: Colors.gray500 }}>
+                <Text style={{ fontSize: 11, color: theme.colors.textMuted }}>
                   {new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </Text>
                 {mine && item.pending ? (
-                  <Text style={{ fontSize: 11, fontWeight: "600", color: Colors.gray500 }}>
+                  <Text style={{ fontSize: 11, fontWeight: "600", color: theme.colors.textMuted }}>
                     {item.message_type === "audio" ? "Sending…" : "Sending…"}
                   </Text>
                 ) : mine && item.failed ? (
                   <Pressable onPress={() => handleRetrySend(item)} hitSlop={6}>
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: Colors.errorRed }}>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: theme.colors.error }}>
                       Not delivered · Tap to retry
                     </Text>
                   </Pressable>
@@ -2077,7 +2081,7 @@ export default function ChatView({
                     style={{
                       fontSize: 11,
                       fontWeight: "600",
-                      color: ownStatus === "seen" ? accentColor : Colors.gray500,
+                      color: ownStatus === "seen" ? accentColor : theme.colors.textMuted,
                     }}
                   >
                     {ownStatus === "seen" ? "Seen" : ownStatus === "delivered" ? "Delivered" : "Sent"}
@@ -2101,7 +2105,7 @@ export default function ChatView({
                           paddingHorizontal: 6,
                           paddingVertical: 2,
                           borderRadius: 12,
-                          backgroundColor: Colors.gray100,
+                          backgroundColor: theme.colors.backgroundMuted,
                         }}
                       >
                         <Text>{emoji}</Text>
@@ -2118,11 +2122,11 @@ export default function ChatView({
                   style={{ padding: 4 }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="arrow-undo-outline" size={16} color={Colors.gray600} />
+                  <Ionicons name="arrow-undo-outline" size={16} color={theme.colors.textSecondary} />
                 </Pressable>
                 {!mine && (
                   <Pressable onPress={() => handleReportMessage(item.id)} style={{ padding: 4 }} hitSlop={8}>
-                    <Ionicons name="flag-outline" size={16} color={Colors.gray600} />
+                    <Ionicons name="flag-outline" size={16} color={theme.colors.textSecondary} />
                   </Pressable>
                 )}
                 <View style={{ flexDirection: "row", gap: 4 }}>
@@ -2180,7 +2184,7 @@ export default function ChatView({
           paddingHorizontal: 14,
           paddingVertical: 10,
           borderBottomWidth: 1,
-          borderBottomColor: Colors.gray200,
+          borderBottomColor: theme.colors.border,
           flexDirection: "row",
           alignItems: "center",
           gap: 10,
@@ -2192,12 +2196,12 @@ export default function ChatView({
             width: 44,
             height: 44,
             borderRadius: 22,
-            backgroundColor: Colors.gray100,
+            backgroundColor: theme.colors.backgroundMuted,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </Pressable>
 
         <ChatConversationHeader
@@ -2224,13 +2228,13 @@ export default function ChatView({
               paddingHorizontal: 10,
               paddingVertical: 8,
               borderRadius: 20,
-              backgroundColor: Colors.primaryViolet + "18",
+              backgroundColor: theme.colors.primary + "18",
               maxWidth: 130,
             }}
             accessibilityLabel="Plan together"
           >
-            <Ionicons name="calendar-outline" size={18} color={Colors.primaryViolet} />
-            <Text style={{ fontWeight: "700", fontSize: 12, color: Colors.primaryViolet }} numberOfLines={1}>
+            <Ionicons name="calendar-outline" size={18} color={theme.colors.primary} />
+            <Text style={{ fontWeight: "700", fontSize: 12, color: theme.colors.primary }} numberOfLines={1}>
               Plan together
             </Text>
           </Pressable>
@@ -2242,12 +2246,12 @@ export default function ChatView({
             width: 44,
             height: 44,
             borderRadius: 22,
-            backgroundColor: Colors.gray100,
+            backgroundColor: theme.colors.backgroundMuted,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Ionicons name="ellipsis-vertical" size={24} color={Colors.textPrimary} />
+          <Ionicons name="ellipsis-vertical" size={24} color={theme.colors.textPrimary} />
         </Pressable>
       </View>
 
@@ -2269,16 +2273,16 @@ export default function ChatView({
             marginTop: 8,
             padding: 12,
             borderRadius: 12,
-            backgroundColor: Colors.primaryViolet + "14",
+            backgroundColor: theme.colors.primary + "14",
             borderWidth: 1,
-            borderColor: Colors.primaryViolet + "44",
+            borderColor: theme.colors.primary + "44",
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <SparklesIcon size={18} color={Colors.primaryViolet} />
-            <Text style={{ fontWeight: "800", fontSize: 13, color: Colors.primaryViolet }}>Concierge nudge</Text>
+            <SparklesIcon size={18} color={theme.colors.primary} />
+            <Text style={{ fontWeight: "800", fontSize: 13, color: theme.colors.primary }}>Concierge nudge</Text>
           </View>
-          <Text style={{ fontSize: 14, color: Colors.textPrimary, marginBottom: 10, lineHeight: 20 }}>
+          <Text style={{ fontSize: 14, color: theme.colors.textPrimary, marginBottom: 10, lineHeight: 20 }}>
             {staleNudgeHint
               ? `You have not messaged in a while — you both care about ${staleNudgeHint}. Want Winkly to suggest a spot for a quick sync?`
               : "It has been quiet here — want Winkly to suggest a time and place that fits both of you?"}
@@ -2292,11 +2296,11 @@ export default function ChatView({
                 flex: 1,
                 paddingVertical: 10,
                 alignItems: "center",
-                backgroundColor: Colors.primaryViolet,
+                backgroundColor: theme.colors.primary,
                 borderRadius: 10,
               }}
             >
-              <Text style={{ fontWeight: "700", color: Colors.accentYellow }}>Find a spot</Text>
+              <Text style={{ fontWeight: "700", color: theme.colors.onPrimary }}>Find a spot</Text>
             </Pressable>
             <Pressable
               onPress={() => {
@@ -2307,11 +2311,11 @@ export default function ChatView({
                 paddingHorizontal: 14,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: Colors.gray100,
+                backgroundColor: theme.colors.backgroundMuted,
                 borderRadius: 10,
               }}
             >
-              <Text style={{ fontWeight: "600", color: Colors.gray700 }}>Later</Text>
+              <Text style={{ fontWeight: "600", color: theme.colors.textSecondary }}>Later</Text>
             </Pressable>
           </View>
         </View>
@@ -2323,19 +2327,16 @@ export default function ChatView({
             position: "absolute",
             top: 70,
             right: 14,
-            backgroundColor: Colors.backgroundLight,
+            backgroundColor: theme.colors.surface,
             borderRadius: 12,
             padding: 8,
-            shadowColor: "#000",
-            shadowOpacity: 0.15,
-            shadowRadius: 8,
-            elevation: 8,
+            ...theme.elevation(2),
             zIndex: 100,
             minWidth: 180,
           }}
         >
           <Pressable onPress={toggleReadReceipts} style={{ padding: 12, flexDirection: "row", alignItems: "center" }}>
-            <Ionicons name={readReceiptsOn ? "checkmark-circle" : "checkmark-circle-outline"} size={20} color={Colors.textPrimary} />
+            <Ionicons name={readReceiptsOn ? "checkmark-circle" : "checkmark-circle-outline"} size={20} color={theme.colors.textPrimary} />
             <Text style={{ marginLeft: 8 }}>Read receipts {readReceiptsOn ? "On" : "Off"}</Text>
           </Pressable>
           {isDm && otherUser && (
@@ -2343,14 +2344,14 @@ export default function ChatView({
               onPress={() => { setShowMenu(false); setShowInviteModal(true); }}
               style={{ padding: 12, flexDirection: "row", alignItems: "center" }}
             >
-              <Ionicons name="calendar-outline" size={20} color={Colors.primaryViolet} />
-              <Text style={{ marginLeft: 8, color: Colors.primaryViolet }}>
+              <Ionicons name="calendar-outline" size={20} color={theme.colors.primary} />
+              <Text style={{ marginLeft: 8, color: theme.colors.primary }}>
                 {conversationMode === "romance" ? "Invite on date" : conversationMode === "friends" ? "Invite to meet-up" : conversationMode === "business" ? "Suggest meeting" : "Invite to meet"}
               </Text>
             </Pressable>
           )}
           <Pressable onPress={handleMute} style={{ padding: 12, flexDirection: "row", alignItems: "center" }}>
-            <Ionicons name={muted ? "notifications-off" : "notifications-outline"} size={20} color={Colors.textPrimary} />
+            <Ionicons name={muted ? "notifications-off" : "notifications-outline"} size={20} color={theme.colors.textPrimary} />
             <Text style={{ marginLeft: 8 }}>{muted ? "Unmute chat" : "Mute chat"}</Text>
           </Pressable>
           {isGroup ? (
@@ -2361,18 +2362,18 @@ export default function ChatView({
               }}
               style={{ padding: 12, flexDirection: "row", alignItems: "center" }}
             >
-              <Ionicons name="people-outline" size={20} color={Colors.textPrimary} />
+              <Ionicons name="people-outline" size={20} color={theme.colors.textPrimary} />
               <Text style={{ marginLeft: 8 }}>Group info</Text>
             </Pressable>
           ) : null}
           {isDm && otherUser ? (
             <Pressable onPress={handleBlock} style={{ padding: 12, flexDirection: "row", alignItems: "center" }}>
-              <Ionicons name="remove-circle-outline" size={20} color={Colors.errorRed} />
-              <Text style={{ marginLeft: 8, color: Colors.errorRed }}>Block user</Text>
+              <Ionicons name="remove-circle-outline" size={20} color={theme.colors.error} />
+              <Text style={{ marginLeft: 8, color: theme.colors.error }}>Block user</Text>
             </Pressable>
           ) : null}
           <Pressable onPress={() => setShowMenu(false)} style={{ padding: 12 }}>
-            <Text style={{ color: Colors.gray600 }}>Close</Text>
+            <Text style={{ color: theme.colors.textSecondary }}>Close</Text>
           </Pressable>
         </View>
       )}
@@ -2445,13 +2446,13 @@ export default function ChatView({
 
       <Modal visible={showStrategicHost} transparent animationType="fade">
         <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", padding: 18 }}
+          style={{ flex: 1, backgroundColor: theme.colors.overlay, justifyContent: "center", padding: 18 }}
           onPress={() => setShowStrategicHost(false)}
         >
           <Pressable
             onPress={(e) => e.stopPropagation()}
             style={{
-              backgroundColor: Colors.white,
+              backgroundColor: theme.colors.surface,
               borderRadius: 18,
               padding: 16,
               maxHeight: "80%",
@@ -2459,20 +2460,20 @@ export default function ChatView({
           >
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <SparklesIcon size={18} color={Colors.primaryViolet} />
-                <Text style={{ fontWeight: "900", fontSize: 14, color: Colors.textPrimary }}>
+                <SparklesIcon size={18} color={theme.colors.primary} />
+                <Text style={{ fontWeight: "900", fontSize: 14, color: theme.colors.textPrimary }}>
                   Strategic Host topics
                 </Text>
               </View>
               <Pressable onPress={() => setShowStrategicHost(false)} hitSlop={10}>
-                <Ionicons name="close" size={22} color={Colors.gray500} />
+                <Ionicons name="close" size={22} color={theme.colors.textMuted} />
               </Pressable>
             </View>
 
             {strategicLoading ? (
               <View style={{ paddingVertical: 18, alignItems: "center" }}>
-                <ActivityIndicator color={Colors.primaryViolet} />
-                <Text style={{ marginTop: 8, color: Colors.gray600 }}>Finding your sweet spot…</Text>
+                <ActivityIndicator color={theme.colors.primary} />
+                <Text style={{ marginTop: 8, color: theme.colors.textSecondary }}>Finding your sweet spot…</Text>
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false}>
@@ -2482,13 +2483,13 @@ export default function ChatView({
                       onPress={() => { setStrategicSelectedTopic(null); setStrategicPlanOptions(null); }}
                       style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 }}
                     >
-                      <Ionicons name="arrow-back" size={18} color={Colors.primaryViolet} />
-                      <Text style={{ fontSize: 13, fontWeight: "700", color: Colors.primaryViolet }}>Back to topics</Text>
+                      <Ionicons name="arrow-back" size={18} color={theme.colors.primary} />
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: theme.colors.primary }}>Back to topics</Text>
                     </Pressable>
                     {strategicSelectedTopic ? (
                       <View style={{ marginBottom: 10 }}>
-                        <Text style={{ fontSize: 12, color: Colors.gray500, fontWeight: "700" }}>Topic</Text>
-                        <Text style={{ fontSize: 14, fontWeight: "900", color: Colors.textPrimary }}>{strategicSelectedTopic.title}</Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.textMuted, fontWeight: "700" }}>Topic</Text>
+                        <Text style={{ fontSize: 14, fontWeight: "900", color: theme.colors.textPrimary }}>{strategicSelectedTopic.title}</Text>
                       </View>
                     ) : null}
                     {strategicPlanOptions.slice(0, 2).map((p, idx) => (
@@ -2499,22 +2500,22 @@ export default function ChatView({
                           padding: 12,
                           borderRadius: 14,
                           borderWidth: 1,
-                          borderColor: Colors.gray200,
-                          backgroundColor: Colors.backgroundLight,
+                          borderColor: theme.colors.border,
+                          backgroundColor: theme.colors.background,
                           marginBottom: 10,
                         }}
                       >
-                        <Text style={{ fontSize: 11, fontWeight: "800", color: Colors.primaryViolet, marginBottom: 6 }}>
+                        <Text style={{ fontSize: 11, fontWeight: "800", color: theme.colors.primary, marginBottom: 6 }}>
                           Plan option {idx + 1}
                         </Text>
-                        <Text style={{ fontSize: 14, fontWeight: "900", color: Colors.textPrimary, marginBottom: 4 }}>
+                        <Text style={{ fontSize: 14, fontWeight: "900", color: theme.colors.textPrimary, marginBottom: 4 }}>
                           {p.title}
                         </Text>
-                        <Text style={{ fontSize: 12, color: Colors.gray600, lineHeight: 17, marginBottom: 8 }}>
+                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, lineHeight: 17, marginBottom: 8 }}>
                           {[p.venue.name, p.venue.address].filter(Boolean).join(" • ")}
                         </Text>
                         <FitReasonLine reason={resolveFitReason(p)} />
-                        <Text style={{ marginTop: 10, fontSize: 12, fontWeight: "800", color: Colors.primaryViolet }}>
+                        <Text style={{ marginTop: 10, fontSize: 12, fontWeight: "800", color: theme.colors.primary }}>
                           Draft pending plan →
                         </Text>
                       </Pressable>
@@ -2530,33 +2531,33 @@ export default function ChatView({
                           padding: 12,
                           borderRadius: 14,
                           borderWidth: 1,
-                          borderColor: Colors.gray200,
-                          backgroundColor: Colors.backgroundLight,
+                          borderColor: theme.colors.border,
+                          backgroundColor: theme.colors.background,
                           marginBottom: 10,
                         }}
                       >
                         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                           <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 14, fontWeight: "800", color: Colors.textPrimary, marginBottom: 4 }}>
+                            <Text style={{ fontSize: 14, fontWeight: "800", color: theme.colors.textPrimary, marginBottom: 4 }}>
                               {t.title}
                             </Text>
-                            <Text style={{ fontSize: 12, color: Colors.gray600, lineHeight: 17 }}>
+                            <Text style={{ fontSize: 12, color: theme.colors.textSecondary, lineHeight: 17 }}>
                               {t.pitch}
                             </Text>
                           </View>
-                          <View style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: Colors.primaryViolet + "12" }}>
-                            <Text style={{ fontSize: 11, fontWeight: "800", color: Colors.primaryViolet }}>
+                          <View style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: theme.colors.primary + "12" }}>
+                            <Text style={{ fontSize: 11, fontWeight: "800", color: theme.colors.primary }}>
                               {t.type}
                             </Text>
                           </View>
                         </View>
-                        <Text style={{ marginTop: 10, fontSize: 12, fontWeight: "700", color: Colors.primaryViolet }}>
+                        <Text style={{ marginTop: 10, fontSize: 12, fontWeight: "700", color: theme.colors.primary }}>
                           See 2 plan options →
                         </Text>
                       </Pressable>
                     ))}
                     {(strategicTopics ?? []).length === 0 ? (
-                      <Text style={{ color: Colors.gray600, textAlign: "center", paddingVertical: 14 }}>
+                      <Text style={{ color: theme.colors.textSecondary, textAlign: "center", paddingVertical: 14 }}>
                         No topics found. Try again in a moment.
                       </Text>
                     ) : null}
@@ -2585,9 +2586,9 @@ export default function ChatView({
 
         <View style={{ flex: 1, paddingHorizontal: 14 }}>
           {messagesLoadError && messages.length === 0 ? (
-            <Text style={{ color: Colors.errorRed, marginBottom: 10 }}>{messagesLoadError}</Text>
+            <Text style={{ color: theme.colors.error, marginBottom: 10 }}>{messagesLoadError}</Text>
           ) : null}
-          {error ? <Text style={{ color: Colors.errorRed, marginBottom: 10 }}>{error}</Text> : null}
+          {error ? <Text style={{ color: theme.colors.error, marginBottom: 10 }}>{error}</Text> : null}
 
           <FlatList
             ref={listRef}
@@ -2599,8 +2600,8 @@ export default function ChatView({
             ListFooterComponent={
               bridgeLoading || proactiveProposalLoading ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 12 }}>
-                  <ActivityIndicator size="small" color={Colors.romance.primary} />
-                  <Text style={{ fontSize: 13, color: Colors.gray500 }}>
+                  <ActivityIndicator size="small" color={theme.modeAccent("romance").primary} />
+                  <Text style={{ fontSize: 13, color: theme.colors.textMuted }}>
                     Getting your first date idea ready…
                   </Text>
                 </View>
@@ -2629,7 +2630,7 @@ export default function ChatView({
           {showChatExperienceCard && (loadingExperienceSuggestion ? (
             <View style={{ paddingHorizontal: 14, paddingVertical: 12, alignItems: "center" }}>
               <ActivityIndicator size="small" color={accentColor} />
-              <Text style={{ fontSize: 13, color: Colors.gray500, marginTop: 6 }}>Winkly is preparing a suggestion…</Text>
+              <Text style={{ fontSize: 13, color: theme.colors.textMuted, marginTop: 6 }}>Winkly is preparing a suggestion…</Text>
             </View>
           ) : chatExperienceSuggestion ? (
             <ChatExperienceSuggestionCard
@@ -2674,7 +2675,7 @@ export default function ChatView({
                 void onSendImages();
               }}
             >
-              <Ionicons name="image-outline" size={26} color={Colors.primaryViolet} />
+              <Ionicons name="image-outline" size={26} color={theme.colors.primary} />
               <Text style={styles.attachLabel}>Photo</Text>
             </Pressable>
             <Pressable
@@ -2684,7 +2685,7 @@ export default function ChatView({
                 setShowGifSheet(true);
               }}
             >
-              <Ionicons name="happy-outline" size={26} color={Colors.primaryViolet} />
+              <Ionicons name="happy-outline" size={26} color={theme.colors.primary} />
               <Text style={styles.attachLabel}>GIF</Text>
             </Pressable>
             {isDm && otherUser ? (
@@ -2696,7 +2697,7 @@ export default function ChatView({
                   setShowInviteModal(true);
                 }}
               >
-                <Ionicons name="calendar-outline" size={26} color={Colors.primaryViolet} />
+                <Ionicons name="calendar-outline" size={26} color={theme.colors.primary} />
                 <Text style={styles.attachLabel}>Plan</Text>
               </Pressable>
             ) : null}
@@ -2708,7 +2709,7 @@ export default function ChatView({
                   void onVideoCall();
                 }}
               >
-                <Ionicons name="videocam-outline" size={26} color={Colors.primaryViolet} />
+                <Ionicons name="videocam-outline" size={26} color={theme.colors.primary} />
                 <Text style={styles.attachLabel}>Video</Text>
               </Pressable>
             ) : null}
@@ -2720,7 +2721,7 @@ export default function ChatView({
                   void onSendIcebreaker();
                 }}
               >
-                <Ionicons name="game-controller-outline" size={26} color={Colors.primaryViolet} />
+                <Ionicons name="game-controller-outline" size={26} color={theme.colors.primary} />
                 <Text style={styles.attachLabel}>Icebreaker</Text>
               </Pressable>
             ) : null}
@@ -2732,7 +2733,7 @@ export default function ChatView({
                   void onRunMatchAgent();
                 }}
               >
-                <SparklesIcon size={26} color={Colors.primaryViolet} />
+                <SparklesIcon size={26} color={theme.colors.primary} />
                 <Text style={styles.attachLabel}>Match AI</Text>
               </Pressable>
             ) : null}
@@ -2744,7 +2745,7 @@ export default function ChatView({
                   openStrategicHost();
                 }}
               >
-                <Ionicons name="star-outline" size={26} color={Colors.primaryViolet} />
+                <Ionicons name="star-outline" size={26} color={theme.colors.primary} />
                 <Text style={styles.attachLabel}>Topics</Text>
               </Pressable>
             ) : null}
@@ -2756,7 +2757,7 @@ export default function ChatView({
                   openGroupPlanning();
                 }}
               >
-                <Ionicons name="people-circle-outline" size={26} color={Colors.primaryViolet} />
+                <Ionicons name="people-circle-outline" size={26} color={theme.colors.primary} />
                 <Text style={styles.attachLabel}>Plan with group</Text>
               </Pressable>
             ) : null}
@@ -2765,7 +2766,7 @@ export default function ChatView({
         </>
         ) : isPendingRomanceInvite && !isRomanceInviteRecipient ? (
           <View style={{ padding: 16, alignItems: "center" }}>
-            <Text style={{ textAlign: "center", color: Colors.gray600, fontSize: 14 }}>
+            <Text style={{ textAlign: "center", color: theme.colors.textSecondary, fontSize: 14 }}>
               Waiting for them to accept your chat invite…
             </Text>
           </View>
@@ -2782,33 +2783,35 @@ export default function ChatView({
   );
 }
 
-const styles = StyleSheet.create({
-  emptyHistory: {
-    opacity: 0.75,
-    textAlign: "center",
-    paddingVertical: 24,
-    fontSize: 15,
-    color: Colors.gray600,
-  },
-  attachSheetTitle: {
-    fontWeight: "800",
-    fontSize: 15,
-    color: Colors.textPrimary,
-    marginBottom: 14,
-  },
-  attachGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 16,
-  },
-  attachItem: {
-    width: 72,
-    alignItems: "center",
-    gap: 6,
-  },
-  attachLabel: {
-    fontSize: 12,
-    color: Colors.gray600,
-    textAlign: "center",
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    emptyHistory: {
+      opacity: 0.75,
+      textAlign: "center",
+      paddingVertical: 24,
+      fontSize: 15,
+      color: theme.colors.textSecondary,
+    },
+    attachSheetTitle: {
+      fontWeight: "800",
+      fontSize: 15,
+      color: theme.colors.textPrimary,
+      marginBottom: 14,
+    },
+    attachGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 16,
+    },
+    attachItem: {
+      width: 72,
+      alignItems: "center",
+      gap: 6,
+    },
+    attachLabel: {
+      fontSize: 12,
+      color: theme.colors.textSecondary,
+      textAlign: "center",
+    },
+  });
+}

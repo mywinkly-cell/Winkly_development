@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { useTranslation } from "react-i18next";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 
 type NotificationItem = {
@@ -14,6 +14,8 @@ type NotificationItem = {
 
 export default function Notifications() {
   const { t } = useTranslation();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -43,21 +45,21 @@ export default function Notifications() {
   }
 
   return (
-    <View style={[styles.screen, { backgroundColor: Colors.background }]}>
+    <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={[Typography.h2, styles.title]}>{t("notifications.inboxTitle")}</Text>
+        <Text style={styles.title}>{t("notifications.inboxTitle")}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color={Colors.primaryViolet} />
-            <Text style={{ marginTop: 8, color: Colors.mutedText }}>{t("common.loading")}</Text>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={{ marginTop: 8, color: theme.colors.textSecondary }}>{t("common.loading")}</Text>
           </View>
         ) : items.length === 0 ? (
-          <View style={[styles.empty, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-            <Text style={{ color: Colors.text, fontWeight: "900" }}>{t("notifications.emptyTitle")}</Text>
-            <Text style={{ color: Colors.mutedText, marginTop: 6 }}>
+          <View style={styles.empty}>
+            <Text style={{ color: theme.colors.textPrimary, fontWeight: "900" }}>{t("notifications.emptyTitle")}</Text>
+            <Text style={{ color: theme.colors.textSecondary, marginTop: 6 }}>
               {t("notifications.emptySubtitle")}
             </Text>
           </View>
@@ -66,18 +68,11 @@ export default function Notifications() {
             {items.map((n) => (
               <View
                 key={n.id}
-                style={[
-                  styles.card,
-                  {
-                    backgroundColor: Colors.card,
-                    borderColor: Colors.border,
-                    opacity: n.read ? 0.7 : 1,
-                  },
-                ]}
+                style={[styles.card, { opacity: n.read ? 0.7 : 1 }]}
               >
-                <Text style={{ color: Colors.text, fontWeight: "900" }}>{n.title}</Text>
-                <Text style={{ color: Colors.text, marginTop: 6 }}>{n.body}</Text>
-                <Text style={{ color: Colors.mutedText, marginTop: 8, fontSize: 12 }}>
+                <Text style={{ color: theme.colors.textPrimary, fontWeight: "900" }}>{n.title}</Text>
+                <Text style={{ color: theme.colors.textPrimary, marginTop: 6 }}>{n.body}</Text>
+                <Text style={{ color: theme.colors.textSecondary, marginTop: 8, fontSize: 12 }}>
                   {new Date(n.created_at).toLocaleString()}
                 </Text>
               </View>
@@ -89,25 +84,31 @@ export default function Notifications() {
   );
 }
 
-const styles: any = {
-  screen: { flex: 1, paddingTop: Layout?.screenTopPadding ?? 16 },
-  header: { paddingHorizontal: Layout?.screenPadding ?? 16, paddingBottom: 12 },
-  title: { fontWeight: "900" },
+function createStyles(theme: AppTheme) {
+  return {
+    screen: { flex: 1, paddingTop: theme.spacing.md, backgroundColor: theme.colors.background },
+    header: { paddingHorizontal: theme.spacing.xl, paddingBottom: 12 },
+    title: { ...theme.type.h2, fontWeight: "900" as const, color: theme.colors.textPrimary },
 
-  center: { paddingVertical: 40, alignItems: "center" },
+    center: { paddingVertical: 40, alignItems: "center" as const },
 
-  empty: {
-    marginHorizontal: Layout?.screenPadding ?? 16,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 8,
-  },
+    empty: {
+      marginHorizontal: theme.spacing.xl,
+      borderWidth: 1,
+      borderRadius: 18,
+      padding: 16,
+      marginTop: 8,
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+    },
 
-  card: {
-    marginHorizontal: Layout?.screenPadding ?? 16,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 14,
-  },
-};
+    card: {
+      marginHorizontal: theme.spacing.xl,
+      borderWidth: 1,
+      borderRadius: 18,
+      padding: 14,
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+    },
+  };
+}

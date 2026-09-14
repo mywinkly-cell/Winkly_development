@@ -3,10 +3,10 @@
 // Persists to device (AsyncStorage via lib/planner/preferences); applied in the planner index.
 
 import React, { useEffect, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Switch, Alert, StyleSheet } from "react-native";
+import { View, Text, ScrollView, Alert, Switch, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Card, Header, ListRow, TextButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import {
   getPlannerPreferences,
@@ -16,6 +16,8 @@ import {
 
 export default function PlannerFilters() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
 
   const [onlyUpcoming, setOnlyUpcoming] = useState(DEFAULT_PLANNER_PREFERENCES.onlyUpcoming);
   const [showCompleted, setShowCompleted] = useState(DEFAULT_PLANNER_PREFERENCES.showCompleted);
@@ -50,70 +52,61 @@ export default function PlannerFilters() {
 
   return (
     <View style={styles.screen}>
+      <Header
+        title="Filters"
+        onBack={() => router.back()}
+        trailing={
+          <TextButton title={saving ? "Saving…" : "Save"} onPress={() => void save()} disabled={saving} style={styles.saveBtn} />
+        }
+      />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Filters</Text>
-          <TouchableOpacity onPress={() => void save()} disabled={saving} style={styles.actionBtn} activeOpacity={0.9}>
-            <Text style={styles.actionText}>{saving ? "Saving…" : "Save"}</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <Text style={styles.title}>Planner preferences</Text>
           <Text style={styles.subtitle}>These settings will affect what you see in planner lists.</Text>
 
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>Only upcoming</Text>
-              <Text style={styles.rowSub}>Hide past items by default.</Text>
-            </View>
-            <Switch
-              value={onlyUpcoming}
-              onValueChange={setOnlyUpcoming}
-              thumbColor={undefined}
-              trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }}
-              ios_backgroundColor={Colors.gray300}
-            />
-          </View>
-
+          <ListRow
+            title="Only upcoming"
+            subtitle="Hide past items by default."
+            style={styles.row}
+            trailing={
+              <Switch
+                value={onlyUpcoming}
+                onValueChange={setOnlyUpcoming}
+                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                ios_backgroundColor={theme.colors.border}
+              />
+            }
+          />
           <View style={styles.hr} />
-
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>Show completed</Text>
-              <Text style={styles.rowSub}>Include finished items in lists.</Text>
-            </View>
-            <Switch
-              value={showCompleted}
-              onValueChange={setShowCompleted}
-              thumbColor={undefined}
-              trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }}
-              ios_backgroundColor={Colors.gray300}
-            />
-          </View>
-
+          <ListRow
+            title="Show completed"
+            subtitle="Include finished items in lists."
+            style={styles.row}
+            trailing={
+              <Switch
+                value={showCompleted}
+                onValueChange={setShowCompleted}
+                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                ios_backgroundColor={theme.colors.border}
+              />
+            }
+          />
           <View style={styles.hr} />
-
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <SparklesIcon size={16} color={Colors.primaryViolet} />
-                <Text style={styles.rowTitle}>AI suggestions</Text>
-              </View>
-              <Text style={styles.rowSub}>Show recommended times/places & follow-ups.</Text>
-            </View>
-            <Switch
-              value={aiSuggestions}
-              onValueChange={setAiSuggestions}
-              thumbColor={undefined}
-              trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }}
-              ios_backgroundColor={Colors.gray300}
-            />
-          </View>
-        </View>
+          <ListRow
+            title="AI suggestions"
+            subtitle="Show recommended times/places & follow-ups."
+            style={styles.row}
+            leading={<SparklesIcon size={16} color={theme.colors.primary} />}
+            trailing={
+              <Switch
+                value={aiSuggestions}
+                onValueChange={setAiSuggestions}
+                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                ios_backgroundColor={theme.colors.border}
+              />
+            }
+          />
+        </Card>
 
         <Text style={styles.note}>Saved on this device and applied to your planner lists.</Text>
       </ScrollView>
@@ -121,38 +114,16 @@ export default function PlannerFilters() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { padding: 20, paddingBottom: 40 },
-
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
-
-  actionBtn: { width: 60, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.primaryViolet, alignItems: "center" },
-  actionText: { ...Typography.caption, color: Colors.accentYellow },
-
-  card: { backgroundColor: "#FFF", borderRadius: Layout.radii.card, borderWidth: 1, borderColor: Colors.gray200, padding: 16 },
-  title: { ...Typography.h2, color: Colors.textPrimary, marginBottom: 6 },
-  subtitle: { ...Typography.body, color: Colors.gray700, marginBottom: 14 },
-
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10 },
-  rowText: { flex: 1, paddingRight: 14 },
-  rowTitle: { ...Typography.body, color: Colors.textPrimary, marginBottom: 3 },
-  rowSub: { ...Typography.caption, color: Colors.gray600 },
-
-  hr: { height: 1, backgroundColor: Colors.gray200 },
-  note: { ...Typography.caption, color: Colors.gray600, textAlign: "center", marginTop: 10 },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { padding: theme.spacing.xl, paddingBottom: theme.spacing.huge },
+    saveBtn: { paddingHorizontal: 0 },
+    card: {},
+    title: { ...theme.type.h2, fontFamily: theme.type.h2.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.xxs },
+    subtitle: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.md },
+    row: { paddingHorizontal: 0 },
+    hr: { height: 1, backgroundColor: theme.colors.border },
+    note: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, textAlign: "center", marginTop: theme.spacing.md },
+  });
+}

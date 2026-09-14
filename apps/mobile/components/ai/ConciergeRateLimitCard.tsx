@@ -1,9 +1,9 @@
 import React, { useMemo } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
-import { Colors, Typography } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
+import { Card, PrimaryButton, SecondaryButton } from "@/components/ds";
 import type { ConciergeErrorCode, ConciergeLimitType } from "@/lib/ai/conciergeClient";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { isConciergeDevLimitMockEnabled } from "@/lib/ai/conciergeDevLimitMock";
@@ -40,6 +40,7 @@ export function ConciergeRateLimitCard({
   onRetry,
   saving,
 }: ConciergeRateLimitCardProps) {
+  const theme = useAppTheme();
   const router = useRouter();
 
   const copy = useMemo(() => {
@@ -75,61 +76,41 @@ export function ConciergeRateLimitCard({
     limitType !== "provider_quota";
 
   return (
-    <View style={styles.card}>
+    <Card style={styles.card}>
       <View style={styles.iconRow}>
-        <View style={styles.iconCircle}>
-          <Ionicons name="hourglass-outline" size={22} color={Colors.primaryViolet} />
+        <View style={[styles.iconCircle, { backgroundColor: theme.colors.backgroundMuted, borderRadius: theme.radii.pill }]}>
+          <Ionicons name="hourglass-outline" size={22} color={theme.colors.primary} />
         </View>
-        <SparklesIcon size={18} color={Colors.gray400} />
+        <SparklesIcon size={18} color={theme.colors.textMuted} />
       </View>
       {isConciergeDevLimitMockEnabled() ? (
-        <Text style={styles.devBadge}>Dev preview — rate limit mock</Text>
+        <Text style={[theme.type.overline, { color: theme.colors.textMuted, marginBottom: theme.spacing.sm }]}>
+          Dev preview — rate limit mock
+        </Text>
       ) : null}
-      <Text style={styles.title}>{copy.title}</Text>
-      <Text style={styles.body}>{copy.body}</Text>
-      {retryHint ? <Text style={styles.retryHint}>{retryHint}</Text> : null}
+      <Text style={[theme.type.h3, { color: theme.colors.textPrimary, marginBottom: theme.spacing.sm }]}>{copy.title}</Text>
+      <Text style={[theme.type.body, { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm }]}>{copy.body}</Text>
+      {retryHint ? (
+        <Text style={[theme.type.caption, { color: theme.colors.primary, fontWeight: "600", marginBottom: theme.spacing.lg }]}>
+          {retryHint}
+        </Text>
+      ) : null}
 
-      <View style={styles.actions}>
+      <View style={[styles.actions, { gap: theme.spacing.sm, marginTop: theme.spacing.sm }]}>
         {showSave ? (
-          <TouchableOpacity
-            style={styles.secondaryBtn}
-            onPress={() => {
-              Haptics.selectionAsync();
-              onSaveForLater?.();
-            }}
-            activeOpacity={0.9}
+          <SecondaryButton
+            title={saving ? "Saving…" : "Save request for later"}
+            onPress={() => onSaveForLater?.()}
             disabled={saving}
-          >
-            <Ionicons name="bookmark-outline" size={18} color={Colors.primaryViolet} />
-            <Text style={styles.secondaryBtnText}>{saving ? "Saving…" : "Save request for later"}</Text>
-          </TouchableOpacity>
+            icon={<Ionicons name="bookmark-outline" size={18} color={theme.colors.primary} />}
+          />
         ) : null}
-        {showRetry ? (
-          <TouchableOpacity
-            style={styles.primaryBtn}
-            onPress={() => {
-              Haptics.selectionAsync();
-              onRetry?.();
-            }}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.primaryBtnText}>Try again</Text>
-          </TouchableOpacity>
-        ) : null}
+        {showRetry ? <PrimaryButton title="Try again" onPress={() => onRetry?.()} /> : null}
         {copy.showUpgrade ? (
-          <TouchableOpacity
-            style={styles.primaryBtn}
-            onPress={() => {
-              Haptics.selectionAsync();
-              router.push("/account/subscription");
-            }}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.primaryBtnText}>See plans</Text>
-          </TouchableOpacity>
+          <PrimaryButton title="See plans" onPress={() => router.push("/account/subscription")} />
         ) : null}
       </View>
-    </View>
+    </Card>
   );
 }
 
@@ -137,11 +118,6 @@ const styles = StyleSheet.create({
   card: {
     marginHorizontal: 24,
     marginTop: 16,
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
   },
   iconRow: {
     flexDirection: "row",
@@ -152,63 +128,8 @@ const styles = StyleSheet.create({
   iconCircle: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.gray100,
     alignItems: "center",
     justifyContent: "center",
   },
-  devBadge: {
-    ...Typography.caption,
-    color: Colors.gray500,
-    fontWeight: "600",
-    marginBottom: 6,
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  title: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  body: {
-    ...Typography.body,
-    color: Colors.gray600,
-    marginBottom: 8,
-  },
-  retryHint: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
-    fontWeight: "600",
-    marginBottom: 16,
-  },
-  actions: {
-    gap: 10,
-    marginTop: 8,
-  },
-  primaryBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  primaryBtnText: {
-    ...Typography.button,
-    color: Colors.white,
-  },
-  secondaryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: Colors.gray100,
-    borderRadius: 12,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  secondaryBtnText: {
-    ...Typography.body,
-    color: Colors.primaryViolet,
-    fontWeight: "600",
-  },
+  actions: {},
 });

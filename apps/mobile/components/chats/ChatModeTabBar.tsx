@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import type { ChatTabConfig, ChatTabKey } from "@/lib/chats/chatTabs";
 
 const EVENTS_ICON = require("@/assets/icons/events-icon_1.png");
@@ -13,6 +13,9 @@ type ChatModeTabBarProps = {
 };
 
 export function ChatModeTabBar({ tabs, activeTab, onTabPress }: ChatModeTabBarProps) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
+
   return (
     <View style={styles.tabBar}>
       <ScrollView
@@ -25,15 +28,15 @@ export function ChatModeTabBar({ tabs, activeTab, onTabPress }: ChatModeTabBarPr
           const isActive = activeTab === tab.key;
           const isAll = tab.key === "all";
 
-          let backgroundColor = Colors.white;
-          let labelColor = Colors.gray600;
+          let backgroundColor = theme.colors.surface;
+          let labelColor = theme.colors.textSecondary;
           let iconColor = tab.accent;
 
           if (isActive) {
             if (isAll) {
-              backgroundColor = Colors.primaryViolet;
-              labelColor = Colors.white;
-              iconColor = Colors.white;
+              backgroundColor = theme.colors.primary;
+              labelColor = theme.colors.onPrimary;
+              iconColor = theme.colors.onPrimary;
             } else {
               backgroundColor = tab.secondary;
               labelColor = tab.accent;
@@ -75,36 +78,38 @@ export function ChatModeTabBar({ tabs, activeTab, onTabPress }: ChatModeTabBarPr
   );
 }
 
-const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: Colors.white,
-    minHeight: 48,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-  },
-  tabBarScroll: { flex: 1 },
-  tabBarContent: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
-    paddingHorizontal: 16,
-  },
-  tab: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    minHeight: 36,
-  },
-  tabLabel: {
-    ...Typography.caption,
-    fontSize: 13,
-  },
-  eventsIcon: {
-    width: 16,
-    height: 16,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    tabBar: {
+      backgroundColor: theme.colors.surface,
+      minHeight: 48,
+      paddingVertical: theme.spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    tabBarScroll: { flex: 1 },
+    tabBarContent: {
+      flexDirection: "row",
+      gap: theme.spacing.sm,
+      alignItems: "center",
+      paddingHorizontal: theme.spacing.lg,
+    },
+    tab: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.xs,
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.pill,
+      minHeight: 36,
+    },
+    tabLabel: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+    },
+    eventsIcon: {
+      width: 16,
+      height: 16,
+    },
+  });
+}

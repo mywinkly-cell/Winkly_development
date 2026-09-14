@@ -6,7 +6,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Alert,
   StyleSheet,
   ActivityIndicator,
@@ -16,7 +15,8 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
+import { Card, Header, Input, PrimaryButton, SecondaryButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import {
   listMyDateCheckins,
   respondDateCheckin,
@@ -165,6 +165,8 @@ async function loadPlannedDates(
 
 export default function PlannerDates() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const scrollRef = useRef<ScrollView>(null);
   const checkinOffsets = useRef<Record<string, number>>({});
   const [query, setQuery] = useState("");
@@ -297,6 +299,7 @@ export default function PlannerDates() {
 
   return (
     <View style={styles.screen}>
+      <Header title="Dates" onBack={() => router.back()} />
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={styles.scroll}
@@ -311,37 +314,23 @@ export default function PlannerDates() {
           />
         }
       >
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backBtn}
-            activeOpacity={0.9}
-            accessibilityLabel="Back"
-          >
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Dates</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <Text style={styles.title}>Upcoming dates & safety</Text>
           <Text style={styles.subtitle}>
             Confirmed plans with matches (accepted in chat). Pending date invites stay in your
             match conversations until someone accepts.
           </Text>
 
-          <TextInput
+          <Input
             value={query}
             onChangeText={setQuery}
             placeholder="Search by name, activity, or venue…"
-            placeholderTextColor={Colors.gray500}
-            style={styles.search}
+            containerStyle={styles.searchContainer}
           />
-        </View>
+        </Card>
 
         {loading ? (
-          <ActivityIndicator style={{ marginTop: 24 }} color={Colors.primaryViolet} />
+          <ActivityIndicator style={{ marginTop: theme.spacing.xxl }} color={theme.colors.primary} />
         ) : (
           <>
             <Text style={styles.sectionTitle}>Confirmed dates</Text>
@@ -352,7 +341,7 @@ export default function PlannerDates() {
 
             {showPlannedEmpty ? (
               <View style={styles.emptyState}>
-                <Ionicons name="calendar-outline" size={40} color={Colors.gray400} />
+                <Ionicons name="calendar-outline" size={40} color={theme.colors.textMuted} />
                 <Text style={styles.emptyTitle}>No confirmed dates yet</Text>
                 <Text style={styles.emptySubtitle}>
                   When you or a match accepts a date invite in chat, it will show up here. Open a
@@ -363,13 +352,13 @@ export default function PlannerDates() {
               <Text style={styles.searchEmpty}>No matches for your search.</Text>
             ) : (
               filteredDates.map((date) => (
-                <View key={date.id} style={styles.itemCard}>
+                <Card key={date.id} style={styles.itemCard}>
                   <View style={styles.plannedTop}>
                     {date.partnerPhotoUrl ? (
                       <Image source={{ uri: date.partnerPhotoUrl }} style={styles.partnerAvatar} />
                     ) : (
                       <View style={[styles.partnerAvatar, styles.partnerAvatarFallback]}>
-                        <Ionicons name="person" size={22} color={Colors.gray500} />
+                        <Ionicons name="person" size={22} color={theme.colors.textMuted} />
                       </View>
                     )}
                     <View style={styles.plannedBody}>
@@ -396,7 +385,7 @@ export default function PlannerDates() {
                         accessibilityRole="button"
                         accessibilityLabel={`Open chat with ${date.partnerName}`}
                       >
-                        <Ionicons name="chatbubble-outline" size={16} color={Colors.romance.primary} />
+                        <Ionicons name="chatbubble-outline" size={16} color={theme.modeAccent("romance").primary} />
                         <Text style={styles.linkText}>Chat</Text>
                       </TouchableOpacity>
                     ) : null}
@@ -408,12 +397,12 @@ export default function PlannerDates() {
                         accessibilityRole="button"
                         accessibilityLabel="View safety check-in"
                       >
-                        <Ionicons name="shield-checkmark-outline" size={16} color={Colors.primaryViolet} />
-                        <Text style={[styles.linkText, styles.linkTextViolet]}>Safety check-in</Text>
+                        <Ionicons name="shield-checkmark-outline" size={16} color={theme.colors.primary} />
+                        <Text style={{ ...styles.linkText, color: theme.colors.primary }}>Safety check-in</Text>
                       </TouchableOpacity>
                     ) : null}
                   </View>
-                </View>
+                </Card>
               ))
             )}
 
@@ -435,11 +424,11 @@ export default function PlannerDates() {
                 return (
                 <View
                   key={it.id}
-                  style={styles.itemCard}
                   onLayout={(e: LayoutChangeEvent) => {
                     checkinOffsets.current[it.id] = e.nativeEvent.layout.y;
                   }}
                 >
+                <Card style={styles.itemCard}>
                   <TouchableOpacity
                     onPress={() => openCheckinChat(it)}
                     disabled={!canOpenChat}
@@ -456,7 +445,7 @@ export default function PlannerDates() {
                       <Image source={{ uri: it.partner_photo_url }} style={styles.checkinAvatar} />
                     ) : (
                       <View style={[styles.checkinAvatar, styles.partnerAvatarFallback]}>
-                        <Ionicons name="person" size={18} color={Colors.gray500} />
+                        <Ionicons name="person" size={18} color={theme.colors.textMuted} />
                       </View>
                     )}
                     <View style={styles.plannedBody}>
@@ -469,14 +458,16 @@ export default function PlannerDates() {
                   </TouchableOpacity>
                   {it.status === "scheduled" ? (
                     <View style={styles.rowActions}>
-                      <TouchableOpacity onPress={() => onOk(it.id)} style={styles.secondaryBtn} activeOpacity={0.9}>
-                        <Text style={styles.secondaryText}>I&apos;m OK</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => onHelp(it.id)} style={styles.primaryBtn} activeOpacity={0.9}>
-                        <Text style={styles.primaryText}>Need help</Text>
-                      </TouchableOpacity>
+                      <SecondaryButton title="I'm OK" onPress={() => onOk(it.id)} style={styles.rowActionBtn} />
+                      <PrimaryButton
+                        title="Need help"
+                        onPress={() => onHelp(it.id)}
+                        style={{ ...styles.rowActionBtn, backgroundColor: theme.colors.errorBg }}
+                        textStyle={{ color: theme.colors.error }}
+                      />
                     </View>
                   ) : null}
+                </Card>
                 </View>
               );
               })
@@ -488,136 +479,89 @@ export default function PlannerDates() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { padding: 16, paddingBottom: 40 },
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { ...Typography.headerTitle, flex: 1, textAlign: "center", color: Colors.textPrimary },
-  headerSpacer: { width: 44 },
-  card: {
-    backgroundColor: "#FFF",
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 16,
-    marginBottom: 12,
-  },
-  title: { ...Typography.h2, color: Colors.textPrimary, marginBottom: 6 },
-  subtitle: { ...Typography.body, color: Colors.gray700, marginBottom: 12 },
-  search: {
-    borderWidth: 1,
-    borderColor: Colors.gray300,
-    borderRadius: Layout.radii.control,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: Colors.textPrimary,
-  },
-  sectionTitle: {
-    ...Typography.caption,
-    fontFamily: FontFamily.headingBold,
-    fontWeight: "700",
-    color: Colors.gray600,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  sectionHint: {
-    ...Typography.caption,
-    color: Colors.gray500,
-    marginBottom: 10,
-    lineHeight: 18,
-  },
-  itemCard: {
-    backgroundColor: "#FFF",
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 14,
-    marginBottom: 10,
-  },
-  plannedTop: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  partnerAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: Colors.gray200,
-  },
-  partnerAvatarFallback: { alignItems: "center", justifyContent: "center" },
-  plannedBody: { flex: 1, minWidth: 0 },
-  checkinHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-  },
-  checkinAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.gray200,
-  },
-  plannedActivity: {
-    ...Typography.body,
-    fontWeight: "600",
-    color: Colors.romance.primary,
-    marginTop: 2,
-  },
-  itemTitle: { ...Typography.body, fontWeight: "700", color: Colors.textPrimary },
-  badge: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600", textTransform: "capitalize" },
-  itemSub: { ...Typography.caption, color: Colors.gray600, marginTop: 4 },
-  linkRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 12 },
-  linkBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
-  linkText: { ...Typography.caption, fontWeight: "600", color: Colors.romance.primary },
-  linkTextViolet: { color: Colors.primaryViolet },
-  rowActions: { flexDirection: "row", gap: 8, marginTop: 12 },
-  secondaryBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: "center",
-    backgroundColor: Colors.gray100,
-    borderRadius: 10,
-  },
-  secondaryText: { fontSize: 14, fontWeight: "600", color: Colors.textPrimary },
-  primaryBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: "center",
-    backgroundColor: Colors.errorRed + "18",
-    borderRadius: 10,
-  },
-  primaryText: { fontSize: 14, fontWeight: "600", color: Colors.errorRed },
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: 28,
-    paddingHorizontal: 20,
-    marginBottom: 8,
-  },
-  emptyTitle: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
-    marginTop: 12,
-    textAlign: "center",
-  },
-  emptySubtitle: {
-    ...Typography.body,
-    color: Colors.gray600,
-    marginTop: 8,
-    textAlign: "center",
-    lineHeight: 22,
-  },
-  searchEmpty: {
-    ...Typography.caption,
-    color: Colors.gray500,
-    textAlign: "center",
-    marginBottom: 12,
-  },
-  note: { ...Typography.caption, color: Colors.gray500, textAlign: "center", marginTop: 4, marginBottom: 8 },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { padding: theme.spacing.lg, paddingBottom: theme.spacing.huge },
+    card: { marginBottom: theme.spacing.md },
+    title: { ...theme.type.h2, fontFamily: theme.type.h2.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.xxs },
+    subtitle: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.md },
+    searchContainer: { marginBottom: 0 },
+    sectionTitle: {
+      ...theme.type.overline,
+      fontFamily: theme.type.overline.fontFamily,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.sm,
+      marginBottom: theme.spacing.xxs,
+    },
+    sectionHint: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textMuted,
+      marginBottom: theme.spacing.md,
+    },
+    itemCard: { marginBottom: theme.spacing.sm },
+    plannedTop: { flexDirection: "row", alignItems: "flex-start", gap: theme.spacing.md },
+    partnerAvatar: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: theme.colors.border,
+    },
+    partnerAvatarFallback: { alignItems: "center", justifyContent: "center" },
+    plannedBody: { flex: 1, minWidth: 0 },
+    checkinHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: theme.spacing.md,
+    },
+    checkinAvatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: theme.colors.border,
+    },
+    plannedActivity: {
+      ...theme.type.bodyMedium,
+      fontFamily: theme.type.bodyMedium.fontFamily,
+      color: theme.modeAccent("romance").primary,
+      marginTop: 2,
+    },
+    itemTitle: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily, fontWeight: "700", color: theme.colors.textPrimary },
+    badge: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.primary, fontWeight: "600", textTransform: "capitalize" },
+    itemSub: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.xxs },
+    linkRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.md, marginTop: theme.spacing.md },
+    linkBtn: { flexDirection: "row", alignItems: "center", gap: theme.spacing.xs },
+    linkText: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, fontWeight: "600", color: theme.modeAccent("romance").primary },
+    rowActions: { flexDirection: "row", gap: theme.spacing.sm, marginTop: theme.spacing.md },
+    rowActionBtn: { flex: 1 },
+    emptyState: {
+      alignItems: "center",
+      paddingVertical: theme.spacing.xxl,
+      paddingHorizontal: theme.spacing.xl,
+      marginBottom: theme.spacing.sm,
+    },
+    emptyTitle: {
+      ...theme.type.h3,
+      fontFamily: theme.type.h3.fontFamily,
+      color: theme.colors.textPrimary,
+      marginTop: theme.spacing.md,
+      textAlign: "center",
+    },
+    emptySubtitle: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.sm,
+      textAlign: "center",
+    },
+    searchEmpty: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textMuted,
+      textAlign: "center",
+      marginBottom: theme.spacing.md,
+    },
+    note: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textMuted, textAlign: "center", marginTop: theme.spacing.xxs, marginBottom: theme.spacing.sm },
+  });
+}

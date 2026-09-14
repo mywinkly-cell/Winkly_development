@@ -17,11 +17,13 @@ import {
   Pressable,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { createGroupWithInvites } from "@/lib/groupInvitations";
 import { getPartnersForConcierge } from "@/lib/ai/conciergePartners";
 import type { ConciergePartner } from "@/lib/ai/conciergePartners";
 import type { Mode } from "@/types";
+
+type Styles = ReturnType<typeof createStyles>;
 
 const MODES: { key: Mode; label: string }[] = [
   { key: "friends", label: "Friends" },
@@ -30,6 +32,8 @@ const MODES: { key: Mode; label: string }[] = [
 
 export default function CreateGroup() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const { mode: modeParam, preselect } = useLocalSearchParams<{ mode?: Mode; preselect?: string }>();
   const preselectIds = React.useMemo(
     () => (typeof preselect === "string" ? preselect.split(",").map((s) => s.trim()).filter(Boolean) : []),
@@ -120,7 +124,7 @@ export default function CreateGroup() {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Header title="Create group" onBack={() => router.back()} />
+        <Header title="Create group" onBack={() => router.back()} theme={theme} styles={styles} />
 
         <View style={styles.card}>
           <Text style={styles.title}>New community</Text>
@@ -128,16 +132,16 @@ export default function CreateGroup() {
             Create a group for meetups, business circles, or shared interests. Invited people will receive a request and can Accept or Decline.
           </Text>
 
-          <Label text="Group name" />
+          <Label text="Group name" styles={styles} />
           <TextInput
             value={name}
             onChangeText={setName}
             placeholder="e.g. Munich Latte Lovers"
-            placeholderTextColor={Colors.gray500}
+            placeholderTextColor={theme.colors.textMuted}
             style={styles.input}
           />
 
-          <Label text="Type" />
+          <Label text="Type" styles={styles} />
           <View style={styles.modeRow}>
             {MODES.map((m) => (
               <TouchableOpacity
@@ -151,20 +155,20 @@ export default function CreateGroup() {
             ))}
           </View>
 
-          <Label text="Description (optional)" />
+          <Label text="Description (optional)" styles={styles} />
           <TextInput
             value={description}
             onChangeText={setDescription}
             placeholder="What is this group about?"
-            placeholderTextColor={Colors.gray500}
+            placeholderTextColor={theme.colors.textMuted}
             style={[styles.input, { minHeight: 80, textAlignVertical: "top" }]}
             multiline
           />
 
-          <Label text="Invite people (optional)" />
+          <Label text="Invite people (optional)" styles={styles} />
           <Text style={styles.hint}>Select connections to invite. They will receive a group invitation and must accept to join.</Text>
           {loadingPartners ? (
-            <ActivityIndicator size="small" color={Colors.primaryViolet} style={{ marginVertical: 12 }} />
+            <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginVertical: 12 }} />
           ) : partners.length === 0 ? (
             <Text style={styles.emptyHint}>No connections yet in this mode. Create the group and invite later from group details.</Text>
           ) : (
@@ -184,7 +188,7 @@ export default function CreateGroup() {
                   </View>
                   <Text style={styles.partnerName} numberOfLines={1}>{p.displayName}</Text>
                   <View style={[styles.checkbox, selectedIds.has(p.id) && styles.checkboxChecked]}>
-                    {selectedIds.has(p.id) ? <Ionicons name="checkmark" size={18} color="#FFF" /> : null}
+                    {selectedIds.has(p.id) ? <Ionicons name="checkmark" size={18} color={theme.colors.onPrimary} /> : null}
                   </View>
                 </Pressable>
               ))}
@@ -198,7 +202,7 @@ export default function CreateGroup() {
             disabled={submitting}
           >
             {submitting ? (
-              <ActivityIndicator size="small" color={Colors.accentYellow} />
+              <ActivityIndicator size="small" color={theme.colors.onPrimary} />
             ) : (
               <Text style={styles.primaryText}>Create group & send invitations</Text>
             )}
@@ -213,11 +217,11 @@ export default function CreateGroup() {
   );
 }
 
-function Header({ title, onBack }: { title: string; onBack: () => void }) {
+function Header({ title, onBack, theme, styles }: { title: string; onBack: () => void; theme: AppTheme; styles: Styles }) {
   return (
     <View style={styles.headerRow}>
       <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
-        <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+        <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
       </TouchableOpacity>
       <Text style={styles.headerTitle}>{title}</Text>
       <View style={{ width: 70 }} />
@@ -225,110 +229,108 @@ function Header({ title, onBack }: { title: string; onBack: () => void }) {
   );
 }
 
-function Label({ text }: { text: string }) {
+function Label({ text, styles }: { text: string; styles: Styles }) {
   return <Text style={styles.label}>{text}</Text>;
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { padding: 20, paddingBottom: 40 },
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
-  card: {
-    backgroundColor: "#FFF",
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 16,
-  },
-  title: { ...Typography.h2, color: Colors.textPrimary, marginBottom: 6 },
-  subtitle: { ...Typography.body, color: Colors.gray700, marginBottom: 14 },
-  label: { ...Typography.caption, color: Colors.gray600, marginBottom: 6 },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.gray300,
-    borderRadius: Layout.radii.control,
-    backgroundColor: "#FFF",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: Colors.textPrimary,
-    marginBottom: 12,
-  },
-  modeRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
-  modeChip: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.gray300,
-  },
-  modeChipActive: { borderColor: Colors.primaryViolet, backgroundColor: Colors.primaryViolet + "18" },
-  modeChipText: { ...Typography.body, color: Colors.gray700 },
-  modeChipTextActive: { color: Colors.primaryViolet, fontWeight: "600" },
-  hint: { ...Typography.caption, color: Colors.gray600, marginBottom: 8 },
-  emptyHint: { ...Typography.caption, color: Colors.gray500, marginBottom: 12, fontStyle: "italic" },
-  partnerList: { marginBottom: 16, maxHeight: 220 },
-  partnerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: Colors.gray100,
-    marginBottom: 6,
-  },
-  partnerRowSelected: { backgroundColor: Colors.primaryViolet + "18", borderWidth: 1, borderColor: Colors.primaryViolet + "40" },
-  partnerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primaryViolet + "30",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  partnerAvatarText: { ...Typography.caption, fontWeight: "700", color: Colors.primaryViolet },
-  partnerName: { flex: 1, ...Typography.body, color: Colors.textPrimary },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.gray400,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  checkboxChecked: { backgroundColor: Colors.primaryViolet, borderColor: Colors.primaryViolet },
-  primaryBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    alignItems: "center",
-    marginTop: 4,
-  },
-  primaryBtnDisabled: { opacity: 0.7 },
-  primaryText: { ...Typography.button, color: Colors.accentYellow },
-  secondaryBtn: {
-    backgroundColor: Colors.gray100,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    marginTop: 10,
-  },
-  secondaryText: { ...Typography.button, color: Colors.textPrimary },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { padding: 20, paddingBottom: 40 },
+    headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+    backBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+      ...theme.elevation(1),
+    },
+    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary },
+    card: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: 16,
+    },
+    title: { ...theme.type.h2, color: theme.colors.textPrimary, marginBottom: 6 },
+    subtitle: { ...theme.type.body, color: theme.colors.textSecondary, marginBottom: 14 },
+    label: { ...theme.type.caption, color: theme.colors.textSecondary, marginBottom: 6 },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surface,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: theme.colors.textPrimary,
+      marginBottom: 12,
+    },
+    modeRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
+    modeChip: {
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    modeChipActive: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary + "18" },
+    modeChipText: { ...theme.type.body, color: theme.colors.textSecondary },
+    modeChipTextActive: { color: theme.colors.primary, fontWeight: "600" },
+    hint: { ...theme.type.caption, color: theme.colors.textSecondary, marginBottom: 8 },
+    emptyHint: { ...theme.type.caption, color: theme.colors.textMuted, marginBottom: 12, fontStyle: "italic" },
+    partnerList: { marginBottom: 16, maxHeight: 220 },
+    partnerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      backgroundColor: theme.colors.backgroundMuted,
+      marginBottom: 6,
+    },
+    partnerRowSelected: { backgroundColor: theme.colors.primary + "18", borderWidth: 1, borderColor: theme.colors.primary + "40" },
+    partnerAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: theme.colors.primary + "30",
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 12,
+    },
+    partnerAvatarText: { ...theme.type.caption, fontWeight: "700", color: theme.colors.primary },
+    partnerName: { flex: 1, ...theme.type.body, color: theme.colors.textPrimary },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      borderWidth: 2,
+      borderColor: theme.colors.textMuted,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    checkboxChecked: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+    primaryBtn: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.radii.md,
+      paddingVertical: 12,
+      alignItems: "center",
+      marginTop: 4,
+    },
+    primaryBtnDisabled: { opacity: 0.7 },
+    primaryText: { ...theme.type.button, color: theme.colors.onPrimary },
+    secondaryBtn: {
+      backgroundColor: theme.colors.backgroundMuted,
+      borderRadius: theme.radii.md,
+      paddingVertical: 12,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      marginTop: 10,
+    },
+    secondaryText: { ...theme.type.button, color: theme.colors.textPrimary },
+  });
+}

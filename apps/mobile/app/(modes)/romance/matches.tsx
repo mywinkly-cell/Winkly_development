@@ -23,7 +23,7 @@ import { useRouter } from "expo-router";
 import { chatRoutes } from "@/lib/navigation/modeHub";
 import * as Haptics from "expo-haptics";
 
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 import { createDirectChat } from "@/lib/chats";
 
@@ -45,9 +45,13 @@ type ModeState = {
   business_enabled: boolean;
 };
 
+/** Distinctive Winkly AI-match orange — decorative accent, not tied to any mode (see romance/profile-view.tsx AI_MATCH_BADGE_BG). */
+const AI_MATCH_ACCENT = "#FF9100";
+
 export default function RomanceMatches() {
   const router = useRouter();
   const fmtLoc = useFormatLocationDisplay();
+  const theme = useAppTheme();
 
   const [, setActiveMode] = useState<ModeKey | null>("romance");
   const [loading, setLoading] = useState(true);
@@ -239,13 +243,10 @@ export default function RomanceMatches() {
             router.push(`/(modes)/romance/profile-view?id=${item.id}`)
           }
           style={{
-            backgroundColor: "#FFF",
-            borderRadius: Layout.radii.card,
+            backgroundColor: theme.colors.surface,
+            borderRadius: theme.radii.lg,
             overflow: "hidden",
-            shadowColor: "#000",
-            shadowOpacity: 0.06,
-            shadowRadius: 6,
-            elevation: 2,
+            ...theme.elevation(1),
           }}
           activeOpacity={0.9}
         >
@@ -259,7 +260,7 @@ export default function RomanceMatches() {
             style={{
               width: "100%",
               height: 160,
-              backgroundColor: Colors.gray200,
+              backgroundColor: theme.colors.border,
               justifyContent: "center",
               alignItems: "center",
             }}
@@ -269,20 +270,20 @@ export default function RomanceMatches() {
         )}
 
         <View style={{ padding: 10 }}>
-          <Text style={{ ...Typography.body, color: Colors.textPrimary }}>
+          <Text style={{ ...theme.type.body, color: theme.colors.textPrimary }}>
             {item.first_name}, {item.age ?? "—"}
           </Text>
-          <Text style={{ ...Typography.caption, color: Colors.gray700 }}>
+          <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary }}>
             {fmtLoc(item.city)}
           </Text>
 
           {tab === "pending" && item.super_like && (
             <View style={{ marginTop: 6, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: "rgba(230, 184, 0, 0.18)", alignSelf: "flex-start" }}>
-              <Text style={{ ...Typography.caption, color: "#B8860B", fontWeight: "600" }} numberOfLines={1}>
+              <Text style={{ ...theme.type.caption, color: "#B8860B", fontWeight: "600" }} numberOfLines={1}>
                 ★ Super liked you
               </Text>
               {item.super_like_message ? (
-                <Text style={{ ...Typography.caption, color: Colors.gray700, marginTop: 4 }} numberOfLines={2}>
+                <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 4 }} numberOfLines={2}>
                   &quot;{item.super_like_message}&quot;
                 </Text>
               ) : null}
@@ -290,8 +291,8 @@ export default function RomanceMatches() {
           )}
           <Text
             style={{
-              ...Typography.caption,
-              color: Colors.accentMint,
+              ...theme.type.caption,
+              color: AI_MATCH_ACCENT,
               marginTop: 4,
             }}
             numberOfLines={1}
@@ -306,12 +307,12 @@ export default function RomanceMatches() {
             style={{
               marginTop: 8,
               paddingVertical: 8,
-              borderRadius: Layout.radii.control,
-              backgroundColor: Colors.primaryViolet,
+              borderRadius: theme.radii.md,
+              backgroundColor: theme.colors.primary,
               alignItems: "center",
             }}
           >
-            <Text style={{ ...Typography.caption, color: "#FFF", fontWeight: "600" }}>Message</Text>
+            <Text style={{ ...theme.type.caption, color: theme.colors.onPrimary, fontWeight: "600" }}>Message</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -355,12 +356,10 @@ export default function RomanceMatches() {
           style={{
             flex: 1,
             flexDirection: "row",
-            backgroundColor: "#FFF",
-            borderRadius: Layout.radii.card,
+            backgroundColor: theme.colors.surface,
+            borderRadius: theme.radii.lg,
             overflow: "hidden",
-            shadowColor: "#000",
-            shadowOpacity: 0.05,
-            shadowRadius: 6,
+            ...theme.elevation(1),
           }}
           activeOpacity={0.9}
         >
@@ -374,7 +373,7 @@ export default function RomanceMatches() {
             style={{
               width: 110,
               height: 110,
-              backgroundColor: Colors.gray200,
+              backgroundColor: theme.colors.border,
               justifyContent: "center",
               alignItems: "center",
             }}
@@ -386,24 +385,24 @@ export default function RomanceMatches() {
         <View style={{ padding: 12, flex: 1 }}>
           <Text
             style={{
-              ...Typography.h3,
-              color: Colors.textPrimary,
+              ...theme.type.h3,
+              color: theme.colors.textPrimary,
               marginBottom: 4,
             }}
           >
             {item.first_name}, {item.age ?? "—"}
           </Text>
-          <Text style={{ ...Typography.body, color: Colors.gray700 }}>
+          <Text style={{ ...theme.type.body, color: theme.colors.textSecondary }}>
             {fmtLoc(item.city)}
           </Text>
 
           {tab === "pending" && item.super_like && (
             <View style={{ marginTop: 6, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: "rgba(230, 184, 0, 0.18)" }}>
-              <Text style={{ ...Typography.caption, color: "#B8860B", fontWeight: "600" }} numberOfLines={1}>
+              <Text style={{ ...theme.type.caption, color: "#B8860B", fontWeight: "600" }} numberOfLines={1}>
                 ★ Super liked you
               </Text>
               {item.super_like_message ? (
-                <Text style={{ ...Typography.caption, color: Colors.gray700, marginTop: 4 }} numberOfLines={2}>
+                <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 4 }} numberOfLines={2}>
                   &quot;{item.super_like_message}&quot;
                 </Text>
               ) : null}
@@ -411,9 +410,9 @@ export default function RomanceMatches() {
           )}
           <Text
             style={{
-              ...Typography.caption,
+              ...theme.type.caption,
               marginTop: 8,
-              color: Colors.accentMint,
+              color: AI_MATCH_ACCENT,
             }}
             numberOfLines={1}
           >
@@ -427,11 +426,11 @@ export default function RomanceMatches() {
             style={{
               paddingVertical: 10,
               paddingHorizontal: 16,
-              borderRadius: Layout.radii.control,
-              backgroundColor: Colors.primaryViolet,
+              borderRadius: theme.radii.md,
+              backgroundColor: theme.colors.primary,
             }}
           >
-            <Text style={{ ...Typography.caption, color: "#FFF", fontWeight: "600" }}>Message</Text>
+            <Text style={{ ...theme.type.caption, color: theme.colors.onPrimary, fontWeight: "600" }}>Message</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -453,11 +452,11 @@ export default function RomanceMatches() {
     <TouchableOpacity onPress={onPress} style={{ paddingHorizontal: 12 }}>
       <Text
         style={{
-          ...Typography.body,
+          ...theme.type.body,
           fontWeight: "600",
-          color: active ? Colors.primaryViolet : Colors.gray500,
+          color: active ? theme.colors.primary : theme.colors.textMuted,
           borderBottomWidth: active ? 2 : 0,
-          borderColor: Colors.primaryViolet,
+          borderColor: theme.colors.primary,
           paddingBottom: 6,
         }}
       >
@@ -472,17 +471,17 @@ export default function RomanceMatches() {
   return (
     <SafeScreenView
       edges={["left", "right"]}
-      style={{ flex: 1, backgroundColor: Colors.backgroundLight }}
+      style={{ flex: 1, backgroundColor: theme.colors.background }}
     >
       {/* HEADER */}
       <ModeHeader currentMode="romance" rightSlot="filterSettings" />
 
       {/* TITLE & TABS */}
       <View style={{ paddingHorizontal: 20, marginBottom: 10 }}>
-        <Text style={{ ...Typography.h2, color: Colors.textPrimary }}>
+        <Text style={{ ...theme.type.h2, color: theme.colors.textPrimary }}>
           Matches
         </Text>
-        <Text style={{ ...Typography.caption, color: Colors.gray700 }}>
+        <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary }}>
           New connections, matches and interested profiles
         </Text>
       </View>
@@ -528,8 +527,8 @@ export default function RomanceMatches() {
               fontSize: 22,
               color:
                 viewMode === "grid"
-                  ? Colors.primaryViolet
-                  : Colors.gray400,
+                  ? theme.colors.primary
+                  : theme.colors.textMuted,
             }}
           >
             ⬚
@@ -542,8 +541,8 @@ export default function RomanceMatches() {
               fontSize: 22,
               color:
                 viewMode === "list"
-                  ? Colors.primaryViolet
-                  : Colors.gray400,
+                  ? theme.colors.primary
+                  : theme.colors.textMuted,
             }}
           >
             ☰
@@ -554,13 +553,13 @@ export default function RomanceMatches() {
       {/* CONTENT */}
       {loading ? (
         <ActivityIndicator
-          color={Colors.primaryViolet}
+          color={theme.colors.primary}
           style={{ marginTop: 40 }}
           size="large"
         />
       ) : matches.length === 0 ? (
         <View style={{ alignItems: "center", marginTop: 60 }}>
-          <Text style={{ ...Typography.body, color: Colors.gray700 }}>
+          <Text style={{ ...theme.type.body, color: theme.colors.textSecondary }}>
             No {tab} matches yet.
           </Text>
         </View>

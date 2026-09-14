@@ -6,26 +6,28 @@ import {
   ScrollView,
   TouchableOpacity,
 } from "react-native";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 export default function GlobalSearch() {
   const [query, setQuery] = useState("");
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
 
   return (
-    <View style={[styles.screen, { backgroundColor: Colors.background }]}>
+    <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={[Typography.h2, styles.title]}>Search</Text>
+        <Text style={styles.title}>Search</Text>
       </View>
 
       <View style={styles.searchRow}>
-        <View style={[styles.searchBox, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-          <Text style={{ color: Colors.mutedText, marginRight: 8 }}>⌕</Text>
+        <View style={styles.searchBox}>
+          <Text style={{ color: theme.colors.textSecondary, marginRight: 8 }}>⌕</Text>
           <TextInput
             value={query}
             onChangeText={setQuery}
             placeholder="Search people, events, companies…"
-            placeholderTextColor={Colors.mutedText}
-            style={[styles.input, { color: Colors.text }]}
+            placeholderTextColor={theme.colors.textSecondary}
+            style={styles.input}
             autoCapitalize="none"
           />
         </View>
@@ -34,16 +36,16 @@ export default function GlobalSearch() {
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         {query.trim().length === 0 ? (
           <View style={styles.hint}>
-            <Text style={{ color: Colors.mutedText }}>
+            <Text style={{ color: theme.colors.textSecondary }}>
               Start typing to search across Winkly.
             </Text>
           </View>
         ) : (
           <View style={styles.hint}>
-            <Text style={{ color: Colors.mutedText }}>
+            <Text style={{ color: theme.colors.textSecondary }}>
               Global search results will appear here.
             </Text>
-            <Text style={{ color: Colors.mutedText, marginTop: 6 }}>
+            <Text style={{ color: theme.colors.textSecondary, marginTop: 6 }}>
               (Mode-specific search routing can be added next.)
             </Text>
           </View>
@@ -60,9 +62,9 @@ export default function GlobalSearch() {
           ].map((label) => (
             <TouchableOpacity
               key={label}
-              style={[styles.quickItem, { backgroundColor: Colors.card, borderColor: Colors.border }]}
+              style={styles.quickItem}
             >
-              <Text style={{ color: Colors.text }}>{label}</Text>
+              <Text style={{ color: theme.colors.textPrimary }}>{label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -71,37 +73,43 @@ export default function GlobalSearch() {
   );
 }
 
-const styles: any = {
-  screen: { flex: 1, paddingTop: Layout?.screenTopPadding ?? 16 },
+function createStyles(theme: AppTheme) {
+  return {
+    screen: { flex: 1, paddingTop: theme.spacing.md, backgroundColor: theme.colors.background },
 
-  header: { paddingHorizontal: Layout?.screenPadding ?? 16, paddingBottom: 12 },
-  title: { fontWeight: "900" },
+    header: { paddingHorizontal: theme.spacing.xl, paddingBottom: 12 },
+    title: { ...theme.type.h2, fontWeight: "900" as const, color: theme.colors.textPrimary },
 
-  searchRow: { paddingHorizontal: Layout?.screenPadding ?? 16, paddingBottom: 10 },
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    height: 48,
-  },
-  input: { flex: 1, fontSize: 15 },
+    searchRow: { paddingHorizontal: theme.spacing.xl, paddingBottom: 10 },
+    searchBox: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      borderWidth: 1,
+      borderRadius: 16,
+      paddingHorizontal: 12,
+      height: 48,
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+    },
+    input: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
 
-  hint: {
-    paddingHorizontal: Layout?.screenPadding ?? 16,
-    marginTop: 20,
-  },
+    hint: {
+      paddingHorizontal: theme.spacing.xl,
+      marginTop: 20,
+    },
 
-  quickLinks: {
-    marginTop: 30,
-    paddingHorizontal: Layout?.screenPadding ?? 16,
-  },
-  quickTitle: { fontWeight: "900", marginBottom: 10, color: Colors.text },
-  quickItem: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-  },
-};
+    quickLinks: {
+      marginTop: 30,
+      paddingHorizontal: theme.spacing.xl,
+    },
+    quickTitle: { fontWeight: "900" as const, marginBottom: 10, color: theme.colors.textPrimary },
+    quickItem: {
+      borderWidth: 1,
+      borderRadius: 14,
+      padding: 14,
+      marginBottom: 10,
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+    },
+  };
+}

@@ -11,7 +11,7 @@
 import React from "react";
 import { View, Text, Image, TouchableOpacity, ActivityIndicator, StyleSheet } from "react-native";
 import { FitReasonLine } from "@/components/ai/FitReasonLine";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 export type TopPickCard = {
   id: string;
@@ -51,9 +51,12 @@ export function TopPicksSection({
   onSeeAll,
   seeAllLabel = "See all",
 }: Props) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
+
   return (
     <View style={styles.wrap}>
-      <Text style={[styles.heading, { color: primaryColor }]}>{heading}</Text>
+      <Text style={{ ...styles.heading, color: primaryColor }}>{heading}</Text>
       <Text style={styles.subheading}>{subheading}</Text>
 
       {loading ? (
@@ -107,62 +110,64 @@ export function TopPicksSection({
       <TouchableOpacity
         onPress={onSeeAll}
         activeOpacity={0.85}
-        style={[styles.seeAll, { borderColor: primaryColor }]}
+        style={{ ...styles.seeAll, borderColor: primaryColor }}
         accessibilityRole="button"
         accessibilityLabel={seeAllLabel}
       >
-        <Text style={[styles.seeAllText, { color: primaryColor }]}>{seeAllLabel}</Text>
+        <Text style={{ ...styles.seeAllText, color: primaryColor }}>{seeAllLabel}</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: { paddingHorizontal: Layout.screenPadding },
-  heading: { ...Typography.h3, fontWeight: "800", marginBottom: 4 },
-  subheading: { ...Typography.caption, color: Colors.gray600, marginBottom: 16 },
-  center: { paddingVertical: 40, alignItems: "center", justifyContent: "center" },
-  emptyText: { ...Typography.body, color: Colors.gray600, lineHeight: 22, paddingVertical: 12 },
-  list: { gap: 12 },
-  card: {
-    flexDirection: "row",
-    gap: 12,
-    backgroundColor: Colors.card,
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 12,
-  },
-  photoWrap: {
-    width: 76,
-    height: 76,
-    borderRadius: 14,
-    overflow: "hidden",
-    backgroundColor: Colors.gray200,
-  },
-  photo: { width: "100%", height: "100%" },
-  placeholder: { alignItems: "center", justifyContent: "center" },
-  placeholderEmoji: { fontSize: 30 },
-  badge: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    borderRadius: 999,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  badgeText: { ...Typography.caption, color: Colors.white, fontWeight: "700", fontSize: 11 },
-  body: { flex: 1, justifyContent: "center" },
-  cardTitle: { ...Typography.body, fontWeight: "800", color: Colors.text },
-  cardSubtitle: { ...Typography.caption, color: Colors.gray600, marginTop: 1 },
-  reason: { marginTop: 6 },
-  seeAll: {
-    marginTop: 16,
-    borderWidth: 1.5,
-    borderRadius: Layout.radii.control ?? 14,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  seeAllText: { ...Typography.button, fontWeight: "800" },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    wrap: { paddingHorizontal: theme.spacing.xl },
+    heading: { ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, fontWeight: "800", marginBottom: theme.spacing.xxs },
+    subheading: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.lg },
+    center: { paddingVertical: theme.spacing.huge, alignItems: "center", justifyContent: "center" },
+    emptyText: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, paddingVertical: theme.spacing.md },
+    list: { gap: theme.spacing.md },
+    card: {
+      flexDirection: "row",
+      gap: theme.spacing.md,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: theme.spacing.md,
+    },
+    photoWrap: {
+      width: 76,
+      height: 76,
+      borderRadius: theme.radii.md,
+      overflow: "hidden",
+      backgroundColor: theme.colors.border,
+    },
+    photo: { width: "100%", height: "100%" },
+    placeholder: { alignItems: "center", justifyContent: "center" },
+    placeholderEmoji: { fontSize: 30 },
+    badge: {
+      position: "absolute",
+      top: 4,
+      right: 4,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      borderRadius: theme.radii.pill,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+    },
+    badgeText: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: "#FFFFFF", fontWeight: "700", fontSize: 11 },
+    body: { flex: 1, justifyContent: "center" },
+    cardTitle: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, fontWeight: "800", color: theme.colors.textPrimary },
+    cardSubtitle: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginTop: 1 },
+    reason: { marginTop: theme.spacing.xs },
+    seeAll: {
+      marginTop: theme.spacing.lg,
+      borderWidth: 1.5,
+      borderRadius: theme.radii.md,
+      paddingVertical: theme.spacing.md,
+      alignItems: "center",
+    },
+    seeAllText: { ...theme.type.button, fontFamily: theme.type.button.fontFamily, fontWeight: "800" },
+  });
+}

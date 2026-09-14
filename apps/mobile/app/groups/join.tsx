@@ -9,7 +9,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 import { joinGroupByCode } from "@/lib/groups/groupsApi";
 import { ensureGroupConversation } from "@/lib/groups/groupChat";
@@ -18,6 +18,8 @@ const PENDING_KEY = "winkly_pending_group_invite_code";
 
 export default function JoinGroupByCode() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const { code } = useLocalSearchParams<{ code?: string }>();
   const [state, setState] = useState<"loading" | "needs_auth" | "error">("loading");
   const [message, setMessage] = useState<string>("Joining group…");
@@ -54,7 +56,7 @@ export default function JoinGroupByCode() {
     <View style={styles.screen}>
       {state === "loading" ? (
         <>
-          <ActivityIndicator size="large" color={Colors.primaryViolet} />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.text}>{message}</Text>
         </>
       ) : state === "needs_auth" ? (
@@ -78,16 +80,18 @@ export default function JoinGroupByCode() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight, alignItems: "center", justifyContent: "center", padding: 24 },
-  title: { ...Typography.h2, color: Colors.textPrimary, marginBottom: 8, textAlign: "center" },
-  text: { ...Typography.body, color: Colors.gray700, marginTop: 12, textAlign: "center" },
-  btn: {
-    marginTop: 20,
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    paddingHorizontal: 28,
-  },
-  btnText: { ...Typography.button, color: "#FFF" },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background, alignItems: "center", justifyContent: "center", padding: 24 },
+    title: { ...theme.type.h2, color: theme.colors.textPrimary, marginBottom: 8, textAlign: "center" },
+    text: { ...theme.type.body, color: theme.colors.textSecondary, marginTop: 12, textAlign: "center" },
+    btn: {
+      marginTop: 20,
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.radii.md,
+      paddingVertical: 12,
+      paddingHorizontal: 28,
+    },
+    btnText: { ...theme.type.button, color: theme.colors.onPrimary },
+  });
+}

@@ -9,7 +9,7 @@ import {
   NativeScrollEvent,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -24,6 +24,8 @@ type ProfilePhotoCarouselProps = {
  * Used on the own-profile preview and can replace hero+thumbnails elsewhere.
  */
 export function ProfilePhotoCarousel({ photos, aspectRatio = 1.1 }: ProfilePhotoCarouselProps) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const height = SCREEN_WIDTH * aspectRatio;
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
@@ -40,7 +42,7 @@ export function ProfilePhotoCarousel({ photos, aspectRatio = 1.1 }: ProfilePhoto
     return (
       <View style={[styles.slide, { height }]}>
         <View style={styles.placeholder}>
-          <Ionicons name="person" size={72} color={Colors.gray400} />
+          <Ionicons name="person" size={72} color={theme.colors.textMuted} />
         </View>
       </View>
     );
@@ -78,35 +80,37 @@ export function ProfilePhotoCarousel({ photos, aspectRatio = 1.1 }: ProfilePhoto
   );
 }
 
-const styles = StyleSheet.create({
-  slide: {
-    backgroundColor: Colors.gray200,
-    overflow: "hidden",
-  },
-  image: { width: "100%", height: "100%" },
-  placeholder: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.gray100,
-  },
-  dots: {
-    position: "absolute",
-    bottom: 12,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 6,
-  },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: "rgba(255,255,255,0.45)",
-  },
-  dotActive: {
-    backgroundColor: Colors.white,
-    width: 18,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    slide: {
+      backgroundColor: theme.colors.border,
+      overflow: "hidden",
+    },
+    image: { width: "100%", height: "100%" },
+    placeholder: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.colors.backgroundMuted,
+    },
+    dots: {
+      position: "absolute",
+      bottom: theme.spacing.md,
+      left: 0,
+      right: 0,
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: theme.spacing.xs,
+    },
+    dot: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: "rgba(255,255,255,0.45)",
+    },
+    dotActive: {
+      backgroundColor: theme.colors.onPrimary,
+      width: 18,
+    },
+  });
+}

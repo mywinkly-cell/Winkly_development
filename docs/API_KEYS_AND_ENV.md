@@ -69,7 +69,11 @@ These are **server-side only**. Never put them in the mobile app.
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | **ai-gateway**, **recompute-behavior-ml** | **Recommended (prod)** | **ai-gateway:** per-tier/per-task rate limits + response caches (skips limits when unset). **recompute-behavior-ml:** busts cache key `winkly:feed:{user_id}` after updates. |
 | `CORS_ALLOWED_ORIGINS` | **ai-gateway**, **delete-account** | **Recommended (prod)** | Comma-separated browser origins allowed for CORS preflight. When unset, defaults to localhost (dev). Production example: `https://YOUR_PROJECT_REF.supabase.co`. Native mobile `supabase.functions.invoke` is unaffected. |
 | `EXPO_ACCESS_TOKEN` | **notify-fanout**, **pending-plan-confirm**, **expo-push-notify** | **Recommended (prod)** | Expo account access token ([expo.dev](https://expo.dev) → Account → Access tokens). Improves Expo Push API reliability and rate limits. Same token family as GitHub `EXPO_TOKEN` for EAS CI. |
-| `WEBHOOK_SECRET` | **notify-fanout** | **Required for server push** | Shared secret for `x-webhook-secret` header from Postgres `pg_net` triggers. **Must match** `private.webhook_config.secret` in the database. Generate a strong random string; set via CLI/Dashboard, then sync the DB row (see §3.1). |
+| `WEBHOOK_SECRET` | **notify-fanout**, **report-notify** | **Required for server push** | Shared secret for `x-webhook-secret` header from Postgres `pg_net` triggers. **Must match** `private.webhook_config.secret` in the database. Generate a strong random string; set via CLI/Dashboard, then sync the DB row (see §3.1). `report-notify` reuses the same secret. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_TLS`, `SMTP_USER`, `SMTP_PASS` | **report-notify** | **Recommended (prod)** | SMTP credentials for the DSA moderation mailbox (`customer-care@mywinkly.de`, hosted at united-domains). `SMTP_HOST=smtps.udag.de`, `SMTP_PORT=587` + `SMTP_TLS=false` (STARTTLS) or `SMTP_PORT=465` + `SMTP_TLS=true`. `SMTP_USER`/`SMTP_PASS` are the mailbox login — generate/rotate the mailbox password in the united-domains control panel, never paste it in chat. Posted on every new `user_reports` / `message_reports` row via `20260906130000_report_notify_triggers.sql`. When unset, reports still land in the DB tables and the function logs only. |
+| `REPORT_EMAIL_TO`, `REPORT_EMAIL_FROM` | **report-notify** | Optional | Override the moderation recipient/sender. Both default to `customer-care@mywinkly.de` (`SMTP_USER`). |
+| `REPORT_WEBHOOK_URL` | **report-notify** | Optional | Incoming-webhook URL (Slack / Discord / relay) — an additional channel alongside or instead of SMTP email. |
+| `REPORT_WEBHOOK_FORMAT` | **report-notify** | Optional | `slack` (default) posts `{ text }`; `raw` posts `{ type, record, summary }` for a custom relay. |
 | `AUTH_REDIRECT_STATE_SECRET` | **auth-redirect** | **Recommended (prod)** | Random string **≥ 16 characters**. Signs `winkly_state` CSRF tokens (`GET …/auth-redirect?action=mint`). Required for production when using HTTPS `EXPO_PUBLIC_AUTH_REDIRECT_URL`. |
 
 **Local Edge Functions (`supabase start` / `supabase functions serve`):**
@@ -111,6 +115,7 @@ Run the commands **on your machine** in PowerShell or Command Prompt. When you t
    npx supabase functions deploy ai-gateway
    npx supabase functions deploy get-nearby-external-events
    npx supabase functions deploy notify-fanout
+   npx supabase functions deploy report-notify
    ```
 
 ### 3.1 Development checklist (`gwgjdpqskusuejlwrsnd` — Winkly_development)

@@ -7,10 +7,12 @@ import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from "rea
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ensureGroupConversation } from "@/lib/groups/groupChat";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 export default function GroupChatEntry() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const { groupId } = useLocalSearchParams<{ groupId?: string }>();
   const [error, setError] = useState<string | null>(null);
 
@@ -46,7 +48,7 @@ export default function GroupChatEntry() {
     <View style={styles.screen}>
       <View style={styles.headerRow}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Group chat</Text>
         <View style={{ width: 44 }} />
@@ -61,7 +63,7 @@ export default function GroupChatEntry() {
         </View>
       ) : (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primaryViolet} />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.loadingText}>Opening group chat…</Text>
         </View>
       )}
@@ -69,32 +71,36 @@ export default function GroupChatEntry() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    ...Layout.topHeaderBar,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  loadingText: { ...Typography.body, color: Colors.gray600, marginTop: 12 },
-  errorText: { ...Typography.body, color: Colors.errorRed, textAlign: "center", marginBottom: 16 },
-  retryBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: Layout.radii.control,
-    backgroundColor: Colors.primaryViolet,
-  },
-  retryText: { ...Typography.button, color: Colors.accentYellow },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 20,
+      paddingTop: theme.spacing.sm,
+      paddingBottom: theme.spacing.md,
+      minHeight: 56,
+    },
+    backBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary },
+    center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+    loadingText: { ...theme.type.body, color: theme.colors.textSecondary, marginTop: 12 },
+    errorText: { ...theme.type.body, color: theme.colors.error, textAlign: "center", marginBottom: 16 },
+    retryBtn: {
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.primary,
+    },
+    retryText: { ...theme.type.button, color: theme.colors.onPrimary },
+  });
+}

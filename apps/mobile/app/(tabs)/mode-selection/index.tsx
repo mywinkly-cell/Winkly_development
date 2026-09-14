@@ -21,7 +21,8 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useModeContext } from "@/providers";
-import { Colors, Typography, FontFamily, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { radii } from "@/constants/design-system/radii";
 import { ModeSelectionHeader } from "@/components/layout/ModeSelectionHeader";
 import {
   computeModeProgressFromSubProfiles,
@@ -49,12 +50,14 @@ import type { Mode } from "@/types";
 
 type ModeKey = Mode;
 
-const MODE_CARD_COLORS: Record<ModeKey, string> = {
-  romance: Colors.romance.primary,
-  friends: Colors.friends.primary,
-  business: Colors.business.primary,
-  events: Colors.events.primary,
-};
+function getModeCardColors(theme: AppTheme): Record<ModeKey, string> {
+  return {
+    romance: theme.modeAccent("romance").primary,
+    friends: theme.modeAccent("friends").primary,
+    business: theme.modeAccent("business").primary,
+    events: theme.modeAccent("events").primary,
+  };
+}
 
 const EVENTS_ICON = require("@/assets/icons/events-icon_1.png");
 
@@ -81,6 +84,8 @@ type AccountType = "personal" | "business";
 
 export default function ModeSelectionIndex() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const modeCardColors = getModeCardColors(theme);
   const { context, setActiveMode, resetMode, refresh } = useModeContext();
   const [activeMode, setActiveModeLocal] = useState<ModeKey | null>(null);
   const [loading, setLoading] = useState(true);
@@ -241,7 +246,7 @@ export default function ModeSelectionIndex() {
   };
 
   return (
-    <SafeScreenView edges={["left", "right"]} style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
+    <SafeScreenView edges={["left", "right"]} style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <ModeSelectionHeader showSettingsIcon />
 
       <ScrollView
@@ -268,19 +273,19 @@ export default function ModeSelectionIndex() {
               marginBottom: 20,
               padding: 14,
               borderRadius: 14,
-              backgroundColor: Colors.primaryViolet + "12",
+              backgroundColor: theme.colors.primary + "12",
               borderWidth: 1,
-              borderColor: Colors.primaryViolet + "44",
+              borderColor: theme.colors.primary + "44",
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
               gap: 12,
             }}
           >
-            <Text style={{ ...Typography.body, flex: 1, color: Colors.textPrimary, fontWeight: "600" }}>
+            <Text style={{ ...theme.type.body, flex: 1, color: theme.colors.textPrimary, fontWeight: "600" }}>
               {SKIPPED_MODE_BANNER[skippedMode].message}
             </Text>
-            <Text style={{ ...Typography.caption, color: Colors.primaryViolet, fontWeight: "800" }}>
+            <Text style={{ ...theme.type.caption, color: theme.colors.primary, fontWeight: "800" }}>
               {SKIPPED_MODE_BANNER[skippedMode].cta} →
             </Text>
           </Pressable>
@@ -303,11 +308,11 @@ export default function ModeSelectionIndex() {
         <Text
           testID="mode-selection-title"
           style={{
-            ...Typography.h2,
+            ...theme.type.h2,
             fontSize: 24,
             fontWeight: "800",
-            color: Colors.primaryViolet,
-            fontFamily: FontFamily.headingBold,
+            color: theme.colors.primary,
+            fontFamily: theme.type.h1.fontFamily,
             textAlign: "center",
             marginBottom: 28,
           }}
@@ -328,7 +333,7 @@ export default function ModeSelectionIndex() {
                 label={cfg.label}
                 description={cfg.description}
                 discoverLine={formatModeDiscoverCount(mode, discoverCounts[mode])}
-                color={MODE_CARD_COLORS[mode]}
+                color={modeCardColors[mode]}
                 icon={cfg.icon}
                 iconImage={cfg.iconImage}
                 active={activeMode === mode}
@@ -363,11 +368,12 @@ const CARD_GAP = 12;
 const CARD_ICON_SIZE = 36;
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CARD_SIZE = (SCREEN_WIDTH - 48 - CARD_GAP * 2) / 2;
-const CARD_RADIUS = Layout.radii.card + 8;
+const CARD_RADIUS = radii.lg + 8;
 const CARD_PADDING = 24;
 const ACTIVE_SCALE = 1.08;
 
 function ModeCard({ testID, label, description, discoverLine, color, icon, iconImage, active, ready, busy, onPress }: ModeCardProps) {
+  const theme = useAppTheme();
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -379,7 +385,7 @@ function ModeCard({ testID, label, description, discoverLine, color, icon, iconI
 
   // Premium 3D: neutral depth shadow (visible on all modes – fixes Romance/Friends)
   const depthShadow = {
-    shadowColor: Colors.softBlack,
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 4 } as const,
     shadowOpacity: 0.28,
     shadowRadius: 10,
@@ -431,7 +437,7 @@ function ModeCard({ testID, label, description, discoverLine, color, icon, iconI
               padding: CARD_PADDING,
               overflow: "hidden",
               borderWidth: active ? 3 : 0,
-              borderColor: active ? Colors.white : "transparent",
+              borderColor: active ? "#FFFFFF" : "transparent",
               justifyContent: "space-between",
             }}
           >
@@ -440,21 +446,21 @@ function ModeCard({ testID, label, description, discoverLine, color, icon, iconI
                 <Ionicons name="lock-closed" size={18} color="rgba(255,255,255,0.9)" style={{ position: "absolute", top: 0, right: 0 }} />
               ) : null}
               {iconImage ? (
-                <Image source={iconImage} style={{ width: CARD_ICON_SIZE, height: CARD_ICON_SIZE, marginBottom: 12, tintColor: Colors.white }} resizeMode="contain" />
+                <Image source={iconImage} style={{ width: CARD_ICON_SIZE, height: CARD_ICON_SIZE, marginBottom: 12, tintColor: "#FFFFFF" }} resizeMode="contain" />
               ) : (
-                <Ionicons name={icon} size={CARD_ICON_SIZE} color={Colors.white} style={{ marginBottom: 12 }} />
+                <Ionicons name={icon} size={CARD_ICON_SIZE} color="#FFFFFF" style={{ marginBottom: 12 }} />
               )}
-              <Text selectable={false} style={{ ...Typography.h3, color: Colors.white, marginBottom: 4, textAlign: "center", fontFamily: FontFamily.headingBold }}>
+              <Text selectable={false} style={{ ...theme.type.h3, color: "#FFFFFF", marginBottom: 4, textAlign: "center", fontFamily: theme.type.h1.fontFamily }}>
                 {label}
               </Text>
-              <Text selectable={false} style={{ ...Typography.caption, color: Colors.white, textAlign: "center", lineHeight: 18 }}>
+              <Text selectable={false} style={{ ...theme.type.caption, color: "#FFFFFF", textAlign: "center", lineHeight: 18 }}>
                 {description}
               </Text>
               {discoverLine ? (
                 <Text
                   selectable={false}
                   style={{
-                    ...Typography.caption,
+                    ...theme.type.caption,
                     fontSize: 11,
                     color: "rgba(255,255,255,0.88)",
                     textAlign: "center",

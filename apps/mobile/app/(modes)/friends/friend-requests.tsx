@@ -19,10 +19,12 @@ import {
   listIncomingFriendsRequests,
   type IncomingFriendsRequestRow,
 } from "@/lib/matching/actions";
-import { Colors, Typography, Layout, HEADER } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 export default function FriendRequestsScreen() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [items, setItems] = useState<IncomingFriendsRequestRow[]>([]);
@@ -96,7 +98,7 @@ export default function FriendRequestsScreen() {
           style={styles.backBtn}
           accessibilityLabel="Back"
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Connection requests</Text>
         <View style={styles.headerRight} />
@@ -104,7 +106,7 @@ export default function FriendRequestsScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={Colors.friends.primary} />
+          <ActivityIndicator color={theme.modeAccent("friends").primary} />
         </View>
       ) : (
         <FlatList
@@ -123,7 +125,7 @@ export default function FriendRequestsScreen() {
                       <Image source={{ uri: item.photo_url }} style={styles.avatarImg} resizeMode="cover" />
                     ) : (
                       <View style={styles.avatarPlaceholder}>
-                        <Ionicons name="person" size={24} color={Colors.gray500} />
+                        <Ionicons name="person" size={24} color={theme.colors.textMuted} />
                       </View>
                     )}
                   </View>
@@ -147,7 +149,7 @@ export default function FriendRequestsScreen() {
                     style={({ pressed }) => [styles.btnPrimary, pressed && styles.btnPressed, busy && styles.btnDisabled]}
                   >
                     {busy ? (
-                      <ActivityIndicator color={Colors.white} />
+                      <ActivityIndicator color="#FFFFFF" />
                     ) : (
                       <Text style={styles.btnPrimaryText}>Accept</Text>
                     )}
@@ -165,76 +167,80 @@ export default function FriendRequestsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    ...Layout.topHeaderBar,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-    backgroundColor: Colors.white,
-  },
-  backBtn: {
-    width: HEADER.buttonSize,
-    height: HEADER.buttonSize,
-    borderRadius: HEADER.buttonRadius,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    ...Typography.headerTitle,
-    color: Colors.friends.primary,
-  },
-  headerRight: { width: HEADER.buttonSize },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  listPad: { padding: 16, paddingBottom: 32 },
-  emptyWrap: { flexGrow: 1, padding: 24, justifyContent: "center" },
-  emptyText: { ...Typography.body, color: Colors.gray600, textAlign: "center" },
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 14,
-  },
-  row: { flexDirection: "row", alignItems: "flex-start" },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    overflow: "hidden",
-    backgroundColor: Colors.gray100,
-  },
-  avatarImg: { width: "100%", height: "100%" },
-  avatarPlaceholder: { flex: 1, alignItems: "center", justifyContent: "center" },
-  meta: { flex: 1, marginLeft: 12 },
-  name: { ...Typography.h3, color: Colors.textPrimary },
-  kind: { ...Typography.caption, color: Colors.friends.primary, marginTop: 2 },
-  msg: { ...Typography.body, color: Colors.gray700, marginTop: 6 },
-  actions: { flexDirection: "row", gap: 10, marginTop: 14 },
-  btnSecondary: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 22,
-    borderWidth: 2,
-    borderColor: Colors.gray300,
-    alignItems: "center",
-  },
-  btnSecondaryText: { ...Typography.button, color: Colors.textPrimary },
-  btnPrimary: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 22,
-    backgroundColor: Colors.friends.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 48,
-  },
-  btnPrimaryText: { ...Typography.button, color: Colors.white },
-  btnPressed: { opacity: 0.85 },
-  btnDisabled: { opacity: 0.55 },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      paddingTop: theme.spacing.sm,
+      paddingBottom: theme.spacing.md,
+      minHeight: 56,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    backBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    headerTitle: {
+      ...theme.type.h2,
+      color: theme.modeAccent("friends").primary,
+    },
+    headerRight: { width: 44 },
+    center: { flex: 1, alignItems: "center", justifyContent: "center" },
+    listPad: { padding: 16, paddingBottom: 32 },
+    emptyWrap: { flexGrow: 1, padding: 24, justifyContent: "center" },
+    emptyText: { ...theme.type.body, color: theme.colors.textSecondary, textAlign: "center" },
+    card: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: 14,
+    },
+    row: { flexDirection: "row", alignItems: "flex-start" },
+    avatar: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      overflow: "hidden",
+      backgroundColor: theme.colors.backgroundMuted,
+    },
+    avatarImg: { width: "100%", height: "100%" },
+    avatarPlaceholder: { flex: 1, alignItems: "center", justifyContent: "center" },
+    meta: { flex: 1, marginLeft: 12 },
+    name: { ...theme.type.h3, color: theme.colors.textPrimary },
+    kind: { ...theme.type.caption, color: theme.modeAccent("friends").primary, marginTop: 2 },
+    msg: { ...theme.type.body, color: theme.colors.textSecondary, marginTop: 6 },
+    actions: { flexDirection: "row", gap: 10, marginTop: 14 },
+    btnSecondary: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 22,
+      borderWidth: 2,
+      borderColor: theme.colors.border,
+      alignItems: "center",
+    },
+    btnSecondaryText: { ...theme.type.button, color: theme.colors.textPrimary },
+    btnPrimary: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 22,
+      backgroundColor: theme.modeAccent("friends").primary,
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: 48,
+    },
+    btnPrimaryText: { ...theme.type.button, color: "#FFFFFF" },
+    btnPressed: { opacity: 0.85 },
+    btnDisabled: { opacity: 0.55 },
+  });
+}

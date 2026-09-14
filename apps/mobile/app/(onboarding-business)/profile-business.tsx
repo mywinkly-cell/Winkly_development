@@ -7,8 +7,7 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
   Image,
   Alert,
@@ -20,7 +19,8 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Routes } from "@/constants/routes";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Card, Chip, Input, PrimaryButton, TextButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { pickAndUploadLogo } from "@/lib/uploadLogo";
 import { trackOnboardingCompleted } from "@/lib/analytics/events";
 import type { BusinessProfileType } from "@/types";
@@ -32,6 +32,8 @@ import {
 
 export default function ProfileBusiness() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const { edit } = useLocalSearchParams<{ edit?: string }>();
   const isEditFlow = edit === "1";
 
@@ -157,33 +159,21 @@ export default function ProfileBusiness() {
   if (step === "type") {
     return (
       <ScrollView
-        contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
+        contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
-        style={{ flex: 1, backgroundColor: Colors.backgroundLight }}
+        style={styles.screen}
       >
-        <Text style={{ ...Typography.h2, color: Colors.textPrimary, marginBottom: 8 }}>
-          What best describes you?
-        </Text>
-        <Text style={{ ...Typography.body, color: Colors.gray600, marginBottom: 24 }}>
+        <Text style={styles.title}>What best describes you?</Text>
+        <Text style={styles.subtitle}>
           This shapes your Winkly experience — discovery, offers, and how others find you.
         </Text>
         {BUSINESS_TYPE_PRIMARY_OPTIONS.map((opt) => (
-          <TouchableOpacity
-            key={opt.key}
-            onPress={() => handlePrimaryType(opt.key)}
-            style={{
-              borderWidth: 1,
-              borderColor: Colors.gray300,
-              backgroundColor: "#FFF",
-              borderRadius: 16,
-              padding: 18,
-              marginBottom: 12,
-            }}
-            activeOpacity={0.9}
-          >
-            <Text style={{ fontWeight: "700", fontSize: 17, color: Colors.textPrimary }}>{opt.label}</Text>
-            <Text style={{ color: Colors.gray600, fontSize: 14, marginTop: 4 }}>{opt.hint}</Text>
-          </TouchableOpacity>
+          <Pressable key={opt.key} onPress={() => handlePrimaryType(opt.key)}>
+            <Card style={styles.optionCard}>
+              <Text style={styles.optionTitle}>{opt.label}</Text>
+              <Text style={styles.optionHint}>{opt.hint}</Text>
+            </Card>
+          </Pressable>
         ))}
       </ScrollView>
     );
@@ -192,36 +182,22 @@ export default function ProfileBusiness() {
   if (step === "org_subtype") {
     return (
       <ScrollView
-        contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
+        contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
-        style={{ flex: 1, backgroundColor: Colors.backgroundLight }}
+        style={styles.screen}
       >
-        <TouchableOpacity onPress={() => setStep("type")} style={{ marginBottom: 16 }}>
-          <Text style={{ color: Colors.primaryViolet, fontWeight: "600" }}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={{ ...Typography.h2, color: Colors.textPrimary, marginBottom: 8 }}>
-          What kind of organisation?
-        </Text>
-        <Text style={{ ...Typography.body, color: Colors.gray600, marginBottom: 24 }}>
+        <TextButton title="← Back" onPress={() => setStep("type")} style={styles.backLink} />
+        <Text style={styles.title}>What kind of organisation?</Text>
+        <Text style={styles.subtitle}>
           Pick the option that fits best — you can update this later.
         </Text>
         {BUSINESS_ORG_SUBTYPE_OPTIONS.map((opt) => (
-          <TouchableOpacity
-            key={opt.value}
-            onPress={() => handleOrgSubtype(opt.value)}
-            style={{
-              borderWidth: 1,
-              borderColor: Colors.gray300,
-              backgroundColor: "#FFF",
-              borderRadius: 16,
-              padding: 18,
-              marginBottom: 12,
-            }}
-            activeOpacity={0.9}
-          >
-            <Text style={{ fontWeight: "700", fontSize: 17, color: Colors.textPrimary }}>{opt.label}</Text>
-            <Text style={{ color: Colors.gray600, fontSize: 14, marginTop: 4 }}>{opt.hint}</Text>
-          </TouchableOpacity>
+          <Pressable key={opt.value} onPress={() => handleOrgSubtype(opt.value)}>
+            <Card style={styles.optionCard}>
+              <Text style={styles.optionTitle}>{opt.label}</Text>
+              <Text style={styles.optionHint}>{opt.hint}</Text>
+            </Card>
+          </Pressable>
         ))}
       </ScrollView>
     );
@@ -230,168 +206,115 @@ export default function ProfileBusiness() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={{ flex: 1, backgroundColor: Colors.backgroundLight }}
+      style={styles.screen}
     >
       <ScrollView
-        contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
+        contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
         {!isEditFlow && (
-          <TouchableOpacity
+          <TextButton
+            title="← Change profile type"
             onPress={() =>
               setStep(businessType === "individual_professional" ? "type" : "org_subtype")
             }
-            style={{ marginBottom: 12 }}
-          >
-            <Text style={{ color: Colors.primaryViolet, fontWeight: "600" }}>← Change profile type</Text>
-          </TouchableOpacity>
+            style={styles.backLink}
+          />
         )}
 
-        <Text style={{ ...Typography.h2, color: Colors.textPrimary, marginBottom: 16 }}>
-          Set up your Business Profile 💼
-        </Text>
+        <Text style={styles.title}>Set up your Business Profile 💼</Text>
 
-        <TouchableOpacity
-          onPress={pickLogo}
-          style={{
-            width: 120,
-            height: 120,
-            borderRadius: 60,
-            backgroundColor: "#F5F5F5",
-            alignSelf: "center",
-            marginBottom: 24,
-            justifyContent: "center",
-            alignItems: "center",
-            borderWidth: 1,
-            borderColor: Colors.gray300,
-          }}
-        >
+        <Pressable onPress={pickLogo} style={styles.logoPicker}>
           {logoUri ? (
             <Image source={{ uri: logoUri }} style={{ width: 120, height: 120, borderRadius: 60 }} />
           ) : (
-            <Text style={{ color: Colors.gray500, fontSize: 32 }}>＋</Text>
+            <Text style={{ color: theme.colors.textMuted, fontSize: 32 }}>＋</Text>
           )}
-        </TouchableOpacity>
+        </Pressable>
 
-        <Text style={[label, { marginBottom: 6 }]}>
-          Business / Brand Name <Text style={{ color: Colors.errorRed, fontWeight: "700" }}>*</Text>
-        </Text>
-        <TextInput
-          placeholder="Business / Brand Name"
-          value={businessName}
-          onChangeText={setBusinessName}
-          style={inputStyle}
-        />
-
-        <Text style={[label, { marginBottom: 6 }]}>Location</Text>
-        <TextInput
-          placeholder="City, Country"
-          value={location}
-          onChangeText={setLocation}
-          style={inputStyle}
-        />
-
-        <Text style={[label, { marginBottom: 6 }]}>
-          Area of Business <Text style={{ color: Colors.errorRed, fontWeight: "700" }}>*</Text>
-        </Text>
-        <TextInput
-          placeholder="e.g. Marketing, Tech, Wellness"
-          value={area}
-          onChangeText={setArea}
-          style={inputStyle}
-        />
-
-        <Text style={[label, { marginBottom: 6 }]}>
-          About your business <Text style={{ color: Colors.errorRed, fontWeight: "700" }}>*</Text>
-        </Text>
-        <TextInput
+        <Input label="Business / Brand Name *" placeholder="Business / Brand Name" value={businessName} onChangeText={setBusinessName} />
+        <Input label="Location" placeholder="City, Country" value={location} onChangeText={setLocation} />
+        <Input label="Area of Business *" placeholder="e.g. Marketing, Tech, Wellness" value={area} onChangeText={setArea} />
+        <Input
+          label="About your business *"
           placeholder="Describe your business..."
           value={bio}
           onChangeText={setBio}
           multiline
-          style={[inputStyle, { height: 100, textAlignVertical: "top" }]}
+          style={{ height: 100, textAlignVertical: "top" }}
         />
 
-        <Text style={label}>Tags (up to 10)</Text>
-        <View style={{ flexDirection: "row", marginBottom: 12 }}>
-          <TextInput
+        <Text style={styles.label}>Tags (up to 10)</Text>
+        <View style={styles.tagInputRow}>
+          <Input
             placeholder="Add tag"
             value={inputTag}
             onChangeText={setInputTag}
-            style={[inputStyle, { flex: 1, marginRight: 8 }]}
+            containerStyle={{ flex: 1, marginBottom: 0, marginRight: theme.spacing.sm }}
           />
-          <TouchableOpacity
-            onPress={addTag}
-            style={{
-              backgroundColor: Colors.primaryViolet,
-              borderRadius: Layout.radii.control,
-              width: 40,
-              height: 40,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Text style={{ color: "#FFF", fontSize: 20 }}>＋</Text>
-          </TouchableOpacity>
+          <Pressable onPress={addTag} style={styles.addTagBtn}>
+            <Text style={{ color: theme.colors.onPrimary, fontSize: 20 }}>＋</Text>
+          </Pressable>
         </View>
 
-        <View style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 20 }}>
+        <View style={styles.tagRow}>
           {tags.map((t) => (
-            <TouchableOpacity
-              key={t}
-              onPress={() => removeTag(t)}
-              style={{
-                backgroundColor: Colors.primaryViolet,
-                borderRadius: 20,
-                paddingVertical: 6,
-                paddingHorizontal: 12,
-                marginRight: 6,
-                marginBottom: 6,
-              }}
-            >
-              <Text style={{ color: "#FFF" }}>{t} ✕</Text>
-            </TouchableOpacity>
+            <Chip key={t} label={`${t} ✕`} selected onPress={() => removeTag(t)} style={styles.tagChip} />
           ))}
         </View>
 
-        <Text style={label}>Website & Socials</Text>
-        <TextInput placeholder="Website" value={website} onChangeText={setWebsite} style={inputStyle} />
-        <TextInput placeholder="Instagram" value={instagram} onChangeText={setInstagram} style={inputStyle} />
-        <TextInput placeholder="Facebook" value={facebook} onChangeText={setFacebook} style={inputStyle} />
-        <TextInput placeholder="LinkedIn" value={linkedin} onChangeText={setLinkedin} style={inputStyle} />
+        <Text style={styles.label}>Website & Socials</Text>
+        <Input placeholder="Website" value={website} onChangeText={setWebsite} />
+        <Input placeholder="Instagram" value={instagram} onChangeText={setInstagram} />
+        <Input placeholder="Facebook" value={facebook} onChangeText={setFacebook} />
+        <Input placeholder="LinkedIn" value={linkedin} onChangeText={setLinkedin} />
 
-        <TouchableOpacity
+        <PrimaryButton
+          title={loading ? "Saving..." : "Continue"}
           onPress={handleContinue}
           disabled={loading}
-          style={{
-            backgroundColor: Colors.primaryViolet,
-            borderRadius: Layout.radii.control,
-            paddingVertical: 16,
-            alignItems: "center",
-            marginTop: 24,
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
-          <Text style={{ ...Typography.button, color: Colors.accentYellow }}>
-            {loading ? "Saving..." : "Continue"}
-          </Text>
-        </TouchableOpacity>
+          loading={loading}
+          style={styles.continueBtn}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-const inputStyle = {
-  borderWidth: 1,
-  borderColor: Colors.gray400,
-  borderRadius: Layout.radii.control,
-  padding: 12,
-  backgroundColor: "#FFF",
-  marginBottom: 12,
-};
-
-const label = {
-  ...Typography.body,
-  color: Colors.gray700,
-  marginBottom: 6,
-};
+function createStyles(theme: AppTheme) {
+  return {
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { padding: theme.spacing.xl, paddingBottom: 100 },
+    title: { ...theme.type.h2, fontFamily: theme.type.h2.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.sm },
+    subtitle: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.xxl },
+    optionCard: { marginBottom: theme.spacing.md },
+    optionTitle: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily, fontWeight: "700" as const, color: theme.colors.textPrimary },
+    optionHint: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.xxs },
+    backLink: { paddingHorizontal: 0, alignSelf: "flex-start" as const, marginBottom: theme.spacing.md },
+    logoPicker: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignSelf: "center" as const,
+      marginBottom: theme.spacing.xxl,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    label: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.xs },
+    tagInputRow: { flexDirection: "row" as const, marginBottom: theme.spacing.md, alignItems: "flex-start" as const },
+    addTagBtn: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.radii.md,
+      width: 48,
+      height: 48,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    tagRow: { flexDirection: "row" as const, flexWrap: "wrap" as const, marginBottom: theme.spacing.xl },
+    tagChip: { marginRight: theme.spacing.xs, marginBottom: theme.spacing.xs },
+    continueBtn: { marginTop: theme.spacing.xl },
+  };
+}

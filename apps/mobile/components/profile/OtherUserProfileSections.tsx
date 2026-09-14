@@ -2,13 +2,15 @@ import React from "react";
 import { View, Text, ScrollView, Image, StyleSheet, Dimensions } from "react-native";
 import * as Linking from "expo-linking";
 import { TouchableOpacity } from "react-native";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 type ChipProps = { items: string[] };
 
 export function ProfileChipList({ items }: ChipProps) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   if (items.length === 0) return null;
   return (
     <View style={styles.chipWrap}>
@@ -28,6 +30,8 @@ export function ProfileSection({
   title: string;
   children: React.ReactNode;
 }) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -37,6 +41,8 @@ export function ProfileSection({
 }
 
 export function ProfilePhotoGallery({ photos }: { photos: string[] }) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const topPhoto = photos[0] ?? null;
   if (!topPhoto && photos.length === 0) {
     return (
@@ -74,6 +80,8 @@ export function ProfilePhotoGallery({ photos }: { photos: string[] }) {
 }
 
 export function ProfileInstagramLink({ handle }: { handle: string }) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const trimmed = handle.trim();
   if (!trimmed) return null;
   const h = trimmed.replace(/^@/, "").replace(/.*instagram\.com\//, "").split("/")[0];
@@ -105,6 +113,8 @@ export function ProfileGeneralBlock({
   languages?: string[];
   nightOwl?: boolean | null;
 }) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const hasGeneral =
     !!coreBio ||
     !!education ||
@@ -117,7 +127,7 @@ export function ProfileGeneralBlock({
     <ProfileSection title="General">
       {coreBio ? <Text style={styles.body}>{coreBio}</Text> : null}
       {education ? (
-        <Text style={[styles.metaLine, coreBio ? { marginTop: 10 } : null]}>
+        <Text style={[styles.metaLine, coreBio ? { marginTop: theme.spacing.sm } : null]}>
           Education: {education}
         </Text>
       ) : null}
@@ -126,7 +136,7 @@ export function ProfileGeneralBlock({
       ) : null}
       {languages && languages.length > 0 ? (
         <>
-          <Text style={[styles.subheading, { marginTop: 12 }]}>Languages</Text>
+          <Text style={[styles.subheading, { marginTop: theme.spacing.md }]}>Languages</Text>
           <Text style={styles.body}>{languages.join(", ")}</Text>
         </>
       ) : null}
@@ -134,70 +144,76 @@ export function ProfileGeneralBlock({
   );
 }
 
-const styles = StyleSheet.create({
-  heroPhoto: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH * 1.1,
-    backgroundColor: Colors.gray200,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heroImage: { width: "100%", height: "100%" },
-  galleryScroll: { marginTop: 12 },
-  galleryContent: {
-    paddingHorizontal: Layout.screenPadding,
-    gap: 10,
-    paddingRight: Layout.screenPadding,
-  },
-  galleryThumb: {
-    width: 90,
-    height: 120,
-    borderRadius: 16,
-    overflow: "hidden",
-    backgroundColor: Colors.gray200,
-  },
-  galleryThumbImage: { width: "100%", height: "100%" },
-  section: { marginBottom: 16 },
-  sectionTitle: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
-    marginBottom: 6,
-  },
-  subheading: {
-    ...Typography.caption,
-    fontWeight: "700",
-    color: Colors.gray700,
-    marginBottom: 4,
-  },
-  body: {
-    ...Typography.body,
-    color: Colors.gray800,
-    lineHeight: 22,
-  },
-  metaLine: {
-    ...Typography.body,
-    color: Colors.gray700,
-    lineHeight: 20,
-  },
-  chipWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: 4,
-  },
-  chip: {
-    borderRadius: 999,
-    backgroundColor: Colors.gray100,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-  },
-  chipText: {
-    ...Typography.caption,
-    color: Colors.textPrimary,
-  },
-  link: {
-    ...Typography.body,
-    color: Colors.primaryViolet,
-    textDecorationLine: "underline",
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    heroPhoto: {
+      width: SCREEN_WIDTH,
+      height: SCREEN_WIDTH * 1.1,
+      backgroundColor: theme.colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    heroImage: { width: "100%", height: "100%" },
+    galleryScroll: { marginTop: theme.spacing.md },
+    galleryContent: {
+      paddingHorizontal: theme.spacing.xl,
+      gap: theme.spacing.sm,
+      paddingRight: theme.spacing.xl,
+    },
+    galleryThumb: {
+      width: 90,
+      height: 120,
+      borderRadius: theme.radii.lg,
+      overflow: "hidden",
+      backgroundColor: theme.colors.border,
+    },
+    galleryThumbImage: { width: "100%", height: "100%" },
+    section: { marginBottom: theme.spacing.lg },
+    sectionTitle: {
+      ...theme.type.h3,
+      fontFamily: theme.type.h3.fontFamily,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.xs,
+    },
+    subheading: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontWeight: "700",
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.xxs,
+    },
+    body: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textSecondary,
+    },
+    metaLine: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textSecondary,
+    },
+    chipWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: theme.spacing.xs,
+      marginTop: theme.spacing.xxs,
+    },
+    chip: {
+      borderRadius: theme.radii.pill,
+      backgroundColor: theme.colors.backgroundMuted,
+      paddingVertical: theme.spacing.xxs,
+      paddingHorizontal: theme.spacing.sm,
+    },
+    chipText: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textPrimary,
+    },
+    link: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.primary,
+      textDecorationLine: "underline",
+    },
+  });
+}

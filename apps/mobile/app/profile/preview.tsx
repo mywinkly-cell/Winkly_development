@@ -6,7 +6,6 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   Image,
   ActivityIndicator,
   StyleSheet,
@@ -17,7 +16,8 @@ import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { Chip, Header } from "@/components/ds";
+import { useAppTheme, type AppTheme, type ModeName } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 
@@ -27,11 +27,11 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const CARD_WIDTH = Math.min(SCREEN_WIDTH * 0.9, 340);
 const CARD_HEIGHT = Math.min(SCREEN_HEIGHT * 0.55, 400);
 
-const MODES: { key: PreviewMode; label: string; color: string }[] = [
-  { key: "romance", label: "Romance", color: Colors.romance.primary },
-  { key: "friends", label: "Friends", color: Colors.friends.primary },
-  { key: "business", label: "Business", color: Colors.business.primary },
-  { key: "events", label: "Events", color: Colors.events.primary },
+const MODES: { key: PreviewMode; label: string }[] = [
+  { key: "romance", label: "Romance" },
+  { key: "friends", label: "Friends" },
+  { key: "business", label: "Business" },
+  { key: "events", label: "Events" },
 ];
 
 function getAge(birthday: string | Date | null): number | null {
@@ -48,6 +48,8 @@ function getAge(birthday: string | Date | null): number | null {
 export default function ProfilePreview() {
   const { i18n } = useTranslation();
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const { mode } = useLocalSearchParams<{ mode?: string }>();
   const [activeMode, setActiveMode] = useState<PreviewMode>((mode as PreviewMode) || "romance");
   const [loading, setLoading] = useState(true);
@@ -152,20 +154,9 @@ export default function ProfilePreview() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); router.back(); }}
-            style={styles.backBtn}
-            activeOpacity={0.9}
-            accessibilityLabel="Back"
-          >
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Card preview</Text>
-          <View style={styles.placeholder} />
-        </View>
+        <Header title="Card preview" onBack={() => { Haptics.selectionAsync(); router.back(); }} />
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primaryViolet} />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.loadingText}>Loading…</Text>
         </View>
       </View>
@@ -215,34 +206,23 @@ export default function ProfilePreview() {
   const photo = getPhoto(activeMode);
   const chipItems = getChipItems(activeMode);
   const businessInfo = getBusinessInfo();
-  const modeColor = MODES.find((m) => m.key === activeMode)?.color ?? Colors.primaryViolet;
+  const modeColor = theme.modeAccent(activeMode as ModeName).primary;
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => { Haptics.selectionAsync(); router.back(); }}
-          style={styles.backBtn}
-          activeOpacity={0.9}
-          accessibilityLabel="Back"
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Card preview</Text>
-        <View style={styles.placeholder} />
-      </View>
+      <Header title="Card preview" onBack={() => { Haptics.selectionAsync(); router.back(); }} />
 
       <Text style={styles.hint}>How you appear on matching cards</Text>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBar} contentContainerStyle={styles.tabBarContent}>
         {MODES.map((m) => (
-          <TouchableOpacity
+          <Chip
             key={m.key}
+            label={m.label}
+            mode={m.key as ModeName}
+            selected={activeMode === m.key}
             onPress={() => { Haptics.selectionAsync(); setActiveMode(m.key); }}
-            style={[styles.tab, activeMode === m.key && { backgroundColor: m.color + "20", borderColor: m.color }]}
-          >
-            <Text style={[styles.tabLabel, activeMode === m.key && { color: m.color, fontWeight: "700" }]}>{m.label}</Text>
-          </TouchableOpacity>
+          />
         ))}
       </ScrollView>
 
@@ -254,7 +234,7 @@ export default function ProfilePreview() {
                 <Image source={{ uri: photo }} style={styles.cardImage} resizeMode="cover" />
               ) : (
                 <View style={styles.photoPlaceholder}>
-                  <Ionicons name="person" size={80} color={Colors.gray400} />
+                  <Ionicons name="person" size={80} color={theme.colors.textMuted} />
                 </View>
               )}
             </View>
@@ -299,133 +279,103 @@ export default function ProfilePreview() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundMuted },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    ...Layout.topHeaderBar,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, fontFamily: FontFamily.heading, color: Colors.textPrimary },
-  placeholder: { width: 44 },
-  hint: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    textAlign: "center",
-    marginTop: 12,
-    marginHorizontal: 20,
-  },
-  tabBar: { maxHeight: 48, marginTop: 8 },
-  tabBarContent: { flexDirection: "row", paddingHorizontal: 16, gap: 8 },
-  tab: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: Colors.gray200,
-  },
-  tabLabel: { ...Typography.caption, fontWeight: "600", color: Colors.gray600 },
-  scroll: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 80, alignItems: "center" },
-  cardContainer: { alignItems: "center", justifyContent: "center" },
-  card: {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
-    borderRadius: Layout.radii.card,
-    backgroundColor: Colors.white,
-    overflow: "visible",
-    borderWidth: 2,
-    ...Shadow.card,
-  },
-  mediaArea: {
-    width: "100%",
-    flex: 1,
-    backgroundColor: Colors.gray200,
-    overflow: "hidden",
-    borderTopLeftRadius: Layout.radii.card - 2,
-    borderTopRightRadius: Layout.radii.card - 2,
-  },
-  cardImage: { width: "100%", height: "100%" },
-  photoPlaceholder: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  infoPanel: {
-    position: "absolute",
-    top: "90%",
-    left: 0,
-    right: 0,
-    padding: 16,
-    paddingTop: 12,
-    backgroundColor: "rgba(255,255,255,0.95)",
-    borderTopLeftRadius: Layout.radii.card,
-    borderTopRightRadius: Layout.radii.card,
-  },
-  nameAge: {
-    ...Typography.h2,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
-    marginBottom: 4,
-  },
-  city: {
-    ...Typography.body,
-    color: Colors.gray600,
-    marginBottom: 4,
-  },
-  occupation: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginBottom: 8,
-  },
-  businessRow: { marginBottom: 8 },
-  businessText: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    marginBottom: 6,
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    alignItems: "center",
-  },
-  chip: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.gray300,
-  },
-  chipText: {
-    ...Typography.caption,
-    color: Colors.textPrimary,
-  },
-  overflowText: {
-    ...Typography.caption,
-    color: Colors.gray500,
-  },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 60 },
-  loadingText: { ...Typography.caption, color: Colors.gray600, marginTop: 10 },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    hint: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      textAlign: "center",
+      marginTop: theme.spacing.md,
+      marginHorizontal: theme.spacing.xl,
+    },
+    tabBar: { maxHeight: 48, marginTop: theme.spacing.sm },
+    tabBarContent: { flexDirection: "row", paddingHorizontal: theme.spacing.lg, gap: theme.spacing.sm },
+    scroll: { flex: 1 },
+    scrollContent: { padding: theme.spacing.xl, paddingBottom: 80, alignItems: "center" },
+    cardContainer: { alignItems: "center", justifyContent: "center" },
+    card: {
+      width: CARD_WIDTH,
+      height: CARD_HEIGHT,
+      borderRadius: theme.radii.lg,
+      backgroundColor: theme.colors.surface,
+      overflow: "visible",
+      borderWidth: 2,
+      ...theme.elevation(1),
+    },
+    mediaArea: {
+      width: "100%",
+      flex: 1,
+      backgroundColor: theme.colors.border,
+      overflow: "hidden",
+      borderTopLeftRadius: theme.radii.lg - 2,
+      borderTopRightRadius: theme.radii.lg - 2,
+    },
+    cardImage: { width: "100%", height: "100%" },
+    photoPlaceholder: {
+      width: "100%",
+      height: "100%",
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    infoPanel: {
+      position: "absolute",
+      top: "90%",
+      left: 0,
+      right: 0,
+      padding: theme.spacing.lg,
+      paddingTop: theme.spacing.md,
+      backgroundColor: "rgba(255,255,255,0.95)",
+      borderTopLeftRadius: theme.radii.lg,
+      borderTopRightRadius: theme.radii.lg,
+    },
+    nameAge: {
+      ...theme.type.h2,
+      fontFamily: theme.type.h2.fontFamily,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.xxs,
+    },
+    city: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.xxs,
+    },
+    occupation: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.sm,
+    },
+    businessRow: { marginBottom: theme.spacing.sm },
+    businessText: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.xs,
+    },
+    chipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: theme.spacing.sm,
+      alignItems: "center",
+    },
+    chip: {
+      paddingVertical: theme.spacing.xs,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.pill,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.borderStrong,
+    },
+    chipText: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textPrimary,
+    },
+    center: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 60 },
+    loadingText: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.sm },
+  });
+}

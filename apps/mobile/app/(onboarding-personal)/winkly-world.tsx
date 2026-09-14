@@ -7,7 +7,6 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
   ScrollView,
   Switch,
   StyleSheet,
@@ -16,7 +15,8 @@ import { SafeScreenView } from "@/components/SafeScreenView";
 import * as Haptics from "expo-haptics";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { Card, ListRow, PrimaryButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { Routes } from "@/constants/routes";
 import { setWinklyWorldSeen, setWinklyWorldDontShow } from "@/lib/introFlags";
 import { trackOnboardingCompleted } from "@/lib/analytics/events";
@@ -25,6 +25,8 @@ type Variant = "personal" | "business";
 
 export default function WinklyWorld() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const params = useLocalSearchParams<{ variant?: string }>();
   const variant: Variant = params.variant === "business" ? "business" : "personal";
   const [dontShowAgain, setDontShowAgain] = useState(false);
@@ -48,48 +50,42 @@ export default function WinklyWorld() {
         <Text style={styles.title}>Welcome to your Winkly world</Text>
 
         <Text style={styles.paragraph}>
-          You don&apos;t have just one profile. You have modes — each with its own profile, visibility, and intention.
+          You don't have just one profile. You have modes — each with its own profile, visibility, and intention.
         </Text>
 
         <Text style={styles.paragraph}>
           Switch modes anytime and control who sees you and how. Winkly is built around clarity, intention, and quality.
         </Text>
 
-        <View style={styles.card}>
+        <Card padding="lg" style={styles.card}>
           <Text style={styles.cardTitle}>Your modes</Text>
 
           {isPersonal ? (
             <>
-              <ModeRow icon="heart" label="Romance" />
-              <ModeRow icon="people" label="Friends" />
-              <ModeRow icon="briefcase" label="Business" sublabel="Available for personal users" />
-              <ModeRow icon="calendar" label="Events" />
+              <ModeRow icon="heart" label="Romance" theme={theme} />
+              <ModeRow icon="people" label="Friends" theme={theme} />
+              <ModeRow icon="briefcase" label="Business" sublabel="Available for personal users" theme={theme} />
+              <ModeRow icon="calendar" label="Events" theme={theme} />
             </>
           ) : (
             <>
-              <ModeRow icon="briefcase" label="Business" />
-              <ModeRow icon="calendar" label="Events" />
-              <ModeRow icon="people" label="People" sublabel="Discover relevant connections" />
+              <ModeRow icon="briefcase" label="Business" theme={theme} />
+              <ModeRow icon="calendar" label="Events" theme={theme} />
+              <ModeRow icon="people" label="People" sublabel="Discover relevant connections" theme={theme} />
             </>
           )}
-        </View>
+        </Card>
 
-        <View style={[styles.card, styles.plannerCard]}>
+        <Card padding="lg" style={{ ...styles.card, ...styles.plannerCard }}>
           <Text style={styles.cardTitle}>Planner & AI</Text>
           <Text style={styles.plannerText}>
             {isPersonal
               ? "The AI planner helps discover relevant events, suggest next steps, and plan meetups naturally to move from online to real life."
               : "The AI planner helps discover relevant people and events, plan meetings efficiently, and turn connections into real outcomes."}
           </Text>
-        </View>
+        </Card>
 
-        <TouchableOpacity
-          onPress={handleEnter}
-          style={styles.cta}
-          activeOpacity={0.9}
-        >
-          <Text style={styles.ctaText}>Enter Winkly</Text>
-        </TouchableOpacity>
+        <PrimaryButton title="Enter Winkly" onPress={handleEnter} style={styles.cta} />
 
         <View style={styles.dontShowRow}>
           <Switch
@@ -98,10 +94,10 @@ export default function WinklyWorld() {
               Haptics.selectionAsync();
               setDontShowAgain(v);
             }}
-            trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }}
-            thumbColor={Colors.white}
+            trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+            thumbColor={theme.colors.onPrimary}
           />
-          <Text style={styles.dontShowLabel}>Don&apos;t show again</Text>
+          <Text style={styles.dontShowLabel}>Don't show again</Text>
         </View>
       </ScrollView>
     </SafeScreenView>
@@ -112,116 +108,84 @@ function ModeRow({
   icon,
   label,
   sublabel,
+  theme,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   sublabel?: string;
+  theme: AppTheme;
 }) {
   return (
-    <View style={styles.modeRow}>
-      <View style={styles.modeIconWrap}>
-        <Ionicons name={icon} size={20} color={Colors.primaryViolet} />
-      </View>
-      <View style={styles.modeText}>
-        <Text style={styles.modeLabel}>{label}</Text>
-        {sublabel && <Text style={styles.modeSublabel}>{sublabel}</Text>}
-      </View>
-    </View>
+    <ListRow
+      title={label}
+      subtitle={sublabel}
+      style={{ paddingHorizontal: 0, paddingVertical: theme.spacing.xs }}
+      leading={
+        <View
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: theme.radii.pill,
+            backgroundColor: theme.colors.primary + "12",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name={icon} size={20} color={theme.colors.primary} />
+        </View>
+      }
+    />
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.backgroundMuted },
-  scroll: {
-    padding: 24,
-    paddingTop: 24,
-    paddingBottom: 40,
-  },
-  title: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 26,
-    lineHeight: 34,
-    color: Colors.textPrimary,
-    marginBottom: 20,
-  },
-  paragraph: {
-    ...Typography.body,
-    color: Colors.gray600,
-    lineHeight: 24,
-    marginBottom: 16,
-  },
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: Layout.radii.card,
-    padding: 20,
-    marginBottom: 16,
-    ...Shadow.card,
-  },
-  cardTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 18,
-    color: Colors.textPrimary,
-    marginBottom: 16,
-  },
-  modeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  modeIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#F5F1FF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
-  },
-  modeText: { flex: 1 },
-  modeLabel: {
-    ...Typography.body,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-  },
-  modeSublabel: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginTop: 2,
-  },
-  plannerCard: {
-    backgroundColor: "#F5F1FF",
-    borderWidth: 1,
-    borderColor: Colors.primaryViolet,
-  },
-  plannerText: {
-    ...Typography.body,
-    color: Colors.gray700,
-    lineHeight: 24,
-  },
-  cta: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 52,
-    marginTop: 8,
-    ...Shadow.button,
-  },
-  ctaText: {
-    ...Typography.button,
-    color: Colors.accentYellow,
-    fontFamily: FontFamily.headingBold,
-  },
-  dontShowRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 20,
-    justifyContent: "center",
-    gap: 10,
-  },
-  dontShowLabel: {
-    ...Typography.caption,
-    color: Colors.gray600,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    safe: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    scroll: {
+      padding: theme.spacing.xl,
+      paddingBottom: theme.spacing.huge,
+    },
+    title: {
+      ...theme.type.h1,
+      fontFamily: theme.type.h1.fontFamily,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.xl,
+    },
+    paragraph: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.md,
+    },
+    card: { marginBottom: theme.spacing.md },
+    cardTitle: {
+      ...theme.type.h3,
+      fontFamily: theme.type.h3.fontFamily,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.md,
+    },
+    plannerCard: {
+      backgroundColor: theme.colors.primary + "10",
+      borderWidth: 1,
+      borderColor: theme.colors.primary,
+    },
+    plannerText: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textSecondary,
+    },
+    cta: { marginTop: theme.spacing.xs },
+    dontShowRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: theme.spacing.xl,
+      justifyContent: "center",
+      gap: theme.spacing.sm,
+    },
+    dontShowLabel: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+    },
+  });
+}

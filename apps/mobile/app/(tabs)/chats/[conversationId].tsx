@@ -1,10 +1,11 @@
 import React from "react";
 import { useLocalSearchParams } from "expo-router";
 import { View, ActivityIndicator } from "react-native";
-import { Colors } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 import ChatView from "./chat-view";
 
 export default function ChatDetail() {
+  const theme = useAppTheme();
   const {
     conversationId,
     partnerUserId,
@@ -22,7 +23,7 @@ export default function ChatDetail() {
   if (!conversationId) {
     return (
       <View style={{ flex: 1, justifyContent: "center" }}>
-        <ActivityIndicator size="large" color={Colors.primaryViolet} />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }

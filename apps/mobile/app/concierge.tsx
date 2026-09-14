@@ -20,9 +20,11 @@ import NetInfo from "@react-native-community/netinfo";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Colors, Typography, FontFamily, HEADER } from "@/constants/tokens";
+import { useAppTheme, accentYellow, type AppTheme } from "@/constants/design-system";
+import { Card, Chip, PrimaryButton, SecondaryButton, TextButton } from "@/components/ds";
 import type { ConciergeContext, ExperienceOption } from "@/lib/ai/conciergeClient";
 import { ConciergeRequestForm } from "@/components/ai/ConciergeRequestForm";
+import { AIDisclosureNote } from "@/components/ai/AIDisclosureNote";
 import { FitReasonLine, resolveFitReason } from "@/components/ai/FitReasonLine";
 import { ConciergePlanningFlow } from "@/components/ai/ConciergePlanningFlow";
 import { ConciergeRateLimitCard } from "@/components/ai/ConciergeRateLimitCard";
@@ -82,6 +84,8 @@ export default function ConciergeScreen() {
   }>();
   const insets = useSafeAreaInsets();
   const { context: modeContext } = useModeContext();
+  const theme = useAppTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   const source_screen = useMemo<"chats" | "planner">(() => {
     const s = params.source_screen;
@@ -464,13 +468,16 @@ export default function ConciergeScreen() {
       style={[styles.screen, { paddingTop: insets.top }]}
     >
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack} style={styles.headerBtn} accessibilityLabel="Back">
-          <Ionicons name="arrow-back" size={HEADER.iconSize} color={Colors.textPrimary} />
+        <TouchableOpacity onPress={handleBack} style={styles.headerBtn} accessibilityLabel="Back" hitSlop={8}>
+          <Ionicons name="chevron-back" size={22} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>{headerTitle}</Text>
+          <View style={styles.headerTitleRow}>
+            <Ionicons name="sparkles" size={15} color={theme.colors.primary} style={styles.headerSpark} />
+            <Text style={styles.headerTitle} numberOfLines={1}>{headerTitle}</Text>
+          </View>
           {step !== "form" && (
-            <Text style={styles.headerSub}>
+            <Text style={styles.headerSub} numberOfLines={1}>
               {step === "options"
                 ? lastSubmittedContext.current?.presentation === "decisive"
                   ? "Primary plan or backup"
@@ -481,8 +488,8 @@ export default function ConciergeScreen() {
             </Text>
           )}
         </View>
-        <TouchableOpacity onPress={handleClose} style={styles.headerBtn} accessibilityLabel="Close">
-          <Ionicons name="close" size={22} color={Colors.gray600} />
+        <TouchableOpacity onPress={handleClose} style={styles.headerBtn} accessibilityLabel="Close" hitSlop={8}>
+          <Ionicons name="close" size={22} color={theme.colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
@@ -503,11 +510,12 @@ export default function ConciergeScreen() {
         <View style={styles.contentWrap}>
       {step === "form" && (
         <>
+          <AIDisclosureNote style={styles.disclosure} />
           {savedIdeas.length > 0 && (
             <View style={styles.savedSection}>
               <Text style={styles.savedSectionTitle}>Saved ideas</Text>
               {savedIdeas.slice(0, 5).map((saved) => (
-                <View key={saved.id} style={styles.savedCard}>
+                <Card key={saved.id} style={styles.savedCard} elevation={0} padding="md">
                   <Text style={styles.savedCardTitle} numberOfLines={1}>
                     {String(saved.option.option_name || saved.option.narrative || "Idea")}
                   </Text>
@@ -518,18 +526,16 @@ export default function ConciergeScreen() {
                     </Text>
                   )}
                   <View style={styles.savedCardActions}>
-                    <TouchableOpacity
-                      style={styles.savedAddBtn}
-                      onPress={() => {
-                        Haptics.selectionAsync();
-                        setSuggestions([saved.option]);
-                        setChosenIndex(0);
-                        if (saved.context?.date_from) setLastDate(saved.context.date_from);
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.savedAddBtnText}>Add to planner</Text>
-                    </TouchableOpacity>
+                    <View style={styles.savedAddBtnWrap}>
+                      <PrimaryButton
+                        title="Add to planner"
+                        onPress={() => {
+                          setSuggestions([saved.option]);
+                          setChosenIndex(0);
+                          if (saved.context?.date_from) setLastDate(saved.context.date_from);
+                        }}
+                      />
+                    </View>
                     <TouchableOpacity
                       onPress={async () => {
                         Haptics.selectionAsync();
@@ -537,11 +543,13 @@ export default function ConciergeScreen() {
                         loadSaved();
                       }}
                       style={styles.savedRemoveBtn}
+                      accessibilityLabel="Remove saved idea"
+                      hitSlop={8}
                     >
-                      <Ionicons name="trash-outline" size={18} color={Colors.gray500} />
+                      <Ionicons name="trash-outline" size={18} color={theme.colors.textMuted} />
                     </TouchableOpacity>
                   </View>
-                </View>
+                </Card>
               ))}
             </View>
           )}
@@ -567,7 +575,7 @@ export default function ConciergeScreen() {
                       hitSlop={12}
                       accessibilityLabel="Close"
                     >
-                      <Ionicons name="close" size={22} color={Colors.gray600} />
+                      <Ionicons name="close" size={22} color={theme.colors.textSecondary} />
                     </TouchableOpacity>
                   </View>
                   <TouchableOpacity
@@ -618,11 +626,10 @@ export default function ConciergeScreen() {
                   { id: "icebreaker", label: "Suggest an icebreaker" },
                   { id: "reconnect", label: "Reconnect after silence" },
                 ].map((chip) => (
-                  <TouchableOpacity
+                  <Chip
                     key={chip.id}
-                    style={styles.chatAssistChip}
+                    label={chip.label}
                     onPress={() => {
-                      Haptics.selectionAsync();
                       const name = selectedPartner?.displayName?.trim() || "them";
                       const interestSnippet =
                         partnerInterests.length > 0
@@ -640,10 +647,7 @@ export default function ConciergeScreen() {
                               : `Write a friendly reconnection message to ${name} after a period of silence.\n${interestSnippet}\n${baseRules}`;
                       setChatPrefillPrompt(prompt);
                     }}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.chatAssistChipText}>{chip.label}</Text>
-                  </TouchableOpacity>
+                  />
                 ))}
               </ScrollView>
             </View>
@@ -674,7 +678,7 @@ export default function ConciergeScreen() {
           />
           {isConnected === false && (
             <View style={styles.offlineBanner}>
-              <Ionicons name="cloud-offline-outline" size={20} color={Colors.white} />
+              <Ionicons name="cloud-offline-outline" size={20} color={theme.colors.textInverse} />
               <Text style={styles.offlineBannerText}>Check connection and try again.</Text>
             </View>
           )}
@@ -712,14 +716,13 @@ export default function ConciergeScreen() {
             <View style={styles.errorBlock}>
               <Text style={styles.errorText}>{error}</Text>
               {lastSubmittedContext.current && (
-                <TouchableOpacity
-                  style={styles.retryBtn}
-                  onPress={() => { Haptics.selectionAsync(); handleSubmit(lastSubmittedContext.current!); }}
-                  activeOpacity={0.9}
-                  disabled={loading}
-                >
-                  <Text style={styles.retryBtnText}>Retry</Text>
-                </TouchableOpacity>
+                <View style={styles.retryBtnWrap}>
+                  <SecondaryButton
+                    title="Retry"
+                    onPress={() => handleSubmit(lastSubmittedContext.current!)}
+                    disabled={loading}
+                  />
+                </View>
               )}
             </View>
           ) : null}
@@ -739,7 +742,7 @@ export default function ConciergeScreen() {
 
       {step === "message_only" && message && (
         <ScrollView style={styles.optionsScroll} contentContainerStyle={styles.optionsContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.emptyStateWrap}>
+          <Card style={styles.emptyStateWrap} elevation={0}>
             <Text style={styles.messageText}>{message}</Text>
             {noOptionsReason ? (
               <Text style={styles.noOptionsReasonText}>{noOptionsReason}</Text>
@@ -747,24 +750,15 @@ export default function ConciergeScreen() {
             <Text style={styles.emptyStateLabel}>Try adjusting:</Text>
             <View style={styles.emptyStateActions}>
               {EMPTY_STATE_ACTIONS.map((a) => (
-                <TouchableOpacity
+                <Chip
                   key={a.id}
-                  style={styles.emptyStateChip}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setMessage(null);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name={a.icon} size={16} color={Colors.primaryViolet} />
-                  <Text style={styles.emptyStateChipText}>{a.label}</Text>
-                </TouchableOpacity>
+                  label={a.label}
+                  onPress={() => setMessage(null)}
+                />
               ))}
             </View>
-            <TouchableOpacity style={styles.tryAgainBtn} onPress={handleTryAgain} activeOpacity={0.9}>
-              <Text style={styles.tryAgainBtnText}>Get new suggestions</Text>
-            </TouchableOpacity>
-          </View>
+            <PrimaryButton title="Get new suggestions" onPress={handleTryAgain} />
+          </Card>
         </ScrollView>
       )}
 
@@ -783,7 +777,7 @@ export default function ConciergeScreen() {
           {sortedOptionsWithIndex.map(({ opt, originalIndex }) => {
             const mapQuery = [opt.option_name ?? opt.narrative, (opt as { place?: string }).place, lastSubmittedContext.current?.city].filter(Boolean).join(", ");
             return (
-              <View key={originalIndex} style={styles.optionCard}>
+              <Card key={originalIndex} style={styles.optionCard} elevation={1}>
                 <View style={styles.optionCardBadges}>
                   {isWinklyOption(opt) && (
                     <View style={styles.winklyBadge}>
@@ -792,12 +786,12 @@ export default function ConciergeScreen() {
                   )}
                   {lastSubmittedContext.current?.presentation === "decisive" && (suggestions?.length ?? 0) >= 2 ? (
                     <View style={styles.dnaBadge}>
-                      <Ionicons name="star" size={14} color={Colors.accentYellow} />
+                      <Ionicons name="star" size={14} color={accentYellow} />
                       <Text style={styles.dnaBadgeText}>{originalIndex === 0 ? "Primary pick" : "Backup"}</Text>
                     </View>
                   ) : resolveFitReason(opt) ? (
                     <View style={styles.dnaBadge}>
-                      <Ionicons name="heart" size={14} color={Colors.primaryViolet} />
+                      <Ionicons name="heart" size={14} color={theme.colors.primary} />
                       <Text style={styles.dnaBadgeText}>Picked for you</Text>
                     </View>
                   ) : null}
@@ -827,7 +821,7 @@ export default function ConciergeScreen() {
                       }}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="git-compare-outline" size={14} color={compareIndices.includes(originalIndex) ? Colors.white : Colors.primaryViolet} />
+                      <Ionicons name="git-compare-outline" size={14} color={compareIndices.includes(originalIndex) ? theme.colors.onPrimary : theme.colors.primary} />
                       <Text style={[styles.compareChipText, compareIndices.includes(originalIndex) && styles.compareChipTextActive]}>Compare</Text>
                     </TouchableOpacity>
                   </View>
@@ -838,32 +832,43 @@ export default function ConciergeScreen() {
                   {mapQuery ? (
                     <TouchableOpacity
                       style={styles.viewOnMapBtn}
-                      onPress={() => {
+                      onPress={(e) => {
+                        e.stopPropagation();
                         Haptics.selectionAsync();
                         Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`);
                       }}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="map-outline" size={16} color={Colors.primaryViolet} />
+                      <Ionicons name="map-outline" size={16} color={theme.colors.primary} />
                       <Text style={styles.viewOnMapText}>View on map</Text>
                     </TouchableOpacity>
                   ) : null}
-                  <Text style={styles.optionCta}>Use this one</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.saveForLaterBtn}
-                  onPress={async () => {
-                    Haptics.selectionAsync();
-                    await saveIdea(opt, mode, { city: lastSubmittedContext.current?.city, date_from: lastDate });
-                    setSavedIds((prev) => new Set(prev).add(`opt-${originalIndex}`));
-                    loadSaved();
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="bookmark-outline" size={18} color={Colors.primaryViolet} />
-                  <Text style={styles.saveForLaterText}>Save for later</Text>
-                </TouchableOpacity>
-              </View>
+                <View style={styles.optionCardFooter}>
+                  <TouchableOpacity
+                    style={styles.saveForLaterBtn}
+                    onPress={async () => {
+                      Haptics.selectionAsync();
+                      await saveIdea(opt, mode, { city: lastSubmittedContext.current?.city, date_from: lastDate });
+                      setSavedIds((prev) => new Set(prev).add(`opt-${originalIndex}`));
+                      loadSaved();
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="bookmark-outline" size={18} color={theme.colors.primary} />
+                    <Text style={styles.saveForLaterText}>Save for later</Text>
+                  </TouchableOpacity>
+                  <View style={styles.choosePlanBtnWrap}>
+                    <PrimaryButton
+                      title="Choose this plan"
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setChosenIndex(originalIndex);
+                      }}
+                    />
+                  </View>
+                </View>
+              </Card>
             );
           })}
           {compareIndices.length === 2 && suggestions && (() => {
@@ -878,7 +883,7 @@ export default function ConciergeScreen() {
               </View>
             );
             return (
-              <View style={styles.compareBlock}>
+              <Card style={styles.compareBlock} elevation={0}>
                 <Text style={styles.compareBlockTitle}>Compare</Text>
                 <View style={styles.compareTableHeader}>
                   <Text style={styles.compareTableHeaderText} />
@@ -889,28 +894,21 @@ export default function ConciergeScreen() {
                 {row("Vibe", (optA?.why_this_fits as string) ?? (optA?.logic_bridge as string) ?? "", (optB?.why_this_fits as string) ?? (optB?.logic_bridge as string) ?? "")}
                 {row("Distance", (optA?.logistics as { distance?: string })?.distance ?? "", (optB?.logistics as { distance?: string })?.distance ?? "")}
                 <View style={styles.compareActions}>
-                  <TouchableOpacity style={styles.compareChooseBtn} onPress={() => { Haptics.selectionAsync(); setChosenIndex(iA); setCompareIndices([]); }} activeOpacity={0.9}>
-                    <Text style={styles.compareChooseBtnText}>Choose A</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.compareChooseBtn} onPress={() => { Haptics.selectionAsync(); setChosenIndex(iB); setCompareIndices([]); }} activeOpacity={0.9}>
-                    <Text style={styles.compareChooseBtnText}>Choose B</Text>
-                  </TouchableOpacity>
+                  <View style={styles.compareChooseBtnWrap}>
+                    <PrimaryButton title="Choose A" onPress={() => { setChosenIndex(iA); setCompareIndices([]); }} />
+                  </View>
+                  <View style={styles.compareChooseBtnWrap}>
+                    <PrimaryButton title="Choose B" onPress={() => { setChosenIndex(iB); setCompareIndices([]); }} />
+                  </View>
                 </View>
-              </View>
+              </Card>
             );
           })()}
           <View style={styles.refinementFromOptionsWrap}>
             <Text style={styles.refinementFromOptionsLabel}>Want something different?</Text>
             <View style={styles.refinementChipsRow}>
               {REFINEMENT_CHIPS.map((label) => (
-                <TouchableOpacity
-                  key={label}
-                  style={styles.refinementChip}
-                  onPress={() => handleRefinementFromOptions(label)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.refinementChipText}>{label}</Text>
-                </TouchableOpacity>
+                <Chip key={label} label={label} onPress={() => handleRefinementFromOptions(label)} />
               ))}
             </View>
           </View>
@@ -919,29 +917,31 @@ export default function ConciergeScreen() {
 
       {step === "confirm" && chosenOption && (
         <ScrollView style={styles.chatConfirmScroll} contentContainerStyle={styles.chatConfirmContent}>
-          <TouchableOpacity onPress={() => setChosenIndex(null)} style={styles.backRow} activeOpacity={0.8}>
-            <Ionicons name="arrow-back" size={22} color={Colors.primaryViolet} />
-            <Text style={styles.backText}>Back to options</Text>
-          </TouchableOpacity>
-          <Text style={styles.chatConfirmTitle}>{String(chosenOption.option_name || chosenOption.narrative || "Suggestion")}</Text>
-          <FitReasonLine reason={resolveFitReason(chosenOption)} numberOfLines={3} style={styles.chatConfirmFitReason} />
-          <TouchableOpacity style={styles.useSuggestionBtn} onPress={() => chosenOption && setShowFeedbackFor(chosenOption)} activeOpacity={0.9}>
-            <Text style={styles.useSuggestionBtnText}>Use this suggestion</Text>
-          </TouchableOpacity>
+          <TextButton
+            title="Back to options"
+            icon={<Ionicons name="arrow-back" size={20} color={theme.colors.primary} />}
+            onPress={() => setChosenIndex(null)}
+            style={styles.backRow}
+          />
+          <Card style={styles.chatConfirmCard} elevation={1}>
+            <Text style={styles.chatConfirmTitle}>{String(chosenOption.option_name || chosenOption.narrative || "Suggestion")}</Text>
+            <FitReasonLine reason={resolveFitReason(chosenOption)} numberOfLines={3} style={styles.chatConfirmFitReason} />
+            <PrimaryButton title="Use this suggestion" onPress={() => chosenOption && setShowFeedbackFor(chosenOption)} />
+          </Card>
         </ScrollView>
       )}
 
       <Modal visible={showFeedbackFor != null} transparent animationType="fade">
         <Pressable style={styles.feedbackModalBackdrop} onPress={() => { setShowFeedbackFor(null); handleClose(); }}>
-          <Pressable style={styles.feedbackModalCard} onPress={(e) => e.stopPropagation()}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+          <Card style={styles.feedbackModalCard} elevation={2}>
             <Text style={styles.feedbackModalTitle}>How did it go?</Text>
             <View style={styles.feedbackModalActions}>
               {(["went_well", "didnt_use", "not_quite_right"] as ConciergeFeedbackType[]).map((fb) => (
-                <TouchableOpacity
+                <SecondaryButton
                   key={fb}
-                  style={styles.feedbackModalBtn}
+                  title={fb === "went_well" ? "Went well" : fb === "didnt_use" ? "Didn't use" : "Not quite right"}
                   onPress={async () => {
-                    Haptics.selectionAsync();
                     reportConciergeOutcome(lastRequestId, fb).catch(() => {});
                     if (showFeedbackFor) {
                       const summary = String(showFeedbackFor.option_name ?? showFeedbackFor.narrative ?? "Plan");
@@ -950,17 +950,13 @@ export default function ConciergeScreen() {
                     setShowFeedbackFor(null);
                     handleClose();
                   }}
-                  activeOpacity={0.9}
-                >
-                  <Text style={styles.feedbackModalBtnText}>
-                    {fb === "went_well" ? "Went well" : fb === "didnt_use" ? "Didn't use" : "Not quite right"}
-                  </Text>
-                </TouchableOpacity>
+                />
               ))}
             </View>
             <TouchableOpacity style={styles.feedbackModalSkip} onPress={() => { setShowFeedbackFor(null); handleClose(); }}>
               <Text style={styles.feedbackModalSkipText}>Skip</Text>
             </TouchableOpacity>
+          </Card>
           </Pressable>
         </Pressable>
       </Modal>
@@ -970,25 +966,26 @@ export default function ConciergeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: AppTheme) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.backgroundLight,
+    backgroundColor: theme.colors.background,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: Colors.white,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
+    borderBottomColor: theme.colors.border,
   },
   headerBtn: {
-    width: HEADER.buttonSize,
-    height: HEADER.buttonSize,
-    borderRadius: HEADER.buttonRadius,
+    width: 40,
+    height: 40,
+    borderRadius: theme.radii.pill,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -996,579 +993,451 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 8,
+    paddingHorizontal: theme.spacing.sm,
+  },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.xs,
+  },
+  headerSpark: {
+    marginTop: 1,
   },
   headerTitle: {
-    ...Typography.headerTitle,
-    color: Colors.primaryViolet,
-    fontFamily: FontFamily.heading,
+    ...theme.type.h3,
+    color: theme.colors.textPrimary,
   },
   headerSub: {
-    ...Typography.caption,
-    color: Colors.gray500,
+    ...theme.type.caption,
+    color: theme.colors.textMuted,
     marginTop: 2,
   },
   stepIndicatorRow: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 10,
-    backgroundColor: Colors.white,
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.gray200,
+    borderBottomColor: theme.colors.border,
   },
   stepDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.gray300,
+    backgroundColor: theme.colors.border,
   },
   stepDotActive: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: Colors.primaryViolet,
+    backgroundColor: theme.colors.primary,
   },
   stepDotDone: {
-    backgroundColor: Colors.primaryViolet,
+    backgroundColor: theme.colors.primary,
     opacity: 0.6,
   },
   contentWrap: {
     flex: 1,
   },
+  disclosure: {
+    marginHorizontal: theme.spacing.xxl,
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+  },
   chatModeBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: theme.colors.overlay,
     justifyContent: "flex-end",
   },
   chatModeSheet: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.radii.lg,
+    borderTopRightRadius: theme.radii.lg,
+    padding: theme.spacing.xl,
   },
   chatModeHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
+    marginBottom: theme.spacing.md,
   },
   chatModeTitle: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
+    ...theme.type.h3,
+    color: theme.colors.textPrimary,
     flex: 1,
-    paddingRight: 10,
+    paddingRight: theme.spacing.sm,
   },
   chatModeOption: {
-    backgroundColor: Colors.gray100,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    marginBottom: 10,
+    backgroundColor: theme.colors.backgroundMuted,
+    borderRadius: theme.radii.lg,
+    paddingVertical: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    marginBottom: theme.spacing.sm,
     borderWidth: 1,
-    borderColor: Colors.gray200,
+    borderColor: theme.colors.border,
   },
   chatModeOptionTitle: {
-    ...Typography.body,
-    color: Colors.textPrimary,
+    ...theme.type.bodyMedium,
+    color: theme.colors.textPrimary,
     fontWeight: "700",
-    marginBottom: 4,
+    marginBottom: theme.spacing.xs,
   },
   chatModeOptionSub: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
   },
   chatModeCloseRow: {
-    marginTop: 6,
-    paddingVertical: 14,
+    marginTop: theme.spacing.xs,
+    paddingVertical: theme.spacing.lg,
     alignItems: "center",
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.gray200,
+    borderTopColor: theme.colors.border,
   },
   chatModeCloseText: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     fontWeight: "700",
   },
   chatAssistChipsWrap: {
-    marginHorizontal: 24,
-    marginBottom: 12,
-    marginTop: 6,
+    marginHorizontal: theme.spacing.xxl,
+    marginBottom: theme.spacing.md,
+    marginTop: theme.spacing.xs,
   },
   chatAssistLabel: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     fontWeight: "600",
-    marginBottom: 8,
+    marginBottom: theme.spacing.sm,
   },
   chatAssistChipsRow: {
     flexDirection: "row",
-    gap: 10,
-    paddingRight: 10,
-  },
-  chatAssistChip: {
-    backgroundColor: Colors.gray100,
-    borderRadius: 999,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  chatAssistChipText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
-    fontWeight: "600",
+    gap: theme.spacing.sm,
+    paddingRight: theme.spacing.sm,
   },
   offlineBanner: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    backgroundColor: Colors.textPrimary,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    marginHorizontal: 24,
-    marginBottom: 12,
+    gap: theme.spacing.sm,
+    backgroundColor: theme.colors.textPrimary,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.radii.sm,
+    marginHorizontal: theme.spacing.xxl,
+    marginBottom: theme.spacing.md,
   },
   offlineBannerText: {
-    ...Typography.caption,
-    color: Colors.white,
+    ...theme.type.caption,
+    color: theme.colors.textInverse,
     fontWeight: "600",
   },
   errorBlock: {
-    marginHorizontal: 24,
-    marginTop: 12,
-    marginBottom: 12,
+    marginHorizontal: theme.spacing.xxl,
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.md,
   },
   errorText: {
-    ...Typography.caption,
-    color: Colors.errorRed,
-    marginBottom: 6,
+    ...theme.type.caption,
+    color: theme.colors.error,
+    marginBottom: theme.spacing.sm,
   },
-  errorHint: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginBottom: 10,
-  },
-  retryBtn: {
+  retryBtnWrap: {
     alignSelf: "flex-start",
-    backgroundColor: Colors.primaryViolet,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    marginTop: 4,
-  },
-  retryBtnText: {
-    ...Typography.caption,
-    color: Colors.white,
-    fontWeight: "600",
+    marginTop: theme.spacing.xs,
   },
   noOptionsReasonText: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     fontStyle: "italic",
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  messageWrap: {
-    marginHorizontal: 24,
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: Colors.gray200,
-  },
-  messageText: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-  },
-  messageHint: {
-    ...Typography.caption,
-    color: Colors.gray500,
-    marginTop: 8,
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
   },
   skeletonWrap: {
-    marginHorizontal: 24,
-    marginTop: 20,
+    marginHorizontal: theme.spacing.xxl,
+    marginTop: theme.spacing.xl,
   },
   skeletonCard: {
-    backgroundColor: Colors.gray100,
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 12,
+    backgroundColor: theme.colors.backgroundMuted,
+    borderRadius: theme.radii.lg,
+    padding: theme.spacing.lg,
+    marginBottom: theme.spacing.md,
   },
   skeletonLine: {
     height: 14,
-    backgroundColor: Colors.gray300,
+    backgroundColor: theme.colors.border,
     borderRadius: 7,
-    marginBottom: 8,
+    marginBottom: theme.spacing.sm,
     width: "90%",
   },
   skeletonLineShort: { width: "60%" },
-  skeletonLineCta: { width: 80, height: 12, marginTop: 4 },
+  skeletonLineCta: { width: 80, height: 12, marginTop: theme.spacing.xs },
   emptyStateWrap: {
-    marginHorizontal: 24,
-    marginTop: 20,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: Colors.gray200,
+    marginHorizontal: theme.spacing.xxl,
+    marginTop: theme.spacing.xl,
+  },
+  messageText: {
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
   },
   emptyStateLabel: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     fontWeight: "600",
-    marginTop: 16,
-    marginBottom: 10,
+    marginTop: theme.spacing.lg,
+    marginBottom: theme.spacing.sm,
   },
   emptyStateActions: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 16,
-  },
-  emptyStateChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: Colors.gray100,
-  },
-  emptyStateChipText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
-    fontWeight: "600",
-  },
-  tryAgainBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  tryAgainBtnText: {
-    ...Typography.button,
-    color: Colors.white,
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.lg,
   },
   refinementFromOptionsWrap: {
-    marginTop: 8,
-    paddingTop: 16,
+    marginTop: theme.spacing.sm,
+    paddingTop: theme.spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: Colors.gray200,
+    borderTopColor: theme.colors.border,
   },
   refinementFromOptionsLabel: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     fontWeight: "600",
-    marginBottom: 10,
+    marginBottom: theme.spacing.sm,
   },
   refinementChipsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-  },
-  refinementChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: Colors.gray100,
-  },
-  refinementChipText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
-    fontWeight: "500",
+    gap: theme.spacing.sm,
   },
   optionsScroll: { flex: 1 },
-  optionsContent: { paddingHorizontal: 24, paddingBottom: 24 },
+  optionsContent: { paddingHorizontal: theme.spacing.xxl, paddingBottom: theme.spacing.xxl },
   optionsIntro: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    marginBottom: 16,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.lg,
   },
   optionCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
+    marginBottom: theme.spacing.md,
   },
   optionCardTouchable: { marginBottom: 0 },
   optionCardBadges: {
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 8,
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
   },
   winklyBadge: {
-    backgroundColor: Colors.primaryViolet,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
+    backgroundColor: theme.colors.primary,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: theme.radii.sm,
   },
   winklyBadgeText: {
-    ...Typography.caption,
-    color: Colors.white,
+    ...theme.type.caption,
+    color: theme.colors.onPrimary,
     fontWeight: "700",
   },
   dnaBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: theme.spacing.xs,
   },
   dnaBadgeText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
+    ...theme.type.caption,
+    color: theme.colors.primary,
     fontWeight: "600",
   },
   saveForLaterBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.gray200,
+    gap: theme.spacing.xs,
   },
   saveForLaterText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
+    ...theme.type.caption,
+    color: theme.colors.primary,
     fontWeight: "500",
   },
   viewOnMapBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginTop: 8,
+    gap: theme.spacing.xs,
+    marginTop: theme.spacing.sm,
   },
   viewOnMapText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
+    ...theme.type.caption,
+    color: theme.colors.primary,
     fontWeight: "500",
   },
   optionCardHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10,
-    marginBottom: 6,
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
   },
   compareChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    backgroundColor: Colors.gray100,
+    gap: theme.spacing.xxs,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    borderRadius: theme.radii.sm,
+    backgroundColor: theme.colors.backgroundMuted,
   },
-  compareChipActive: { backgroundColor: Colors.primaryViolet },
+  compareChipActive: { backgroundColor: theme.colors.primary },
   compareChipText: {
-    ...Typography.caption,
+    ...theme.type.caption,
     fontSize: 11,
-    color: Colors.primaryViolet,
+    color: theme.colors.primary,
     fontWeight: "600",
   },
-  compareChipTextActive: { color: Colors.white },
+  compareChipTextActive: { color: theme.colors.onPrimary },
   compareBlock: {
-    marginHorizontal: 24,
-    marginTop: 20,
-    marginBottom: 16,
-    backgroundColor: Colors.gray100,
-    borderRadius: 14,
-    padding: 16,
+    marginHorizontal: theme.spacing.xxl,
+    marginTop: theme.spacing.xl,
+    marginBottom: theme.spacing.lg,
   },
   compareBlockTitle: {
-    ...Typography.caption,
+    ...theme.type.caption,
     fontWeight: "700",
-    color: Colors.textPrimary,
-    marginBottom: 12,
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.md,
   },
   compareTableHeader: {
     flexDirection: "row",
-    marginBottom: 8,
+    marginBottom: theme.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.gray300,
-    paddingBottom: 6,
+    borderBottomColor: theme.colors.border,
+    paddingBottom: theme.spacing.xs,
   },
   compareTableHeaderText: {
-    ...Typography.caption,
+    ...theme.type.caption,
     fontWeight: "600",
-    color: Colors.gray600,
+    color: theme.colors.textSecondary,
     flex: 1,
   },
   compareRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: theme.spacing.sm,
   },
   compareRowLabel: {
-    ...Typography.caption,
+    ...theme.type.caption,
     width: 70,
-    color: Colors.gray600,
+    color: theme.colors.textSecondary,
     fontWeight: "500",
   },
   compareRowVal: {
     flex: 1,
-    ...Typography.caption,
-    color: Colors.textPrimary,
+    ...theme.type.caption,
+    color: theme.colors.textPrimary,
   },
   compareActions: {
     flexDirection: "row",
-    gap: 12,
-    marginTop: 14,
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.md,
   },
-  compareChooseBtn: {
-    flex: 1,
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  compareChooseBtnText: {
-    ...Typography.caption,
-    color: Colors.white,
-    fontWeight: "600",
-  },
+  compareChooseBtnWrap: { flex: 1 },
   feedbackModalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: theme.colors.overlay,
     justifyContent: "center",
     alignItems: "center",
-    padding: 24,
+    padding: theme.spacing.xxl,
   },
   feedbackModalCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: 24,
     width: "100%",
     maxWidth: 340,
   },
   feedbackModalTitle: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
-    marginBottom: 20,
+    ...theme.type.h3,
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.xl,
     textAlign: "center",
   },
   feedbackModalActions: {
-    gap: 10,
-  },
-  feedbackModalBtn: {
-    backgroundColor: Colors.gray100,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  feedbackModalBtnText: {
-    ...Typography.body,
-    color: Colors.primaryViolet,
-    fontWeight: "600",
+    gap: theme.spacing.sm,
   },
   feedbackModalSkip: {
     alignItems: "center",
-    marginTop: 12,
+    marginTop: theme.spacing.md,
   },
   feedbackModalSkipText: {
-    ...Typography.caption,
-    color: Colors.gray500,
+    ...theme.type.caption,
+    color: theme.colors.textMuted,
   },
   savedSection: {
-    marginHorizontal: 24,
-    marginBottom: 20,
+    marginHorizontal: theme.spacing.xxl,
+    marginBottom: theme.spacing.xl,
   },
   savedSectionTitle: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     fontWeight: "600",
-    marginBottom: 10,
+    marginBottom: theme.spacing.sm,
   },
   savedCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
+    marginBottom: theme.spacing.sm,
   },
   savedCardTitle: {
-    ...Typography.body,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-    marginBottom: 4,
+    ...theme.type.bodyMedium,
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.xs,
   },
   savedCardMeta: {
-    ...Typography.caption,
-    color: Colors.gray500,
-    marginBottom: 10,
+    ...theme.type.caption,
+    color: theme.colors.textMuted,
+    marginBottom: theme.spacing.sm,
   },
   savedCardActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: theme.spacing.sm,
   },
-  savedAddBtn: {
-    flex: 1,
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  savedAddBtnText: {
-    ...Typography.caption,
-    color: Colors.white,
-    fontWeight: "600",
-  },
-  savedRemoveBtn: { padding: 8 },
+  savedAddBtnWrap: { flex: 1 },
+  savedRemoveBtn: { padding: theme.spacing.sm },
   optionTitle: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
-    marginBottom: 6,
+    ...theme.type.h3,
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.xs,
+    flex: 1,
   },
   optionFitReason: {
-    marginBottom: 8,
+    marginBottom: theme.spacing.sm,
   },
   optionSchedule: {
-    ...Typography.caption,
-    color: Colors.gray500,
-    marginBottom: 10,
+    ...theme.type.caption,
+    color: theme.colors.textMuted,
+    marginBottom: theme.spacing.sm,
   },
-  optionCta: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
-    fontWeight: "600",
-  },
-  backRow: {
+  optionCardFooter: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 16,
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.border,
   },
-  backText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
-    fontWeight: "600",
+  choosePlanBtnWrap: { flex: 1 },
+  backRow: {
+    alignSelf: "flex-start",
+    marginBottom: theme.spacing.md,
+    paddingLeft: 0,
   },
   chatConfirmScroll: { flex: 1 },
-  chatConfirmContent: { paddingHorizontal: 24, paddingBottom: 24 },
+  chatConfirmContent: { paddingHorizontal: theme.spacing.xxl, paddingBottom: theme.spacing.xxl },
+  chatConfirmCard: {},
   chatConfirmTitle: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
-    marginBottom: 8,
+    ...theme.type.h3,
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.sm,
   },
   chatConfirmFitReason: {
-    marginTop: 4,
-    marginBottom: 24,
+    marginTop: theme.spacing.xs,
+    marginBottom: theme.spacing.xl,
   },
-  useSuggestionBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  useSuggestionBtnText: {
-    ...Typography.button,
-    color: Colors.white,
-  },
-});
+  });
+}

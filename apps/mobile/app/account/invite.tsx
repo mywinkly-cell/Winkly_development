@@ -6,13 +6,15 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Share, Alert, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import * as Contacts from "expo-contacts";
 import { supabase } from "@/lib/supabase";
 import { hashContactIdentifiers } from "@/lib/contacts/matching";
 
 export default function Invite() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const [contactsConnected, setContactsConnected] = useState(false);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [matchesCount, setMatchesCount] = useState<number | null>(null);
@@ -78,7 +80,7 @@ export default function Invite() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9}>
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Invite</Text>
           <View style={{ width: 60 }} />
@@ -91,7 +93,7 @@ export default function Invite() {
         {/* Connect contacts — primary CTA */}
         <View style={styles.card}>
           <View style={styles.iconBadge}>
-            <Ionicons name="people" size={28} color={Colors.primaryViolet} />
+            <Ionicons name="people" size={28} color={theme.colors.primary} />
           </View>
           <Text style={styles.cardTitle}>Connect your contacts</Text>
           <Text style={styles.cardSubtitle}>
@@ -104,9 +106,9 @@ export default function Invite() {
             disabled={contactsConnected || contactsLoading}
           >
             {contactsLoading ? (
-              <ActivityIndicator color={Colors.white} style={{ marginRight: 10 }} />
+              <ActivityIndicator color={theme.colors.onPrimary} style={{ marginRight: 10 }} />
             ) : (
-              <Ionicons name="link" size={20} color={Colors.white} style={{ marginRight: 8 }} />
+              <Ionicons name="link" size={20} color={theme.colors.onPrimary} style={{ marginRight: 8 }} />
             )}
             <Text style={styles.primaryText}>
               {contactsConnected ? "Contacts connected" : contactsLoading ? "Connecting…" : "Connect contacts"}
@@ -122,7 +124,7 @@ export default function Invite() {
         {/* Share invite */}
         <View style={styles.card}>
           <View style={styles.iconBadgeSecondary}>
-            <Ionicons name="share-social" size={24} color={Colors.primaryViolet} />
+            <Ionicons name="share-social" size={24} color={theme.colors.primary} />
           </View>
           <Text style={styles.cardTitle}>Share invite link</Text>
           <Text style={styles.cardSubtitle}>
@@ -141,92 +143,86 @@ export default function Invite() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { padding: 20, paddingBottom: 40 },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
-  pageSubtitle: {
-    ...Typography.body,
-    color: Colors.gray600,
-    marginBottom: 24,
-  },
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { padding: 20, paddingBottom: 40 },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 8,
+    },
+    backBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+      ...theme.elevation(1),
+    },
+    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary },
+    pageSubtitle: {
+      ...theme.type.body,
+      color: theme.colors.textSecondary,
+      marginBottom: 24,
+    },
 
-  card: {
-    backgroundColor: "#FFF",
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  iconBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: Colors.backgroundMuted,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 14,
-  },
-  iconBadgeSecondary: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: Colors.backgroundMuted,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  cardTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 6 },
-  cardSubtitle: { ...Typography.body, color: Colors.gray700, marginBottom: 16 },
+    card: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: 20,
+      marginBottom: 16,
+      ...theme.elevation(1),
+    },
+    iconBadge: {
+      width: 52,
+      height: 52,
+      borderRadius: 16,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 14,
+    },
+    iconBadgeSecondary: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 12,
+    },
+    cardTitle: { ...theme.type.h3, color: theme.colors.textPrimary, marginBottom: 6 },
+    cardSubtitle: { ...theme.type.body, color: theme.colors.textSecondary, marginBottom: 16 },
 
-  primaryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 14,
-  },
-  primaryBtnDisabled: {
-    opacity: 0.7,
-  },
-  primaryText: { ...Typography.button, color: Colors.accentYellow },
+    primaryBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.radii.md,
+      paddingVertical: 14,
+    },
+    primaryBtnDisabled: {
+      opacity: 0.7,
+    },
+    primaryText: { ...theme.type.button, color: theme.colors.onPrimary },
 
-  secondaryBtn: {
-    backgroundColor: Colors.gray100,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  secondaryText: { ...Typography.button, color: Colors.textPrimary },
+    secondaryBtn: {
+      backgroundColor: theme.colors.backgroundMuted,
+      borderRadius: theme.radii.md,
+      paddingVertical: 12,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    secondaryText: { ...theme.type.button, color: theme.colors.textPrimary },
 
-  footerNote: { ...Typography.caption, color: Colors.gray500, textAlign: "center", marginTop: 8 },
-  matchNote: { ...Typography.caption, color: Colors.gray600, marginTop: 12 },
-});
+    footerNote: { ...theme.type.caption, color: theme.colors.textMuted, textAlign: "center", marginTop: 8 },
+    matchNote: { ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 12 },
+  });
+}

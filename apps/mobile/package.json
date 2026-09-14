@@ -23,10 +23,13 @@
     "test:e2e:android": "maestro test --device emulator-5554 -e EMAIL=qa@winkly.test -e PASSWORD=Test1234! .maestro/critical-path.yaml",
     "audit-i18n": "node scripts/audit-i18n.mjs",
     "audit-a11y": "node scripts/lint-a11y-touchables.mjs",
+    "audit-design-tokens": "node scripts/audit-design-tokens.mjs",
     "sync-i18n": "node scripts/sync-i18n-keys.mjs"
   },
   "dependencies": {
+    "@expo-google-fonts/archivo": "^0.4.2",
     "@expo-google-fonts/poppins": "^0.4.1",
+    "@expo-google-fonts/public-sans": "^0.4.2",
     "@expo/vector-icons": "^15.1.1",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-async-storage/async-storage": "2.2.0",

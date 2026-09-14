@@ -7,7 +7,7 @@ import { useRouter, usePathname } from "expo-router";
 import { appModeToHub, chatRoutes, getModeHubFromPathname } from "@/lib/navigation/modeHub";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Layout, Shadow, Typography, FontFamily, HEADER } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { WinklyAISpark } from "@/components/ui/WinklyAISpark";
 import type { Mode } from "@/types";
 
@@ -17,9 +17,14 @@ type ChatsHeaderProps = {
   mode?: Mode;
 };
 
+const BUTTON_SIZE = 44;
+const ICON_SIZE = 24;
+
 export function ChatsHeader({ showBack = false, mode }: ChatsHeaderProps) {
   const router = useRouter();
   const pathname = usePathname() ?? "";
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const chatHub = getModeHubFromPathname(pathname);
   const hub = chatHub !== "tabs" ? chatHub : appModeToHub(mode ?? null);
 
@@ -56,19 +61,19 @@ export function ChatsHeader({ showBack = false, mode }: ChatsHeaderProps) {
             activeOpacity={0.8}
             accessibilityLabel="Back"
           >
-            <Ionicons name="arrow-back" size={HEADER.iconSize} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={ICON_SIZE} color={theme.colors.textPrimary} />
           </TouchableOpacity>
         ) : (
-          <View style={styles.addChatButton3D}>
+          <View style={styles.button3D}>
             <TouchableOpacity
               onPress={handleAddPress}
               style={styles.addChatInner}
               activeOpacity={0.8}
               accessibilityLabel="New conversation"
             >
-              <Ionicons name="chatbubble-outline" size={HEADER.iconSize} color={Colors.primaryViolet} />
+              <Ionicons name="chatbubble-outline" size={ICON_SIZE} color={theme.colors.primary} />
               <View style={styles.addChatPlusWrap}>
-                <Ionicons name="add" size={HEADER.iconSize - 6} color={Colors.primaryViolet} />
+                <Ionicons name="add" size={ICON_SIZE - 6} color={theme.colors.primary} />
               </View>
             </TouchableOpacity>
           </View>
@@ -78,11 +83,11 @@ export function ChatsHeader({ showBack = false, mode }: ChatsHeaderProps) {
         <Text style={styles.centerTitle}>Winkly</Text>
       </View>
       <View style={styles.rightRow}>
-        <View style={styles.aiButton3D}>
+        <View style={styles.button3D}>
           <WinklyAISpark
             feature="concierge"
             onPress={handleAIPress}
-            size={HEADER.iconSize}
+            size={ICON_SIZE}
             style={styles.sparkBtn}
             accessibilityLabel="Winkly AI"
           />
@@ -92,100 +97,83 @@ export function ChatsHeader({ showBack = false, mode }: ChatsHeaderProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 16,
-    ...Layout.topHeaderBar,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-    ...Shadow.card,
-  },
-  leftSlot: {
-    width: HEADER.buttonSize,
-    height: HEADER.buttonSize,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rightRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: HEADER.buttonSize,
-    height: HEADER.buttonSize,
-    justifyContent: "flex-end",
-  },
-  addChatButton3D: {
-    width: HEADER.buttonSize,
-    height: HEADER.buttonSize,
-    borderRadius: HEADER.buttonSize / 2,
-    backgroundColor: Colors.gray100,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 6,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  addChatInner: {
-    width: HEADER.buttonSize,
-    height: HEADER.buttonSize,
-    borderRadius: HEADER.buttonRadius,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  addChatPlusWrap: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconBtn: {
-    width: HEADER.buttonSize,
-    height: HEADER.buttonSize,
-    borderRadius: HEADER.buttonRadius,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  aiButton3D: {
-    width: HEADER.buttonSize,
-    height: HEADER.buttonSize,
-    borderRadius: HEADER.buttonRadius,
-    backgroundColor: Colors.gray100,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 6,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sparkBtn: {
-    width: HEADER.buttonSize,
-    height: HEADER.buttonSize,
-    marginRight: 0,
-  },
-  centerTitleWrap: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  centerTitle: {
-    ...Typography.headerWinklyTitle,
-    color: Colors.primaryViolet,
-    fontFamily: FontFamily.headingBold,
-    textAlign: "center",
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      paddingHorizontal: theme.spacing.lg,
+      paddingTop: theme.spacing.sm,
+      paddingBottom: theme.spacing.md,
+      minHeight: 56,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: theme.colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      ...theme.elevation(1),
+    },
+    leftSlot: {
+      width: BUTTON_SIZE,
+      height: BUTTON_SIZE,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    rightRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      width: BUTTON_SIZE,
+      height: BUTTON_SIZE,
+      justifyContent: "flex-end",
+    },
+    button3D: {
+      width: BUTTON_SIZE,
+      height: BUTTON_SIZE,
+      borderRadius: theme.radii.pill,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+      ...theme.elevation(2),
+    },
+    addChatInner: {
+      width: BUTTON_SIZE,
+      height: BUTTON_SIZE,
+      borderRadius: theme.radii.pill,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    addChatPlusWrap: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    iconBtn: {
+      width: BUTTON_SIZE,
+      height: BUTTON_SIZE,
+      borderRadius: theme.radii.pill,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+      ...theme.elevation(1),
+    },
+    sparkBtn: {
+      width: BUTTON_SIZE,
+      height: BUTTON_SIZE,
+      marginRight: 0,
+    },
+    centerTitleWrap: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    centerTitle: {
+      ...theme.type.h2,
+      fontFamily: theme.type.h2.fontFamily,
+      color: theme.colors.primary,
+      textAlign: "center",
+    },
+  });
+}

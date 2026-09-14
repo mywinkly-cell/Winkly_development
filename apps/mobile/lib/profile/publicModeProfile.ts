@@ -6,7 +6,7 @@ import {
   mergePhotoUrls,
   metaStringArray,
   modeDisplayName,
-} from "@/lib/profile/otherUserCore";
+} from "@/lib/profile/otherUserFormat";
 
 /** Public general profile — same fields shown in preview & other-user views. */
 export type PublicCoreProfile = {

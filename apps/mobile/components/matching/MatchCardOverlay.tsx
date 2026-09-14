@@ -8,11 +8,9 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { Colors, Typography, FontFamily, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
-
-const CARD_RADIUS = Layout.radii.card;
 
 export type MatchCardMode = "romance" | "friends";
 
@@ -40,9 +38,6 @@ export type MatchCardOverlayProps = {
   cardRadius?: number;
 };
 
-const modePrimary = (mode: MatchCardMode) =>
-  mode === "romance" ? Colors.romance.primary : Colors.friends.primary;
-
 export function MatchCardOverlay({
   name,
   age,
@@ -54,10 +49,13 @@ export function MatchCardOverlay({
   aiHint,
   distanceLabel,
   hasIncomingMessage = false,
-  cardRadius = CARD_RADIUS,
+  cardRadius,
 }: MatchCardOverlayProps) {
   const { i18n } = useTranslation();
-  const accent = modePrimary(mode);
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
+  const accent = theme.modeAccent(mode).primary;
+  const resolvedRadius = cardRadius ?? theme.radii.lg;
   const highlightSet = new Set(highlightItems.map((h) => h.trim().toLowerCase()));
   const nameAgeLine = age != null && age > 0 ? `${name}, ${age}` : name;
   const cityLine = city?.trim()
@@ -69,8 +67,8 @@ export function MatchCardOverlay({
       style={[
         styles.infoOverlay,
         {
-          borderBottomLeftRadius: cardRadius,
-          borderBottomRightRadius: cardRadius,
+          borderBottomLeftRadius: resolvedRadius,
+          borderBottomRightRadius: resolvedRadius,
         },
       ]}
     >
@@ -128,100 +126,107 @@ export function MatchCardOverlay({
   );
 }
 
-const styles = StyleSheet.create({
-  infoOverlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 18,
-    paddingTop: 32,
-    paddingBottom: 18,
-    backgroundColor: "rgba(0,0,0,0.45)",
-  },
-  envelopeBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: 6,
-    backgroundColor: Colors.romance.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 10,
-  },
-  envelopeBadgeText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  nameAge: {
-    ...Typography.h2,
-    fontSize: 24,
-    fontFamily: FontFamily.headingBold,
-    color: Colors.white,
-    marginBottom: 4,
-    textShadowColor: "rgba(0,0,0,0.3)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  cityOverlay: {
-    ...Typography.body,
-    fontSize: 15,
-    color: "rgba(255,255,255,0.92)",
-    marginBottom: 2,
-  },
-  distanceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginBottom: 4,
-  },
-  distanceText: {
-    ...Typography.caption,
-    fontSize: 13,
-    color: "rgba(255,255,255,0.92)",
-  },
-  occupationOverlay: {
-    ...Typography.caption,
-    color: "rgba(255,255,255,0.85)",
-    marginBottom: 10,
-  },
-  aiHintRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignSelf: "flex-start",
-    maxWidth: "100%",
-  },
-  aiHintText: {
-    ...Typography.caption,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    alignItems: "center",
-  },
-  chipOverlay: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.22)",
-    borderWidth: 1,
-  },
-  chipTextOverlay: {
-    ...Typography.caption,
-    fontSize: 12,
-    color: Colors.white,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    infoOverlay: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      paddingHorizontal: theme.spacing.xl,
+      paddingTop: theme.spacing.xxl,
+      paddingBottom: theme.spacing.xl,
+      backgroundColor: "rgba(0,0,0,0.45)",
+    },
+    envelopeBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
+      gap: theme.spacing.xs,
+      backgroundColor: theme.modeAccent("romance").primary,
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: theme.spacing.xs,
+      borderRadius: theme.radii.pill,
+      marginBottom: theme.spacing.sm,
+    },
+    envelopeBadgeText: {
+      color: "#fff",
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    nameAge: {
+      ...theme.type.h2,
+      fontSize: 24,
+      fontFamily: theme.type.h2.fontFamily,
+      color: "#FFFFFF",
+      marginBottom: theme.spacing.xxs,
+      textShadowColor: "rgba(0,0,0,0.3)",
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 2,
+    },
+    cityOverlay: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      fontSize: 15,
+      color: "rgba(255,255,255,0.92)",
+      marginBottom: 2,
+    },
+    distanceRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.xxs,
+      marginBottom: theme.spacing.xxs,
+    },
+    distanceText: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontSize: 13,
+      color: "rgba(255,255,255,0.92)",
+    },
+    occupationOverlay: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: "rgba(255,255,255,0.85)",
+      marginBottom: theme.spacing.sm,
+    },
+    aiHintRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.xs,
+      marginBottom: theme.spacing.sm,
+      paddingVertical: theme.spacing.xs,
+      paddingHorizontal: theme.spacing.sm,
+      borderRadius: theme.radii.sm,
+      borderWidth: 1,
+      alignSelf: "flex-start",
+      maxWidth: "100%",
+    },
+    aiHintText: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    chipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: theme.spacing.sm,
+      alignItems: "center",
+    },
+    chipOverlay: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 5,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.sm,
+      backgroundColor: "rgba(255,255,255,0.22)",
+      borderWidth: 1,
+    },
+    chipTextOverlay: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontSize: 12,
+      color: "#FFFFFF",
+    },
+  });
+}

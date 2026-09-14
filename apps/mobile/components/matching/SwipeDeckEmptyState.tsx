@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 type SwipeDeckMode = "romance" | "friends";
 
@@ -21,16 +21,6 @@ type SwipeDeckEmptyStateProps = {
   hasCustomFilters?: boolean;
   onExpandRadius: () => void;
   onOpenDiscover: () => void;
-};
-
-const MODE_ACCENT: Record<SwipeDeckMode, string> = {
-  romance: Colors.romance.primary,
-  friends: Colors.friends.primary,
-};
-
-const MODE_SOFT_BG: Record<SwipeDeckMode, string> = {
-  romance: Colors.romance.secondary,
-  friends: Colors.friends.secondary,
 };
 
 const FALLBACK_TITLE =
@@ -69,8 +59,10 @@ export function SwipeDeckEmptyState({
   onExpandRadius,
   onOpenDiscover,
 }: SwipeDeckEmptyStateProps) {
-  const accent = MODE_ACCENT[mode];
-  const softBg = MODE_SOFT_BG[mode];
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
+  const accent = theme.modeAccent(mode).primary;
+  const softBg = theme.modeAccent(mode).bg;
   const title = getContextTitle(distanceKm, hasCustomFilters);
   const emphasizeDiscover = likesCount != null && likesCount > 0;
 
@@ -100,7 +92,7 @@ export function SwipeDeckEmptyState({
           ]}
           accessibilityLabel={seeWhoLikedLabel(mode)}
         >
-          <Ionicons name="heart" size={20} color={Colors.white} />
+          <Ionicons name="heart" size={20} color={theme.colors.onPrimary} />
           <Text style={styles.primaryBtnText}>{seeWhoLikedLabel(mode)}</Text>
         </Pressable>
       ) : (
@@ -113,7 +105,7 @@ export function SwipeDeckEmptyState({
           ]}
           accessibilityLabel="Expand search radius"
         >
-          <Ionicons name="resize-outline" size={20} color={Colors.white} />
+          <Ionicons name="resize-outline" size={20} color={theme.colors.onPrimary} />
           <Text style={styles.primaryBtnText}>Expand search radius</Text>
         </Pressable>
       )}
@@ -143,87 +135,92 @@ export function SwipeDeckEmptyState({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: Layout.spacing.xl,
-    paddingVertical: Layout.spacing.lg,
-  },
-  iconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Layout.spacing.lg,
-  },
-  title: {
-    ...Typography.h3,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
-    textAlign: "center",
-    marginBottom: Layout.spacing.md,
-    maxWidth: 320,
-  },
-  likesSubtitle: {
-    ...Typography.body,
-    color: Colors.gray700,
-    textAlign: "center",
-    marginBottom: Layout.spacing.lg,
-    maxWidth: 320,
-  },
-  primaryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: Layout.radii.card,
-    minHeight: 48,
-    minWidth: 240,
-    marginBottom: Layout.spacing.md,
-  },
-  primaryBtnPressed: {
-    opacity: 0.88,
-  },
-  primaryBtnText: {
-    ...Typography.button,
-    fontFamily: FontFamily.heading,
-    color: Colors.white,
-  },
-  secondaryLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: 8,
-    marginBottom: Layout.spacing.sm,
-  },
-  secondaryLinkPressed: {
-    opacity: 0.75,
-  },
-  secondaryLinkText: {
-    ...Typography.caption,
-    fontWeight: "600",
-  },
-  teaserLoading: {
-    minHeight: 32,
-    justifyContent: "center",
-    marginBottom: Layout.spacing.lg,
-  },
-  discoverLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: 8,
-  },
-  discoverLinkPressed: {
-    opacity: 0.75,
-  },
-  discoverLinkText: {
-    ...Typography.caption,
-    fontWeight: "600",
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: theme.spacing.xl,
+      paddingVertical: theme.spacing.lg,
+    },
+    iconWrap: {
+      width: 72,
+      height: 72,
+      borderRadius: theme.radii.pill,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: theme.spacing.lg,
+    },
+    title: {
+      ...theme.type.h3,
+      fontFamily: theme.type.h3.fontFamily,
+      color: theme.colors.textPrimary,
+      textAlign: "center",
+      marginBottom: theme.spacing.md,
+      maxWidth: 320,
+    },
+    likesSubtitle: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textSecondary,
+      textAlign: "center",
+      marginBottom: theme.spacing.lg,
+      maxWidth: 320,
+    },
+    primaryBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: theme.spacing.sm,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.xxl,
+      borderRadius: theme.radii.lg,
+      minHeight: 48,
+      minWidth: 240,
+      marginBottom: theme.spacing.md,
+    },
+    primaryBtnPressed: {
+      opacity: 0.88,
+    },
+    primaryBtnText: {
+      ...theme.type.button,
+      fontFamily: theme.type.button.fontFamily,
+      color: theme.colors.onPrimary,
+    },
+    secondaryLink: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.xxs,
+      paddingVertical: theme.spacing.sm,
+      marginBottom: theme.spacing.sm,
+    },
+    secondaryLinkPressed: {
+      opacity: 0.75,
+    },
+    secondaryLinkText: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontWeight: "600",
+    },
+    teaserLoading: {
+      minHeight: 32,
+      justifyContent: "center",
+      marginBottom: theme.spacing.lg,
+    },
+    discoverLink: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.xxs,
+      paddingVertical: theme.spacing.sm,
+    },
+    discoverLinkPressed: {
+      opacity: 0.75,
+    },
+    discoverLinkText: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontWeight: "600",
+    },
+  });
+}

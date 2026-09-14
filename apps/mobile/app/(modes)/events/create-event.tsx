@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 type CreateEventPayload = {
   title: string;
@@ -54,6 +54,8 @@ function toFloatOrNull(v: string) {
 
 export default function CreateEvent() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const params = useLocalSearchParams<{
     partner_user_id?: string;
     partner_display_name?: string;
@@ -185,160 +187,150 @@ export default function CreateEvent() {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: Colors.background }]}>
+    <View style={styles.screen}>
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
-          style={[styles.backBtn, { backgroundColor: Colors.card, borderColor: Colors.border }]}
+          style={styles.backBtn}
           activeOpacity={0.9}
         >
-          <Text style={{ color: Colors.text, fontWeight: "900" }}>‹</Text>
+          <Text style={{ color: theme.colors.textPrimary, fontWeight: "900" }}>‹</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.title, Typography.h2]}>Create Event</Text>
+        <Text style={styles.title}>Create Event</Text>
 
         <View style={{ width: 40 }} />
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         {planPartnerId ? (
-          <View
-            style={{
-              marginHorizontal: Layout.screenPadding,
-              marginBottom: 12,
-              padding: 12,
-              borderRadius: 12,
-              backgroundColor: Colors.events.primary + "14",
-              borderWidth: 1,
-              borderColor: Colors.events.primary + "44",
-            }}
-          >
-            <Text style={{ fontWeight: "800", color: Colors.events.primary, marginBottom: 4 }}>
+          <View style={styles.planBanner}>
+            <Text style={styles.planBannerTitle}>
               Planning with {planPartnerName}
             </Text>
-            <Text style={{ color: Colors.gray600, fontSize: 13, lineHeight: 18 }}>
+            <Text style={styles.planBannerText}>
               This event is started from your chat
               {planConversationId ? " — share the event link after you publish." : "."}
             </Text>
           </View>
         ) : null}
-        <View style={[styles.card, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-          <Text style={[styles.label, { color: Colors.mutedText }]}>Title *</Text>
-          <View style={[styles.inputBox, { borderColor: Colors.border, backgroundColor: Colors.background }]}>
+        <View style={styles.card}>
+          <Text style={styles.label}>Title *</Text>
+          <View style={styles.inputBox}>
             <TextInput
               value={title}
               onChangeText={(t) => setTitle(t.slice(0, EVENT_TITLE_MAX_LENGTH))}
               placeholder="e.g., Winkly Rooftop Networking Night"
-              placeholderTextColor={Colors.mutedText}
-              style={[styles.input, { color: Colors.text }]}
+              placeholderTextColor={theme.colors.textSecondary}
+              style={styles.input}
               returnKeyType="next"
               maxLength={EVENT_TITLE_MAX_LENGTH}
             />
           </View>
-          <Text style={[styles.hint, { color: Colors.mutedText }]}>{title.length}/{EVENT_TITLE_MAX_LENGTH} characters</Text>
+          <Text style={styles.hint}>{title.length}/{EVENT_TITLE_MAX_LENGTH} characters</Text>
 
-          <Text style={[styles.label, { color: Colors.mutedText, marginTop: 12 }]}>Description</Text>
-          <View style={[styles.textArea, { borderColor: Colors.border, backgroundColor: Colors.background }]}>
+          <Text style={[styles.label, { marginTop: 12 }]}>Description</Text>
+          <View style={styles.textArea}>
             <TextInput
               value={description}
               onChangeText={setDescription}
               placeholder="What’s the vibe? Who is it for? Dress code?"
-              placeholderTextColor={Colors.mutedText}
-              style={[styles.input, { color: Colors.text, height: 90 }]}
+              placeholderTextColor={theme.colors.textSecondary}
+              style={[styles.input, { height: 90 }]}
               multiline
             />
           </View>
 
           <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: Colors.mutedText }]}>City</Text>
-              <View style={[styles.inputBox, { borderColor: Colors.border, backgroundColor: Colors.background }]}>
+              <Text style={styles.label}>City</Text>
+              <View style={styles.inputBox}>
                 <TextInput
                   value={city}
                   onChangeText={setCity}
                   placeholder="City"
-                  placeholderTextColor={Colors.mutedText}
-                  style={[styles.input, { color: Colors.text }]}
+                  placeholderTextColor={theme.colors.textSecondary}
+                  style={styles.input}
                 />
               </View>
             </View>
 
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: Colors.mutedText }]}>Venue</Text>
-              <View style={[styles.inputBox, { borderColor: Colors.border, backgroundColor: Colors.background }]}>
+              <Text style={styles.label}>Venue</Text>
+              <View style={styles.inputBox}>
                 <TextInput
                   value={venueName}
                   onChangeText={setVenueName}
                   placeholder="Venue name"
-                  placeholderTextColor={Colors.mutedText}
-                  style={[styles.input, { color: Colors.text }]}
+                  placeholderTextColor={theme.colors.textSecondary}
+                  style={styles.input}
                 />
               </View>
             </View>
           </View>
 
-          <Text style={[styles.label, { color: Colors.mutedText, marginTop: 12 }]}>Cover image URL (optional)</Text>
-          <View style={[styles.inputBox, { borderColor: Colors.border, backgroundColor: Colors.background }]}>
+          <Text style={[styles.label, { marginTop: 12 }]}>Cover image URL (optional)</Text>
+          <View style={styles.inputBox}>
             <TextInput
               value={coverUrl}
               onChangeText={setCoverUrl}
               placeholder="https://..."
-              placeholderTextColor={Colors.mutedText}
-              style={[styles.input, { color: Colors.text }]}
+              placeholderTextColor={theme.colors.textSecondary}
+              style={styles.input}
               autoCapitalize="none"
             />
           </View>
 
-          <Text style={[styles.label, { color: Colors.mutedText, marginTop: 12 }]}>Start time (ISO)</Text>
-          <View style={[styles.inputBox, { borderColor: Colors.border, backgroundColor: Colors.background }]}>
+          <Text style={[styles.label, { marginTop: 12 }]}>Start time (ISO)</Text>
+          <View style={styles.inputBox}>
             <TextInput
               value={startAt}
               onChangeText={setStartAt}
               placeholder="2026-01-10T18:00:00.000Z"
-              placeholderTextColor={Colors.mutedText}
-              style={[styles.input, { color: Colors.text }]}
+              placeholderTextColor={theme.colors.textSecondary}
+              style={styles.input}
               autoCapitalize="none"
             />
           </View>
-          <Text style={{ color: Colors.mutedText, marginTop: 6 }}>Preview: {startLabel}</Text>
+          <Text style={{ color: theme.colors.textSecondary, marginTop: 6 }}>Preview: {startLabel}</Text>
 
-          <Text style={[styles.label, { color: Colors.mutedText, marginTop: 12 }]}>End time (ISO, optional)</Text>
-          <View style={[styles.inputBox, { borderColor: Colors.border, backgroundColor: Colors.background }]}>
+          <Text style={[styles.label, { marginTop: 12 }]}>End time (ISO, optional)</Text>
+          <View style={styles.inputBox}>
             <TextInput
               value={endAt}
               onChangeText={setEndAt}
               placeholder="2026-01-10T22:00:00.000Z"
-              placeholderTextColor={Colors.mutedText}
-              style={[styles.input, { color: Colors.text }]}
+              placeholderTextColor={theme.colors.textSecondary}
+              style={styles.input}
               autoCapitalize="none"
             />
           </View>
 
           <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: Colors.mutedText }]}>Category / Topic</Text>
-              <View style={[styles.inputBox, { borderColor: Colors.border, backgroundColor: Colors.background }]}>
+              <Text style={styles.label}>Category / Topic</Text>
+              <View style={styles.inputBox}>
                 <TextInput
                   value={category}
                   onChangeText={(t) => setCategory(t.slice(0, EVENT_TOPIC_CATEGORY_MAX_LENGTH))}
                   placeholder="Social / Business / Fitness / Culture (up to 25)"
-                  placeholderTextColor={Colors.mutedText}
-                  style={[styles.input, { color: Colors.text }]}
+                  placeholderTextColor={theme.colors.textSecondary}
+                  style={styles.input}
                   maxLength={EVENT_TOPIC_CATEGORY_MAX_LENGTH}
                 />
               </View>
-              <Text style={[styles.hint, { color: Colors.mutedText }]}>{category.length}/{EVENT_TOPIC_CATEGORY_MAX_LENGTH} characters</Text>
+              <Text style={styles.hint}>{category.length}/{EVENT_TOPIC_CATEGORY_MAX_LENGTH} characters</Text>
             </View>
             <View style={{ width: 120 }}>
-              <Text style={[styles.label, { color: Colors.mutedText }]}>Capacity</Text>
-              <View style={[styles.inputBox, { borderColor: Colors.border, backgroundColor: Colors.background }]}>
+              <Text style={styles.label}>Capacity</Text>
+              <View style={styles.inputBox}>
                 <TextInput
                   value={capacity}
                   onChangeText={setCapacity}
                   keyboardType="number-pad"
                   placeholder="30"
-                  placeholderTextColor={Colors.mutedText}
-                  style={[styles.input, { color: Colors.text }]}
+                  placeholderTextColor={theme.colors.textSecondary}
+                  style={styles.input}
                 />
               </View>
             </View>
@@ -346,46 +338,43 @@ export default function CreateEvent() {
 
           <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: Colors.mutedText }]}>Tags</Text>
-              <View style={[styles.inputBox, { borderColor: Colors.border, backgroundColor: Colors.background }]}>
+              <Text style={styles.label}>Tags</Text>
+              <View style={styles.inputBox}>
                 <TextInput
                   value={tags}
                   onChangeText={setTags}
                   placeholder="networking, dating, friends"
-                  placeholderTextColor={Colors.mutedText}
-                  style={[styles.input, { color: Colors.text }]}
+                  placeholderTextColor={theme.colors.textSecondary}
+                  style={styles.input}
                 />
               </View>
             </View>
             <View style={{ width: 120 }}>
-              <Text style={[styles.label, { color: Colors.mutedText }]}>Price (€)</Text>
-              <View style={[styles.inputBox, { borderColor: Colors.border, backgroundColor: Colors.background }]}>
+              <Text style={styles.label}>Price (€)</Text>
+              <View style={styles.inputBox}>
                 <TextInput
                   value={price}
                   onChangeText={setPrice}
                   keyboardType="decimal-pad"
                   placeholder="0"
-                  placeholderTextColor={Colors.mutedText}
-                  style={[styles.input, { color: Colors.text }]}
+                  placeholderTextColor={theme.colors.textSecondary}
+                  style={styles.input}
                 />
               </View>
             </View>
           </View>
 
-          <Text style={[styles.label, { color: Colors.mutedText, marginTop: 12 }]}>Visibility</Text>
+          <Text style={[styles.label, { marginTop: 12 }]}>Visibility</Text>
           <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
             <TouchableOpacity
               onPress={() => setVisibility("public")}
               style={[
                 styles.chip,
-                {
-                  backgroundColor: visibility === "public" ? Colors.primary : Colors.background,
-                  borderColor: Colors.border,
-                },
+                { backgroundColor: visibility === "public" ? theme.colors.primary : theme.colors.background },
               ]}
               activeOpacity={0.9}
             >
-              <Text style={{ color: visibility === "public" ? Colors.onPrimary : Colors.text, fontWeight: "700" }}>
+              <Text style={{ color: visibility === "public" ? theme.colors.onPrimary : theme.colors.textPrimary, fontWeight: "700" }}>
                 Public
               </Text>
             </TouchableOpacity>
@@ -394,14 +383,11 @@ export default function CreateEvent() {
               onPress={() => setVisibility("private")}
               style={[
                 styles.chip,
-                {
-                  backgroundColor: visibility === "private" ? Colors.primary : Colors.background,
-                  borderColor: Colors.border,
-                },
+                { backgroundColor: visibility === "private" ? theme.colors.primary : theme.colors.background },
               ]}
               activeOpacity={0.9}
             >
-              <Text style={{ color: visibility === "private" ? Colors.onPrimary : Colors.text, fontWeight: "700" }}>
+              <Text style={{ color: visibility === "private" ? theme.colors.onPrimary : theme.colors.textPrimary, fontWeight: "700" }}>
                 Private
               </Text>
             </TouchableOpacity>
@@ -409,25 +395,24 @@ export default function CreateEvent() {
 
           {visibility === "public" && (
             <>
-              <Text style={[styles.label, { color: Colors.mutedText, marginTop: 16 }]}>Group chat</Text>
+              <Text style={[styles.label, { marginTop: 16 }]}>Group chat</Text>
               <TouchableOpacity
                 onPress={() => setAllowEventChat((v) => !v)}
                 style={[
                   styles.chip,
                   {
-                    backgroundColor: allowEventChat ? Colors.primary : Colors.background,
-                    borderColor: Colors.border,
+                    backgroundColor: allowEventChat ? theme.colors.primary : theme.colors.background,
                     alignSelf: "flex-start",
                     marginTop: 6,
                   },
                 ]}
                 activeOpacity={0.9}
               >
-                <Text style={{ color: allowEventChat ? Colors.onPrimary : Colors.text, fontWeight: "700" }}>
+                <Text style={{ color: allowEventChat ? theme.colors.onPrimary : theme.colors.textPrimary, fontWeight: "700" }}>
                   {allowEventChat ? "Allow group chat ✓" : "Allow a group chat for this event"}
                 </Text>
               </TouchableOpacity>
-              <Text style={[styles.hint, { color: Colors.mutedText, marginTop: 6 }]}>
+              <Text style={[styles.hint, { marginTop: 6 }]}>
                 Participants who join or mark interested can chat with each other in one group chat.
               </Text>
             </>
@@ -436,17 +421,17 @@ export default function CreateEvent() {
           <TouchableOpacity
             onPress={onSave}
             disabled={saving}
-            style={[styles.cta, { backgroundColor: Colors.primary, opacity: saving ? 0.7 : 1 }]}
+            style={[styles.cta, { opacity: saving ? 0.7 : 1 }]}
             activeOpacity={0.9}
           >
             {saving ? (
-              <ActivityIndicator size="small" color={Colors.white} />
+              <ActivityIndicator size="small" color={theme.colors.onPrimary} />
             ) : (
-              <Text style={{ color: Colors.onPrimary, fontWeight: "900" }}>Create</Text>
+              <Text style={{ color: theme.colors.onPrimary, fontWeight: "900" }}>Create</Text>
             )}
           </TouchableOpacity>
 
-          <Text style={{ color: Colors.mutedText, marginTop: 10, lineHeight: 18 }}>
+          <Text style={{ color: theme.colors.textSecondary, marginTop: 10, lineHeight: 18 }}>
             Note: Start/End fields are ISO for now (DB-friendly). You can add a date/time picker later without changing the
             backend shape.
           </Text>
@@ -456,37 +441,55 @@ export default function CreateEvent() {
   );
 }
 
-const styles: any = {
-  screen: { flex: 1, paddingTop: Layout?.screenTopPadding ?? 16 },
-  header: {
-    paddingHorizontal: Layout?.screenPadding ?? 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingBottom: 12,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: { fontWeight: "900" },
+function createStyles(theme: AppTheme) {
+  return {
+    screen: { flex: 1, paddingTop: theme.spacing.md, backgroundColor: theme.colors.background },
+    header: {
+      paddingHorizontal: theme.spacing.xl,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      paddingBottom: 12,
+    },
+    backBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 14,
+      borderWidth: 1,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+    },
+    title: { ...theme.type.h2, fontWeight: "900" as const, color: theme.colors.textPrimary },
 
-  card: {
-    marginHorizontal: Layout?.screenPadding ?? 16,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 14,
-    marginTop: 8,
-  },
-  label: { fontSize: 12, fontWeight: "700" },
-  hint: { fontSize: 11, marginTop: 4, marginBottom: 0 },
-  inputBox: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, height: 46, justifyContent: "center" },
-  textArea: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10 },
-  input: { fontSize: 15 },
-  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10 },
-  cta: { marginTop: 16, borderRadius: 14, paddingVertical: 12, alignItems: "center" },
-};
+    planBanner: {
+      marginHorizontal: theme.spacing.xl,
+      marginBottom: 12,
+      padding: 12,
+      borderRadius: 12,
+      backgroundColor: theme.modeAccent("events").primary + "14",
+      borderWidth: 1,
+      borderColor: theme.modeAccent("events").primary + "44",
+    },
+    planBannerTitle: { fontWeight: "800" as const, color: theme.modeAccent("events").primary, marginBottom: 4 },
+    planBannerText: { color: theme.colors.textSecondary, fontSize: 13, lineHeight: 18 },
+
+    card: {
+      marginHorizontal: theme.spacing.xl,
+      borderWidth: 1,
+      borderRadius: 18,
+      padding: 14,
+      marginTop: 8,
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+    },
+    label: { fontSize: 12, fontWeight: "700" as const, color: theme.colors.textSecondary },
+    hint: { fontSize: 11, marginTop: 4, marginBottom: 0, color: theme.colors.textSecondary },
+    inputBox: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, height: 46, justifyContent: "center" as const, borderColor: theme.colors.border, backgroundColor: theme.colors.background },
+    textArea: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10, borderColor: theme.colors.border, backgroundColor: theme.colors.background },
+    input: { fontSize: 15, color: theme.colors.textPrimary },
+    chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10, borderColor: theme.colors.border },
+    cta: { marginTop: 16, borderRadius: 14, paddingVertical: 12, alignItems: "center" as const, backgroundColor: theme.colors.primary },
+  };
+}

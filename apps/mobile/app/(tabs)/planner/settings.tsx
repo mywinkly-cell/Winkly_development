@@ -7,13 +7,11 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   Switch,
   Alert,
   StyleSheet,
   Platform,
   Linking,
-  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -22,7 +20,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Calendar from "expo-calendar";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Card, Chip, Header, ListRow, SecondaryButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import {
   CALENDAR_SYNC_STORAGE_KEY,
   setCalendarSyncPreference,
@@ -67,6 +66,8 @@ type PermissionStatus = "undetermined" | "granted" | "denied";
 export default function PlannerSettings() {
   const router = useRouter();
   const { t } = useTranslation();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const [reminders, setReminders] = useState(false);
   const [weeklyDigest, setWeeklyDigest] = useState(false);
   const [defaultReminderWhen, setDefaultReminderWhen] = useState<DefaultReminderWhen>("15m");
@@ -338,73 +339,59 @@ export default function PlannerSettings() {
   };
 
   const getStatusColor = (status: PermissionStatus) => {
-    if (status === "granted") return Colors.events.primary;
-    if (status === "denied") return Colors.romance.primary;
-    return Colors.gray600;
+    if (status === "granted") return theme.colors.success;
+    if (status === "denied") return theme.modeAccent("romance").primary;
+    return theme.colors.textSecondary;
   };
 
   return (
     <View style={styles.screen}>
+      <Header title={t("planner.settingsTitle")} onBack={() => { Haptics.selectionAsync(); router.back(); }} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); router.back(); }}
-            style={styles.backBtn}
-            activeOpacity={0.9}
-            accessibilityLabel={t("common.back")}
-          >
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t("planner.settingsTitle")}</Text>
-          <View style={styles.headerPlaceholder} />
-        </View>
-
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <Text style={styles.title}>{t("planner.notificationsSection")}</Text>
 
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>{t("planner.reminders")}</Text>
-              <Text style={styles.rowSub}>{t("planner.remindersSub")}</Text>
-            </View>
-            <Switch
-              value={reminders}
-              onValueChange={(v) => { Haptics.selectionAsync(); saveReminders(v); }}
-              trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }}
-              ios_backgroundColor={Colors.gray300}
-            />
-          </View>
+          <ListRow
+            title={t("planner.reminders")}
+            subtitle={t("planner.remindersSub")}
+            style={styles.row}
+            trailing={
+              <Switch
+                value={reminders}
+                onValueChange={(v) => { Haptics.selectionAsync(); saveReminders(v); }}
+                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                ios_backgroundColor={theme.colors.border}
+              />
+            }
+          />
 
           <View style={styles.hr} />
 
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>{t("planner.weeklyDigest")}</Text>
-              <Text style={styles.rowSub}>{t("planner.weeklyDigestSub")}</Text>
-            </View>
-            <Switch
-              value={weeklyDigest}
-              onValueChange={(v) => { Haptics.selectionAsync(); saveWeeklyDigest(v); }}
-              trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }}
-              ios_backgroundColor={Colors.gray300}
-            />
-          </View>
+          <ListRow
+            title={t("planner.weeklyDigest")}
+            subtitle={t("planner.weeklyDigestSub")}
+            style={styles.row}
+            trailing={
+              <Switch
+                value={weeklyDigest}
+                onValueChange={(v) => { Haptics.selectionAsync(); saveWeeklyDigest(v); }}
+                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                ios_backgroundColor={theme.colors.border}
+              />
+            }
+          />
 
           <View style={styles.hr} />
 
           <Text style={styles.rowSub}>{t("planner.defaultReminderTime")}</Text>
           <View style={styles.pickerRow}>
             {DEFAULT_REMINDER_WHEN_OPTIONS.map((opt) => (
-              <TouchableOpacity
+              <Chip
                 key={opt.value}
+                label={t(opt.labelKey)}
+                selected={defaultReminderWhen === opt.value}
                 onPress={() => { Haptics.selectionAsync(); saveDefaultReminderWhen(opt.value); }}
-                style={[styles.pillOption, defaultReminderWhen === opt.value && styles.pillOptionActive]}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.pillOptionText, defaultReminderWhen === opt.value && styles.pillOptionTextActive]}>
-                  {t(opt.labelKey)}
-                </Text>
-              </TouchableOpacity>
+              />
             ))}
           </View>
 
@@ -413,39 +400,32 @@ export default function PlannerSettings() {
           <Text style={styles.rowSub}>{t("planner.defaultReminderChannel")}</Text>
           <View style={styles.pickerRow}>
             {DEFAULT_REMINDER_CHANNEL_OPTIONS.map((opt) => (
-              <TouchableOpacity
+              <Chip
                 key={opt.value}
+                label={t(opt.labelKey)}
+                selected={defaultReminderChannel === opt.value}
                 onPress={() => { Haptics.selectionAsync(); saveDefaultReminderChannel(opt.value); }}
-                style={[styles.pillOption, defaultReminderChannel === opt.value && styles.pillOptionActive]}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.pillOptionText, defaultReminderChannel === opt.value && styles.pillOptionTextActive]}>
-                  {t(opt.labelKey)}
-                </Text>
-              </TouchableOpacity>
+              />
             ))}
           </View>
 
           <View style={styles.hr} />
 
-          <TouchableOpacity
+          <ListRow
+            title={t("planner.manageAppNotifications")}
             onPress={() => { Haptics.selectionAsync(); router.push("/account/notifications-preferences"); }}
-            style={styles.linkRow}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="notifications-outline" size={20} color={Colors.primaryViolet} />
-            <Text style={styles.linkRowText}>{t("planner.manageAppNotifications")}</Text>
-            <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
-          </TouchableOpacity>
-        </View>
+            style={styles.row}
+            leading={<Ionicons name="notifications-outline" size={20} color={theme.colors.primary} />}
+          />
+        </Card>
 
-        <View style={[styles.card, { marginTop: 20 }]}>
+        <Card style={styles.card2}>
           <Text style={styles.title}>{t("planner.calendarMapsSection")}</Text>
           <Text style={styles.subtitle}>{t("planner.calendarMapsSub")}</Text>
 
           <View style={styles.integrationRow}>
-            <View style={[styles.iconWrap, { backgroundColor: Colors.events.primary + "20" }]}>
-              <Ionicons name="calendar-outline" size={24} color={Colors.events.primary} />
+            <View style={{ ...styles.iconWrap, backgroundColor: theme.modeAccent("events").bg }}>
+              <Ionicons name="calendar-outline" size={24} color={theme.modeAccent("events").primary} />
             </View>
             <View style={styles.integrationContent}>
               <Text style={styles.rowTitle}>
@@ -453,57 +433,46 @@ export default function PlannerSettings() {
               </Text>
               <Text style={styles.rowSub}>{t("planner.calendarSyncSub")}</Text>
               <View style={styles.statusRow}>
-                <View style={[styles.statusDot, { backgroundColor: getStatusColor(calendarStatus) }]} />
-                <Text style={[styles.statusText, { color: getStatusColor(calendarStatus) }]}>
+                <View style={{ ...styles.statusDot, backgroundColor: getStatusColor(calendarStatus) }} />
+                <Text style={{ ...styles.statusText, color: getStatusColor(calendarStatus) }}>
                   {getStatusLabel(calendarStatus)}
                 </Text>
               </View>
             </View>
           </View>
-          <TouchableOpacity
-            onPress={handleCalendarToggle}
-            disabled={loading === "calendar"}
-            style={[styles.integrationBtn, loading === "calendar" && styles.integrationBtnDisabled]}
-            activeOpacity={0.9}
-          >
-            {loading === "calendar" ? (
-              <ActivityIndicator size="small" color={Colors.primaryViolet} />
-            ) : null}
-            <Text style={styles.integrationBtnText}>
-              {loading === "calendar"
+          <SecondaryButton
+            title={
+              loading === "calendar"
                 ? t("planner.requesting")
                 : calendarStatus === "granted"
                   ? t("planner.disconnect")
-                  : t("planner.connect")}
-            </Text>
-            {calendarStatus !== "granted" && loading !== "calendar" && (
-              <Ionicons name="chevron-forward" size={18} color={Colors.primaryViolet} />
-            )}
-          </TouchableOpacity>
+                  : t("planner.connect")
+            }
+            onPress={handleCalendarToggle}
+            disabled={loading === "calendar"}
+            loading={loading === "calendar"}
+          />
 
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>{t("planner.syncToCalendar")}</Text>
-              <Text style={styles.rowSub}>
-                {calendarStatus === "granted"
-                  ? t("planner.syncToCalendarGranted")
-                  : t("planner.syncToCalendarPrompt")}
-              </Text>
-            </View>
-            <Switch
-              value={calendarSync}
-              onValueChange={handleCalendarSyncToggle}
-              disabled={loading === "calendar"}
-              trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }}
-              ios_backgroundColor={Colors.gray300}
-            />
-          </View>
+          <ListRow
+            title={t("planner.syncToCalendar")}
+            subtitle={calendarStatus === "granted" ? t("planner.syncToCalendarGranted") : t("planner.syncToCalendarPrompt")}
+            style={styles.row}
+            trailing={
+              <Switch
+                value={calendarSync}
+                onValueChange={handleCalendarSyncToggle}
+                disabled={loading === "calendar"}
+                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                ios_backgroundColor={theme.colors.border}
+              />
+            }
+          />
 
           <View style={styles.hr} />
 
           <View style={styles.integrationRow}>
-            <View style={[styles.iconWrap, { backgroundColor: Colors.friends.primary + "20" }]}>
-              <Ionicons name="location-outline" size={24} color={Colors.friends.primary} />
+            <View style={{ ...styles.iconWrap, backgroundColor: theme.modeAccent("friends").bg }}>
+              <Ionicons name="location-outline" size={24} color={theme.modeAccent("friends").primary} />
             </View>
             <View style={styles.integrationContent}>
               <Text style={styles.rowTitle}>
@@ -511,36 +480,28 @@ export default function PlannerSettings() {
               </Text>
               <Text style={styles.rowSub}>{t("planner.mapsSub")}</Text>
               <View style={styles.statusRow}>
-                <View style={[styles.statusDot, { backgroundColor: getStatusColor(locationStatus) }]} />
-                <Text style={[styles.statusText, { color: getStatusColor(locationStatus) }]}>
+                <View style={{ ...styles.statusDot, backgroundColor: getStatusColor(locationStatus) }} />
+                <Text style={{ ...styles.statusText, color: getStatusColor(locationStatus) }}>
                   {getStatusLabel(locationStatus)}
                 </Text>
               </View>
             </View>
           </View>
-          <TouchableOpacity
-            onPress={handleLocationToggle}
-            disabled={loading === "location"}
-            style={[styles.integrationBtn, loading === "location" && styles.integrationBtnDisabled]}
-            activeOpacity={0.9}
-          >
-            {loading === "location" ? (
-              <ActivityIndicator size="small" color={Colors.primaryViolet} />
-            ) : null}
-            <Text style={styles.integrationBtnText}>
-              {loading === "location"
+          <SecondaryButton
+            title={
+              loading === "location"
                 ? t("planner.requesting")
                 : locationStatus === "granted"
                   ? t("planner.disconnect")
-                  : t("planner.connect")}
-            </Text>
-            {locationStatus !== "granted" && loading !== "location" && (
-              <Ionicons name="chevron-forward" size={18} color={Colors.primaryViolet} />
-            )}
-          </TouchableOpacity>
-        </View>
+                  : t("planner.connect")
+            }
+            onPress={handleLocationToggle}
+            disabled={loading === "location"}
+            loading={loading === "location"}
+          />
+        </Card>
 
-        <View style={[styles.card, { marginTop: 20 }]}>
+        <Card style={styles.card2}>
           <Text style={styles.title}>{t("planner.cloudCalendarSection")}</Text>
           <Text style={styles.subtitle}>{t("planner.cloudCalendarSectionSub")}</Text>
 
@@ -551,8 +512,8 @@ export default function PlannerSettings() {
               <React.Fragment key={provider}>
                 {idx > 0 && <View style={styles.hr} />}
                 <View style={styles.integrationRow}>
-                  <View style={[styles.iconWrap, { backgroundColor: Colors.romance.primary + "20" }]}>
-                    <Ionicons name="cloud-outline" size={24} color={Colors.romance.primary} />
+                  <View style={{ ...styles.iconWrap, backgroundColor: theme.modeAccent("romance").bg }}>
+                    <Ionicons name="cloud-outline" size={24} color={theme.modeAccent("romance").primary} />
                   </View>
                   <View style={styles.integrationContent}>
                     <Text style={styles.rowTitle}>
@@ -560,181 +521,83 @@ export default function PlannerSettings() {
                     </Text>
                     <View style={styles.statusRow}>
                       <View
-                        style={[
-                          styles.statusDot,
-                          { backgroundColor: connected ? Colors.events.primary : Colors.gray600 },
-                        ]}
+                        style={{
+                          ...styles.statusDot,
+                          backgroundColor: connected ? theme.colors.success : theme.colors.textSecondary,
+                        }}
                       />
-                      <Text style={[styles.statusText, { color: connected ? Colors.events.primary : Colors.gray600 }]}>
+                      <Text style={{ ...styles.statusText, color: connected ? theme.colors.success : theme.colors.textSecondary }}>
                         {connected ? t("planner.cloudConnected") : t("planner.cloudNotConnected")}
                       </Text>
                     </View>
                   </View>
                 </View>
-                <TouchableOpacity
+                <SecondaryButton
+                  title={
+                    isLoading
+                      ? t("planner.cloudConnecting")
+                      : connected
+                        ? t("planner.disconnect")
+                        : t("planner.connect")
+                  }
                   onPress={() =>
                     connected ? handleCloudCalendarDisconnect(provider) : handleCloudCalendarConnect(provider)
                   }
                   disabled={isLoading}
-                  style={[styles.integrationBtn, isLoading && styles.integrationBtnDisabled]}
-                  activeOpacity={0.9}
-                >
-                  {isLoading ? <ActivityIndicator size="small" color={Colors.primaryViolet} /> : null}
-                  <Text style={styles.integrationBtnText}>
-                    {isLoading
-                      ? t("planner.cloudConnecting")
-                      : connected
-                        ? t("planner.disconnect")
-                        : t("planner.connect")}
-                  </Text>
-                  {!connected && !isLoading && (
-                    <Ionicons name="chevron-forward" size={18} color={Colors.primaryViolet} />
-                  )}
-                </TouchableOpacity>
+                  loading={isLoading}
+                />
               </React.Fragment>
             );
           })}
-        </View>
+        </Card>
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { padding: 20, paddingBottom: 40 },
-
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
-  headerPlaceholder: { width: 44 },
-
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 16,
-  },
-  title: { ...Typography.h2, color: Colors.textPrimary, marginBottom: 6 },
-  subtitle: { ...Typography.body, color: Colors.gray700, marginBottom: 14 },
-
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 10,
-  },
-  rowText: { flex: 1, paddingRight: 14 },
-  rowTitle: { ...Typography.body, color: Colors.textPrimary, marginBottom: 3, fontWeight: "600" },
-  rowSub: { ...Typography.caption, color: Colors.gray600 },
-
-  hr: { height: 1, backgroundColor: Colors.gray200, marginVertical: 12 },
-
-  integrationRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 10,
-  },
-  iconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
-  },
-  integrationContent: { flex: 1 },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 6,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 6,
-  },
-  statusText: { ...Typography.caption, fontWeight: "600" },
-
-  integrationBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: Colors.primaryViolet + "15",
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: Colors.primaryViolet + "40",
-  },
-  integrationBtnDisabled: {
-    backgroundColor: Colors.gray100,
-    borderColor: Colors.gray200,
-    opacity: 0.8,
-  },
-  integrationBtnText: {
-    ...Typography.button,
-    color: Colors.primaryViolet,
-    fontWeight: "600",
-  },
-
-  pickerRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 8,
-  },
-  pillOption: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: Colors.gray100,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  pillOptionActive: {
-    backgroundColor: Colors.primaryViolet + "18",
-    borderColor: Colors.primaryViolet + "50",
-  },
-  pillOptionText: {
-    ...Typography.caption,
-    color: Colors.gray700,
-    fontWeight: "500",
-  },
-  pillOptionTextActive: {
-    color: Colors.primaryViolet,
-    fontWeight: "600",
-  },
-  linkRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    gap: 12,
-  },
-  linkRowText: {
-    flex: 1,
-    ...Typography.body,
-    color: Colors.primaryViolet,
-    fontWeight: "500",
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { padding: theme.spacing.xl, paddingBottom: theme.spacing.huge },
+    card: {},
+    card2: { marginTop: theme.spacing.xl },
+    title: { ...theme.type.h2, fontFamily: theme.type.h2.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.xxs },
+    subtitle: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.md },
+    row: { paddingHorizontal: 0 },
+    rowTitle: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily, color: theme.colors.textPrimary, marginBottom: 3 },
+    rowSub: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary },
+    hr: { height: 1, backgroundColor: theme.colors.border, marginVertical: theme.spacing.md },
+    integrationRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      marginBottom: theme.spacing.sm,
+    },
+    iconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: theme.radii.sm,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: theme.spacing.md,
+    },
+    integrationContent: { flex: 1 },
+    statusRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: theme.spacing.xs,
+    },
+    statusDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      marginRight: theme.spacing.xs,
+    },
+    statusText: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, fontWeight: "600" },
+    pickerRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: theme.spacing.sm,
+      marginTop: theme.spacing.sm,
+    },
+  });
+}

@@ -2,17 +2,12 @@
 // Winkly – Account: Subscription plans (reads tier from Supabase; billing TBD)
 
 import React, { useCallback, useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-} from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { SafeScreenView } from "@/components/SafeScreenView";
+import { Card, Header, PrimaryButton, SecondaryButton, TextButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import {
   getSubscriptionStatus,
   purchase,
@@ -51,6 +46,8 @@ const UPGRADE_TIERS: Array<Exclude<SubscriptionTier, "free" | "enterprise">> = [
 
 export default function Subscription() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState<SubscriptionTier | null>(null);
@@ -89,28 +86,16 @@ export default function Subscription() {
   const currentCopy = PLAN_COPY[current];
 
   return (
-    <View style={styles.screen}>
+    <SafeScreenView style={styles.screen}>
+      <Header title="Subscription plans" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backBtn}
-            activeOpacity={0.9}
-            accessibilityLabel="Back"
-          >
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Subscription plans</Text>
-          <View style={{ width: 60 }} />
-        </View>
-
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <Text style={styles.title}>Your plan</Text>
           {loading ? (
-            <ActivityIndicator color={Colors.primaryViolet} style={{ marginVertical: 12 }} />
+            <ActivityIndicator color={theme.colors.primary} style={{ marginVertical: theme.spacing.md }} />
           ) : (
             <>
-              <View style={styles.planBox}>
+              <Card padding="md" elevation={0} style={styles.planBox}>
                 <Text style={styles.planName}>
                   {currentCopy.label}
                   {status?.isOnTrial ? " (Trial)" : ""}
@@ -122,11 +107,11 @@ export default function Subscription() {
                     {new Date(status.activeUntil).toLocaleDateString()}
                   </Text>
                 ) : null}
-              </View>
+              </Card>
 
               {status?.isOnTrial ? (
                 <View style={styles.trialBanner}>
-                  <Ionicons name="sparkles-outline" size={18} color={Colors.primaryViolet} />
+                  <Ionicons name="sparkles-outline" size={18} color={theme.colors.primary} />
                   <Text style={styles.trialText}>
                     Your free Premium trial — {trialDaysRemaining(status.activeUntil)} day
                     {trialDaysRemaining(status.activeUntil) === 1 ? "" : "s"} left. Subscribe to keep full
@@ -137,7 +122,7 @@ export default function Subscription() {
 
               {!status?.isBillingConfigured ? (
                 <View style={styles.comingSoonBanner}>
-                  <Ionicons name="information-circle-outline" size={18} color={Colors.gray700} />
+                  <Ionicons name="information-circle-outline" size={18} color={theme.colors.textSecondary} />
                   <Text style={styles.comingSoonText}>
                     Paid upgrades are coming soon. Plans below are for preview — no charges yet.
                   </Text>
@@ -158,153 +143,82 @@ export default function Subscription() {
                   <View key={tier} style={styles.planOption}>
                     <Text style={styles.planOptionTitle}>{copy.label}</Text>
                     <Text style={styles.planOptionSub}>{copy.description}</Text>
-                    <TouchableOpacity
+                    <PrimaryButton
+                      title={isCurrent ? "Current plan" : `Choose ${copy.label}`}
                       onPress={() => void onChoosePlan(tier)}
-                      style={[
-                        styles.primaryBtn,
-                        (disabled || isCurrent) && styles.primaryBtnDisabled,
-                      ]}
-                      activeOpacity={0.9}
                       disabled={disabled}
-                    >
-                      {purchasing === tier ? (
-                        <ActivityIndicator color={Colors.accentYellow} />
-                      ) : (
-                        <Text style={styles.primaryText}>
-                          {isCurrent ? "Current plan" : `Choose ${copy.label}`}
-                        </Text>
-                      )}
-                    </TouchableOpacity>
+                      loading={purchasing === tier}
+                    />
                   </View>
                 );
               })}
 
-              <TouchableOpacity
-                onPress={() => router.push("/account/payments")}
-                style={styles.secondaryBtn}
-                activeOpacity={0.9}
-              >
-                <Text style={styles.secondaryText}>Payment methods</Text>
-              </TouchableOpacity>
+              <SecondaryButton title="Payment methods" onPress={() => router.push("/account/payments")} style={styles.secondaryBtn} />
 
               {status?.isBillingConfigured ? (
-                <TouchableOpacity
+                <TextButton
+                  title="Manage subscription in store"
                   onPress={() => void openManageSubscriptions()}
                   style={styles.linkBtn}
-                  activeOpacity={0.9}
-                >
-                  <Text style={styles.linkText}>Manage subscription in store</Text>
-                </TouchableOpacity>
+                />
               ) : null}
             </>
           )}
-        </View>
+        </Card>
       </ScrollView>
-    </View>
+    </SafeScreenView>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { padding: 20, paddingBottom: 40 },
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    scroll: { padding: theme.spacing.xl, paddingBottom: theme.spacing.huge },
+    card: {},
+    title: { ...theme.type.h2, fontFamily: theme.type.h2.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.xxs },
 
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
+    planBox: { marginBottom: theme.spacing.md },
+    planName: { ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.xxs },
+    planText: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary },
+    activeUntil: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.sm },
 
-  card: {
-    backgroundColor: "#FFF",
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 16,
-  },
-  title: { ...Typography.h2, color: Colors.textPrimary, marginBottom: 6 },
+    comingSoonBanner: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: theme.spacing.sm,
+      backgroundColor: theme.colors.backgroundMuted,
+      borderRadius: theme.radii.sm,
+      padding: theme.spacing.md,
+      marginBottom: theme.spacing.md,
+    },
+    comingSoonText: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, flex: 1 },
 
-  planBox: {
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 14,
-    marginBottom: 14,
-  },
-  planName: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 4 },
-  planText: { ...Typography.body, color: Colors.gray700 },
-  activeUntil: { ...Typography.caption, color: Colors.gray600, marginTop: 8 },
+    trialBanner: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: theme.spacing.sm,
+      backgroundColor: theme.colors.primary + "12",
+      borderRadius: theme.radii.sm,
+      padding: theme.spacing.md,
+      marginBottom: theme.spacing.md,
+    },
+    trialText: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.primary, flex: 1 },
 
-  comingSoonBanner: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-    backgroundColor: Colors.gray100,
-    borderRadius: Layout.radii.control,
-    padding: 12,
-    marginBottom: 12,
-  },
-  comingSoonText: { ...Typography.caption, color: Colors.gray700, flex: 1, lineHeight: 18 },
+    notice: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.primary,
+      marginBottom: theme.spacing.md,
+      textAlign: "center",
+    },
 
-  trialBanner: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-    backgroundColor: "#F3ECFB",
-    borderRadius: Layout.radii.control,
-    padding: 12,
-    marginBottom: 12,
-  },
-  trialText: { ...Typography.caption, color: Colors.primaryViolet, flex: 1, lineHeight: 18 },
+    sectionTitle: { ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.md },
 
-  notice: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
-    marginBottom: 12,
-    textAlign: "center",
-  },
+    planOption: { marginBottom: theme.spacing.md },
+    planOptionTitle: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.xxs },
+    planOptionSub: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.sm },
 
-  sectionTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 12 },
-
-  planOption: { marginBottom: 14 },
-  planOptionTitle: { ...Typography.body, color: Colors.textPrimary, marginBottom: 4 },
-  planOptionSub: { ...Typography.caption, color: Colors.gray600, marginBottom: 10 },
-
-  primaryBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  primaryBtnDisabled: { opacity: 0.55 },
-  primaryText: { ...Typography.button, color: Colors.accentYellow },
-
-  secondaryBtn: {
-    backgroundColor: Colors.gray100,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    marginTop: 4,
-  },
-  secondaryText: { ...Typography.button, color: Colors.textPrimary },
-
-  linkBtn: { marginTop: 12, alignItems: "center" },
-  linkText: { ...Typography.caption, color: Colors.primaryViolet, textDecorationLine: "underline" },
-});
+    secondaryBtn: { marginTop: theme.spacing.xxs },
+    linkBtn: { marginTop: theme.spacing.md, alignSelf: "center" },
+  });
+}

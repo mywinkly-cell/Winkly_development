@@ -71,6 +71,12 @@ export function serializeCategoryExtras(extras: CategoryExtras): string {
   return lines.join("\n");
 }
 
+function nowLine(currentDateTimeLocal?: string, timezone?: string): string | null {
+  if (!currentDateTimeLocal?.trim()) return null;
+  const tzSuffix = timezone?.trim() ? ` (${timezone.trim()})` : "";
+  return `Current date & time (local${tzSuffix}): ${currentDateTimeLocal.trim()}. Every suggested plan start time MUST be strictly after this moment — never propose a date/time that has already passed.`;
+}
+
 function formatDateLine(dateFrom?: string, dateTo?: string, singleDay?: boolean): string {
   if (!dateFrom) return "Date: not specified.";
   if (singleDay !== false && (!dateTo || dateFrom === dateTo)) {
@@ -180,6 +186,10 @@ export type BuildPlanRequestTextInput = {
   travelFromOriginSummary?: string;
   /** When single-day: optional precise local time HH:mm (24h). */
   exactTimeHm?: string;
+  /** Requester's current local wall-clock date/time ("YYYY-MM-DDTHH:mm") — anchors "future only". */
+  currentDateTimeLocal?: string;
+  /** IANA timezone (e.g. "Europe/Berlin") matching currentDateTimeLocal. */
+  timezone?: string;
   dateFrom?: string;
   dateTo?: string;
   singleDay?: boolean;
@@ -272,6 +282,9 @@ export function buildPlanRequestText(i: BuildPlanRequestTextInput): string {
   lines.push(travel);
   if (venue) lines.push(venue);
 
+  const nowLn = nowLine(i.currentDateTimeLocal, i.timezone);
+  if (nowLn) lines.push(nowLn);
+
   lines.push(
     formatDateLine(i.dateFrom, i.dateTo, i.singleDay),
     timePreferenceLine(i.timePreference, i.availableSlots),
@@ -309,7 +322,7 @@ export function buildPlanRequestText(i: BuildPlanRequestTextInput): string {
   lines.push(modeLine(i));
 
   lines.push(
-    "Constraints — verify together before finalizing options: (1) Date and time fit the user’s request. (2) Weather suits the activity (e.g. move outdoor plans indoor if rain/wind). (3) Venue opening hours must contain the requested arrival time — avoid proposing arrival near closing (e.g. <45 min before stated closing) unless the user asked for a short visit. (4) If anything conflicts, say so and suggest a concrete adjustment (different time, day, or venue).",
+    "Constraints — verify together before finalizing options: (1) Date and time fit the user’s request AND every start time is strictly in the future relative to the current date/time given above — a past or already-elapsed slot is never acceptable, even for \"today\". (2) Weather suits the activity (e.g. move outdoor plans indoor if rain/wind). (3) Venue opening hours must contain the requested arrival time — avoid proposing arrival near closing (e.g. <45 min before stated closing) unless the user asked for a short visit. (4) If anything conflicts, say so and suggest a concrete adjustment (different time, day, or venue).",
     'Output: suggest exactly three concrete plan options as JSON in the required schema. For EACH option include fields aligned with: Topic/activity; Place (city/country OR full address); Name of place; Google Maps link when a real place is named; opening hours when known; date/time; how requested time compares to hours; budget; weather fit; sanitized planning notes; links to official booking or tickets when known (never fabricate URLs). If a constraint cannot be satisfied, explain and offer alternatives.',
   );
 

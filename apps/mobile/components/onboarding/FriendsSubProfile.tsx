@@ -105,10 +105,17 @@ export function FriendsSubProfile(props: {
   toggleMulti: (arr: string[], val: string, setter: (v: string[]) => void, max: number) => void;
   onPetsToggle?: (v: string) => void;
   hideToggle?: boolean;
+  /** When set, only that section's fields render (used by the onboarding wizard's short steps). Omit to render everything (edit flow). */
+  section?: "photosBio" | "details" | "goals";
+  /** When rendering a single section for the wizard, hide the repeated "👥 Friends" header row. */
+  hideHeader?: boolean;
 }) {
-  const { enabled, toggle, photos, onPickPhoto, video, onPickVideo, bio, onBioChange, hideToggle } = props;
+  const { enabled, toggle, photos, onPickPhoto, video, onPickVideo, bio, onBioChange, hideToggle, section, hideHeader } = props;
   const { lifestyle, onLifestyleChange, alcohol, onAlcoholChange, smoking, onSmokingChange } = props;
   const { meetupGoals, onMeetupGoalsChange, status, onStatusChange, kids, onKidsChange, pets, onPetsChange, food, onFoodChange, toggleMulti, onPetsToggle } = props;
+  const showPhotosBio = !section || section === "photosBio";
+  const showDetails = !section || section === "details";
+  const showGoals = !section || section === "goals";
 
   if (!enabled) {
     return (
@@ -123,11 +130,15 @@ export function FriendsSubProfile(props: {
 
   return (
     <View style={{ marginBottom: 28 }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>👥 Friends</Text>
-        {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />}
-      </View>
+      {!hideHeader && (
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>👥 Friends</Text>
+          {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />}
+        </View>
+      )}
 
+      {showPhotosBio && (
+      <>
       <Text style={label}>Photos <Text style={requiredMark}>*</Text></Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 16 }}>
         {photos.map((p, i) => {
@@ -165,13 +176,14 @@ export function FriendsSubProfile(props: {
 
       <Text style={label}>Bio <Text style={requiredMark}>*</Text></Text>
       <TextInput placeholder="What kind of friendships do you enjoy?" value={bio} onChangeText={onBioChange} multiline style={[inputStyle, { height: 100, textAlignVertical: "top" }]} placeholderTextColor={Colors.gray500} />
+      </>
+      )}
 
+      {showDetails && (
+      <>
       <SingleSelect options={LIFESTYLE_ROMANCE} selected={lifestyle} onSelect={onLifestyleChange} label="Lifestyle" />
       <SingleSelect options={ALCOHOL_OPTIONS} selected={alcohol} onSelect={onAlcoholChange} label="Alcohol" />
       <SingleSelect options={SMOKING_OPTIONS} selected={smoking} onSelect={onSmokingChange} label="Smoking" />
-      <Text style={label}>Meetup goals (up to 3) <Text style={requiredMark}>*</Text></Text>
-      <ChipSelect options={MEETUP_GOALS_OPTIONS} selected={meetupGoals} onToggle={(v) => toggleMulti(meetupGoals, v, onMeetupGoalsChange, 3)} />
-      <SingleSelect options={STATUS_OPTIONS} selected={status} onSelect={onStatusChange} label="Status" />
       <SingleSelect options={KIDS_FRIENDS_OPTIONS} selected={kids} onSelect={onKidsChange} label="Kids" />
       <Text style={label}>Pets (up to 2)</Text>
       <ChipSelect
@@ -182,6 +194,16 @@ export function FriendsSubProfile(props: {
         exclusiveOption="No pets"
       />
       <SingleSelect options={FOOD_OPTIONS} selected={food} onSelect={onFoodChange} label="Food habits" />
+      </>
+      )}
+
+      {showGoals && (
+      <>
+      <Text style={label}>Meetup goals (up to 3) <Text style={requiredMark}>*</Text></Text>
+      <ChipSelect options={MEETUP_GOALS_OPTIONS} selected={meetupGoals} onToggle={(v) => toggleMulti(meetupGoals, v, onMeetupGoalsChange, 3)} />
+      <SingleSelect options={STATUS_OPTIONS} selected={status} onSelect={onStatusChange} label="Status" />
+      </>
+      )}
     </View>
   );
 }

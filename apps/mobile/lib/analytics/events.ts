@@ -81,7 +81,7 @@ export function trackOnboardingCompleted(p: { account_type: string }): void {
 }
 
 export function trackOnboardingSubProfileSkipped(p: {
-  skipped_mode: "romance" | "friends" | "business";
+  skipped_mode: "romance" | "friends" | "business" | "none";
   onboarding_step: number;
 }): void {
   track(AnalyticsEvents.OnboardingSubProfileSkipped, { ...p });

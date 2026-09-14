@@ -1,12 +1,13 @@
 // app/account/profile-settings.tsx
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator, StyleSheet } from "react-native";
+import { Text, ScrollView, Alert, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/providers";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { SafeScreenView } from "@/components/SafeScreenView";
+import { Card, Header, ListRow, PrimaryButton, SecondaryButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import type { AccountType } from "@/types";
 import {
   accountTypeActionVerb,
@@ -19,6 +20,8 @@ import {
 export default function ProfileSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const { user, accountType } = useAuth();
   const [switching, setSwitching] = useState(false);
   const [profileStatus, setProfileStatus] = useState<AccountProfileStatus | null>(null);
@@ -47,8 +50,7 @@ export default function ProfileSettingsScreen() {
 
   const handleSwitchAccountType = async () => {
     if (!user?.id) return;
-    const targetLabel =
-      target === "personal" ? t("auth.accountTypePersonal") : t("auth.accountTypeBusiness");
+    const targetLabel = target === "personal" ? t("auth.accountTypePersonal") : t("auth.accountTypeBusiness");
     const title =
       verb === "create"
         ? t("auth.createAccountTypeTitle", { type: targetLabel })
@@ -81,164 +83,60 @@ export default function ProfileSettingsScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
-      {/* Simple header (no dependency on your custom Header to avoid breaking anything) */}
-      <View
-        style={{
-          paddingHorizontal: 16,
-          paddingTop: 12,
-          paddingBottom: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          activeOpacity={0.9}
-          accessibilityLabel="Back"
-        >
-          <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
-        </TouchableOpacity>
+    <SafeScreenView style={styles.screen}>
+      <Header title="Profile Settings" onBack={() => router.back()} />
 
-        <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>
-          Profile Settings
-        </Text>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <Card style={styles.card}>
+          <Text style={styles.cardTitle}>Core profile</Text>
+          <Text style={styles.cardSubtitle}>Name, photos, bio, location, languages</Text>
+          <PrimaryButton title="Open Core Profile" onPress={() => router.push("/profile")} style={styles.actionBtn} />
+        </Card>
 
-        <View style={{ width: 36 }} />
-      </View>
+        <Card style={styles.card}>
+          <Text style={styles.cardTitle}>Sub-profiles</Text>
+          <Text style={styles.cardSubtitle}>Friends & Business preferences, interests, goals</Text>
+          <SecondaryButton title="Manage Sub-profiles (placeholder)" onPress={() => router.push("/profile")} style={styles.actionBtn} />
+        </Card>
 
-      <ScrollView
-        contentContainerStyle={{
-          padding: 20,
-          paddingBottom: 40,
-        }}
-      >
-        {/* Core profile */}
-        <View
-          style={{
-            backgroundColor: "#FFF",
-            borderRadius: Layout.radii.card,
-            padding: 16,
-            marginBottom: 12,
-          }}
-        >
-          <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>
-            Core profile
-          </Text>
-          <Text style={{ ...Typography.caption, color: Colors.gray700, marginTop: 4 }}>
-            Name, photos, bio, location, languages
-          </Text>
-
-          <TouchableOpacity
-            onPress={() => router.push("/profile")}
-            style={{
-              marginTop: 12,
-              borderRadius: Layout.radii.control,
-              paddingVertical: 12,
-              alignItems: "center",
-              backgroundColor: Colors.primaryViolet,
-            }}
-          >
-            <Text style={{ ...Typography.button, color: "#FFF" }}>
-              Open Core Profile
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Sub-profiles */}
-        <View
-          style={{
-            backgroundColor: "#FFF",
-            borderRadius: Layout.radii.card,
-            padding: 16,
-            marginBottom: 12,
-          }}
-        >
-          <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>
-            Sub-profiles
-          </Text>
-          <Text style={{ ...Typography.caption, color: Colors.gray700, marginTop: 4 }}>
-            Friends & Business preferences, interests, goals
-          </Text>
-
-          {/* These routes are placeholders — keep minimal and safe.
-              If you already have specific routes, tell me and I’ll point exactly there. */}
-          <TouchableOpacity
-            onPress={() => router.push("/profile")}
-            style={{
-              marginTop: 12,
-              borderRadius: Layout.radii.control,
-              paddingVertical: 12,
-              alignItems: "center",
-              backgroundColor: Colors.gray100,
-            }}
-          >
-            <Text style={{ ...Typography.button, color: Colors.textPrimary }}>
-              Manage Sub-profiles (placeholder)
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Account actions */}
-        <View
-          style={{
-            backgroundColor: "#FFF",
-            borderRadius: Layout.radii.card,
-            padding: 16,
-          }}
-        >
-          <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>
-            Account
-          </Text>
-
-          <TouchableOpacity
-            onPress={() => router.push("/account")}
-            style={{ paddingVertical: 12 }}
-          >
-            <Text style={{ ...Typography.body, color: Colors.primaryViolet }}>
-              Open Account Hub
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
+        <Card padding="none" style={styles.card}>
+          <Text style={{ ...styles.cardTitle, padding: theme.spacing.lg, paddingBottom: 0 }}>Account</Text>
+          <ListRow title="Open Account Hub" onPress={() => router.push("/account")} style={styles.row} />
+          <ListRow
+            title={switchLabel}
             onPress={handleSwitchAccountType}
             disabled={switching}
-            style={{ paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
-          >
-            <Text style={{ ...Typography.body, color: Colors.primaryViolet }}>
-              {switchLabel}
-            </Text>
-            {switching && <ActivityIndicator size="small" color={Colors.primaryViolet} />}
-          </TouchableOpacity>
-
-          <TouchableOpacity
+            style={styles.row}
+          />
+          <ListRow
+            title="Delete / Deactivate"
+            destructive
             onPress={() => router.push("/account/delete-deactivate")}
-            style={{ paddingVertical: 12 }}
-          >
-            <Text style={{ ...Typography.body, color: Colors.accentCoral }}>
-              Delete / Deactivate
-            </Text>
-          </TouchableOpacity>
-        </View>
+            style={styles.row}
+          />
+        </Card>
       </ScrollView>
-    </View>
+    </SafeScreenView>
   );
 }
 
-const styles = StyleSheet.create({
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    scroll: { padding: theme.spacing.xl, paddingBottom: theme.spacing.huge },
+    card: { marginBottom: theme.spacing.md, overflow: "hidden" },
+    cardTitle: {
+      ...theme.type.h3,
+      fontFamily: theme.type.h3.fontFamily,
+      color: theme.colors.textPrimary,
+    },
+    cardSubtitle: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.xxs,
+    },
+    actionBtn: { marginTop: theme.spacing.md },
+    row: { paddingHorizontal: theme.spacing.lg },
+  });
+}

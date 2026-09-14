@@ -5,11 +5,15 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert } from "react-native";
 import { useRouter } from "expo-router";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { createWishlistItem } from "@/lib/wishlistStore";
+
+type Styles = ReturnType<typeof createStyles>;
 
 export default function WishlistCreate() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -40,47 +44,47 @@ export default function WishlistCreate() {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Header title="New wishlist item" onBack={() => router.back()} onSave={onSave} />
+        <Header title="New wishlist item" onBack={() => router.back()} onSave={onSave} theme={theme} styles={styles} />
 
         <View style={styles.card}>
           <Text style={styles.title}>Add an idea</Text>
           <Text style={styles.subtitle}>Keep it short and clear — you can refine later.</Text>
 
-          <Label text="Title" />
+          <Label text="Title" styles={styles} />
           <TextInput
             value={title}
             onChangeText={setTitle}
             placeholder="e.g. Tennis racket"
-            placeholderTextColor={Colors.gray500}
+            placeholderTextColor={theme.colors.textMuted}
             style={styles.input}
           />
 
-          <Label text="Description (optional)" />
+          <Label text="Description (optional)" styles={styles} />
           <TextInput
             value={description}
             onChangeText={setDescription}
             placeholder="Why you want it, size, color…"
-            placeholderTextColor={Colors.gray500}
+            placeholderTextColor={theme.colors.textMuted}
             style={[styles.input, { minHeight: 110, textAlignVertical: "top" }]}
             multiline
           />
 
-          <Label text="Link (optional)" />
+          <Label text="Link (optional)" styles={styles} />
           <TextInput
             value={url}
             onChangeText={setUrl}
             placeholder="https://…"
-            placeholderTextColor={Colors.gray500}
+            placeholderTextColor={theme.colors.textMuted}
             autoCapitalize="none"
             style={styles.input}
           />
 
-          <Label text="Price (optional)" />
+          <Label text="Price (optional)" styles={styles} />
           <TextInput
             value={price}
             onChangeText={setPrice}
             placeholder="e.g. €120"
-            placeholderTextColor={Colors.gray500}
+            placeholderTextColor={theme.colors.textMuted}
             style={styles.input}
           />
 
@@ -102,11 +106,11 @@ export default function WishlistCreate() {
   );
 }
 
-function Header({ title, onBack, onSave }: { title: string; onBack: () => void; onSave: () => void }) {
+function Header({ title, onBack, onSave, theme, styles }: { title: string; onBack: () => void; onSave: () => void; theme: AppTheme; styles: Styles }) {
   return (
     <View style={styles.headerRow}>
       <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
-        <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+        <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
       </TouchableOpacity>
       <Text style={styles.headerTitle}>{title}</Text>
       <TouchableOpacity onPress={onSave} style={styles.saveBtn} activeOpacity={0.9}>
@@ -116,67 +120,65 @@ function Header({ title, onBack, onSave }: { title: string; onBack: () => void; 
   );
 }
 
-function Label({ text }: { text: string }) {
+function Label({ text, styles }: { text: string; styles: Styles }) {
   return <Text style={styles.label}>{text}</Text>;
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { padding: 20, paddingBottom: 40 },
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { padding: 20, paddingBottom: 40 },
 
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
-  saveBtn: { width: 70, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.primaryViolet, alignItems: "center" },
-  saveText: { ...Typography.caption, color: Colors.accentYellow },
+    headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+    backBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+      ...theme.elevation(1),
+    },
+    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary },
+    saveBtn: { width: 70, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.colors.primary, alignItems: "center" },
+    saveText: { ...theme.type.caption, color: theme.colors.onPrimary },
 
-  card: { backgroundColor: "#FFF", borderRadius: Layout.radii.card, borderWidth: 1, borderColor: Colors.gray200, padding: 16 },
-  title: { ...Typography.h2, color: Colors.textPrimary, marginBottom: 6 },
-  subtitle: { ...Typography.body, color: Colors.gray700, marginBottom: 14 },
+    card: { backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.border, padding: 16 },
+    title: { ...theme.type.h2, color: theme.colors.textPrimary, marginBottom: 6 },
+    subtitle: { ...theme.type.body, color: theme.colors.textSecondary, marginBottom: 14 },
 
-  label: { ...Typography.caption, color: Colors.gray600, marginBottom: 6 },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.gray300,
-    borderRadius: Layout.radii.control,
-    backgroundColor: "#FFF",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: Colors.textPrimary,
-    marginBottom: 12,
-  },
+    label: { ...theme.type.caption, color: theme.colors.textSecondary, marginBottom: 6 },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surface,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: theme.colors.textPrimary,
+      marginBottom: 12,
+    },
 
-  primaryBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    alignItems: "center",
-    marginTop: 4,
-  },
-  primaryText: { ...Typography.button, color: Colors.accentYellow },
+    primaryBtn: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.radii.md,
+      paddingVertical: 12,
+      alignItems: "center",
+      marginTop: 4,
+    },
+    primaryText: { ...theme.type.button, color: theme.colors.onPrimary },
 
-  secondaryBtn: {
-    backgroundColor: Colors.gray100,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    marginTop: 10,
-  },
-  secondaryText: { ...Typography.button, color: Colors.textPrimary },
+    secondaryBtn: {
+      backgroundColor: theme.colors.backgroundMuted,
+      borderRadius: theme.radii.md,
+      paddingVertical: 12,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      marginTop: 10,
+    },
+    secondaryText: { ...theme.type.button, color: theme.colors.textPrimary },
 
-  note: { ...Typography.caption, color: Colors.gray600, textAlign: "center", marginTop: 12 },
-});
+    note: { ...theme.type.caption, color: theme.colors.textSecondary, textAlign: "center", marginTop: 12 },
+  });
+}

@@ -1,7 +1,6 @@
 import React from "react";
 import { View, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors } from "@/constants/tokens";
 import { HIT_SLOP } from "@/constants/a11y";
 
 const ACTION_BUTTON_SIZE = 64;
