@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout, FontFamily, HEADER, Shadow } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { PROFILE_INVITE_LABEL } from "@/lib/profile/profilePlanInvite";
 import type { Mode } from "@/types";
 
@@ -15,6 +15,9 @@ type Props = {
   onPlannerPress?: () => void;
 };
 
+const ICON_SIZE = 24;
+const BUTTON_SIZE = 44;
+
 export function ProfileViewHeader({
   onBack,
   rightSlot = "planner",
@@ -22,12 +25,14 @@ export function ProfileViewHeader({
   onMenuPress,
   onPlannerPress,
 }: Props) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const inviteLabel = PROFILE_INVITE_LABEL[mode];
 
   return (
     <View style={styles.container}>
       <TouchableOpacity onPress={onBack} style={styles.iconBtn} activeOpacity={0.8} accessibilityLabel="Go back">
-        <Ionicons name="arrow-back" size={HEADER.iconSize} color={Colors.textPrimary} />
+        <Ionicons name="arrow-back" size={ICON_SIZE} color={theme.colors.textPrimary} />
       </TouchableOpacity>
 
       <View style={styles.centerTitleWrap}>
@@ -41,7 +46,7 @@ export function ProfileViewHeader({
           activeOpacity={0.8}
           accessibilityLabel={inviteLabel}
         >
-          <Ionicons name="calendar-outline" size={HEADER.iconSize} color={Colors.primaryViolet} />
+          <Ionicons name="calendar-outline" size={ICON_SIZE} color={theme.colors.primary} />
         </TouchableOpacity>
       ) : rightSlot === "menu" ? (
         <TouchableOpacity
@@ -50,7 +55,7 @@ export function ProfileViewHeader({
           activeOpacity={0.8}
           accessibilityLabel="More options"
         >
-          <Ionicons name="ellipsis-vertical" size={HEADER.iconSize} color={Colors.textPrimary} />
+          <Ionicons name="ellipsis-vertical" size={ICON_SIZE} color={theme.colors.textPrimary} />
         </TouchableOpacity>
       ) : (
         <View style={styles.placeholder} />
@@ -59,39 +64,43 @@ export function ProfileViewHeader({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Layout.screenPadding,
-    ...Layout.topHeaderBar,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-    ...Shadow.card,
-  },
-  iconBtn: {
-    width: HEADER.buttonSize,
-    height: HEADER.buttonSize,
-    borderRadius: HEADER.buttonRadius,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  placeholder: {
-    width: HEADER.buttonSize,
-    height: HEADER.buttonSize,
-  },
-  centerTitleWrap: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  centerTitle: {
-    ...Typography.headerWinklyTitle,
-    fontFamily: FontFamily.headingBold,
-    color: Colors.primaryViolet,
-    textAlign: "center",
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: theme.spacing.xl,
+      paddingTop: theme.spacing.sm,
+      paddingBottom: theme.spacing.md,
+      minHeight: 56,
+      backgroundColor: theme.colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      ...theme.elevation(1),
+    },
+    iconBtn: {
+      width: BUTTON_SIZE,
+      height: BUTTON_SIZE,
+      borderRadius: theme.radii.pill,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    placeholder: {
+      width: BUTTON_SIZE,
+      height: BUTTON_SIZE,
+    },
+    centerTitleWrap: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    centerTitle: {
+      ...theme.type.h2,
+      fontFamily: theme.type.h2.fontFamily,
+      color: theme.colors.primary,
+      textAlign: "center",
+    },
+  });
+}

@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { interestEmoji } from "@/constants/interestCategories";
 import { ProfilePhotoCarousel } from "@/components/profile/ProfilePhotoCarousel";
@@ -32,7 +32,7 @@ type ModeProfilePublicViewProps = {
   modeColor?: string;
 };
 
-function metaLine(label: string, value: string | null | undefined) {
+function metaLine(label: string, value: string | null | undefined, styles: ReturnType<typeof createStyles>) {
   const v = (value ?? "").trim();
   if (!v) return null;
   return (
@@ -52,12 +52,14 @@ function metaChips(title: string, items: string[]) {
   );
 }
 
-const MODE_COLORS: Record<PublicProfileMode, string> = {
-  romance: Colors.romance.primary,
-  friends: Colors.friends.primary,
-  business: Colors.business.primary,
-  events: Colors.events.primary,
-};
+function modeColors(theme: AppTheme): Record<PublicProfileMode, string> {
+  return {
+    romance: theme.modeAccent("romance").primary,
+    friends: theme.modeAccent("friends").primary,
+    business: theme.modeAccent("business").primary,
+    events: theme.modeAccent("events").primary,
+  };
+}
 
 /**
  * Canonical public profile body — must match the owner's `/profile/view-profile`
@@ -73,7 +75,9 @@ export function ModeProfilePublicView({
   aboutYouExtra,
   modeColor,
 }: ModeProfilePublicViewProps) {
-  const borderColor = (modeColor ?? MODE_COLORS[mode]) + "40";
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
+  const borderColor = (modeColor ?? modeColors(theme)[mode]) + "40";
   const displayName = displayNameForPublicModeProfile(mode, core);
   const age = ageForPublicCoreProfile(core);
   const city = core.city ? normalizeLocationDisplayString(core.city, locale) : "";
@@ -137,7 +141,7 @@ export function ModeProfilePublicView({
               </Text>
             ) : null}
             {core.interests.length > 0 ? (
-              <View style={{ marginTop: 10 }}>
+              <View style={{ marginTop: theme.spacing.md }}>
                 <Text style={styles.subheading}>Interests</Text>
                 <View style={styles.interestRow}>
                   {core.interests.map((it) => (
@@ -150,7 +154,7 @@ export function ModeProfilePublicView({
               </View>
             ) : null}
             {core.instagram ? (
-              <View style={{ marginTop: 12 }}>
+              <View style={{ marginTop: theme.spacing.md }}>
                 <ProfileInstagramLink handle={core.instagram} />
               </View>
             ) : null}
@@ -168,7 +172,7 @@ export function ModeProfilePublicView({
               <Text style={styles.bodyLine}>Languages: {core.languages.join(", ")}</Text>
             ) : null}
             {core.instagram ? (
-              <View style={{ marginTop: 12 }}>
+              <View style={{ marginTop: theme.spacing.md }}>
                 <ProfileInstagramLink handle={core.instagram} />
               </View>
             ) : null}
@@ -184,16 +188,16 @@ export function ModeProfilePublicView({
               <Text style={styles.emptyHint}>No romance bio yet.</Text>
             )}
             {metaChips("Relationship goals", metaStringArray(activeMeta, "relationship_goals"))}
-            {metaLine("Height", String(activeMeta.height ?? ""))}
-            {metaLine("Weight", String(activeMeta.weight ?? ""))}
-            {metaLine("Lifestyle", String(activeMeta.lifestyle ?? ""))}
-            {metaLine("Smoking", String(activeMeta.smoking ?? ""))}
-            {metaLine("Alcohol", String(activeMeta.alcohol ?? ""))}
-            {metaLine("Kids", String(activeMeta.kids ?? ""))}
-            {metaLine("Sexual orientation", String(activeMeta.sexual_views ?? ""))}
-            {metaLine("Religion", String(activeMeta.religion ?? ""))}
-            {metaLine("Political views", String(activeMeta.political_views ?? ""))}
-            {metaLine("Food habits", String(activeMeta.food ?? ""))}
+            {metaLine("Height", String(activeMeta.height ?? ""), styles)}
+            {metaLine("Weight", String(activeMeta.weight ?? ""), styles)}
+            {metaLine("Lifestyle", String(activeMeta.lifestyle ?? ""), styles)}
+            {metaLine("Smoking", String(activeMeta.smoking ?? ""), styles)}
+            {metaLine("Alcohol", String(activeMeta.alcohol ?? ""), styles)}
+            {metaLine("Kids", String(activeMeta.kids ?? ""), styles)}
+            {metaLine("Sexual orientation", String(activeMeta.sexual_views ?? ""), styles)}
+            {metaLine("Religion", String(activeMeta.religion ?? ""), styles)}
+            {metaLine("Political views", String(activeMeta.political_views ?? ""), styles)}
+            {metaLine("Food habits", String(activeMeta.food ?? ""), styles)}
             {metaChips("Values", metaStringArray(activeMeta, "values"))}
             {metaChips("Pets", metaStringArray(activeMeta, "pets"))}
             {metaChips("Lifestyle tags", modeRow.lifestyle_tags)}
@@ -210,12 +214,12 @@ export function ModeProfilePublicView({
             )}
             {metaChips("Meetup goals", metaStringArray(activeMeta, "meetup_goals"))}
             {metaChips("Vibe tags", metaStringArray(activeMeta, "vibe_tags"))}
-            {metaLine("Lifestyle", String(activeMeta.lifestyle ?? ""))}
-            {metaLine("Alcohol", String(activeMeta.alcohol ?? ""))}
-            {metaLine("Smoking", String(activeMeta.smoking ?? ""))}
-            {metaLine("Status", String(activeMeta.status ?? ""))}
-            {metaLine("Kids", String(activeMeta.kids ?? ""))}
-            {metaLine("Food habits", String(activeMeta.food ?? ""))}
+            {metaLine("Lifestyle", String(activeMeta.lifestyle ?? ""), styles)}
+            {metaLine("Alcohol", String(activeMeta.alcohol ?? ""), styles)}
+            {metaLine("Smoking", String(activeMeta.smoking ?? ""), styles)}
+            {metaLine("Status", String(activeMeta.status ?? ""), styles)}
+            {metaLine("Kids", String(activeMeta.kids ?? ""), styles)}
+            {metaLine("Food habits", String(activeMeta.food ?? ""), styles)}
             {metaChips("Pets", metaStringArray(activeMeta, "pets"))}
           </>
         ) : null}
@@ -228,14 +232,14 @@ export function ModeProfilePublicView({
             ) : (
               <Text style={styles.emptyHint}>No business bio yet.</Text>
             )}
-            {metaLine("Role", String(activeMeta.role ?? ""))}
-            {metaLine("Company", String(activeMeta.company ?? ""))}
-            {metaLine("Industry", String(activeMeta.area ?? ""))}
+            {metaLine("Role", String(activeMeta.role ?? ""), styles)}
+            {metaLine("Company", String(activeMeta.company ?? ""), styles)}
+            {metaLine("Industry", String(activeMeta.area ?? ""), styles)}
             {metaChips("Networking goals", metaStringArray(activeMeta, "networking_goals"))}
             {metaChips("Skills", metaStringArray(activeMeta, "skills"))}
             {metaChips("Professional interests", modeRow.interests)}
             {String(activeMeta.instagram ?? "").trim() ? (
-              <View style={{ marginTop: 12 }}>
+              <View style={{ marginTop: theme.spacing.md }}>
                 <ProfileSection title="Instagram (business)">
                   <ProfileInstagramLink handle={String(activeMeta.instagram)} />
                 </ProfileSection>
@@ -254,80 +258,87 @@ export function ModeProfilePublicView({
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    marginHorizontal: 20,
-    marginTop: 16,
-    padding: 16,
-    borderRadius: Layout.radii.card,
-    backgroundColor: Colors.white,
-    borderWidth: 2,
-  },
-  nameRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 8,
-    marginBottom: 4,
-  },
-  nameBlock: { flex: 1 },
-  nameAge: {
-    ...Typography.h2,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
-  },
-  privacyHint: { ...Typography.caption, color: Colors.gray500, marginTop: 4 },
-  meta: { ...Typography.body, color: Colors.gray600, marginBottom: 4 },
-  sectionTitle: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  sectionGap: { marginTop: 16 },
-  subheading: {
-    ...Typography.caption,
-    fontWeight: "700",
-    color: Colors.gray700,
-    marginBottom: 6,
-  },
-  body: { ...Typography.body, color: Colors.gray700, lineHeight: 22 },
-  bodyLine: { ...Typography.body, color: Colors.gray700, lineHeight: 22, marginBottom: 4 },
-  emptyHint: { ...Typography.caption, color: Colors.gray500 },
-  eventsNote: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    fontStyle: "italic",
-  },
-  metaRow: {
-    flexDirection: "row",
-    marginTop: 8,
-    gap: 10,
-  },
-  metaLabel: {
-    ...Typography.caption,
-    color: Colors.gray500,
-    width: 120,
-  },
-  metaValue: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    flex: 1,
-  },
-  interestRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  interestChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 16,
-    backgroundColor: Colors.gray100,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  interestEmoji: { fontSize: 14, marginRight: 4 },
-  interestText: { ...Typography.caption, color: Colors.textPrimary },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    card: {
+      marginHorizontal: theme.spacing.xl,
+      marginTop: theme.spacing.lg,
+      padding: theme.spacing.lg,
+      borderRadius: theme.radii.lg,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 2,
+    },
+    nameRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: theme.spacing.sm,
+      marginBottom: theme.spacing.xxs,
+    },
+    nameBlock: { flex: 1 },
+    nameAge: {
+      ...theme.type.h2,
+      fontFamily: theme.type.h2.fontFamily,
+      color: theme.colors.textPrimary,
+    },
+    privacyHint: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textMuted, marginTop: theme.spacing.xxs },
+    meta: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.xxs },
+    sectionTitle: {
+      ...theme.type.h3,
+      fontFamily: theme.type.h3.fontFamily,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.sm,
+    },
+    sectionGap: { marginTop: theme.spacing.lg },
+    subheading: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontWeight: "700",
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.xs,
+    },
+    body: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary },
+    bodyLine: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.xxs },
+    emptyHint: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textMuted },
+    eventsNote: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      fontStyle: "italic",
+    },
+    metaRow: {
+      flexDirection: "row",
+      marginTop: theme.spacing.sm,
+      gap: theme.spacing.sm,
+    },
+    metaLabel: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textMuted,
+      width: 120,
+    },
+    metaValue: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textPrimary,
+      flex: 1,
+    },
+    interestRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: theme.spacing.sm,
+    },
+    interestChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: theme.spacing.xs,
+      paddingHorizontal: theme.spacing.sm,
+      borderRadius: theme.radii.pill,
+      backgroundColor: theme.colors.backgroundMuted,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    interestEmoji: { fontSize: 14, marginRight: theme.spacing.xxs },
+    interestText: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textPrimary },
+  });
+}

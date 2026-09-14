@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
   ActivityIndicator,
   Alert,
@@ -12,7 +12,8 @@ import {
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { ModeHeader } from "@/components/layout/ModeHeader";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Card, Chip, PrimaryButton, SecondaryButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import {
   getBusinessFilters,
   applyBusinessFiltersToFeed,
@@ -54,6 +55,8 @@ function asString(v: unknown) {
 
 export default function BusinessDiscover() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const params = useLocalSearchParams<{ company_id?: string }>();
 
   const [query, setQuery] = useState("");
@@ -278,8 +281,8 @@ export default function BusinessDiscover() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      <View style={[styles.screen, { flex: 1, backgroundColor: Colors.background }]}>
+    <View style={styles.screen}>
+      <View style={{ flex: 1 }}>
       <ModeHeader
         currentMode="business"
         rightSlot="filters"
@@ -287,20 +290,19 @@ export default function BusinessDiscover() {
       />
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.title, Typography.h2]}>Discover</Text>
-        <TouchableOpacity
+        <Text style={styles.title}>Discover</Text>
+        <Pressable
           onPress={() => router.push("/(modes)/business/planner")}
-          style={[styles.pill, { backgroundColor: Colors.card }]}
-          activeOpacity={0.9}
+          style={styles.pill}
         >
-          <Text style={[styles.pillText, { color: Colors.text }]}>Planner</Text>
-        </TouchableOpacity>
+          <Text style={styles.pillText}>Planner</Text>
+        </Pressable>
       </View>
 
       <DiscoverModeToggle
         value={viewMode}
         onChange={setViewMode}
-        primaryColor={Colors.business.primary}
+        primaryColor={theme.modeAccent("business").primary}
         allLabel="See all"
         allCount={filtered.length}
       />
@@ -310,7 +312,7 @@ export default function BusinessDiscover() {
           <TopPicksSection
             picks={topPicks}
             loading={loading}
-            primaryColor={Colors.business.primary}
+            primaryColor={theme.modeAccent("business").primary}
             subheading="A few people worth reaching out to — picked so you don't have to scroll."
             emptyText="No people to pick from yet. Tap See all to browse the full directory."
             placeholderEmoji="💼"
@@ -325,22 +327,22 @@ export default function BusinessDiscover() {
         <>
       {/* Search */}
       <View style={styles.searchRow}>
-        <View style={[styles.searchBox, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-          <Text style={[styles.searchIcon, { color: Colors.mutedText }]}>⌕</Text>
+        <View style={styles.searchBox}>
+          <Text style={styles.searchIcon}>⌕</Text>
           <TextInput
             value={query}
             onChangeText={setQuery}
             placeholder={hint}
-            placeholderTextColor={Colors.mutedText}
-            style={[styles.searchInput, { color: Colors.text }]}
+            placeholderTextColor={theme.colors.textMuted}
+            style={styles.searchInput}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
           />
           {!!query && (
-            <TouchableOpacity onPress={() => setQuery("")} style={styles.clearBtn}>
-              <Text style={{ color: Colors.mutedText }}>✕</Text>
-            </TouchableOpacity>
+            <Pressable onPress={() => setQuery("")} style={styles.clearBtn}>
+              <Text style={{ color: theme.colors.textMuted }}>✕</Text>
+            </Pressable>
           )}
         </View>
       </View>
@@ -351,43 +353,35 @@ export default function BusinessDiscover() {
           const active = activeType === t;
           const label = t === "all" ? "All" : t === "person" ? "People" : t === "company" ? "Companies" : "Services";
           return (
-            <TouchableOpacity
+            <Chip
               key={t}
+              label={label}
+              mode="business"
+              selected={active}
               onPress={() => setActiveType(t)}
-              style={[
-                styles.filterChip,
-                { backgroundColor: active ? Colors.primary : Colors.card, borderColor: Colors.border },
-              ]}
-              activeOpacity={0.9}
-            >
-              <Text style={{ color: active ? Colors.onPrimary : Colors.text, fontWeight: "700" }}>
-                {label}
-              </Text>
-            </TouchableOpacity>
+              style={styles.filterChip}
+            />
           );
         })}
-        <TouchableOpacity
+        <Chip
+          label="Communities · Soon"
+          selected={false}
+          disabled
           onPress={() =>
             Alert.alert(
               "Communities",
               "Professional communities are coming soon — curated groups by industry and goal."
             )
           }
-          style={[
-            styles.filterChip,
-            { backgroundColor: Colors.card, borderColor: Colors.border, opacity: 0.85 },
-          ]}
-          activeOpacity={0.9}
-        >
-          <Text style={{ color: Colors.mutedText, fontWeight: "700" }}>Communities · Soon</Text>
-        </TouchableOpacity>
+          style={styles.filterChip}
+        />
       </ScrollView>
 
       {/* Results */}
       <ScrollView
         style={styles.list}
         contentContainerStyle={{ paddingBottom: 32 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.text} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.textPrimary} />}
         onScroll={({ nativeEvent }) => {
           const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
           const nearBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 650;
@@ -397,36 +391,31 @@ export default function BusinessDiscover() {
       >
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color={Colors.business.primary} />
-            <Text style={{ marginTop: 10, color: Colors.mutedText }}>Loading discover feed…</Text>
+            <ActivityIndicator size="large" color={theme.modeAccent("business").primary} />
+            <Text style={{ marginTop: theme.spacing.sm, color: theme.colors.textMuted }}>Loading discover feed…</Text>
           </View>
         ) : filtered.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={[styles.emptyTitle, { color: Colors.text }]}>No results yet</Text>
-            <Text style={[styles.emptyText, { color: Colors.mutedText }]}>
+          <Card style={styles.empty}>
+            <Text style={styles.emptyTitle}>No results yet</Text>
+            <Text style={styles.emptyText}>
               Connect your Business tables (or add an RPC search) to populate Discover.
             </Text>
 
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <TouchableOpacity
+            <View style={{ flexDirection: "row", gap: theme.spacing.sm }}>
+              <SecondaryButton
+                title="Companies"
                 onPress={() => router.push("/(modes)/business/companies")}
-                style={[styles.ctaSecondary, { backgroundColor: Colors.card, borderColor: Colors.border }]}
-                activeOpacity={0.9}
-              >
-                <Text style={{ color: Colors.text, fontWeight: "700" }}>Companies</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
+                style={{ flex: 1 }}
+              />
+              <PrimaryButton
+                title="Open Planner"
                 onPress={() => router.push("/(modes)/business/planner")}
-                style={[styles.cta, { backgroundColor: Colors.primary }]}
-                activeOpacity={0.9}
-              >
-                <Text style={{ color: Colors.onPrimary, fontWeight: "800" }}>Open Planner</Text>
-              </TouchableOpacity>
+                style={{ flex: 1, backgroundColor: theme.modeAccent("business").primary }}
+              />
             </View>
-          </View>
+          </Card>
         ) : (
-          <View style={{ gap: 12 }}>
+          <View style={{ gap: theme.spacing.md }}>
             {filtered.map((r) =>
               r.type === "person" && r.person ? (
                 <BusinessDiscoverListCard
@@ -436,45 +425,42 @@ export default function BusinessDiscover() {
                   onPress={() => openResult(r)}
                 />
               ) : (
-              <TouchableOpacity
-                key={`${r.type}:${r.id}`}
-                onPress={() => openResult(r)}
-                activeOpacity={0.9}
-                style={[styles.card, { backgroundColor: Colors.card, borderColor: Colors.border }]}
-              >
-                <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+              <Pressable key={`${r.type}:${r.id}`} onPress={() => openResult(r)}>
+                <Card style={styles.card}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", gap: theme.spacing.md }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.cardTitle, { color: Colors.text }]} numberOfLines={1}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>
                       {r.title}
                     </Text>
                     {!!r.subtitle && (
-                      <Text style={{ color: Colors.mutedText }} numberOfLines={1}>
+                      <Text style={{ color: theme.colors.textMuted }} numberOfLines={1}>
                         {r.subtitle}
                       </Text>
                     )}
                     {!!r.meta && (
-                      <Text style={{ color: Colors.text, marginTop: 8 }} numberOfLines={2}>
+                      <Text style={{ color: theme.colors.textPrimary, marginTop: theme.spacing.sm }} numberOfLines={2}>
                         {r.meta}
                       </Text>
                     )}
                   </View>
 
                   <View style={styles.rightCol}>
-                    <View style={[styles.badge, { backgroundColor: Colors.background }]}>
-                      <Text style={{ color: Colors.mutedText, fontSize: 12 }}>
+                    <View style={styles.badge}>
+                      <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>
                         {r.type === "person" ? "Person" : r.type === "company" ? "Company" : "Service"}
                       </Text>
                     </View>
-                    <Text style={{ color: Colors.mutedText, marginTop: 10 }}>›</Text>
+                    <Text style={{ color: theme.colors.textMuted, marginTop: theme.spacing.sm }}>›</Text>
                   </View>
                 </View>
-              </TouchableOpacity>
+                </Card>
+              </Pressable>
               )
             )}
 
             {loadingMore && (
-              <View style={[styles.center, { paddingVertical: 12 }]}>
-                <ActivityIndicator size="large" color={Colors.business.primary} />
+              <View style={{ ...styles.center, paddingVertical: theme.spacing.md }}>
+                <ActivityIndicator size="large" color={theme.modeAccent("business").primary} />
               </View>
             )}
           </View>
@@ -488,66 +474,49 @@ export default function BusinessDiscover() {
   );
 }
 
-const styles: any = {
-  screen: { flex: 1, paddingTop: Layout?.screenTopPadding ?? 16 },
-  header: {
-    paddingHorizontal: Layout?.screenPadding ?? 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    paddingBottom: 12,
-  },
-  title: { fontWeight: "800" },
-  pill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
-  pillText: { fontWeight: "700" },
+function createStyles(theme: AppTheme) {
+  return {
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    header: {
+      paddingHorizontal: theme.spacing.lg,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      gap: theme.spacing.md,
+      paddingBottom: theme.spacing.md,
+    },
+    title: { ...theme.type.h2, fontFamily: theme.type.h2.fontFamily, color: theme.colors.textPrimary },
+    pill: { paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, borderRadius: theme.radii.pill, backgroundColor: theme.colors.surface },
+    pillText: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, fontWeight: "700" as const, color: theme.colors.textPrimary },
 
-  searchRow: { paddingHorizontal: Layout?.screenPadding ?? 16, paddingBottom: 10 },
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    height: 46,
-  },
-  searchIcon: { marginRight: 8, fontSize: 16 },
-  searchInput: { flex: 1, fontSize: 15 },
-  clearBtn: { padding: 6, marginLeft: 4 },
+    searchRow: { paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.sm },
+    searchBox: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.md,
+      paddingHorizontal: theme.spacing.md,
+      height: 46,
+    },
+    searchIcon: { marginRight: theme.spacing.sm, fontSize: 16, color: theme.colors.textMuted },
+    searchInput: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
+    clearBtn: { padding: theme.spacing.xs, marginLeft: theme.spacing.xxs },
 
-  filtersRow: { paddingHorizontal: Layout?.screenPadding ?? 16, paddingBottom: 10 },
-  filterChip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginRight: 10,
-  },
+    filtersRow: { paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.sm },
+    filterChip: { marginRight: theme.spacing.sm },
 
-  list: { flex: 1, paddingHorizontal: Layout?.screenPadding ?? 16 },
-  card: { borderWidth: 1, borderRadius: 18, padding: 14 },
-  cardTitle: { fontSize: 16, fontWeight: "800" },
-  rightCol: { alignItems: "flex-end", justifyContent: "space-between" },
-  badge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+    list: { flex: 1, paddingHorizontal: theme.spacing.lg },
+    card: {},
+    cardTitle: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily, fontWeight: "800" as const, color: theme.colors.textPrimary },
+    rightCol: { alignItems: "flex-end" as const, justifyContent: "space-between" as const },
+    badge: { paddingHorizontal: theme.spacing.sm, paddingVertical: theme.spacing.xs, borderRadius: theme.radii.pill, backgroundColor: theme.colors.background },
 
-  center: { paddingVertical: 30, alignItems: "center", justifyContent: "center" },
+    center: { paddingVertical: theme.spacing.xxl, alignItems: "center" as const, justifyContent: "center" as const },
 
-  empty: {
-    marginTop: 22,
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    backgroundColor: Colors.card,
-    borderColor: Colors.border,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: "800", marginBottom: 6 },
-  emptyText: { lineHeight: 20, marginBottom: 12 },
-  cta: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: "center" },
-  ctaSecondary: {
-    flex: 1,
-    borderRadius: 14,
-    paddingVertical: 12,
-    alignItems: "center",
-    borderWidth: 1,
-  },
-};
+    empty: { marginTop: theme.spacing.xl },
+    emptyTitle: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily, fontWeight: "800" as const, color: theme.colors.textPrimary, marginBottom: theme.spacing.xs },
+    emptyText: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textMuted, marginBottom: theme.spacing.md },
+  };
+}

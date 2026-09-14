@@ -19,7 +19,7 @@ import * as Haptics from "expo-haptics";
 
 import { Ionicons } from "@expo/vector-icons";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
-import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { RomanceBottomNav } from "@/components/layout/RomanceBottomNav";
@@ -44,6 +44,9 @@ type LikedProfileRow = {
   matched_chat_id?: string | null;
 };
 
+/** Distinctive Winkly AI-match orange — decorative accent, not tied to any mode (see romance/profile-view.tsx AI_MATCH_BADGE_BG). */
+const AI_MATCH_ACCENT = "#FF9100";
+
 function MatchedChatPill({
   conversationId,
   style,
@@ -52,6 +55,7 @@ function MatchedChatPill({
   style?: object;
 }) {
   const router = useRouter();
+  const theme = useAppTheme();
   return (
     <Pressable
       onPress={() =>
@@ -68,20 +72,20 @@ function MatchedChatPill({
           paddingHorizontal: 10,
           paddingVertical: 5,
           borderRadius: 999,
-          backgroundColor: Colors.romance.primary,
+          backgroundColor: theme.modeAccent("romance").primary,
         },
         style,
       ]}
       accessibilityRole="button"
       accessibilityLabel="You matched — open chat"
     >
-      <Ionicons name="chatbubble-ellipses" size={13} color={Colors.white} />
+      <Ionicons name="chatbubble-ellipses" size={13} color="#FFFFFF" />
       <Text
         style={{
-          ...Typography.caption,
-          fontFamily: FontFamily.headingBold,
+          ...theme.type.caption,
+          fontFamily: theme.type.caption.fontFamily,
           fontWeight: "700",
-          color: Colors.white,
+          color: "#FFFFFF",
         }}
       >
         You matched — open chat
@@ -93,6 +97,7 @@ function MatchedChatPill({
 export default function RomanceLiked() {
   const router = useRouter();
   const fmtLoc = useFormatLocationDisplay();
+  const theme = useAppTheme();
 
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<LikedProfileRow[]>([]);
@@ -185,13 +190,11 @@ export default function RomanceLiked() {
         activeOpacity={0.9}
         style={{
           width: "48%",
-          backgroundColor: "#FFF",
-          borderRadius: Layout.radii.card,
+          backgroundColor: theme.colors.surface,
+          borderRadius: theme.radii.lg,
           marginBottom: 16,
           overflow: "hidden",
-          shadowColor: "#000",
-          shadowOpacity: 0.06,
-          shadowRadius: 6,
+          ...theme.elevation(1),
         }}
       >
         <View style={{ position: "relative" }}>
@@ -202,7 +205,7 @@ export default function RomanceLiked() {
               style={{
                 width: "100%",
                 height: 160,
-                backgroundColor: Colors.gray200,
+                backgroundColor: theme.colors.border,
                 alignItems: "center",
                 justifyContent: "center",
               }}
@@ -220,22 +223,22 @@ export default function RomanceLiked() {
         <View style={{ padding: 10 }}>
           <Text
             style={{
-              ...Typography.body,
-              color: Colors.textPrimary,
+              ...theme.type.body,
+              color: theme.colors.textPrimary,
               marginBottom: 2,
             }}
           >
             {item.first_name}, {item.age ?? "—"}
           </Text>
 
-          <Text style={{ ...Typography.caption, color: Colors.gray700 }}>
+          <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary }}>
             {fmtLoc(item.city)}
           </Text>
 
           <Text
             style={{
-              ...Typography.caption,
-              color: Colors.accentMint,
+              ...theme.type.caption,
+              color: AI_MATCH_ACCENT,
               marginTop: 4,
             }}
           >
@@ -277,13 +280,11 @@ export default function RomanceLiked() {
         activeOpacity={0.9}
         style={{
           flexDirection: "row",
-          backgroundColor: "#FFF",
-          borderRadius: Layout.radii.card,
+          backgroundColor: theme.colors.surface,
+          borderRadius: theme.radii.lg,
           marginBottom: 16,
           overflow: "hidden",
-          shadowColor: "#000",
-          shadowOpacity: 0.05,
-          shadowRadius: 6,
+          ...theme.elevation(1),
         }}
       >
         {mainPhoto ? (
@@ -293,7 +294,7 @@ export default function RomanceLiked() {
             style={{
               width: 110,
               height: 110,
-              backgroundColor: Colors.gray200,
+              backgroundColor: theme.colors.border,
               alignItems: "center",
               justifyContent: "center",
             }}
@@ -305,8 +306,8 @@ export default function RomanceLiked() {
         <View style={{ padding: 12, flex: 1 }}>
           <Text
             style={{
-              ...Typography.h3,
-              color: Colors.textPrimary,
+              ...theme.type.h3,
+              color: theme.colors.textPrimary,
               marginBottom: 4,
             }}
           >
@@ -317,15 +318,15 @@ export default function RomanceLiked() {
             <MatchedChatPill conversationId={item.matched_chat_id} style={{ marginTop: 6, marginBottom: 4 }} />
           ) : null}
 
-          <Text style={{ ...Typography.body, color: Colors.gray700 }}>
+          <Text style={{ ...theme.type.body, color: theme.colors.textSecondary }}>
             {fmtLoc(item.city)}
           </Text>
 
           <Text
             style={{
-              ...Typography.caption,
+              ...theme.type.caption,
               marginTop: 8,
-              color: Colors.accentMint,
+              color: AI_MATCH_ACCENT,
             }}
           >
             💫 {score}% • {tags[0] ?? "Good vibe match"}
@@ -341,18 +342,18 @@ export default function RomanceLiked() {
   return (
     <SafeScreenView
       edges={["left", "right"]}
-      style={{ flex: 1, backgroundColor: Colors.backgroundLight }}
+      style={{ flex: 1, backgroundColor: theme.colors.background }}
     >
       {/* HEADER */}
       <ModeHeader currentMode="romance" rightSlot="filterSettings" />
 
       <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
-        <Text style={{ ...Typography.h2, color: Colors.textPrimary }}>
+        <Text style={{ ...theme.type.h2, color: theme.colors.textPrimary }}>
           Sent likes
         </Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
-          <SparklesIcon size={14} color={Colors.primaryViolet} />
-          <Text style={{ ...Typography.caption, color: Colors.gray700 }}>
+          <SparklesIcon size={14} color={theme.colors.primary} />
+          <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary }}>
             Profiles you&apos;ve liked — sorted by AI affinity
           </Text>
         </View>
@@ -366,18 +367,18 @@ export default function RomanceLiked() {
             paddingHorizontal: 14,
             paddingVertical: 8,
             borderRadius: 999,
-            backgroundColor: Colors.romance.secondary,
+            backgroundColor: theme.modeAccent("romance").bg,
             borderWidth: 1,
-            borderColor: Colors.romance.primary + "33",
+            borderColor: theme.modeAccent("romance").primary + "33",
           }}
           accessibilityRole="button"
           accessibilityLabel="See who liked you"
         >
           <Text
             style={{
-              ...Typography.caption,
+              ...theme.type.caption,
               fontWeight: "600",
-              color: Colors.romance.primary,
+              color: theme.modeAccent("romance").primary,
             }}
           >
             See who liked you →
@@ -401,8 +402,8 @@ export default function RomanceLiked() {
               fontSize: 22,
               color:
                 viewMode === "grid"
-                  ? Colors.primaryViolet
-                  : Colors.gray400,
+                  ? theme.colors.primary
+                  : theme.colors.textMuted,
             }}
           >
             ⬚
@@ -415,8 +416,8 @@ export default function RomanceLiked() {
               fontSize: 22,
               color:
                 viewMode === "list"
-                  ? Colors.primaryViolet
-                  : Colors.gray400,
+                  ? theme.colors.primary
+                  : theme.colors.textMuted,
             }}
           >
             ☰
@@ -427,7 +428,7 @@ export default function RomanceLiked() {
       {/* CONTENT */}
       {loading ? (
         <ActivityIndicator
-          color={Colors.primaryViolet}
+          color={theme.colors.primary}
           style={{ marginTop: 40 }}
           size="large"
         />
@@ -435,8 +436,8 @@ export default function RomanceLiked() {
         <View style={{ alignItems: "center", marginTop: 60 }}>
           <Text
             style={{
-              ...Typography.body,
-              color: Colors.gray700,
+              ...theme.type.body,
+              color: theme.colors.textSecondary,
               textAlign: "center",
             }}
           >

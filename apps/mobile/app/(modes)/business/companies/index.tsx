@@ -13,7 +13,7 @@ import {
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { ModeHeader } from "@/components/layout/ModeHeader";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 
 type CompanyRow = {
@@ -53,6 +53,8 @@ function normalizeCompany(row: any): CompanyRow {
 export default function BusinessCompaniesIndex() {
   const router = useRouter();
   const fmtLoc = useFormatLocationDisplay();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
 
   const [query, setQuery] = useState("");
   const [industry, setIndustry] = useState<string | null>(null);
@@ -164,37 +166,37 @@ export default function BusinessCompaniesIndex() {
   };
 
   return (
-    <View style={[styles.screen, { backgroundColor: Colors.background }]}>
+    <View style={styles.screen}>
       <ModeHeader currentMode="business" rightSlot="filterSettings" />
       {/* Header */}
       <View style={styles.header}>
-        <Text style={[styles.title, Typography.h2]}>Companies</Text>
+        <Text style={styles.title}>Companies</Text>
         <TouchableOpacity
           onPress={() => router.push("/(modes)/business/discover")}
-          style={[styles.pill, { backgroundColor: Colors.card }]}
+          style={styles.pill}
           activeOpacity={0.9}
         >
-          <Text style={[styles.pillText, { color: Colors.text }]}>Discover</Text>
+          <Text style={styles.pillText}>Discover</Text>
         </TouchableOpacity>
       </View>
 
       {/* Search */}
       <View style={styles.searchRow}>
-        <View style={[styles.searchBox, { backgroundColor: Colors.card, borderColor: Colors.border }]}>
-          <Text style={[styles.searchIcon, { color: Colors.mutedText }]}>⌕</Text>
+        <View style={styles.searchBox}>
+          <Text style={styles.searchIcon}>⌕</Text>
           <TextInput
             value={query}
             onChangeText={setQuery}
             placeholder="Search companies, city, industry…"
-            placeholderTextColor={Colors.mutedText}
-            style={[styles.searchInput, { color: Colors.text }]}
+            placeholderTextColor={theme.colors.textSecondary}
+            style={styles.searchInput}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="search"
           />
           {!!query && (
             <TouchableOpacity onPress={() => setQuery("")} style={styles.clearBtn}>
-              <Text style={{ color: Colors.mutedText }}>✕</Text>
+              <Text style={{ color: theme.colors.textSecondary }}>✕</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -206,10 +208,10 @@ export default function BusinessCompaniesIndex() {
           onPress={() => setIndustry((v) => (v ? null : "Technology"))}
           style={[
             styles.filterChip,
-            { backgroundColor: industry === "Technology" ? Colors.primary : Colors.card, borderColor: Colors.border },
+            { backgroundColor: industry === "Technology" ? theme.colors.primary : theme.colors.surface },
           ]}
         >
-          <Text style={{ color: industry === "Technology" ? Colors.onPrimary : Colors.text }}>
+          <Text style={{ color: industry === "Technology" ? theme.colors.onPrimary : theme.colors.textPrimary }}>
             Technology
           </Text>
         </TouchableOpacity>
@@ -218,10 +220,10 @@ export default function BusinessCompaniesIndex() {
           onPress={() => setIndustry((v) => (v ? null : "Finance"))}
           style={[
             styles.filterChip,
-            { backgroundColor: industry === "Finance" ? Colors.primary : Colors.card, borderColor: Colors.border },
+            { backgroundColor: industry === "Finance" ? theme.colors.primary : theme.colors.surface },
           ]}
         >
-          <Text style={{ color: industry === "Finance" ? Colors.onPrimary : Colors.text }}>
+          <Text style={{ color: industry === "Finance" ? theme.colors.onPrimary : theme.colors.textPrimary }}>
             Finance
           </Text>
         </TouchableOpacity>
@@ -230,10 +232,10 @@ export default function BusinessCompaniesIndex() {
           onPress={() => setIndustry((v) => (v ? null : "Healthcare"))}
           style={[
             styles.filterChip,
-            { backgroundColor: industry === "Healthcare" ? Colors.primary : Colors.card, borderColor: Colors.border },
+            { backgroundColor: industry === "Healthcare" ? theme.colors.primary : theme.colors.surface },
           ]}
         >
-          <Text style={{ color: industry === "Healthcare" ? Colors.onPrimary : Colors.text }}>
+          <Text style={{ color: industry === "Healthcare" ? theme.colors.onPrimary : theme.colors.textPrimary }}>
             Healthcare
           </Text>
         </TouchableOpacity>
@@ -242,18 +244,18 @@ export default function BusinessCompaniesIndex() {
           onPress={() => setCity((v) => (v ? null : "Munich"))}
           style={[
             styles.filterChip,
-            { backgroundColor: city === "Munich" ? Colors.primary : Colors.card, borderColor: Colors.border },
+            { backgroundColor: city === "Munich" ? theme.colors.primary : theme.colors.surface },
           ]}
         >
-          <Text style={{ color: city === "Munich" ? Colors.onPrimary : Colors.text }}>Munich</Text>
+          <Text style={{ color: city === "Munich" ? theme.colors.onPrimary : theme.colors.textPrimary }}>Munich</Text>
         </TouchableOpacity>
 
         {(industry || city) && (
           <TouchableOpacity
             onPress={clearFilters}
-            style={[styles.filterChip, { backgroundColor: Colors.card, borderColor: Colors.border }]}
+            style={styles.filterChip}
           >
-            <Text style={{ color: Colors.text }}>Clear</Text>
+            <Text style={{ color: theme.colors.textPrimary }}>Clear</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -262,7 +264,7 @@ export default function BusinessCompaniesIndex() {
       <ScrollView
         style={styles.list}
         contentContainerStyle={{ paddingBottom: 32 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.text} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.textPrimary} />}
         onScroll={({ nativeEvent }) => {
           const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
           const nearBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 600;
@@ -270,26 +272,26 @@ export default function BusinessCompaniesIndex() {
         }}
         scrollEventThrottle={16}
       >
-        <Text style={[styles.subtitle, { color: Colors.mutedText }]}>{filtersLabel}</Text>
+        <Text style={styles.subtitle}>{filtersLabel}</Text>
 
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color={Colors.business.primary} />
-            <Text style={{ marginTop: 10, color: Colors.mutedText }}>Loading companies…</Text>
+            <ActivityIndicator size="large" color={theme.modeAccent("business").primary} />
+            <Text style={{ marginTop: 10, color: theme.colors.textSecondary }}>Loading companies…</Text>
           </View>
         ) : filtered.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={[styles.emptyTitle, { color: Colors.text }]}>No companies yet</Text>
-            <Text style={[styles.emptyText, { color: Colors.mutedText }]}>
+            <Text style={styles.emptyTitle}>No companies yet</Text>
+            <Text style={styles.emptyText}>
               Once the Companies table is connected, you’ll see real results here.
             </Text>
 
             <TouchableOpacity
               onPress={() => router.push("/(modes)/business/discover")}
-              style={[styles.cta, { backgroundColor: Colors.primary }]}
+              style={styles.cta}
               activeOpacity={0.9}
             >
-              <Text style={{ color: Colors.onPrimary, fontWeight: "700" }}>Go to Discover</Text>
+              <Text style={{ color: theme.colors.onPrimary, fontWeight: "700" }}>Go to Discover</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -299,34 +301,34 @@ export default function BusinessCompaniesIndex() {
                 key={c.id}
                 onPress={() => onOpenCompany(c.id)}
                 activeOpacity={0.9}
-                style={[styles.card, { backgroundColor: Colors.card, borderColor: Colors.border }]}
+                style={styles.card}
               >
                 <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.cardTitle, { color: Colors.text }]} numberOfLines={1}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>
                       {c.name || "Unnamed company"}
                     </Text>
 
-                    <Text style={{ color: Colors.mutedText }} numberOfLines={1}>
+                    <Text style={{ color: theme.colors.textSecondary }} numberOfLines={1}>
                       {safeText(c.industry) || "Industry"} ·{" "}
                       {c.city?.trim() ? fmtLoc(safeText(c.city)) : "City"}{" "}
                       {c.size ? `· ${c.size}` : ""}
                     </Text>
 
                     {!!c.tagline && (
-                      <Text style={{ color: Colors.text, marginTop: 8 }} numberOfLines={2}>
+                      <Text style={{ color: theme.colors.textPrimary, marginTop: 8 }} numberOfLines={2}>
                         {c.tagline}
                       </Text>
                     )}
                   </View>
 
                   <View style={styles.badgeCol}>
-                    <View style={[styles.badge, { backgroundColor: Colors.background }]}>
-                      <Text style={{ color: Colors.mutedText, fontSize: 12 }}>Company</Text>
+                    <View style={styles.badge}>
+                      <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Company</Text>
                     </View>
                     {!!c.website && (
-                      <View style={[styles.badge, { backgroundColor: Colors.background, marginTop: 8 }]}>
-                        <Text style={{ color: Colors.mutedText, fontSize: 12 }}>Website</Text>
+                      <View style={[styles.badge, { marginTop: 8 }]}>
+                        <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>Website</Text>
                       </View>
                     )}
                   </View>
@@ -336,7 +338,7 @@ export default function BusinessCompaniesIndex() {
 
             {loadingMore && (
               <View style={[styles.center, { paddingVertical: 12 }]}>
-                <ActivityIndicator size="large" color={Colors.business.primary} />
+                <ActivityIndicator size="large" color={theme.modeAccent("business").primary} />
               </View>
             )}
           </View>
@@ -346,63 +348,72 @@ export default function BusinessCompaniesIndex() {
   );
 }
 
-const styles: any = {
-  screen: { flex: 1, paddingTop: Layout?.screenTopPadding ?? 16 },
-  header: {
-    paddingHorizontal: Layout?.screenPadding ?? 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    paddingBottom: 12,
-  },
-  title: { fontWeight: "800" },
-  pill: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
-  pillText: { fontWeight: "700" },
-  searchRow: { paddingHorizontal: Layout?.screenPadding ?? 16, paddingBottom: 10 },
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    height: 46,
-  },
-  searchIcon: { marginRight: 8, fontSize: 16 },
-  searchInput: { flex: 1, fontSize: 15 },
-  clearBtn: { padding: 6, marginLeft: 4 },
-  filtersRow: { paddingHorizontal: Layout?.screenPadding ?? 16, paddingBottom: 10 },
-  filterChip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginRight: 10,
-  },
-  list: { flex: 1, paddingHorizontal: Layout?.screenPadding ?? 16 },
-  subtitle: { marginBottom: 10 },
-  card: {
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 14,
-  },
-  cardTitle: { fontSize: 16, fontWeight: "800" },
-  badgeCol: { alignItems: "flex-end", justifyContent: "flex-start" },
-  badge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
-  center: { paddingVertical: 30, alignItems: "center", justifyContent: "center" },
-  empty: {
-    marginTop: 22,
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.card,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: "800", marginBottom: 6 },
-  emptyText: { lineHeight: 20, marginBottom: 12 },
-  cta: { borderRadius: 14, paddingVertical: 12, alignItems: "center" },
-};
+function createStyles(theme: AppTheme) {
+  return {
+    screen: { flex: 1, paddingTop: theme.spacing.md, backgroundColor: theme.colors.background },
+    header: {
+      paddingHorizontal: theme.spacing.xl,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      gap: 12,
+      paddingBottom: 12,
+    },
+    title: { ...theme.type.h2, fontWeight: "800" as const, color: theme.colors.textPrimary },
+    pill: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: theme.colors.surface,
+    },
+    pillText: { fontWeight: "700" as const, color: theme.colors.textPrimary },
+    searchRow: { paddingHorizontal: theme.spacing.xl, paddingBottom: 10 },
+    searchBox: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      borderWidth: 1,
+      borderRadius: 14,
+      paddingHorizontal: 12,
+      height: 46,
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+    },
+    searchIcon: { marginRight: 8, fontSize: 16, color: theme.colors.textSecondary },
+    searchInput: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
+    clearBtn: { padding: 6, marginLeft: 4 },
+    filtersRow: { paddingHorizontal: theme.spacing.xl, paddingBottom: 10 },
+    filterChip: {
+      borderWidth: 1,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      marginRight: 10,
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+    },
+    list: { flex: 1, paddingHorizontal: theme.spacing.xl },
+    subtitle: { marginBottom: 10, color: theme.colors.textSecondary },
+    card: {
+      borderWidth: 1,
+      borderRadius: 18,
+      padding: 14,
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+    },
+    cardTitle: { fontSize: 16, fontWeight: "800" as const, color: theme.colors.textPrimary },
+    badgeCol: { alignItems: "flex-end" as const, justifyContent: "flex-start" as const },
+    badge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: theme.colors.background },
+    center: { paddingVertical: 30, alignItems: "center" as const, justifyContent: "center" as const },
+    empty: {
+      marginTop: 22,
+      borderRadius: 18,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    emptyTitle: { fontSize: 16, fontWeight: "800" as const, marginBottom: 6, color: theme.colors.textPrimary },
+    emptyText: { lineHeight: 20, marginBottom: 12, color: theme.colors.textSecondary },
+    cta: { borderRadius: 14, paddingVertical: 12, alignItems: "center" as const, backgroundColor: theme.colors.primary },
+  };
+}

@@ -22,16 +22,30 @@ import { SafeScreenView } from "@/components/SafeScreenView";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 import { getEmailRedirectTo } from "@/lib/authRedirectUrl";
 
 export default function ResetPassword() {
   const router = useRouter();
   const { t } = useTranslation();
+  const theme = useAppTheme();
   const [email, setEmail] = useState("");
   const [sentToEmail, setSentToEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+
+  const inputStyle = {
+    borderWidth: 2,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.md,
+    padding: 16,
+    marginBottom: 12,
+    width: "100%" as const,
+    maxWidth: 360,
+    backgroundColor: theme.colors.surface,
+    fontSize: 16,
+    color: theme.colors.textPrimary,
+  };
 
   // ────────────────────────────────────────────────
   //  Handle Reset
@@ -64,9 +78,9 @@ export default function ResetPassword() {
   //  UI
   // ────────────────────────────────────────────────
   return (
-    <SafeScreenView style={{ flex: 1, backgroundColor: Colors.backgroundMuted }}>
+    <SafeScreenView style={{ flex: 1, backgroundColor: theme.colors.backgroundMuted }}>
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: Colors.backgroundMuted }}
+      style={{ flex: 1, backgroundColor: theme.colors.backgroundMuted }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView
@@ -75,7 +89,7 @@ export default function ResetPassword() {
           justifyContent: "center",
           alignItems: "center",
           padding: 24,
-          paddingTop: 24 + (Layout.safeTopExtra ?? 24),
+          paddingTop: 24 + theme.spacing.md,
         }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -91,8 +105,8 @@ export default function ResetPassword() {
           <>
             <Text
               style={{
-                ...Typography.h2,
-                color: Colors.textPrimary,
+                ...theme.type.h2,
+                color: theme.colors.textPrimary,
                 textAlign: "center",
                 marginBottom: 12,
               }}
@@ -101,8 +115,8 @@ export default function ResetPassword() {
             </Text>
             <Text
               style={{
-                ...Typography.body,
-                color: Colors.gray700,
+                ...theme.type.body,
+                color: theme.colors.textSecondary,
                 textAlign: "center",
                 marginBottom: 24,
               }}
@@ -112,7 +126,7 @@ export default function ResetPassword() {
 
             <TextInput
               placeholder={t("auth.email")}
-              placeholderTextColor={Colors.gray500}
+              placeholderTextColor={theme.colors.textMuted}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -126,8 +140,8 @@ export default function ResetPassword() {
               onPress={handleReset}
               disabled={loading}
               style={{
-                backgroundColor: Colors.primaryViolet,
-                borderRadius: Layout.radii.control,
+                backgroundColor: theme.colors.primary,
+                borderRadius: theme.radii.md,
                 paddingVertical: 16,
                 width: "85%",
                 alignItems: "center",
@@ -136,9 +150,9 @@ export default function ResetPassword() {
               }}
             >
               {loading ? (
-                <ActivityIndicator color={Colors.accentYellow} />
+                <ActivityIndicator color={theme.colors.onPrimary} />
               ) : (
-                <Text style={{ ...Typography.button, color: Colors.accentYellow }}>
+                <Text style={{ ...theme.type.button, color: theme.colors.onPrimary }}>
                   {t("auth.reset.sendLink")}
                 </Text>
               )}
@@ -148,7 +162,7 @@ export default function ResetPassword() {
               onPress={() => router.push("/(auth)/signin")}
               style={{ marginTop: 24 }}
             >
-              <Text style={{ ...Typography.body, color: Colors.primaryViolet }}>
+              <Text style={{ ...theme.type.body, color: theme.colors.primary }}>
                 {t("auth.reset.backToSignIn")}
               </Text>
             </TouchableOpacity>
@@ -157,8 +171,8 @@ export default function ResetPassword() {
           <>
             <Text
               style={{
-                ...Typography.h2,
-                color: Colors.primaryViolet,
+                ...theme.type.h2,
+                color: theme.colors.primary,
                 textAlign: "center",
                 marginBottom: 12,
               }}
@@ -167,8 +181,8 @@ export default function ResetPassword() {
             </Text>
             <Text
               style={{
-                ...Typography.body,
-                color: Colors.gray700,
+                ...theme.type.body,
+                color: theme.colors.textSecondary,
                 textAlign: "center",
                 marginBottom: 28,
               }}
@@ -177,9 +191,9 @@ export default function ResetPassword() {
             </Text>
             <Text
               style={{
-                ...Typography.body,
+                ...theme.type.body,
                 fontWeight: "600",
-                color: Colors.textPrimary,
+                color: theme.colors.textPrimary,
                 textAlign: "center",
                 marginBottom: 32,
               }}
@@ -195,7 +209,7 @@ export default function ResetPassword() {
                 alignItems: "center",
               }}
             >
-              <Text style={{ ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" }}>
+              <Text style={{ ...theme.type.caption, color: theme.colors.primary, fontWeight: "600" }}>
                 {t("auth.reset.haveLink")}
               </Text>
             </TouchableOpacity>
@@ -203,14 +217,14 @@ export default function ResetPassword() {
             <TouchableOpacity
               onPress={() => router.push("/(auth)/signin")}
               style={{
-                backgroundColor: Colors.primaryViolet,
-                borderRadius: Layout.radii.control,
+                backgroundColor: theme.colors.primary,
+                borderRadius: theme.radii.md,
                 paddingVertical: 16,
                 width: "85%",
                 alignItems: "center",
               }}
             >
-              <Text style={{ ...Typography.button, color: Colors.accentYellow }}>
+              <Text style={{ ...theme.type.button, color: theme.colors.onPrimary }}>
                 {t("auth.reset.returnToSignIn")}
               </Text>
             </TouchableOpacity>
@@ -221,19 +235,3 @@ export default function ResetPassword() {
     </SafeScreenView>
   );
 }
-
-// ────────────────────────────────────────────────
-// Shared Styles
-// ────────────────────────────────────────────────
-const inputStyle = {
-  borderWidth: 2,
-  borderColor: Colors.gray200,
-  borderRadius: Layout.radii.control,
-  padding: 16,
-  marginBottom: 12,
-  width: "100%" as const,
-  maxWidth: 360,
-  backgroundColor: Colors.white,
-  fontSize: 16,
-  color: Colors.textPrimary,
-};

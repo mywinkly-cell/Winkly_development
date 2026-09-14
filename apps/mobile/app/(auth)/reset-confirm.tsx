@@ -25,14 +25,28 @@ import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { createSessionFromUrl } from "@/lib/authDeepLink";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 
 export default function ResetConfirm() {
   const router = useRouter();
   const { t } = useTranslation();
+  const theme = useAppTheme();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const inputStyle = {
+    borderWidth: 2,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.md,
+    padding: 16,
+    marginBottom: 12,
+    width: "100%" as const,
+    maxWidth: 360,
+    backgroundColor: theme.colors.surface,
+    fontSize: 16,
+    color: theme.colors.textPrimary,
+  };
 
   // Paste reset link when the email link opened in a browser (Expo Go, or when app didn’t open from deep link)
   const [pasteUrl, setPasteUrl] = useState("");
@@ -101,9 +115,9 @@ export default function ResetConfirm() {
   //  UI
   // ────────────────────────────────────────────────
   return (
-    <SafeScreenView style={{ flex: 1, backgroundColor: Colors.backgroundMuted }}>
+    <SafeScreenView style={{ flex: 1, backgroundColor: theme.colors.backgroundMuted }}>
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: Colors.backgroundMuted }}
+      style={{ flex: 1, backgroundColor: theme.colors.backgroundMuted }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView
@@ -125,8 +139,8 @@ export default function ResetConfirm() {
 
         <Text
           style={{
-            ...Typography.h2,
-            color: Colors.textPrimary,
+            ...theme.type.h2,
+            color: theme.colors.textPrimary,
             textAlign: "center",
             marginBottom: 12,
           }}
@@ -136,8 +150,8 @@ export default function ResetConfirm() {
 
         <Text
           style={{
-            ...Typography.body,
-            color: Colors.gray700,
+            ...theme.type.body,
+            color: theme.colors.textSecondary,
             textAlign: "center",
             marginBottom: 24,
           }}
@@ -147,17 +161,17 @@ export default function ResetConfirm() {
 
         {__DEV__ && (
         <View style={{ marginBottom: 24, width: "100%", maxWidth: 360 }}>
-          <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 8, fontWeight: "600" }}>
+          <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary, marginBottom: 8, fontWeight: "600" }}>
             {t("auth.verify.devTitle")}
           </Text>
-          <Text style={{ ...Typography.caption, color: Colors.gray500, marginBottom: 8 }}>
+          <Text style={{ ...theme.type.caption, color: theme.colors.textMuted, marginBottom: 8 }}>
             {t("auth.verify.devHint")}
           </Text>
           <TextInput
             value={pasteUrl}
             onChangeText={setPasteUrl}
             placeholder={t("auth.verify.pastePlaceholder")}
-            placeholderTextColor={Colors.gray500}
+            placeholderTextColor={theme.colors.textMuted}
             autoCapitalize="none"
             autoCorrect={false}
             multiline
@@ -171,17 +185,17 @@ export default function ResetConfirm() {
             onPress={handlePasteResetLink}
             disabled={pasteLoading}
             style={{
-              backgroundColor: Colors.primaryViolet,
-              borderRadius: Layout.radii.control,
+              backgroundColor: theme.colors.primary,
+              borderRadius: theme.radii.md,
               paddingVertical: 12,
               alignItems: "center",
               opacity: pasteLoading ? 0.7 : 1,
             }}
           >
             {pasteLoading ? (
-              <ActivityIndicator color={Colors.accentYellow} size="small" />
+              <ActivityIndicator color={theme.colors.onPrimary} size="small" />
             ) : (
-              <Text style={{ ...Typography.button, color: Colors.accentYellow }}>{t("auth.resetConfirm.pasteAndContinue")}</Text>
+              <Text style={{ ...theme.type.button, color: theme.colors.onPrimary }}>{t("auth.resetConfirm.pasteAndContinue")}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -189,7 +203,7 @@ export default function ResetConfirm() {
 
         <TextInput
           placeholder={t("auth.resetConfirm.newPasswordPlaceholder")}
-          placeholderTextColor={Colors.gray500}
+          placeholderTextColor={theme.colors.textMuted}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
@@ -200,7 +214,7 @@ export default function ResetConfirm() {
 
         <TextInput
           placeholder={t("auth.resetConfirm.confirmPlaceholder")}
-          placeholderTextColor={Colors.gray500}
+          placeholderTextColor={theme.colors.textMuted}
           value={confirmPassword}
           onChangeText={setConfirmPassword}
           secureTextEntry
@@ -213,8 +227,8 @@ export default function ResetConfirm() {
           onPress={handleUpdatePassword}
           disabled={loading}
           style={{
-            backgroundColor: Colors.primaryViolet,
-            borderRadius: Layout.radii.control,
+            backgroundColor: theme.colors.primary,
+            borderRadius: theme.radii.md,
             paddingVertical: 16,
             width: "85%",
             alignItems: "center",
@@ -223,9 +237,9 @@ export default function ResetConfirm() {
           }}
         >
           {loading ? (
-            <ActivityIndicator color={Colors.accentYellow} />
+            <ActivityIndicator color={theme.colors.onPrimary} />
           ) : (
-            <Text style={{ ...Typography.button, color: Colors.accentYellow }}>
+            <Text style={{ ...theme.type.button, color: theme.colors.onPrimary }}>
               {t("auth.resetConfirm.updateButton")}
             </Text>
           )}
@@ -235,7 +249,7 @@ export default function ResetConfirm() {
           onPress={() => router.push("/(auth)/signin")}
           style={{ marginTop: 24 }}
         >
-          <Text style={{ ...Typography.body, color: Colors.primaryViolet }}>
+          <Text style={{ ...theme.type.body, color: theme.colors.primary }}>
             {t("auth.reset.backToSignIn")}
           </Text>
         </TouchableOpacity>
@@ -244,19 +258,3 @@ export default function ResetConfirm() {
     </SafeScreenView>
   );
 }
-
-// ────────────────────────────────────────────────
-// Shared Styles
-// ────────────────────────────────────────────────
-const inputStyle = {
-  borderWidth: 2,
-  borderColor: Colors.gray200,
-  borderRadius: Layout.radii.control,
-  padding: 16,
-  marginBottom: 12,
-  width: "100%" as const,
-  maxWidth: 360,
-  backgroundColor: Colors.white,
-  fontSize: 16,
-  color: Colors.textPrimary,
-};

@@ -16,7 +16,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import {
   getMyPendingGroupInvitations,
   acceptGroupInvite,
@@ -26,6 +26,8 @@ import {
 
 export default function GroupInvitationsScreen() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const [list, setList] = useState<GroupInvitationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -85,7 +87,7 @@ export default function GroupInvitationsScreen() {
     <View style={styles.screen}>
       <View style={styles.headerRow}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Group invitations</Text>
         <View style={{ width: 44 }} />
@@ -94,17 +96,17 @@ export default function GroupInvitationsScreen() {
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primaryViolet]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.colors.primary]} />}
       >
         <Text style={styles.subtitle}>
           You have been invited to join these groups. Accept to join the group chat, or decline.
         </Text>
 
         {loading ? (
-          <ActivityIndicator size="large" color={Colors.primaryViolet} style={{ marginTop: 24 }} />
+          <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: 24 }} />
         ) : list.length === 0 ? (
           <View style={styles.empty}>
-            <Ionicons name="mail-open-outline" size={48} color={Colors.gray400} />
+            <Ionicons name="mail-open-outline" size={48} color={theme.colors.textMuted} />
             <Text style={styles.emptyText}>No pending invitations</Text>
           </View>
         ) : (
@@ -124,7 +126,7 @@ export default function GroupInvitationsScreen() {
                   activeOpacity={0.9}
                 >
                   {actingId === inv.id ? (
-                    <ActivityIndicator size="small" color="#FFF" />
+                    <ActivityIndicator size="small" color={theme.colors.onPrimary} />
                   ) : (
                     <Text style={styles.acceptBtnText}>Accept</Text>
                   )}
@@ -146,51 +148,53 @@ export default function GroupInvitationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
-  scroll: { padding: 20, paddingBottom: 40 },
-  subtitle: { ...Typography.body, color: Colors.gray700, marginBottom: 16 },
-  empty: { alignItems: "center", marginTop: 32 },
-  emptyText: { ...Typography.body, color: Colors.gray500, marginTop: 12 },
-  card: {
-    backgroundColor: "#FFF",
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 16,
-    marginBottom: 12,
-  },
-  groupName: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 8 },
-  inviterLine: { ...Typography.body, color: Colors.gray700, marginBottom: 14 },
-  bold: { fontWeight: "600", color: Colors.textPrimary },
-  actions: { flexDirection: "row", gap: 12 },
-  acceptBtn: {
-    flex: 1,
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  acceptBtnText: { ...Typography.button, color: Colors.accentYellow },
-  declineBtn: {
-    flex: 1,
-    backgroundColor: Colors.gray100,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  declineBtnText: { ...Typography.button, color: Colors.textPrimary },
-  btnDisabled: { opacity: 0.6 },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
+    backBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary },
+    scroll: { padding: 20, paddingBottom: 40 },
+    subtitle: { ...theme.type.body, color: theme.colors.textSecondary, marginBottom: 16 },
+    empty: { alignItems: "center", marginTop: 32 },
+    emptyText: { ...theme.type.body, color: theme.colors.textMuted, marginTop: 12 },
+    card: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: 16,
+      marginBottom: 12,
+    },
+    groupName: { ...theme.type.h3, color: theme.colors.textPrimary, marginBottom: 8 },
+    inviterLine: { ...theme.type.body, color: theme.colors.textSecondary, marginBottom: 14 },
+    bold: { fontWeight: "600", color: theme.colors.textPrimary },
+    actions: { flexDirection: "row", gap: 12 },
+    acceptBtn: {
+      flex: 1,
+      backgroundColor: theme.colors.primary,
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: "center",
+    },
+    acceptBtnText: { ...theme.type.button, color: theme.colors.onPrimary },
+    declineBtn: {
+      flex: 1,
+      backgroundColor: theme.colors.backgroundMuted,
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    declineBtnText: { ...theme.type.button, color: theme.colors.textPrimary },
+    btnDisabled: { opacity: 0.6 },
+  });
+}

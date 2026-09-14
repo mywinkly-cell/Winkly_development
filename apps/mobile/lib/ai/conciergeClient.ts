@@ -248,6 +248,8 @@ export type ConciergeContext = {
   /** Human-readable precise pin label when latitude/longitude are set. */
   pin_label?: string;
   timezone?: string;
+  /** Requester's current local wall-clock date/time ("YYYY-MM-DDTHH:mm") when the request was built — the model must never suggest a slot at or before this. */
+  current_datetime_local?: string;
   limit_events?: number;
   source_mode?: Mode;
   /** When planning with a partner (e.g. date/meetup), their user id for constraint intersection and DNA alignment. */
@@ -366,6 +368,7 @@ function serializeConciergeContextForGateway(context: ConciergeContext) {
     search_radius_km: context.search_radius_km,
     pin_label: context.pin_label,
     timezone: context.timezone,
+    current_datetime_local: context.current_datetime_local,
     limit_events: context.limit_events,
     source_mode: context.source_mode,
     partner_user_id: context.partner_user_id,

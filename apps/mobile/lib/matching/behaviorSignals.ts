@@ -5,7 +5,8 @@ export type PairBehaviorSignalKind =
   | "dm_first_outreach"
   | "concierge_match_session"
   | "planner_from_chat"
-  | "invite_accepted";
+  | "invite_accepted"
+  | "plan_reviewed";
 
 /**
  * Structured pair signals (Beyond raw message counts — concierge, planner-from-chat, invites).

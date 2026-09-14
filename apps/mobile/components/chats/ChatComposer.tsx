@@ -25,7 +25,7 @@ import {
   useAudioRecorder,
   useAudioRecorderState,
 } from "expo-audio";
-import { Colors, Typography } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { hitSlopForSize } from "@/constants/a11y";
 import { RecordingWaveform } from "@/components/chats/RecordingWaveform";
 
@@ -49,6 +49,8 @@ function VoiceDraftPlayer({
   accentColor: string;
   durationMs: number;
 }) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const player = useAudioPlayer(uri);
   const status = useAudioPlayerStatus(player);
 
@@ -117,6 +119,8 @@ export function ChatComposer({
   inputRef,
 }: ChatComposerProps) {
   const insets = useSafeAreaInsets();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const localInputRef = useRef<TextInput>(null);
   const mergedRef = inputRef ?? localInputRef;
   const recordUriRef = useRef<string | null>(null);
@@ -228,7 +232,6 @@ export function ChatComposer({
         styles.root,
         {
           paddingBottom: Math.max(insets.bottom, 10),
-          shadowColor: Platform.OS === "ios" ? "#1C1C1E" : "#000",
         },
       ]}
     >
@@ -244,7 +247,7 @@ export function ChatComposer({
             accessibilityRole="button"
             accessibilityLabel="Cancel reply"
           >
-            <Ionicons name="close-circle" size={22} color={Colors.gray500} />
+            <Ionicons name="close-circle" size={22} color={theme.colors.textMuted} />
           </Pressable>
         </View>
       ) : null}
@@ -259,7 +262,7 @@ export function ChatComposer({
           accessibilityLabel="More actions"
           accessibilityState={{ disabled: busy || isRecording }}
         >
-          <Ionicons name="add" size={26} color={Colors.primaryViolet} />
+          <Ionicons name="add" size={26} color={theme.colors.primary} />
         </Pressable>
 
         <View style={styles.inputColumn}>
@@ -288,7 +291,7 @@ export function ChatComposer({
                 accessibilityRole="button"
                 accessibilityLabel="Delete voice message"
               >
-                <Ionicons name="trash-outline" size={22} color={Colors.errorRed} />
+                <Ionicons name="trash-outline" size={22} color={theme.colors.error} />
               </Pressable>
             </View>
           ) : (
@@ -300,7 +303,7 @@ export function ChatComposer({
                 onFocus={onFocus}
                 onBlur={onBlur}
                 placeholder="Message"
-                placeholderTextColor={Colors.gray500}
+                placeholderTextColor={theme.colors.textMuted}
                 multiline
                 maxLength={4000}
                 style={styles.textInput}
@@ -314,7 +317,7 @@ export function ChatComposer({
                   accessibilityRole="button"
                   accessibilityLabel={isRecording ? "Stop recording" : "Record voice message"}
                 >
-                  <Ionicons name="mic-outline" size={22} color={Colors.gray600} />
+                  <Ionicons name="mic-outline" size={22} color={theme.colors.textSecondary} />
                 </Pressable>
               ) : null}
             </View>
@@ -351,15 +354,13 @@ export function ChatComposer({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
   root: {
     width: "100%",
-    backgroundColor: Colors.white,
+    backgroundColor: theme.colors.surface,
     paddingTop: 8,
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 12,
+    ...theme.elevation(2),
   },
   replyStrip: {
     flexDirection: "row",
@@ -369,7 +370,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
     borderRadius: 12,
   },
   replyAccent: {
@@ -380,7 +381,7 @@ const styles = StyleSheet.create({
   replyText: {
     flex: 1,
     fontSize: 13,
-    color: Colors.gray700,
+    color: theme.colors.textSecondary,
   },
   bar: {
     flexDirection: "row",
@@ -392,7 +393,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: Colors.primaryViolet + "14",
+    backgroundColor: theme.colors.primary + "14",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 2,
@@ -406,7 +407,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     minHeight: 44,
     maxHeight: 120,
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
     borderRadius: 22,
     paddingLeft: 16,
     paddingRight: 8,
@@ -416,7 +417,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     lineHeight: 22,
-    color: Colors.textPrimary,
+    color: theme.colors.textPrimary,
     maxHeight: 96,
     paddingVertical: 0,
   },
@@ -434,7 +435,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     minHeight: 44,
-    backgroundColor: Colors.errorRed + "12",
+    backgroundColor: theme.colors.error + "12",
     borderRadius: 22,
     paddingHorizontal: 14,
   },
@@ -442,12 +443,12 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: Colors.errorRed,
+    backgroundColor: theme.colors.error,
   },
   recordingTime: {
     fontSize: 13,
     fontWeight: "600",
-    color: Colors.textPrimary,
+    color: theme.colors.textPrimary,
     fontVariant: ["tabular-nums"],
     minWidth: 44,
   },
@@ -455,7 +456,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: Colors.errorRed,
+    backgroundColor: theme.colors.error,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -465,7 +466,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     minHeight: 44,
-    backgroundColor: Colors.gray100,
+    backgroundColor: theme.colors.backgroundMuted,
     borderRadius: 22,
     paddingLeft: 10,
     paddingRight: 10,
@@ -488,7 +489,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.gray200,
+    backgroundColor: theme.colors.border,
     overflow: "hidden",
   },
   previewWaveFill: {
@@ -498,7 +499,7 @@ const styles = StyleSheet.create({
   previewDuration: {
     fontSize: 12,
     fontWeight: "600",
-    color: Colors.gray600,
+    color: theme.colors.textSecondary,
     minWidth: 52,
     textAlign: "right",
     fontVariant: ["tabular-nums"],
@@ -523,16 +524,18 @@ const styles = StyleSheet.create({
     opacity: 0.42,
   },
   sendLabel: {
-    ...Typography.button,
+    ...theme.type.button,
+    fontFamily: theme.type.button.fontFamily,
     color: "#FFF",
     fontWeight: "700",
     fontSize: 15,
   },
   hint: {
     fontSize: 12,
-    color: Colors.gray500,
+    color: theme.colors.textMuted,
     textAlign: "center",
     marginTop: 6,
     paddingHorizontal: 16,
   },
-});
+  });
+}

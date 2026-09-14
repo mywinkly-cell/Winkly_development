@@ -15,7 +15,6 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   ActivityIndicator,
   Alert,
 } from "react-native";
@@ -24,7 +23,8 @@ import { chatRoutes } from "@/lib/navigation/modeHub";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { TextButton } from "@/components/ds";
+import { useAppTheme } from "@/constants/design-system";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { ProfileViewHeader } from "@/components/profile/ProfileViewHeader";
 import { ProfileSwipeActions } from "@/components/profile/ProfileSwipeActions";
@@ -55,6 +55,10 @@ import {
   buildMatchTags,
   type RomanceProfile,
 } from "@/lib/ai/romanceInsights";
+
+// Distinctive AI-match badge accent — intentionally not a brand/mode token.
+const AI_MATCH_BADGE_BG = "#FF9100";
+const AI_MATCH_BADGE_TEXT = "#003329";
 
 type ProfileRow = {
   id: string;
@@ -92,6 +96,7 @@ function isValidUUID(s: string | undefined): boolean {
 export default function RomanceProfileView() {
   const { i18n } = useTranslation();
   const router = useRouter();
+  const theme = useAppTheme();
   const { id } = useLocalSearchParams<{ id?: string }>();
 
   const [loading, setLoading] = useState(true);
@@ -348,10 +353,10 @@ export default function RomanceProfileView() {
   // ────────────────────────────────────────────────
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
+      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
         <ProfileViewHeader onBack={onBack} mode="romance" onPlannerPress={() => promptConnectBeforeInvite("romance")} />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="large" color={Colors.primaryViolet} />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       </View>
     );
@@ -359,40 +364,20 @@ export default function RomanceProfileView() {
 
   if (!targetProfile) {
     return (
-      <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
+      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
         <ProfileViewHeader onBack={onBack} mode="romance" onPlannerPress={() => promptConnectBeforeInvite("romance")} />
         <View
           style={{
             flex: 1,
             alignItems: "center",
             justifyContent: "center",
-            padding: 24,
+            padding: theme.spacing.xxl,
           }}
         >
-        <Text style={{ ...Typography.body, color: Colors.gray700 }}>
-          This profile is not available.
-        </Text>
-        <TouchableOpacity
-          onPress={onBack}
-          style={{
-            marginTop: 16,
-            paddingVertical: 10,
-            paddingHorizontal: 20,
-            borderRadius: Layout.radii.control,
-            borderWidth: 1,
-            borderColor: Colors.primaryViolet,
-          }}
-        >
-          <Text
-            style={{
-              ...Typography.body,
-              color: Colors.primaryViolet,
-              fontWeight: "600",
-            }}
-          >
-            Go back
+          <Text style={{ ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary }}>
+            This profile is not available.
           </Text>
-        </TouchableOpacity>
+          <TextButton title="Go back" onPress={onBack} style={{ marginTop: theme.spacing.lg }} />
         </View>
       </View>
     );
@@ -410,7 +395,7 @@ export default function RomanceProfileView() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <ProfileViewHeader
         onBack={onBack}
         mode="romance"
@@ -419,7 +404,7 @@ export default function RomanceProfileView() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: theme.spacing.xxl }}
       >
         <ModeProfilePublicView
           mode="romance"
@@ -431,21 +416,22 @@ export default function RomanceProfileView() {
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 6,
+                gap: theme.spacing.xs,
                 minWidth: 78,
                 height: 40,
-                borderRadius: 20,
-                backgroundColor: Colors.accentMint,
+                borderRadius: theme.radii.pill,
+                backgroundColor: AI_MATCH_BADGE_BG,
                 justifyContent: "center",
-                paddingHorizontal: 10,
+                paddingHorizontal: theme.spacing.sm,
               }}
             >
-              <SparklesIcon size={14} color="#003329" />
+              <SparklesIcon size={14} color={AI_MATCH_BADGE_TEXT} />
               <Text
                 style={{
-                  ...Typography.caption,
+                  ...theme.type.caption,
+                  fontFamily: theme.type.caption.fontFamily,
                   fontWeight: "700",
-                  color: "#003329",
+                  color: AI_MATCH_BADGE_TEXT,
                 }}
               >
                 {ai.score}% match
@@ -458,23 +444,23 @@ export default function RomanceProfileView() {
                 style={{
                   flexDirection: "row",
                   flexWrap: "wrap",
-                  marginTop: 8,
-                  marginBottom: 4,
+                  marginTop: theme.spacing.sm,
+                  marginBottom: theme.spacing.xxs,
                 }}
               >
                 {ai.tags.slice(0, 4).map((tag) => (
                   <View
                     key={tag}
                     style={{
-                      borderRadius: 999,
-                      backgroundColor: Colors.gray100,
-                      paddingVertical: 4,
-                      paddingHorizontal: 8,
-                      marginRight: 6,
-                      marginBottom: 6,
+                      borderRadius: theme.radii.pill,
+                      backgroundColor: theme.colors.backgroundMuted,
+                      paddingVertical: theme.spacing.xxs,
+                      paddingHorizontal: theme.spacing.sm,
+                      marginRight: theme.spacing.xs,
+                      marginBottom: theme.spacing.xs,
                     }}
                   >
-                    <Text style={{ ...Typography.caption, color: Colors.gray700 }}>{tag}</Text>
+                    <Text style={{ ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary }}>{tag}</Text>
                   </View>
                 ))}
               </View>
@@ -482,11 +468,11 @@ export default function RomanceProfileView() {
           }
         />
 
-        <View style={{ paddingHorizontal: 20, marginTop: 8 }}>
+        <View style={{ paddingHorizontal: theme.spacing.xl, marginTop: theme.spacing.sm }}>
           {isConnected ? (
             <ProfileConnectionActions
               mode="romance"
-              primaryColor={Colors.romance.primary}
+              primaryColor={theme.modeAccent("romance").primary}
               busy={actionBusy}
               hasChat={!!chatId}
               onChat={() => void handleChat()}
@@ -495,7 +481,7 @@ export default function RomanceProfileView() {
           ) : (
             <ProfileSwipeActions
               mode="romance"
-              primaryColor={Colors.romance.primary}
+              primaryColor={theme.modeAccent("romance").primary}
               disabled={actionBusy}
               onPass={() => void handlePass()}
               onSuper={() => void handleSuperLike()}

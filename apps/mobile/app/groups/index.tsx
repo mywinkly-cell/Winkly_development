@@ -10,7 +10,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 import { getMyGroups, type GroupSummary } from "@/lib/groups/groupsApi";
 import { getMyPendingGroupInvitations } from "@/lib/groupInvitations";
 import type { Mode } from "@/types";
@@ -19,6 +19,7 @@ type GroupsMode = Mode | undefined;
 
 export default function GroupsIndex() {
   const router = useRouter();
+  const theme = useAppTheme();
   const { mode } = useLocalSearchParams<{ mode?: GroupsMode }>();
 
   const [groups, setGroups] = useState<GroupSummary[]>([]);
@@ -58,10 +59,10 @@ export default function GroupsIndex() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <View style={{ padding: 20, paddingBottom: 12 }}>
-        <Text style={{ ...Typography.h1, color: Colors.textPrimary }}>{title}</Text>
-        <Text style={{ ...Typography.body, color: Colors.gray700, marginTop: 6 }}>{subtitle}</Text>
+        <Text style={{ ...theme.type.h1, color: theme.colors.textPrimary }}>{title}</Text>
+        <Text style={{ ...theme.type.body, color: theme.colors.textSecondary, marginTop: 6 }}>{subtitle}</Text>
       </View>
 
       <ScrollView
@@ -84,13 +85,13 @@ export default function GroupsIndex() {
             })
           }
           style={{
-            borderRadius: Layout.radii.card,
+            borderRadius: theme.radii.lg,
             padding: 16,
             marginBottom: 12,
             flexDirection: "row",
             alignItems: "center",
             gap: 12,
-            backgroundColor: Colors.primaryViolet,
+            backgroundColor: theme.colors.primary,
           }}
           activeOpacity={0.9}
           accessibilityLabel="Plan something for the group"
@@ -100,20 +101,20 @@ export default function GroupsIndex() {
               width: 40,
               height: 40,
               borderRadius: 20,
-              backgroundColor: "rgba(255,255,255,0.18)",
+              backgroundColor: theme.colors.onPrimary + "2E",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Ionicons name="sparkles" size={20} color="#FFF" />
+            <Ionicons name="sparkles" size={20} color={theme.colors.onPrimary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ ...Typography.button, color: "#FFF" }}>Plan something for us</Text>
-            <Text style={{ ...Typography.caption, color: "rgba(255,255,255,0.85)", marginTop: 2 }}>
+            <Text style={{ ...theme.type.button, color: theme.colors.onPrimary }}>Plan something for us</Text>
+            <Text style={{ ...theme.type.caption, color: theme.colors.onPrimary + "D9", marginTop: 2 }}>
               Pick a few people — Winkly drafts plan options for the group.
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.85)" />
+          <Ionicons name="chevron-forward" size={20} color={theme.colors.onPrimary + "D9"} />
         </TouchableOpacity>
 
         <View style={{ flexDirection: "row", gap: 10, marginBottom: 16 }}>
@@ -121,40 +122,40 @@ export default function GroupsIndex() {
             onPress={() => router.push({ pathname: "/groups/create-group", params: { mode } })}
             style={{
               flex: 1,
-              borderRadius: Layout.radii.control,
+              borderRadius: theme.radii.md,
               paddingVertical: 12,
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
-              backgroundColor: Colors.gray100,
+              backgroundColor: theme.colors.backgroundMuted,
               borderWidth: 1,
-              borderColor: Colors.gray200,
+              borderColor: theme.colors.border,
             }}
             activeOpacity={0.9}
           >
-            <Ionicons name="add" size={18} color={Colors.textPrimary} />
-            <Text style={{ ...Typography.button, color: Colors.textPrimary }}>Create a group</Text>
+            <Ionicons name="add" size={18} color={theme.colors.textPrimary} />
+            <Text style={{ ...theme.type.button, color: theme.colors.textPrimary }}>Create a group</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={() => router.push("/groups/invitations")}
             style={{
-              borderRadius: Layout.radii.control,
+              borderRadius: theme.radii.md,
               paddingVertical: 12,
               paddingHorizontal: 16,
               flexDirection: "row",
               alignItems: "center",
               gap: 8,
-              backgroundColor: Colors.gray100,
+              backgroundColor: theme.colors.backgroundMuted,
               borderWidth: 1,
-              borderColor: Colors.gray200,
+              borderColor: theme.colors.border,
             }}
             activeOpacity={0.9}
             accessibilityLabel="Group invitations"
           >
-            <Ionicons name="mail-outline" size={18} color={Colors.textPrimary} />
-            <Text style={{ ...Typography.button, color: Colors.textPrimary }}>Invites</Text>
+            <Ionicons name="mail-outline" size={18} color={theme.colors.textPrimary} />
+            <Text style={{ ...theme.type.button, color: theme.colors.textPrimary }}>Invites</Text>
             {pendingCount > 0 ? (
               <View
                 style={{
@@ -162,32 +163,32 @@ export default function GroupsIndex() {
                   height: 20,
                   borderRadius: 10,
                   paddingHorizontal: 5,
-                  backgroundColor: Colors.primaryViolet,
+                  backgroundColor: theme.colors.primary,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <Text style={{ color: "#FFF", fontSize: 12, fontWeight: "700" }}>{pendingCount}</Text>
+                <Text style={{ color: theme.colors.onPrimary, fontSize: 12, fontWeight: "700" }}>{pendingCount}</Text>
               </View>
             ) : null}
           </TouchableOpacity>
         </View>
 
-        <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 10 }}>Your groups</Text>
+        <Text style={{ ...theme.type.h3, color: theme.colors.textPrimary, marginBottom: 10 }}>Your groups</Text>
 
         {loading ? (
-          <ActivityIndicator size="small" color={Colors.primaryViolet} style={{ marginTop: 24 }} />
+          <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 24 }} />
         ) : groups.length === 0 ? (
           <View
             style={{
-              backgroundColor: "#FFF",
-              borderRadius: Layout.radii.card,
+              backgroundColor: theme.colors.surface,
+              borderRadius: theme.radii.lg,
               padding: 20,
               alignItems: "center",
             }}
           >
-            <Ionicons name="people-outline" size={36} color={Colors.gray400} />
-            <Text style={{ ...Typography.body, color: Colors.gray700, marginTop: 10, textAlign: "center" }}>
+            <Ionicons name="people-outline" size={36} color={theme.colors.textMuted} />
+            <Text style={{ ...theme.type.body, color: theme.colors.textSecondary, marginTop: 10, textAlign: "center" }}>
               You haven&apos;t joined any groups yet. Create one or accept an invitation to get started.
             </Text>
           </View>
@@ -202,6 +203,7 @@ export default function GroupsIndex() {
 }
 
 function GroupRow({ group, onPress }: { group: GroupSummary; onPress: () => void }) {
+  const theme = useAppTheme();
   const initial = (group.name ?? "G").trim().slice(0, 1).toUpperCase();
   return (
     <TouchableOpacity
@@ -210,8 +212,8 @@ function GroupRow({ group, onPress }: { group: GroupSummary; onPress: () => void
       style={{
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: "#FFF",
-        borderRadius: Layout.radii.card,
+        backgroundColor: theme.colors.surface,
+        borderRadius: theme.radii.lg,
         padding: 14,
         marginBottom: 10,
       }}
@@ -224,27 +226,27 @@ function GroupRow({ group, onPress }: { group: GroupSummary; onPress: () => void
             width: 48,
             height: 48,
             borderRadius: 24,
-            backgroundColor: Colors.primaryViolet + "22",
+            backgroundColor: theme.colors.primary + "22",
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Text style={{ ...Typography.h3, color: Colors.primaryViolet }}>{initial}</Text>
+          <Text style={{ ...theme.type.h3, color: theme.colors.primary }}>{initial}</Text>
         </View>
       )}
 
       <View style={{ flex: 1, marginLeft: 12 }}>
-        <Text style={{ ...Typography.body, fontWeight: "600", color: Colors.textPrimary }} numberOfLines={1}>
+        <Text style={{ ...theme.type.body, fontWeight: "600", color: theme.colors.textPrimary }} numberOfLines={1}>
           {group.name}
         </Text>
-        <Text style={{ ...Typography.caption, color: Colors.gray600, marginTop: 2 }} numberOfLines={1}>
+        <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 2 }} numberOfLines={1}>
           {group.last_message_preview
             ? group.last_message_preview
             : `${group.member_count} / ${group.max_members} members`}
         </Text>
       </View>
 
-      <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
+      <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
     </TouchableOpacity>
   );
 }

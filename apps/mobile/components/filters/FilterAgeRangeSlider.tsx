@@ -1,7 +1,7 @@
 import React from "react";
 import { View } from "react-native";
 import RangeSlider from "react-native-range-slider-expo";
-import { Colors } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 import {
   FILTER_SLIDER_BAR_HEIGHT,
   FILTER_SLIDER_CONTAINER_STYLE,
@@ -30,6 +30,7 @@ export function FilterAgeRangeSlider({
   onAgeMaxChange,
   primaryColor,
 }: FilterAgeRangeSliderProps) {
+  const theme = useAppTheme();
   return (
     <View style={FILTER_SLIDER_WRAP_STYLE}>
       <RangeSlider
@@ -43,7 +44,7 @@ export function FilterAgeRangeSlider({
         fromKnobColor={primaryColor}
         toKnobColor={primaryColor}
         inRangeBarColor={primaryColor}
-        outOfRangeBarColor={Colors.gray300}
+        outOfRangeBarColor={theme.colors.border}
         showRangeLabels={false}
         showValueLabels={false}
         styleSize={FILTER_SLIDER_KNOB_SIZE}

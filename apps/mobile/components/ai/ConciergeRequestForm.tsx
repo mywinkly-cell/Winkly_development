@@ -18,7 +18,9 @@ import { useTranslation } from "react-i18next";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { Chip, PrimaryButton, TextButton } from "@/components/ds";
 import type { ConciergeContext } from "@/lib/ai/conciergeClient";
 import { buildOriginContext } from "@/lib/ai/conciergeClient";
 import { buildPlanRequestText } from "@/lib/ai/buildPlanRequestText";
@@ -203,6 +205,8 @@ export function ConciergeRequestForm({
   const { i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
   const insets = useSafeAreaInsets();
+  const theme = useAppTheme();
+  const styles = useMemo(() => makeStyles(theme, mode), [theme, mode]);
   const [prompt, setPrompt] = useState("");
   const [extraNotes, setExtraNotes] = useState("");
   const [timePreference, setTimePreference] = useState<string>("any");
@@ -502,7 +506,7 @@ export function ConciergeRequestForm({
 
       {selectedTopicLabel?.trim() ? (
         <View style={styles.selectedTopicPill}>
-          <Ionicons name="pricetag-outline" size={16} color={Colors.primaryViolet} />
+          <Ionicons name="pricetag-outline" size={16} color={theme.colors.primary} />
           <Text style={styles.selectedTopicText} numberOfLines={1}>
             Topic: {selectedTopicLabel.trim()}
           </Text>
@@ -513,18 +517,14 @@ export function ConciergeRequestForm({
           <Text style={styles.recentLabel}>Recent ideas</Text>
           <View style={styles.recentChipsRow}>
             {recentRequests.slice(0, 2).map((r, i) => (
-              <TouchableOpacity
+              <Chip
                 key={`${r.timestamp}-${i}`}
-                style={styles.recentChip}
+                label={r.summary}
                 onPress={() => {
                   Haptics.selectionAsync();
                   onSubmit(r.context);
                 }}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="time-outline" size={16} color={Colors.primaryViolet} />
-                <Text style={styles.recentChipText} numberOfLines={1}>{r.summary}</Text>
-              </TouchableOpacity>
+              />
             ))}
           </View>
         </View>
@@ -537,17 +537,14 @@ export function ConciergeRequestForm({
           contentContainerStyle={styles.chipsContent}
         >
           {chips.map((label) => (
-            <TouchableOpacity
+            <Chip
               key={label}
+              label={label}
               onPress={() => {
                 Haptics.selectionAsync();
                 setPrompt((p) => (p ? `${p}, ${label.toLowerCase()}` : label));
               }}
-              style={styles.activityChip}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.activityChipText}>{label}</Text>
-            </TouchableOpacity>
+            />
           ))}
         </ScrollView>
       )}
@@ -562,20 +559,18 @@ export function ConciergeRequestForm({
                 ? "e.g. Suggest an opening line, What to do this weekend with my match, Fun topic to talk about"
                 : "e.g. Plan a date, weekend brunch, something outdoors"
           }
-          placeholderTextColor={Colors.gray500}
+          placeholderTextColor={theme.colors.textMuted}
           value={prompt}
           onChangeText={setPrompt}
           multiline
           maxLength={300}
         />
-        <TouchableOpacity
+        <TextButton
+          title="Say what you want"
+          icon={<Ionicons name="mic-outline" size={22} color={theme.colors.primary} />}
+          onPress={() => { setVoiceInputText(""); setShowVoiceModal(true); }}
           style={styles.voiceInputBtn}
-          onPress={() => { Haptics.selectionAsync(); setVoiceInputText(""); setShowVoiceModal(true); }}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="mic-outline" size={24} color={Colors.primaryViolet} />
-          <Text style={styles.voiceInputBtnText}>Say what you want</Text>
-        </TouchableOpacity>
+        />
       </View>
 
       <Modal visible={showVoiceModal} transparent animationType="fade">
@@ -586,7 +581,7 @@ export function ConciergeRequestForm({
             <TextInput
               style={styles.voiceModalInput}
               placeholder="Describe your plan in one sentence"
-              placeholderTextColor={Colors.gray500}
+              placeholderTextColor={theme.colors.textMuted}
               value={voiceInputText}
               onChangeText={setVoiceInputText}
               multiline
@@ -627,7 +622,7 @@ export function ConciergeRequestForm({
         <Ionicons
           name={showDetails ? "chevron-up" : "chevron-down"}
           size={20}
-          color={Colors.primaryViolet}
+          color={theme.colors.primary}
         />
         <Text style={styles.detailsToggleText}>
           {showDetails
@@ -644,7 +639,7 @@ export function ConciergeRequestForm({
           <TextInput
             style={[styles.promptInput, styles.promptSecondary]}
             placeholder="Allergies, vibe, constraints, dress code…"
-            placeholderTextColor={Colors.gray500}
+            placeholderTextColor={theme.colors.textMuted}
             value={extraNotes}
             onChangeText={setExtraNotes}
             multiline
@@ -671,10 +666,10 @@ export function ConciergeRequestForm({
           {parseLocation(location, appLanguage).city && (
             <View style={styles.weatherRow}>
               {weatherLoading ? (
-                <ActivityIndicator size="small" color={Colors.primaryViolet} />
+                <ActivityIndicator size="small" color={theme.colors.primary} />
               ) : weatherSnapshot ? (
                 <>
-                  <Ionicons name="partly-sunny-outline" size={18} color={Colors.gray600} />
+                  <Ionicons name="partly-sunny-outline" size={18} color={theme.colors.textSecondary} />
                   <Text style={styles.weatherText}>
                     {formatWeatherDisplayText(weatherSnapshot, {
                       singleDay: dateRangePreset === "single",
@@ -704,7 +699,7 @@ export function ConciergeRequestForm({
                         ? "Next week"
                         : "Custom range"}
             </Text>
-            <Ionicons name="chevron-down" size={18} color={Colors.gray600} />
+            <Ionicons name="chevron-down" size={18} color={theme.colors.textSecondary} />
           </TouchableOpacity>
           <Modal visible={showDateRangePicker} transparent animationType="fade">
             <Pressable style={styles.pickerOverlay} onPress={() => setShowDateRangePicker(false)}>
@@ -768,14 +763,14 @@ export function ConciergeRequestForm({
           </Modal>
           <View style={styles.dateRangeRow}>
             <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateBtn} activeOpacity={0.8}>
-              <Ionicons name="calendar-outline" size={20} color={Colors.gray600} />
+              <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
               <Text style={styles.dateBtnText} numberOfLines={1}>
                 From: {date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
               </Text>
             </TouchableOpacity>
             {dateRangePreset !== "single" && (
               <TouchableOpacity onPress={() => setShowDateEndPicker(true)} style={[styles.dateBtn, styles.dateBtnSecond]} activeOpacity={0.8}>
-                <Ionicons name="calendar-outline" size={20} color={Colors.gray600} />
+                <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
                 <Text style={styles.dateBtnText} numberOfLines={1}>
                   To: {dateEnd.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
                 </Text>
@@ -825,7 +820,7 @@ export function ConciergeRequestForm({
             <TextInput
               style={styles.budgetAmountInput}
               placeholder="Amount (optional)"
-              placeholderTextColor={Colors.gray500}
+              placeholderTextColor={theme.colors.textMuted}
               value={budgetAmount}
               onChangeText={(t) => setBudgetAmount(t.replace(/[^0-9.,]/g, ""))}
               keyboardType="decimal-pad"
@@ -839,7 +834,7 @@ export function ConciergeRequestForm({
               activeOpacity={0.8}
             >
               <Text style={styles.currencyDropdownText}>{budgetCurrency}</Text>
-              <Ionicons name="chevron-down" size={16} color={Colors.gray600} />
+              <Ionicons name="chevron-down" size={16} color={theme.colors.textSecondary} />
             </TouchableOpacity>
           </View>
           <Modal visible={showCurrencyPicker} transparent animationType="fade">
@@ -875,18 +870,15 @@ export function ConciergeRequestForm({
                   { key: "afternoon", label: "Afternoon" },
                   { key: "evening", label: "Evening" },
                 ].map(({ key, label }) => (
-                  <TouchableOpacity
+                  <Chip
                     key={key}
-                    style={[styles.freeWhenChip, timePreference === key && styles.freeWhenChipActive]}
+                    label={label}
+                    selected={timePreference === key}
                     onPress={() => {
-                      Haptics.selectionAsync();
                       setTimePreference(key);
                       setAvailableSlots([]);
                     }}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.freeWhenChipText, timePreference === key && styles.freeWhenChipTextActive]}>{label}</Text>
-                  </TouchableOpacity>
+                  />
                 ))}
               </View>
               <TouchableOpacity
@@ -903,10 +895,10 @@ export function ConciergeRequestForm({
                 activeOpacity={0.8}
               >
                 {calendarLoading ? (
-                  <ActivityIndicator size="small" color={Colors.primaryViolet} />
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
                 ) : (
                   <>
-                    <Ionicons name="calendar-outline" size={18} color={availableSlots.length > 0 ? Colors.white : Colors.primaryViolet} />
+                    <Ionicons name="calendar-outline" size={18} color={availableSlots.length > 0 ? theme.colors.onPrimary : theme.colors.primary} />
                     <Text style={[styles.whenFreeBtnText, availableSlots.length > 0 && styles.whenFreeBtnTextActive]}>
                       {availableSlots.length > 0 ? `Suggest when I'm free (${availableSlots.length} evenings)` : "Suggest when I am free"}
                     </Text>
@@ -923,7 +915,7 @@ export function ConciergeRequestForm({
                   <Avatar uri={partner.avatar_url} size={32} />
                   <Text style={styles.partnerName} numberOfLines={1}>{partner.displayName}</Text>
                   <TouchableOpacity onPress={() => handleSelectPartner(null)} hitSlop={8} accessibilityLabel="Clear">
-                    <Ionicons name="close-circle" size={24} color={Colors.gray500} />
+                    <Ionicons name="close-circle" size={24} color={theme.colors.textMuted} />
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -936,7 +928,7 @@ export function ConciergeRequestForm({
                   }}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="person-add-outline" size={20} color={Colors.primaryViolet} />
+                  <Ionicons name="person-add-outline" size={20} color={theme.colors.primary} />
                   <Text style={styles.partnerBtnText}>Invite</Text>
                 </TouchableOpacity>
               )}
@@ -962,7 +954,7 @@ export function ConciergeRequestForm({
                     <TextInput
                       style={[styles.input, { marginBottom: 8 }]}
                       placeholder="Search by name"
-                      placeholderTextColor={Colors.gray500}
+                      placeholderTextColor={theme.colors.textMuted}
                       value={inviteSearchQuery}
                       onChangeText={setInviteSearchQuery}
                       autoCapitalize="words"
@@ -971,7 +963,7 @@ export function ConciergeRequestForm({
                   <ScrollView style={styles.partnerList} nestedScrollEnabled showsVerticalScrollIndicator={false}>
                     {inviteSource === "matches"
                       ? (partnersLoading ? (
-                          <ActivityIndicator size="small" color={Colors.primaryViolet} style={{ marginVertical: 12 }} />
+                          <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginVertical: 12 }} />
                         ) : partners.length === 0 ? (
                           <Text style={styles.inviteEmptyText}>
                             {mode === "romance" ? "No matches yet." : "No connections yet."}
@@ -985,7 +977,7 @@ export function ConciergeRequestForm({
                           ))
                         ))
                       : (inviteSearchLoading ? (
-                          <ActivityIndicator size="small" color={Colors.primaryViolet} style={{ marginVertical: 12 }} />
+                          <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginVertical: 12 }} />
                         ) : inviteSearchQuery.trim().length < 2 ? (
                           <Text style={styles.inviteEmptyText}>Type at least 2 characters to search.</Text>
                         ) : inviteSearchResults.length === 0 ? (
@@ -1009,137 +1001,97 @@ export function ConciergeRequestForm({
 
       {/* Sticky footer CTA so form is always usable + scrolling stays vertical */}
       <View style={[styles.footer, { paddingBottom: Math.max(12, insets.bottom + 10) }]}>
-        <TouchableOpacity
+        <PrimaryButton
+          title={source_screen === "chats" ? "Get chat suggestions" : "Get suggestions"}
           onPress={handleSubmit}
-          style={[styles.submitBtn, (loading || !canSubmit) && styles.submitBtnDisabled]}
-          disabled={loading || !canSubmit}
-          activeOpacity={0.9}
-        >
-          {loading ? (
-            <ActivityIndicator color={Colors.white} />
-          ) : (
-            <Text style={styles.submitBtnText}>
-              {source_screen === "chats" ? "Get chat suggestions" : "Get suggestions"}
-            </Text>
-          )}
-        </TouchableOpacity>
+          loading={loading}
+          disabled={!canSubmit}
+        />
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: AppTheme, mode: Mode) {
+  const modeBg = theme.modeAccent(mode).bg;
+  return StyleSheet.create({
   container: { flex: 1 },
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 24, paddingBottom: 16 },
-  modeLabelRow: { marginBottom: 8 },
+  scrollContent: { paddingHorizontal: theme.spacing.xxl, paddingBottom: theme.spacing.lg },
+  modeLabelRow: { marginBottom: theme.spacing.sm },
   modeLabelText: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     fontWeight: "600",
   },
-  chipsScroll: { marginHorizontal: -24, marginBottom: 12 },
-  chipsContent: { paddingHorizontal: 24, flexDirection: "row", flexWrap: "wrap" },
-  activityChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: Colors.gray100,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  activityChipText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
-    fontWeight: "500",
-  },
-  recentWrap: { marginBottom: 14 },
+  chipsScroll: { marginHorizontal: -theme.spacing.xxl, marginBottom: theme.spacing.md },
+  chipsContent: { paddingHorizontal: theme.spacing.xxl, flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
+  recentWrap: { marginBottom: theme.spacing.lg },
   recentLabel: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     fontWeight: "600",
-    marginBottom: 8,
+    marginBottom: theme.spacing.sm,
   },
-  recentChipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  recentChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: Colors.gray100,
-  },
-  recentChipText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
-    fontWeight: "500",
-    maxWidth: 160,
-  },
-  freeWhenRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
-  freeWhenChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: Colors.gray100,
-  },
-  freeWhenChipActive: { backgroundColor: Colors.primaryViolet },
-  freeWhenChipText: { ...Typography.caption, color: Colors.gray700, fontWeight: "500" },
-  freeWhenChipTextActive: { color: Colors.white },
+  recentChipsRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
+  freeWhenRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.sm },
   whenFreeBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: Colors.gray100,
-    marginBottom: 16,
+    justifyContent: "center",
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.backgroundMuted,
+    marginBottom: theme.spacing.lg,
   },
-  whenFreeBtnActive: { backgroundColor: Colors.primaryViolet },
-  whenFreeBtnText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "500" },
-  whenFreeBtnTextActive: { color: Colors.white },
+  whenFreeBtnActive: { backgroundColor: theme.colors.primary },
+  whenFreeBtnText: { ...theme.type.caption, color: theme.colors.primary, fontWeight: "600" },
+  whenFreeBtnTextActive: { color: theme.colors.onPrimary },
   hint: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginBottom: 12,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
+    marginBottom: theme.spacing.md,
   },
   fieldLabel: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     fontWeight: "600",
-    marginBottom: 8,
+    marginBottom: theme.spacing.sm,
   },
   selectedTopicPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: Colors.romance.secondary,
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.radii.pill,
+    backgroundColor: modeBg,
     borderWidth: 1,
-    borderColor: Colors.gray200,
-    marginBottom: 12,
+    borderColor: theme.colors.border,
+    marginBottom: theme.spacing.md,
   },
   selectedTopicText: {
-    ...Typography.caption,
-    color: Colors.textPrimary,
+    ...theme.type.caption,
+    color: theme.colors.textPrimary,
     fontWeight: "700",
     flex: 1,
   },
   promptRow: {
-    marginBottom: 12,
+    marginBottom: theme.spacing.md,
   },
   promptInput: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.gray100,
-    borderRadius: 12,
-    padding: 14,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
+    backgroundColor: theme.colors.backgroundMuted,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.lg,
     minHeight: 80,
     textAlignVertical: "top",
-    marginBottom: 8,
+    marginBottom: theme.spacing.sm,
   },
   promptPrimary: {
     minHeight: 92,
@@ -1148,331 +1100,288 @@ const styles = StyleSheet.create({
     minHeight: 64,
   },
   voiceInputBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  voiceInputBtnText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
-    fontWeight: "600",
+    alignSelf: "flex-start",
+    paddingLeft: 0,
   },
   voiceModalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: theme.colors.overlay,
     justifyContent: "center",
     alignItems: "center",
-    padding: 24,
+    padding: theme.spacing.xxl,
   },
   voiceModalCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: 24,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.lg,
+    padding: theme.spacing.xxl,
     width: "100%",
     maxWidth: 360,
   },
   voiceModalTitle: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
-    marginBottom: 8,
+    ...theme.type.h3,
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.sm,
   },
   voiceModalHint: {
-    ...Typography.caption,
-    color: Colors.gray500,
-    marginBottom: 16,
+    ...theme.type.caption,
+    color: theme.colors.textMuted,
+    marginBottom: theme.spacing.lg,
   },
   voiceModalInput: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.gray100,
-    borderRadius: 12,
-    padding: 14,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
+    backgroundColor: theme.colors.backgroundMuted,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.lg,
     minHeight: 60,
     textAlignVertical: "top",
-    marginBottom: 20,
+    marginBottom: theme.spacing.xl,
   },
   voiceModalActions: {
     flexDirection: "row",
-    gap: 12,
+    gap: theme.spacing.md,
     justifyContent: "flex-end",
   },
   voiceModalCancel: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
   },
   voiceModalCancelText: {
-    ...Typography.caption,
-    color: Colors.gray500,
+    ...theme.type.caption,
+    color: theme.colors.textMuted,
   },
   voiceModalDone: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radii.md,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xl,
   },
   voiceModalDoneText: {
-    ...Typography.caption,
-    color: Colors.white,
+    ...theme.type.caption,
+    color: theme.colors.onPrimary,
     fontWeight: "600",
   },
   detailsToggle: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 12,
+    gap: theme.spacing.xs,
+    marginBottom: theme.spacing.md,
   },
   detailsToggleText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
+    ...theme.type.caption,
+    color: theme.colors.primary,
     fontWeight: "600",
   },
-  details: { marginBottom: 16 },
+  details: { marginBottom: theme.spacing.lg },
   label: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginBottom: 6,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
+    marginBottom: theme.spacing.xs,
   },
   input: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.gray100,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 12,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
+    backgroundColor: theme.colors.backgroundMuted,
+    borderRadius: theme.radii.sm,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md,
   },
   locationWrap: {
-    marginBottom: 12,
+    marginBottom: theme.spacing.md,
     position: "relative",
   },
   locationInput: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.gray100,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
+    backgroundColor: theme.colors.backgroundMuted,
+    borderRadius: theme.radii.md,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
     paddingRight: 40,
   },
   locationInputSpinner: {
     position: "absolute",
-    right: 12,
+    right: theme.spacing.md,
     top: 0,
     bottom: 0,
     justifyContent: "center",
   },
   locationSuggestionsList: {
-    marginTop: 6,
-    backgroundColor: Colors.white,
-    borderRadius: 12,
+    marginTop: theme.spacing.xs,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.md,
     borderWidth: 1,
-    borderColor: Colors.gray200,
-    ...Platform.select({
-      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 },
-      android: { elevation: 4 },
-    }),
+    borderColor: theme.colors.border,
+    ...theme.elevation(2),
     overflow: "hidden",
   },
   locationSuggestionItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.gray200,
+    borderBottomColor: theme.colors.border,
   },
   locationSuggestionText: {
-    ...Typography.body,
-    color: Colors.textPrimary,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
     flex: 1,
   },
   dropdownTriggerFull: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: Colors.gray100,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    marginBottom: 12,
+    backgroundColor: theme.colors.backgroundMuted,
+    borderRadius: theme.radii.sm,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+    marginBottom: theme.spacing.md,
   },
   dropdownTriggerText: {
-    ...Typography.body,
-    color: Colors.textPrimary,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
     flex: 1,
   },
   pickerOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: theme.colors.overlay,
     justifyContent: "flex-end",
   },
   pickerSheet: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 20,
-    paddingBottom: 32,
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.radii.lg,
+    borderTopRightRadius: theme.radii.lg,
+    padding: theme.spacing.xl,
+    paddingBottom: theme.spacing.xxxl,
     maxHeight: "70%",
   },
   pickerTitle: {
-    ...Typography.body,
+    ...theme.type.body,
     fontWeight: "600",
-    color: Colors.textPrimary,
-    marginBottom: 12,
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.md,
   },
-  pickerList: { maxHeight: 320 },
   pickerItem: {
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    marginBottom: 4,
+    paddingVertical: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.radii.sm,
+    marginBottom: theme.spacing.xs,
   },
-  pickerItemActive: { backgroundColor: Colors.primaryViolet },
+  pickerItemActive: { backgroundColor: theme.colors.primary },
   pickerItemText: {
-    ...Typography.body,
-    color: Colors.textPrimary,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
   },
-  pickerItemTextActive: { color: Colors.white, fontWeight: "600" },
+  pickerItemTextActive: { color: theme.colors.onPrimary, fontWeight: "600" },
   dateBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    backgroundColor: Colors.gray100,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 12,
+    gap: theme.spacing.sm,
+    backgroundColor: theme.colors.backgroundMuted,
+    borderRadius: theme.radii.sm,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md,
   },
   dateBtnText: {
-    ...Typography.body,
-    color: Colors.textPrimary,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
   },
-  dateBtnSecond: { marginTop: 8 },
+  dateBtnSecond: { marginTop: theme.spacing.sm },
   datePickerWrap: {
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md,
   },
-  datePickerDone: { alignSelf: "flex-end", marginTop: 8 },
+  datePickerDone: { alignSelf: "flex-end", marginTop: theme.spacing.sm },
   datePickerDoneText: {
-    ...Typography.button,
-    color: Colors.primaryViolet,
+    ...theme.type.button,
+    color: theme.colors.primary,
   },
-  datePresetScroll: { marginHorizontal: -24, marginBottom: 10 },
-  datePresetContent: { paddingHorizontal: 24, flexDirection: "row", flexWrap: "wrap" },
-  datePresetChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: Colors.gray100,
-    marginRight: 8,
-    marginBottom: 8,
-    flexShrink: 0,
-    minWidth: 100,
-  },
-  datePresetChipActive: { backgroundColor: Colors.primaryViolet },
-  datePresetChipText: { ...Typography.caption, color: Colors.gray600, fontWeight: "500" },
-  datePresetChipTextActive: { color: Colors.white, fontWeight: "600" },
-  dateRangeRow: { marginBottom: 12 },
+  dateRangeRow: { marginBottom: theme.spacing.md },
   budgetAmountRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: theme.spacing.sm,
   },
   budgetAmountInput: {
     flex: 1,
-    ...Typography.body,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.gray100,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginRight: 10,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
+    backgroundColor: theme.colors.backgroundMuted,
+    borderRadius: theme.radii.sm,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    marginRight: theme.spacing.sm,
   },
   currencyDropdownTrigger: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: Colors.gray100,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    gap: theme.spacing.xs,
+    backgroundColor: theme.colors.backgroundMuted,
+    borderRadius: theme.radii.sm,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
     minWidth: 72,
   },
   currencyDropdownText: {
-    ...Typography.body,
-    color: Colors.textPrimary,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
     fontWeight: "600",
   },
-  currencyChipsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginBottom: 12,
-  },
-  currencyChip: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    backgroundColor: Colors.gray100,
-    marginRight: 8,
-    marginBottom: 6,
-  },
-  currencyChipActive: { backgroundColor: Colors.primaryViolet },
-  currencyChipText: { ...Typography.caption, color: Colors.gray600 },
-  currencyChipTextActive: { color: Colors.white, fontWeight: "600" },
   partnerSelectedRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    backgroundColor: Colors.gray100,
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 12,
+    gap: theme.spacing.sm,
+    backgroundColor: theme.colors.backgroundMuted,
+    borderRadius: theme.radii.sm,
+    padding: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
   },
   partnerName: {
-    ...Typography.body,
-    color: Colors.textPrimary,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
     flex: 1,
   },
   partnerBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: Colors.gray100,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 12,
+    gap: theme.spacing.xs,
+    backgroundColor: theme.colors.backgroundMuted,
+    borderRadius: theme.radii.sm,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md,
   },
   partnerBtnText: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
+    ...theme.type.caption,
+    color: theme.colors.primary,
     fontWeight: "600",
   },
   invitePickerWrap: {
-    backgroundColor: Colors.gray100,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
+    backgroundColor: theme.colors.backgroundMuted,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md,
     maxHeight: 220,
   },
-  inviteSourceRow: { flexDirection: "row", marginBottom: 10 },
+  inviteSourceRow: { flexDirection: "row", marginBottom: theme.spacing.sm, gap: theme.spacing.sm },
   inviteSourceTab: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginRight: 8,
-    backgroundColor: Colors.white,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.radii.pill,
+    backgroundColor: theme.colors.surface,
   },
-  inviteSourceTabActive: { backgroundColor: Colors.primaryViolet },
-  inviteSourceTabText: { ...Typography.caption, color: Colors.gray600, fontWeight: "600" },
-  inviteSourceTabTextActive: { color: Colors.white },
+  inviteSourceTabActive: { backgroundColor: theme.colors.primary },
+  inviteSourceTabText: { ...theme.type.caption, color: theme.colors.textSecondary, fontWeight: "600" },
+  inviteSourceTabTextActive: { color: theme.colors.onPrimary },
   inviteEmptyText: {
-    ...Typography.caption,
-    color: Colors.gray500,
-    paddingVertical: 12,
-    paddingHorizontal: 4,
+    ...theme.type.caption,
+    color: theme.colors.textMuted,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.xs,
   },
   partnerList: {
     maxHeight: 160,
@@ -1481,42 +1390,32 @@ const styles = StyleSheet.create({
   partnerRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xs,
   },
   partnerRowName: {
-    ...Typography.body,
-    color: Colors.textPrimary,
+    ...theme.type.body,
+    color: theme.colors.textPrimary,
     flex: 1,
   },
   weatherRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginTop: 8,
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
   },
   weatherText: {
-    ...Typography.caption,
-    color: Colors.gray600,
+    ...theme.type.caption,
+    color: theme.colors.textSecondary,
     flex: 1,
   },
-  submitBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  submitBtnDisabled: { opacity: 0.6 },
-  submitBtnText: {
-    ...Typography.button,
-    color: Colors.white,
-  },
   footer: {
-    paddingTop: 10,
-    paddingHorizontal: 24,
-    backgroundColor: Colors.backgroundMuted,
+    paddingTop: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xxl,
+    backgroundColor: theme.colors.backgroundMuted,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.gray200,
+    borderTopColor: theme.colors.border,
   },
-});
+  });
+}

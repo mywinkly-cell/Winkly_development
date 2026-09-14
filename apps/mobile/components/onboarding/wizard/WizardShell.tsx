@@ -1,0 +1,60 @@
+// Shell for the onboarding wizard steps: progress indicator, scrollable body,
+// and a persistent Back/Next footer. Built from the D0 primitives (Button).
+
+import React from "react";
+import { View, Text } from "react-native";
+import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Button } from "@/components/ui/Button";
+import { OnboardingStepIndicator } from "@/components/onboarding/OnboardingStepIndicator";
+
+export function WizardShell(props: {
+  currentStep: number; // 1-based
+  totalSteps: number;
+  stepLabel: string;
+  subProgress?: number;
+  children: React.ReactNode;
+  onBack: () => void;
+  backDisabled?: boolean;
+  onNext: () => void;
+  nextLabel: string;
+  saving?: boolean;
+  saveError?: string | null;
+  onRetry?: () => void;
+  showSkip?: boolean;
+  onSkip?: () => void;
+}) {
+  const {
+    currentStep, totalSteps, stepLabel, subProgress, children,
+    onBack, backDisabled, onNext, nextLabel, saving, saveError, onRetry,
+    showSkip, onSkip,
+  } = props;
+
+  return (
+    <View>
+      <OnboardingStepIndicator currentStep={currentStep} totalSteps={totalSteps} label={stepLabel} subProgress={subProgress} />
+
+      {children}
+
+      {saveError ? (
+        <View style={{ backgroundColor: "#FDECEC", borderRadius: 14, padding: 14, marginTop: 20, borderWidth: 1, borderColor: "#F5B5B5" }}>
+          <Text style={{ ...Typography.body, color: "#B42318", fontWeight: "600" as const }}>Couldn't save your profile</Text>
+          <Text style={{ ...Typography.caption, color: "#B42318", marginTop: 4 }}>{saveError}</Text>
+          {onRetry && (
+            <Button title={saving ? "Retrying…" : "Tap to retry"} variant="ghost" onPress={onRetry} disabled={saving} style={{ alignSelf: "flex-start", marginTop: 10, paddingHorizontal: 0 }} />
+          )}
+        </View>
+      ) : null}
+
+      <View style={{ flexDirection: "row", marginTop: 28, gap: Layout.spacing.md }}>
+        {currentStep > 1 && (
+          <Button title="Back" variant="secondary" onPress={onBack} disabled={backDisabled || saving} style={{ flex: 1 }} />
+        )}
+        <Button title={saving ? "Saving..." : nextLabel} variant="primary" onPress={onNext} disabled={saving} style={{ flex: currentStep > 1 ? 2 : 1 }} />
+      </View>
+
+      {showSkip && onSkip && (
+        <Button title="Skip for now" variant="ghost" onPress={onSkip} disabled={saving} style={{ marginTop: 12 }} textStyle={{ color: Colors.gray600 }} />
+      )}
+    </View>
+  );
+}

@@ -16,7 +16,7 @@ import { getDemoInboxPreview, shouldShowDemoInboxPreview, type DemoChatPreviewRo
 import { subscribeChatsHubUpdates } from "@/lib/chats/hubRealtime";
 import { appModeToHub, chatRoutes } from "@/lib/navigation/modeHub";
 import { formatChatInboxTimestamp, loadChatInbox, sortChatInboxItems } from "@/lib/chats/inbox";
-import { Colors, Layout } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 import { ChatModeTabBar } from "./ChatModeTabBar";
 import { ChatPreviewCard } from "./ChatPreviewCard";
 import { MatchesConnectionsSubheader, type MatchConnectionItem } from "./MatchesConnectionsSubheader";
@@ -30,6 +30,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
   const chatHub = appModeToHub(sourceMode === "all" ? null : sourceMode);
   const { t, i18n } = useTranslation();
   const router = useRouter();
+  const theme = useAppTheme();
   const tabs = useChatTabsWithModeFirst(sourceMode);
   const unknownLabel = t("chat.unknown");
   const initialTab: "all" | AppMode = sourceMode === "all" ? "all" : sourceMode;
@@ -323,13 +324,13 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
   );
 
   const spinnerColor =
-    sourceMode === "all" ? Colors.primaryViolet : Colors[sourceMode].primary;
+    sourceMode === "all" ? theme.colors.primary : theme.modeAccent(sourceMode).primary;
 
   if (loading) {
     return (
-      <View style={{ flex: 1, padding: 16, justifyContent: "center" }}>
+      <View style={{ flex: 1, padding: theme.spacing.lg, justifyContent: "center" }}>
         <ActivityIndicator size="large" color={spinnerColor} />
-        <Text style={{ textAlign: "center", marginTop: 8 }}>{t("chat.loadingChats")}</Text>
+        <Text style={{ textAlign: "center", marginTop: theme.spacing.sm, color: theme.colors.textSecondary }}>{t("chat.loadingChats")}</Text>
       </View>
     );
   }
@@ -371,7 +372,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                tintColor={tabs.find((t) => t.key === activeTab)?.accent ?? Colors.primaryViolet}
+                tintColor={tabs.find((t) => t.key === activeTab)?.accent ?? theme.colors.primary}
               />
             }
             keyboardShouldPersistTaps="handled"
@@ -401,7 +402,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                tintColor={tabs.find((t) => t.key === activeTab)?.accent ?? Colors.primaryViolet}
+                tintColor={tabs.find((t) => t.key === activeTab)?.accent ?? theme.colors.primary}
               />
             }
             keyboardShouldPersistTaps="handled"
@@ -494,7 +495,7 @@ const styles = StyleSheet.create({
   emptyText: {
     opacity: 0.7,
     textAlign: "center",
-    paddingHorizontal: Layout.screenPadding,
+    paddingHorizontal: 20,
     paddingTop: 24,
   },
 });

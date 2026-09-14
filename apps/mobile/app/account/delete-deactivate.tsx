@@ -16,10 +16,12 @@ import {
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { requestAccountDeletion } from "@/lib/account/deleteAccount";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 export default function DeleteDeactivate() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -79,7 +81,7 @@ export default function DeleteDeactivate() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9}>
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Delete / Deactivate</Text>
           <View style={{ width: 60 }} />
@@ -115,7 +117,7 @@ export default function DeleteDeactivate() {
               disabled={deleting}
             >
               {deleting ? (
-                <ActivityIndicator size="small" color="#E11D48" />
+                <ActivityIndicator size="small" color={theme.colors.error} />
               ) : (
                 <Text style={styles.dangerText}>Delete my account</Text>
               )}
@@ -134,7 +136,7 @@ export default function DeleteDeactivate() {
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color={Colors.accentYellow} />
+                <ActivityIndicator color={theme.colors.onPrimary} />
               ) : (
                 <Text style={styles.primaryText}>Sign out</Text>
               )}
@@ -150,74 +152,72 @@ export default function DeleteDeactivate() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { padding: 20, paddingBottom: 40 },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { padding: 20, paddingBottom: 40 },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 12,
+    },
+    backBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+      ...theme.elevation(1),
+    },
+    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary },
 
-  card: {
-    backgroundColor: "#FFF",
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 16,
-  },
-  title: { ...Typography.h2, color: Colors.textPrimary, marginBottom: 6 },
-  subtitle: { ...Typography.body, color: Colors.gray700, marginBottom: 14 },
+    card: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: 16,
+    },
+    title: { ...theme.type.h2, color: theme.colors.textPrimary, marginBottom: 6 },
+    subtitle: { ...theme.type.body, color: theme.colors.textSecondary, marginBottom: 14 },
 
-  section: { marginBottom: 12 },
-  sectionTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 6 },
-  sectionText: { ...Typography.body, color: Colors.gray700, marginBottom: 10 },
+    section: { marginBottom: 12 },
+    sectionTitle: { ...theme.type.h3, color: theme.colors.textPrimary, marginBottom: 6 },
+    sectionText: { ...theme.type.body, color: theme.colors.textSecondary, marginBottom: 10 },
 
-  hr: { height: 1, backgroundColor: Colors.gray200, marginVertical: 12 },
+    hr: { height: 1, backgroundColor: theme.colors.border, marginVertical: 12 },
 
-  primaryBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  primaryText: { ...Typography.button, color: Colors.accentYellow },
+    primaryBtn: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.radii.md,
+      paddingVertical: 12,
+      alignItems: "center",
+    },
+    primaryText: { ...theme.type.button, color: theme.colors.onPrimary },
 
-  secondaryBtn: {
-    backgroundColor: Colors.gray100,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  secondaryText: { ...Typography.button, color: Colors.textPrimary },
+    secondaryBtn: {
+      backgroundColor: theme.colors.backgroundMuted,
+      borderRadius: theme.radii.md,
+      paddingVertical: 12,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    secondaryText: { ...theme.type.button, color: theme.colors.textPrimary },
 
-  dangerBtn: {
-    backgroundColor: "#FFF",
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E11D48",
-  },
-  dangerBtnDisabled: { opacity: 0.7 },
-  dangerText: { ...Typography.button, color: "#E11D48" },
+    dangerBtn: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.md,
+      paddingVertical: 12,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.colors.error,
+    },
+    dangerBtnDisabled: { opacity: 0.7 },
+    dangerText: { ...theme.type.button, color: theme.colors.error },
 
-  note: { ...Typography.caption, color: Colors.gray600, marginTop: 12, textAlign: "center" },
-});
+    note: { ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 12, textAlign: "center" },
+  });
+}

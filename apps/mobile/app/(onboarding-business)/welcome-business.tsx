@@ -6,15 +6,17 @@
 // ────────────────────────────────────────────────
 
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, Image, ActivityIndicator } from "react-native";
+import { View, Text, Image, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useModeContext } from "@/providers";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { PrimaryButton, TextButton } from "@/components/ds";
+import { useAppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 
 export default function WelcomeBusiness() {
   useRouter(); // router available for future nav
   const { setActiveMode } = useModeContext();
+  const theme = useAppTheme();
   const [businessName, setBusinessName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,33 +42,34 @@ export default function WelcomeBusiness() {
     <View
       style={{
         flex: 1,
-        backgroundColor: Colors.backgroundLight,
+        backgroundColor: theme.colors.background,
         alignItems: "center",
         justifyContent: "center",
-        padding: 28,
-        paddingTop: 28 + 24,
+        padding: theme.spacing.xxl,
+        paddingTop: theme.spacing.xxl + theme.spacing.xxl,
       }}
     >
       {/* Logo */}
       <Image
         source={require("../../assets/icons/winkly-logo.png")}
-        style={{ width: 160, height: 55, marginBottom: 32 }}
+        style={{ width: 160, height: 55, marginBottom: theme.spacing.xxxl }}
         resizeMode="contain"
       />
 
       {/* Illustration / Emoji */}
       <Image
         source={require("../../assets/icons/winkly-emoji-shadow.png")}
-        style={{ width: 120, height: 120, marginBottom: 20 }}
+        style={{ width: 120, height: 120, marginBottom: theme.spacing.xl }}
         resizeMode="contain"
       />
 
       <Text
         style={{
-          ...Typography.h2,
-          color: Colors.textPrimary,
+          ...theme.type.h2,
+          fontFamily: theme.type.h2.fontFamily,
+          color: theme.colors.textPrimary,
           textAlign: "center",
-          marginBottom: 12,
+          marginBottom: theme.spacing.md,
         }}
       >
         Welcome {businessName ? businessName : "to Winkly Business"} 👋
@@ -74,11 +77,11 @@ export default function WelcomeBusiness() {
 
       <Text
         style={{
-          ...Typography.body,
-          color: Colors.gray700,
+          ...theme.type.body,
+          fontFamily: theme.type.body.fontFamily,
+          color: theme.colors.textSecondary,
           textAlign: "center",
-          marginBottom: 32,
-          lineHeight: 24,
+          marginBottom: theme.spacing.xxxl,
         }}
       >
         Your business profile is ready.{"\n"}
@@ -88,46 +91,29 @@ export default function WelcomeBusiness() {
       {/* Illustration */}
       <Image
         source={require("../../assets/images/onboarding/welcome-business-illustration.png")}
-        style={{ width: 280, height: 180, marginBottom: 48 }}
+        style={{ width: 280, height: 180, marginBottom: theme.spacing.massive }}
         resizeMode="contain"
       />
 
       {/* CTA */}
-      <TouchableOpacity
+      <PrimaryButton
+        title="Go to Business Mode"
         onPress={() => setActiveMode("business")}
-        style={{
-          backgroundColor: Colors.primaryViolet,
-          borderRadius: Layout.radii.card,
-          paddingVertical: 16,
-          width: "85%",
-          alignItems: "center",
-        }}
-      >
-        <Text style={{ ...Typography.button, color: Colors.accentYellow }}>
-          Go to Business Mode
-        </Text>
-      </TouchableOpacity>
+        style={{ width: "85%" }}
+      />
 
       {/* Option: Switch to Events */}
-      <TouchableOpacity
+      <TextButton
+        title="Explore Events"
         onPress={() => setActiveMode("events")}
-        style={{ marginTop: 18 }}
-      >
-        <Text
-          style={{
-            ...Typography.caption,
-            color: Colors.primaryViolet,
-            textDecorationLine: "underline",
-          }}
-        >
-          Explore Events
-        </Text>
-      </TouchableOpacity>
+        style={{ marginTop: theme.spacing.md }}
+        textStyle={{ textDecorationLine: "underline" }}
+      />
 
       {!businessName && (
         <ActivityIndicator
           style={{ position: "absolute", top: 40, right: 40 }}
-          color={Colors.primaryViolet}
+          color={theme.colors.primary}
         />
       )}
     </View>

@@ -13,7 +13,7 @@ import { usePostHog } from "posthog-react-native";
 
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { FriendsBottomNav } from "@/components/layout/FriendsBottomNav";
-import { Colors } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 import { type FriendsProfile } from "@/lib/ai/friendsInsights";
 import { useModeContext } from "@/providers";
@@ -48,6 +48,7 @@ type FriendProfileRow = {
 
 export default function FriendsDiscover() {
   const router = useRouter();
+  const theme = useAppTheme();
   const posthog = usePostHog();
   const { context } = useModeContext();
 
@@ -165,13 +166,13 @@ export default function FriendsDiscover() {
     loadData();
   };
 
-  const primaryColor = Colors.friends.primary;
+  const primaryColor = theme.modeAccent("friends").primary;
   const openProfile = (item: DiscoverProfileItem) =>
     router.push(`/(modes)/friends/profile-view?user_id=${item.id}&source=discover`);
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
+      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
         <ModeHeader currentMode="friends" />
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator size="large" color={primaryColor} />
@@ -182,7 +183,7 @@ export default function FriendsDiscover() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <ModeHeader currentMode="friends" />
 
       <DiscoverModeToggle value={viewMode} onChange={setViewMode} primaryColor={primaryColor} />

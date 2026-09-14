@@ -14,7 +14,7 @@
 import React from "react";
 import { View, Text, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
-import { Colors, Typography } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 import { resolveFitReason, FIT_REASON_FALLBACK } from "@/lib/ai/fitReason";
 
 // Re-exported so existing imports of these from this component keep working, while
@@ -38,20 +38,24 @@ export type FitReasonLineProps = {
  */
 export function FitReasonLine({
   reason,
-  accentColor = Colors.primaryViolet,
+  accentColor,
   numberOfLines = 2,
   style,
 }: FitReasonLineProps) {
+  const theme = useAppTheme();
   const text = reason && reason.trim() ? reason.trim() : FIT_REASON_FALLBACK;
   return (
     <View
-      style={[styles.row, style]}
+      style={[styles.row, { gap: theme.spacing.xs }, style]}
       accessibilityLabel={`Why this fits you: ${text}`}
     >
       <View style={styles.iconWrap}>
-        <SparklesIcon size={13} color={accentColor} />
+        <SparklesIcon size={13} color={accentColor ?? theme.colors.primary} />
       </View>
-      <Text style={styles.text} numberOfLines={numberOfLines}>
+      <Text
+        style={[theme.type.caption, { flex: 1, color: theme.colors.textSecondary, lineHeight: 17, fontWeight: "500" }]}
+        numberOfLines={numberOfLines}
+      >
         {text}
       </Text>
     </View>
@@ -62,17 +66,9 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 6,
   },
   iconWrap: {
     // Nudge the icon down so it baselines with the first text line.
     paddingTop: 2,
-  },
-  text: {
-    flex: 1,
-    ...Typography.caption,
-    color: Colors.gray700,
-    lineHeight: 17,
-    fontWeight: "500",
   },
 });

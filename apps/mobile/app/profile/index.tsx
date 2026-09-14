@@ -3,16 +3,16 @@
 // Purpose: Premium profile hub with edit shortcuts + verification entry.
 
 import React from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, Alert } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Image, Alert } from "react-native";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
-import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
+import { Card, Header, ListRow, PrimaryButton, TextButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 
 export default function ProfileIndex() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
 
   const onSignOut = async () => {
     try {
@@ -25,18 +25,13 @@ export default function ProfileIndex() {
 
   return (
     <View style={styles.screen}>
+      <Header
+        title="Profile"
+        onBack={() => router.back()}
+        trailing={<TextButton title="Sign out" onPress={onSignOut} style={styles.signOutBtn} />}
+      />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Profile</Text>
-          <TouchableOpacity onPress={onSignOut} style={styles.ghostBtn} activeOpacity={0.9}>
-            <Text style={styles.ghostText}>Sign out</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Card style={styles.heroCard} elevated={false}>
+        <Card style={styles.heroCard}>
           <View style={styles.avatarWrap}>
             <Image
               source={require("../../assets/icons/winkly-emoji-shadow.png")}
@@ -48,137 +43,81 @@ export default function ProfileIndex() {
             <Text style={styles.name}>Your Winkly Profile</Text>
             <Text style={styles.meta}>Edit your core profile and mode-specific sections.</Text>
 
-            <Button title="View profile" onPress={() => router.push("/profile/view-profile")} />
+            <PrimaryButton title="View profile" onPress={() => router.push("/profile/view-profile")} />
           </View>
         </Card>
 
         <Text style={styles.sectionTitle}>Edit sections</Text>
 
-        <Row
-          title="Core profile"
-          subtitle="Name, bio, city, languages, basics"
-          onPress={() => router.push("/profile/edit-core")}
-        />
-        <Row
-          title="Romance"
-          subtitle="Preferences, relationship goals, dating details"
-          onPress={() => router.push("/profile/edit-romance")}
-        />
-        <Row
-          title="Friends"
-          subtitle="Interests, activities, meetup style"
-          onPress={() => router.push("/profile/edit-friends")}
-        />
-        <Row
-          title="Business"
-          subtitle="Role, company, networking focus"
-          onPress={() => router.push("/profile/edit-business")}
-        />
-        <Row
-          title="Media"
-          subtitle="Photos and profile visuals"
-          onPress={() => router.push("/profile/edit-media")}
-        />
-        <Row
-          title="Verification"
-          subtitle="Verify your photo to earn a verified badge"
-          onPress={() => router.push("/account/photo-verification")}
-        />
+        <Card padding="none" style={styles.rowsCard}>
+          <ListRow
+            title="Core profile"
+            subtitle="Name, bio, city, languages, basics"
+            onPress={() => router.push("/profile/edit-core")}
+            style={styles.row}
+          />
+          <ListRow
+            title="Romance"
+            subtitle="Preferences, relationship goals, dating details"
+            onPress={() => router.push("/profile/edit-romance")}
+            style={styles.row}
+          />
+          <ListRow
+            title="Friends"
+            subtitle="Interests, activities, meetup style"
+            onPress={() => router.push("/profile/edit-friends")}
+            style={styles.row}
+          />
+          <ListRow
+            title="Business"
+            subtitle="Role, company, networking focus"
+            onPress={() => router.push("/profile/edit-business")}
+            style={styles.row}
+          />
+          <ListRow
+            title="Media"
+            subtitle="Photos and profile visuals"
+            onPress={() => router.push("/profile/edit-media")}
+            style={styles.row}
+          />
+          <ListRow
+            title="Verification"
+            subtitle="Verify your photo to earn a verified badge"
+            onPress={() => router.push("/account/photo-verification")}
+            style={styles.row}
+          />
+        </Card>
       </ScrollView>
     </View>
   );
 }
 
-function Row({
-  title,
-  subtitle,
-  onPress,
-}: {
-  title: string;
-  subtitle: string;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
-      <Card style={styles.rowCard} elevated={false}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.rowTitle}>{title}</Text>
-          <Text style={styles.rowSubtitle}>{subtitle}</Text>
-        </View>
-        <Text style={styles.rowCTA}>Open</Text>
-      </Card>
-    </TouchableOpacity>
-  );
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { padding: theme.spacing.xl, paddingBottom: theme.spacing.huge },
+    signOutBtn: { paddingHorizontal: 0 },
+    heroCard: {
+      flexDirection: "row",
+      gap: theme.spacing.md,
+      alignItems: "center",
+      marginBottom: theme.spacing.lg,
+    },
+    avatarWrap: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: theme.colors.backgroundMuted,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    avatar: { width: 54, height: 54 },
+    name: { ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.xxs },
+    meta: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.sm },
+    sectionTitle: { ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.sm },
+    rowsCard: { overflow: "hidden" },
+    row: { paddingHorizontal: theme.spacing.lg },
+  });
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { padding: 20, paddingBottom: 40 },
-
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
-
-  ghostBtn: {
-    width: 70,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: "transparent",
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    alignItems: "center",
-  },
-  ghostText: { ...Typography.caption, color: Colors.textPrimary },
-
-  heroCard: {
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 16,
-    flexDirection: "row",
-    gap: 14,
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  avatarWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: Colors.gray100,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatar: { width: 54, height: 54 },
-  name: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 4 },
-  meta: { ...Typography.body, color: Colors.gray700, marginBottom: 10 },
-
-  sectionTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 10 },
-
-  rowCard: {
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  rowTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 4 },
-  rowSubtitle: { ...Typography.body, color: Colors.gray700 },
-  rowCTA: { ...Typography.caption, color: Colors.primaryViolet },
-});

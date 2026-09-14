@@ -22,7 +22,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
-import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { getEmailRedirectTo } from "@/lib/authRedirectUrl";
 import {
   isExistingUserError,
@@ -40,6 +40,8 @@ export default function Signup() {
   const router = useRouter();
   const params = useLocalSearchParams<{ accountType?: string }>();
   const { signOut } = useAuth();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const [email, setEmail] = useState("");
@@ -148,7 +150,7 @@ export default function Signup() {
             <TextInput
               testID="signup-email"
               placeholder={t("auth.emailPlaceholder")}
-              placeholderTextColor={Colors.gray500}
+              placeholderTextColor={theme.colors.textMuted}
               value={email}
               onChangeText={setEmail}
               onFocus={() => setEmailFocused(true)}
@@ -165,7 +167,7 @@ export default function Signup() {
               <TextInput
                 testID="signup-password"
                 placeholder={t("auth.passwordSignupPlaceholder")}
-                placeholderTextColor={Colors.gray500}
+                placeholderTextColor={theme.colors.textMuted}
                 value={password}
                 onChangeText={setPassword}
                 onFocus={() => setPasswordFocused(true)}
@@ -190,9 +192,9 @@ export default function Signup() {
               <Switch
                 value={isAdult}
                 onValueChange={setIsAdult}
-                thumbColor={Platform.OS === "android" ? (isAdult ? Colors.primaryViolet : Colors.gray400) : undefined}
-                trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }}
-                ios_backgroundColor={Colors.gray300}
+                thumbColor={Platform.OS === "android" ? (isAdult ? theme.colors.primary : theme.colors.textMuted) : undefined}
+                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                ios_backgroundColor={theme.colors.border}
               />
               <Text style={styles.adultText}>{t("auth.confirmAdultTerms")}</Text>
             </View>
@@ -208,7 +210,7 @@ export default function Signup() {
               accessibilityState={{ disabled: loading, busy: loading }}
             >
               {loading ? (
-                <ActivityIndicator color={Colors.accentYellow} />
+                <ActivityIndicator color={theme.colors.onPrimary} />
               ) : (
                 <Text style={styles.primaryText}>{t("auth.createAccount")}</Text>
               )}
@@ -254,103 +256,110 @@ export default function Signup() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.backgroundMuted },
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    ...Layout.topHeaderBar,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-  },
-  topBarSide: { width: 44 },
-  topBarSideEnd: { alignItems: "flex-end" },
-  topBarTitle: {
-    ...Typography.headerWinklyTitle,
-    color: Colors.primaryViolet,
-    fontFamily: FontFamily.headingBold,
-    textAlign: "center",
-  },
-  screen: { flex: 1, backgroundColor: Colors.backgroundMuted },
-  inner: { flex: 1, justifyContent: "center", paddingHorizontal: Layout.spacing.lg, paddingVertical: Layout.spacing.md },
-  card: {
-    width: "100%",
-    maxWidth: 420,
-    alignSelf: "center",
-    backgroundColor: Colors.white,
-    borderRadius: Layout.radii.card,
-    padding: Layout.spacing.lg,
-    ...Shadow.card,
-  },
-  title: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 22,
-    lineHeight: 28,
-    color: Colors.textPrimary,
-    marginBottom: Layout.spacing.md,
-  },
-  label: { ...Typography.caption, color: Colors.textSecondary, marginBottom: 6 },
-  accountTypeSelected: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: Layout.radii.control,
-    borderWidth: 2,
-    borderColor: Colors.primaryViolet,
-    backgroundColor: Colors.backgroundMuted,
-    marginBottom: 12,
-    alignItems: "center",
-  },
-  accountTypeSelectedText: {
-    ...Typography.button,
-    color: Colors.primaryViolet,
-    fontFamily: FontFamily.headingBold,
-  },
-  input: {
-    borderWidth: 2,
-    borderColor: Colors.gray200,
-    backgroundColor: Colors.white,
-    borderRadius: Layout.radii.control,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 12,
-    color: Colors.textPrimary,
-    fontSize: 16,
-    minHeight: Layout.touchTargetMin,
-  },
-  inputFlex: { flex: 1, marginBottom: 0 },
-  inputFocused: { borderColor: Colors.primaryViolet },
-  passwordRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
-  smallBtn: {
-    borderWidth: 2,
-    borderColor: Colors.gray200,
-    backgroundColor: Colors.white,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: Layout.radii.control,
-    minHeight: Layout.touchTargetMin,
-    justifyContent: "center",
-  },
-  smallBtnText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
-  adultRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  adultText: { ...Typography.caption, color: Colors.gray600, marginLeft: 10, flex: 1 },
-  primaryBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginBottom: 8,
-    minHeight: Layout.touchTargetMin,
-    justifyContent: "center",
-    ...Shadow.button,
-  },
-  primaryBtnDisabled: { opacity: 0.7 },
-  primaryText: { ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.headingBold },
-  link: { color: Colors.primaryViolet, fontWeight: "600" },
-  footerLink: { marginTop: 12, alignItems: "center", minHeight: 40, justifyContent: "center" },
-  footerText: { ...Typography.body, color: Colors.gray600 },
-  altTypeLink: { marginTop: 4, alignItems: "center", minHeight: 40, justifyContent: "center" },
-  altTypeText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600", textAlign: "center" },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    safe: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    topBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      paddingTop: theme.spacing.sm,
+      paddingBottom: theme.spacing.md,
+      minHeight: 56,
+      backgroundColor: theme.colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    topBarSide: { width: 44 },
+    topBarSideEnd: { alignItems: "flex-end" },
+    topBarTitle: {
+      ...theme.type.h2,
+      fontSize: 22,
+      lineHeight: 31,
+      fontWeight: "700",
+      color: theme.colors.primary,
+      fontFamily: theme.type.h1.fontFamily,
+      textAlign: "center",
+    },
+    screen: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    inner: { flex: 1, justifyContent: "center", paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.md },
+    card: {
+      width: "100%",
+      maxWidth: 420,
+      alignSelf: "center",
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      padding: theme.spacing.lg,
+      ...theme.elevation(1),
+    },
+    title: {
+      fontFamily: theme.type.h1.fontFamily,
+      fontSize: 22,
+      lineHeight: 28,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.md,
+    },
+    label: { ...theme.type.caption, color: theme.colors.textSecondary, marginBottom: 6 },
+    accountTypeSelected: {
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: theme.radii.md,
+      borderWidth: 2,
+      borderColor: theme.colors.primary,
+      backgroundColor: theme.colors.backgroundMuted,
+      marginBottom: 12,
+      alignItems: "center",
+    },
+    accountTypeSelectedText: {
+      ...theme.type.button,
+      color: theme.colors.primary,
+      fontFamily: theme.type.button.fontFamily,
+    },
+    input: {
+      borderWidth: 2,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.md,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      marginBottom: 12,
+      color: theme.colors.textPrimary,
+      fontSize: 16,
+      minHeight: 44,
+    },
+    inputFlex: { flex: 1, marginBottom: 0 },
+    inputFocused: { borderColor: theme.colors.primary },
+    passwordRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+    smallBtn: {
+      borderWidth: 2,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderRadius: theme.radii.md,
+      minHeight: 44,
+      justifyContent: "center",
+    },
+    smallBtnText: { ...theme.type.caption, color: theme.colors.primary, fontWeight: "600" },
+    adultRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+    adultText: { ...theme.type.caption, color: theme.colors.textSecondary, marginLeft: 10, flex: 1 },
+    primaryBtn: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.radii.md,
+      paddingVertical: 14,
+      alignItems: "center",
+      marginBottom: 8,
+      minHeight: 44,
+      justifyContent: "center",
+      ...theme.elevation(2),
+    },
+    primaryBtnDisabled: { opacity: 0.7 },
+    primaryText: { ...theme.type.button, color: theme.colors.onPrimary, fontFamily: theme.type.button.fontFamily },
+    link: { color: theme.colors.primary, fontWeight: "600" },
+    footerLink: { marginTop: 12, alignItems: "center", minHeight: 40, justifyContent: "center" },
+    footerText: { ...theme.type.body, color: theme.colors.textSecondary },
+    altTypeLink: { marginTop: 4, alignItems: "center", minHeight: 40, justifyContent: "center" },
+    altTypeText: { ...theme.type.caption, color: theme.colors.primary, fontWeight: "600", textAlign: "center" },
+  });
+}

@@ -2,19 +2,21 @@
 // Winkly – Profile: Edit Romance. Persists to profiles_mode (mode = romance).
 
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, ActivityIndicator } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, Text, ScrollView, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
 import { useAuth } from "@/providers";
 import { getOwnProfileMode, upsertOwnProfileMode } from "@/lib/access/profiles";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Card, Header, Input, SecondaryButton, TextButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 import { pickAndUploadVideo } from "@/lib/uploadMedia";
 
 export default function EditRomance() {
   const router = useRouter();
   const { user } = useAuth();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -91,209 +93,150 @@ export default function EditRomance() {
   if (!user) return null;
   if (loading) {
     return (
-      <View style={[styles.screen, styles.centered]}>
-        <ActivityIndicator size="large" color={Colors.primaryViolet} />
+      <View style={{ ...styles.screen, ...styles.centered }}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
 
+  const handleVoicePress = async () => {
+    if (!user?.id) return;
+    if (recorderState.isRecording) {
+      try {
+        await audioRecorder.stop();
+        const uri = audioRecorder.uri ?? lastRecordedUriRef.current;
+        const durSec =
+          recorderState.durationMillis != null ? Math.round(recorderState.durationMillis / 1000) : null;
+        lastRecordedUriRef.current = uri ?? null;
+        if (!uri) return;
+        const resp = await fetch(uri);
+        const blob = await resp.blob();
+        const path = `${user.id}/romance/voice_${Date.now()}.m4a`;
+        const { error: upErr } = await supabase.storage.from("user-videos").upload(path, blob, {
+          contentType: "audio/mp4",
+          upsert: true,
+        });
+        if (upErr) throw upErr;
+        const { data } = supabase.storage.from("user-videos").getPublicUrl(path);
+        setVoiceUrl(data.publicUrl);
+        setVoiceSeconds(durSec);
+      } catch (e) {
+        Alert.alert("Voice", e instanceof Error ? e.message : "Upload failed");
+      }
+      return;
+    }
+    const perm = await AudioModule.requestRecordingPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Microphone", "Permission is required to record.");
+      return;
+    }
+    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
+    await audioRecorder.prepareToRecordAsync();
+    audioRecorder.record();
+  };
+
   return (
     <View style={styles.screen}>
+      <Header
+        title="Edit romance"
+        onBack={() => router.back()}
+        trailing={<TextButton title={saving ? "Saving…" : "Save"} onPress={save} disabled={saving} style={styles.saveBtn} />}
+      />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Header title="Edit romance" onBack={() => router.back()} onSave={save} saving={saving} />
-
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <Text style={styles.title}>Romance</Text>
           <Text style={styles.subtitle}>Your dating intentions and preferences.</Text>
 
-          <Label text="Relationship goal" />
-          <TextInput
+          <Input
+            label="Relationship goal"
             value={goal}
             onChangeText={setGoal}
             placeholder="e.g. serious relationship, long-term, etc."
-            placeholderTextColor={Colors.gray500}
-            style={styles.input}
           />
-
-          <Label text="What you value" />
-          <TextInput
+          <Input
+            label="What you value"
             value={aboutLove}
             onChangeText={setAboutLove}
             placeholder="e.g. honesty, growth, emotional maturity…"
-            placeholderTextColor={Colors.gray500}
-            style={[styles.input, { minHeight: 110, textAlignVertical: "top" }]}
+            style={{ minHeight: 110, textAlignVertical: "top" }}
             multiline
           />
-
-          <Label text="Dealbreakers (optional)" />
-          <TextInput
+          <Input
+            label="Dealbreakers (optional)"
             value={dealbreakers}
             onChangeText={setDealbreakers}
             placeholder="e.g. smoking, disrespect, etc."
-            placeholderTextColor={Colors.gray500}
-            style={[styles.input, { minHeight: 90, textAlignVertical: "top" }]}
+            style={{ minHeight: 90, textAlignVertical: "top" }}
             multiline
             editable={!saving}
           />
-        </View>
+        </Card>
 
-        <View style={[styles.card, { marginTop: 16 }]}>
+        <Card style={styles.card2}>
           <Text style={styles.title}>Rich profile</Text>
           <Text style={styles.subtitle}>Lifestyle tags, a short voice prompt, and optional video intro.</Text>
 
-          <Label text="Lifestyle tags (comma-separated)" />
-          <TextInput
+          <Input
+            label="Lifestyle tags (comma-separated)"
             value={lifestyleTags}
             onChangeText={setLifestyleTags}
             placeholder="e.g. gym, foodie, travel, early bird"
-            placeholderTextColor={Colors.gray500}
-            style={styles.input}
             editable={!saving}
           />
 
-          <Label text="Voice prompt" />
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <TouchableOpacity
-              style={[styles.secondaryBtn, recorderState.isRecording && { backgroundColor: Colors.errorRed + "22" }]}
-              onPress={async () => {
-                if (!user?.id) return;
-                if (recorderState.isRecording) {
-                  try {
-                    await audioRecorder.stop();
-                    const uri = audioRecorder.uri ?? lastRecordedUriRef.current;
-                    const durSec =
-                      recorderState.durationMillis != null ? Math.round(recorderState.durationMillis / 1000) : null;
-                    lastRecordedUriRef.current = uri ?? null;
-                    if (!uri) return;
-                    const resp = await fetch(uri);
-                    const blob = await resp.blob();
-                    const path = `${user.id}/romance/voice_${Date.now()}.m4a`;
-                    const { error: upErr } = await supabase.storage.from("user-videos").upload(path, blob, {
-                      contentType: "audio/mp4",
-                      upsert: true,
-                    });
-                    if (upErr) throw upErr;
-                    const { data } = supabase.storage.from("user-videos").getPublicUrl(path);
-                    setVoiceUrl(data.publicUrl);
-                    setVoiceSeconds(durSec);
-                  } catch (e) {
-                    Alert.alert("Voice", e instanceof Error ? e.message : "Upload failed");
-                  }
-                  return;
-                }
-                const perm = await AudioModule.requestRecordingPermissionsAsync();
-                if (!perm.granted) {
-                  Alert.alert("Microphone", "Permission is required to record.");
-                  return;
-                }
-                await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
-                await audioRecorder.prepareToRecordAsync();
-                audioRecorder.record();
-              }}
+          <Text style={styles.label}>Voice prompt</Text>
+          <View style={styles.voiceRow}>
+            <SecondaryButton
+              title={recorderState.isRecording ? "Stop & upload" : "Record voice prompt"}
+              onPress={handleVoicePress}
               disabled={saving}
-            >
-              <Text style={styles.secondaryBtnText}>{recorderState.isRecording ? "Stop & upload" : "Record voice prompt"}</Text>
-            </TouchableOpacity>
+              style={recorderState.isRecording ? { backgroundColor: theme.colors.errorBg } : undefined}
+            />
             {voiceUrl ? (
-              <Text style={{ ...Typography.caption, color: Colors.gray600, flex: 1 }} numberOfLines={2}>
+              <Text style={styles.hint} numberOfLines={2}>
                 Saved voice clip
               </Text>
             ) : null}
           </View>
 
-          <Label text="Video bio (short clip)" />
-          <TouchableOpacity
-            style={styles.secondaryBtn}
+          <Text style={styles.label}>Video bio (short clip)</Text>
+          <SecondaryButton
+            title={videoBioUrl ? "Replace video bio" : "Pick video from library"}
             onPress={async () => {
               if (!user?.id) return;
               const url = await pickAndUploadVideo(user.id, "romance");
               if (url) setVideoBioUrl(url);
             }}
             disabled={saving}
-          >
-            <Text style={styles.secondaryBtnText}>{videoBioUrl ? "Replace video bio" : "Pick video from library"}</Text>
-          </TouchableOpacity>
+          />
           {videoBioUrl ? (
-            <Text style={{ ...Typography.caption, color: Colors.gray600, marginTop: 8 }} numberOfLines={1}>
+            <Text style={{ ...styles.hint, marginTop: theme.spacing.sm }} numberOfLines={1}>
               Video added
             </Text>
           ) : null}
-        </View>
+        </Card>
       </ScrollView>
     </View>
   );
 }
 
-function Header({
-  title,
-  onBack,
-  onSave,
-  saving,
-}: { title: string; onBack: () => void; onSave: () => void; saving?: boolean }) {
-  return (
-    <View style={styles.headerRow}>
-      <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back" disabled={saving}>
-        <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-      </TouchableOpacity>
-      <Text style={styles.headerTitle}>{title}</Text>
-      <TouchableOpacity onPress={onSave} style={[styles.saveBtn, saving && styles.saveBtnDisabled]} activeOpacity={0.9} disabled={saving}>
-        <Text style={styles.saveText}>{saving ? "Saving…" : "Save"}</Text>
-      </TouchableOpacity>
-    </View>
-  );
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    centered: { justifyContent: "center", alignItems: "center" },
+    scroll: { padding: theme.spacing.xl, paddingBottom: theme.spacing.huge },
+    saveBtn: { paddingHorizontal: 0 },
+    card: {},
+    card2: { marginTop: theme.spacing.lg },
+    title: { ...theme.type.h2, fontFamily: theme.type.h2.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.xxs },
+    subtitle: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.md },
+    label: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.xs,
+    },
+    voiceRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, marginBottom: theme.spacing.md },
+    hint: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, flex: 1 },
+  });
 }
-
-function Label({ text }: { text: string }) {
-  return <Text style={styles.label}>{text}</Text>;
-}
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { padding: 20, paddingBottom: 40 },
-
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
-  saveBtn: { width: 70, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.primaryViolet, alignItems: "center" },
-  saveText: { ...Typography.caption, color: Colors.accentYellow },
-
-  card: { backgroundColor: "#FFF", borderRadius: Layout.radii.card, borderWidth: 1, borderColor: Colors.gray200, padding: 16 },
-  title: { ...Typography.h2, color: Colors.textPrimary, marginBottom: 6 },
-  subtitle: { ...Typography.body, color: Colors.gray700, marginBottom: 14 },
-
-  label: { ...Typography.caption, color: Colors.gray600, marginBottom: 6 },
-  centered: { justifyContent: "center", alignItems: "center" },
-  saveBtnDisabled: { opacity: 0.7 },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.gray300,
-    borderRadius: Layout.radii.control,
-    backgroundColor: "#FFF",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: Colors.textPrimary,
-    marginBottom: 12,
-  },
-  secondaryBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: Layout.radii.control,
-    borderWidth: 1,
-    borderColor: Colors.primaryViolet,
-    backgroundColor: Colors.primaryViolet + "10",
-  },
-  secondaryBtnText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
-
-});

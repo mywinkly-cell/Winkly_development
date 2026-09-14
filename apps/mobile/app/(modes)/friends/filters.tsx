@@ -10,14 +10,22 @@ import {
   StyleSheet,
   TouchableOpacity,
   Modal,
+  Switch,
 } from "react-native";
 import { FilterAgeRangeSlider } from "@/components/filters/FilterAgeRangeSlider";
 import { FilterDistanceSlider } from "@/components/filters/FilterDistanceSlider";
+import {
+  FILTER_SLIDER_FIELD_GAP,
+  FILTER_SLIDER_VALUE_ROW_STYLE,
+  filterSliderValuePillStyle,
+  filterSliderValueTextStyle,
+} from "@/lib/filters/filterSliderStyle";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { FriendsBottomNav } from "@/components/layout/FriendsBottomNav";
-import { Colors, Typography, Layout, FontFamily, HEADER } from "@/constants/tokens";
+import { Card, Chip, Header, PrimaryButton, TextButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import {
   LANGUAGE_OPTIONS,
   MEETUP_GOALS_OPTIONS,
@@ -65,6 +73,9 @@ export default function FriendsFiltersScreen() {
   const { user } = useAuth();
   const { i18n } = useTranslation();
   const { context } = useModeContext();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
+  const friendsAccent = theme.modeAccent("friends").primary;
   const HAS_SUBSCRIPTION = context.subscription_tier !== "free";
   const HAS_AI_MATCHING = canUseAIFeature(context.subscription_tier, "smart_matching");
 
@@ -183,30 +194,19 @@ export default function FriendsFiltersScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          activeOpacity={0.9}
-          accessibilityLabel="Back"
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Filtering</Text>
-        <View style={styles.headerRight} />
-      </View>
+      <Header title="Filtering" onBack={() => router.back()} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/* —— Basic settings (all users, all tariffs) —— */}
-        <View style={[styles.sectionCard, styles.sectionCardBasic]}>
+        <Card style={{ ...styles.sectionCard, ...styles.sectionCardBasic }}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Basic settings</Text>
-            <View style={styles.badgeFree}>
-              <Ionicons name="checkmark-circle" size={14} color={Colors.white} />
-              <Text style={styles.badgeFreeText}>All users</Text>
+            <View style={{ ...styles.badge, backgroundColor: friendsAccent }}>
+              <Ionicons name="checkmark-circle" size={14} color={theme.colors.onPrimary} />
+              <Text style={styles.badgeText}>All users</Text>
             </View>
           </View>
           <Text style={styles.sectionHint}>Distance and age — available on all tariffs.</Text>
@@ -214,18 +214,16 @@ export default function FriendsFiltersScreen() {
           <Text style={styles.label}>Distance (max)</Text>
           {distanceKm === DISTANCE_KM_ANY ? (
             <View style={styles.chipRow}>
-              <Text style={[styles.chipText, { marginRight: 8 }]}>Any distance</Text>
-              <Pressable onPress={() => { Haptics.selectionAsync(); setDistanceKm(50); }} style={styles.chip}>
-                <Text style={styles.chipText}>Set limit</Text>
-              </Pressable>
+              <Text style={{ ...styles.chipText, marginRight: theme.spacing.sm }}>Any distance</Text>
+              <Chip label="Set limit" onPress={() => { Haptics.selectionAsync(); setDistanceKm(50); }} />
             </View>
           ) : (
             <>
-              <View style={styles.sliderValueRow}>
-                <Text style={styles.sliderValue}>{distanceKm} km</Text>
-                <Pressable onPress={() => { Haptics.selectionAsync(); setDistanceKm(DISTANCE_KM_ANY); }} style={styles.chip}>
-                  <Text style={styles.chipText}>Any</Text>
-                </Pressable>
+              <View style={FILTER_SLIDER_VALUE_ROW_STYLE}>
+                <View style={filterSliderValuePillStyle(theme)}>
+                  <Text style={filterSliderValueTextStyle(theme)}>{distanceKm} km</Text>
+                </View>
+                <Chip label="Any" onPress={() => { Haptics.selectionAsync(); setDistanceKm(DISTANCE_KM_ANY); }} />
               </View>
               <FilterDistanceSlider
                 min={DISTANCE_MIN}
@@ -236,14 +234,16 @@ export default function FriendsFiltersScreen() {
                   setDistanceKm(Math.round(v));
                   Haptics.selectionAsync();
                 }}
-                primaryColor={Colors.friends.primary}
+                primaryColor={friendsAccent}
               />
             </>
           )}
 
-          <Text style={[styles.label, { marginTop: 20 }]}>Age range</Text>
-          <View style={styles.sliderValueRow}>
-            <Text style={styles.sliderValue}>{ageMin} – {ageMax}</Text>
+          <Text style={{ ...styles.label, marginTop: FILTER_SLIDER_FIELD_GAP }}>Age range</Text>
+          <View style={FILTER_SLIDER_VALUE_ROW_STYLE}>
+            <View style={filterSliderValuePillStyle(theme)}>
+              <Text style={filterSliderValueTextStyle(theme)}>{ageMin} – {ageMax}</Text>
+            </View>
           </View>
           <FilterAgeRangeSlider
             min={AGE_MIN_LIMIT}
@@ -258,19 +258,19 @@ export default function FriendsFiltersScreen() {
               setAgeMax(Math.round(v));
               Haptics.selectionAsync();
             }}
-            primaryColor={Colors.friends.primary}
+            primaryColor={friendsAccent}
           />
-        </View>
+        </Card>
 
         {/* —— Subscription: AI-powered matching —— */}
-        <View style={[styles.sectionCard, styles.sectionCardSubscription]}>
+        <Card style={{ ...styles.sectionCard, ...styles.sectionCardSubscription }}>
           <View style={styles.sectionHeaderRowWithBadge}>
             <View style={styles.sectionHeaderTitleWrap}>
-              <WinklyAISpark feature="smart_matching" size={HEADER.iconSize} style={{ marginRight: 4 }} />
+              <WinklyAISpark feature="smart_matching" size={24} style={{ marginRight: theme.spacing.xxs }} />
               <Text style={styles.sectionTitle} numberOfLines={2}>AI-powered matching</Text>
             </View>
-            <View style={[styles.badge, styles.badgeSubscription]}>
-              <Ionicons name="lock-closed" size={12} color={Colors.white} />
+            <View style={{ ...styles.badge, backgroundColor: friendsAccent }}>
+              <Ionicons name="lock-closed" size={12} color={theme.colors.onPrimary} />
               <Text style={styles.badgeText}>Subscription</Text>
             </View>
           </View>
@@ -279,35 +279,35 @@ export default function FriendsFiltersScreen() {
           </Text>
           {HAS_AI_MATCHING ? (
             <View style={styles.toggleRow}>
-              <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: 12 }}>
-                <SparklesIcon size={16} color={Colors.friends.primary} />
+              <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: theme.spacing.md }}>
+                <SparklesIcon size={16} color={friendsAccent} />
                 <Text style={styles.toggleLabel}>Use AI to improve my match order</Text>
               </View>
-              <Pressable
-                onPress={() => { Haptics.selectionAsync(); setAiMatchingEnabled((v) => !v); }}
-                style={[styles.toggleTrack, aiMatchingEnabled && styles.toggleTrackOn]}
-              >
-                <View style={[styles.toggleThumb, aiMatchingEnabled && styles.toggleThumbOn]} />
-              </Pressable>
+              <Switch
+                value={aiMatchingEnabled}
+                onValueChange={() => { Haptics.selectionAsync(); setAiMatchingEnabled((v) => !v); }}
+                trackColor={{ false: theme.colors.border, true: friendsAccent }}
+                thumbColor={theme.colors.onPrimary}
+              />
             </View>
           ) : (
             <TouchableOpacity style={styles.upsellCard} onPress={lockAI} activeOpacity={0.9}>
-              <SparklesIcon size={28} color={Colors.gray400} />
+              <SparklesIcon size={28} color={theme.colors.textMuted} />
               <Text style={styles.upsellTitle}>Better matches with AI</Text>
               <Text style={styles.upsellText}>Super and Premium use AI to rank and suggest people who are a better fit.</Text>
               <Text style={styles.upsellCta}>See plans</Text>
             </TouchableOpacity>
           )}
-        </View>
+        </Card>
 
         {/* —— Subscription: More filters (Friends sub-profile) —— */}
-        <View style={[styles.sectionCard, styles.sectionCardSubscription]}>
+        <Card style={{ ...styles.sectionCard, ...styles.sectionCardSubscription }}>
           <View style={styles.sectionHeaderRowWithBadge}>
             <View style={styles.sectionHeaderTitleWrap}>
               <Text style={styles.sectionTitle} numberOfLines={2}>More filters</Text>
             </View>
-            <View style={[styles.badge, styles.badgeSubscription]}>
-              <Ionicons name="lock-closed" size={12} color={Colors.white} />
+            <View style={{ ...styles.badge, backgroundColor: friendsAccent }}>
+              <Ionicons name="lock-closed" size={12} color={theme.colors.onPrimary} />
               <Text style={styles.badgeText}>Subscription</Text>
             </View>
           </View>
@@ -330,7 +330,7 @@ export default function FriendsFiltersScreen() {
                 <Text style={styles.languageDropdownText} numberOfLines={1}>
                   {languageLabel}
                 </Text>
-                <Ionicons name="chevron-down" size={20} color={Colors.gray600} />
+                <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary} />
               </Pressable>
               <Text style={styles.languageHint}>Up to {MAX_LANGUAGES} languages. Your profile languages appear first.</Text>
 
@@ -354,7 +354,7 @@ export default function FriendsFiltersScreen() {
                         hitSlop={12}
                         accessibilityLabel="Close"
                       >
-                        <Ionicons name="close" size={24} color={Colors.gray600} />
+                        <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
                       </TouchableOpacity>
                     </View>
                     <ScrollView
@@ -390,22 +390,22 @@ export default function FriendsFiltersScreen() {
                               {lang}
                             </Text>
                             {selected && (
-                              <Ionicons name="checkmark-circle" size={22} color={Colors.friends.primary} />
+                              <Ionicons name="checkmark-circle" size={22} color={friendsAccent} />
                             )}
                           </Pressable>
                         );
                       })}
                     </ScrollView>
                     <View style={styles.languageModalFooter}>
-                      <Pressable
+                      <TextButton
+                        title="Done"
                         onPress={() => {
                           Haptics.selectionAsync();
                           setLanguageModalVisible(false);
                         }}
-                        style={[styles.languageModalDoneBtn, { backgroundColor: Colors.friends.primary }]}
-                      >
-                        <Text style={styles.languageModalDoneText}>Done</Text>
-                      </Pressable>
+                        style={{ ...styles.languageModalDoneBtn, backgroundColor: friendsAccent }}
+                        textStyle={{ color: theme.colors.onPrimary }}
+                      />
                     </View>
                   </Pressable>
                 </Pressable>
@@ -414,55 +414,31 @@ export default function FriendsFiltersScreen() {
               <Text style={styles.label}>Interests (up to 6)</Text>
               <View style={styles.chipRowWrap}>
                 {INTEREST_POPULAR_FRIENDS.map((i) => (
-                  <Pressable
-                    key={i}
-                    onPress={() => toggleChip(interests, i, setInterests, 6)}
-                    style={[styles.chipSmall, interests.includes(i) && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, interests.includes(i) && styles.chipTextSelected]}>{i}</Text>
-                  </Pressable>
+                  <Chip key={i} label={i} mode="friends" selected={interests.includes(i)} onPress={() => toggleChip(interests, i, setInterests, 6)} />
                 ))}
               </View>
               <Text style={styles.label}>Meetup style (up to 3)</Text>
               <View style={styles.chipRowWrap}>
                 {MEETUP_GOALS_OPTIONS.map((g) => (
-                  <Pressable
-                    key={g}
-                    onPress={() => toggleChip(meetupGoals, g, setMeetupGoals, 3)}
-                    style={[styles.chipSmall, meetupGoals.includes(g) && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, meetupGoals.includes(g) && styles.chipTextSelected]}>{g}</Text>
-                  </Pressable>
+                  <Chip key={g} label={g} mode="friends" selected={meetupGoals.includes(g)} onPress={() => toggleChip(meetupGoals, g, setMeetupGoals, 3)} />
                 ))}
               </View>
               <Text style={styles.label}>Pets (up to 2)</Text>
               <View style={styles.chipRowWrap}>
                 {PETS_OPTIONS.map((p) => (
-                  <Pressable
-                    key={p}
-                    onPress={() => toggleChip(pets, p, setPets, 2)}
-                    style={[styles.chipSmall, pets.includes(p) && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, pets.includes(p) && styles.chipTextSelected]}>{p}</Text>
-                  </Pressable>
+                  <Chip key={p} label={p} mode="friends" selected={pets.includes(p)} onPress={() => toggleChip(pets, p, setPets, 2)} />
                 ))}
               </View>
               <Text style={styles.label}>Food preferences</Text>
               <View style={styles.chipRowWrap}>
                 {FOOD_OPTIONS.slice(0, 6).map((f) => (
-                  <Pressable
-                    key={f}
-                    onPress={() => setFood(food === f ? "" : f)}
-                    style={[styles.chipSmall, food === f && styles.chipSelected]}
-                  >
-                    <Text style={[styles.chipTextSmall, food === f && styles.chipTextSelected]}>{f}</Text>
-                  </Pressable>
+                  <Chip key={f} label={f} mode="friends" selected={food === f} onPress={() => setFood(food === f ? "" : f)} />
                 ))}
               </View>
             </>
           ) : (
             <TouchableOpacity style={styles.upsellCard} onPress={lockSubscription} activeOpacity={0.9}>
-              <Ionicons name="lock-closed" size={28} color={Colors.gray500} />
+              <Ionicons name="lock-closed" size={28} color={theme.colors.textMuted} />
               <Text style={styles.upsellTitle}>Unlock more filters</Text>
               <Text style={styles.upsellText}>
                 Filter by interests, meetup style, language, pets, food, and all Friends profile fields.
@@ -470,382 +446,248 @@ export default function FriendsFiltersScreen() {
               <Text style={styles.upsellCta}>View subscription plans</Text>
             </TouchableOpacity>
           )}
-        </View>
+        </Card>
 
-        <Pressable onPress={handleApply} style={styles.applyBtn} android_ripple={{ color: "rgba(255,255,255,0.2)" }}>
-          <Text style={styles.applyBtnText}>Apply filters</Text>
-        </Pressable>
-        <View style={{ height: 40 }} />
+        <PrimaryButton title="Apply filters" onPress={handleApply} style={{ backgroundColor: friendsAccent }} />
+        <View style={{ height: theme.spacing.huge }} />
       </ScrollView>
       <FriendsBottomNav />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.backgroundMuted },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    ...Layout.topHeaderBar,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  backBtn: {
-    width: HEADER.buttonSize,
-    height: HEADER.buttonSize,
-    borderRadius: HEADER.buttonRadius,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    ...Typography.headerTitle,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
-  },
-  headerRight: { width: HEADER.buttonSize, height: HEADER.buttonSize },
-  scroll: { flex: 1 },
-  scrollContent: { padding: 20, paddingTop: 20, paddingBottom: 24 },
-  sectionCard: {
-    marginBottom: 24,
-    backgroundColor: Colors.white,
-    borderRadius: Layout.radii.card,
-    padding: 20,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  sectionCardBasic: {
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.accentMint,
-  },
-  sectionCardSubscription: {
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.friends.primary,
-  },
-  sectionHeaderRowWithBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
-    gap: 12,
-  },
-  sectionHeaderTitleWrap: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    minWidth: 0,
-  },
-  sectionHeaderRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 },
-  badgeFree: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    backgroundColor: Colors.friends.primary,
-  },
-  badgeFreeText: {
-    ...Typography.caption,
-    fontSize: 11,
-    fontWeight: "600",
-    color: Colors.white,
-  },
-  badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    backgroundColor: Colors.friends.primary,
-  },
-  badgeText: {
-    ...Typography.caption,
-    fontSize: 11,
-    fontWeight: "600",
-    color: Colors.white,
-  },
-  badgeSubscription: {},
-  sliderValueRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  sliderValue: {
-    ...Typography.body,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-  },
-  sliderMinLabel: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginBottom: 4,
-  },
-  languageDropdownTrigger: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    minHeight: 48,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: Layout.radii.control,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    backgroundColor: Colors.backgroundLight,
-    marginTop: 8,
-  },
-  languageDropdownText: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    flex: 1,
-    marginRight: 8,
-  },
-  languageHint: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginTop: 6,
-    marginLeft: 2,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  languageModalContent: {
-    width: "100%",
-    maxWidth: 400,
-    maxHeight: "80%",
-    backgroundColor: Colors.backgroundLight,
-    borderRadius: Layout.radii.card,
-    overflow: "hidden",
-    shadowColor: Colors.softBlack,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 12,
-  },
-  languageModalHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-  },
-  languageModalTitle: {
-    ...Typography.h3,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
-    marginBottom: 4,
-  },
-  languageModalSubtitle: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginBottom: 8,
-  },
-  languageModalClose: {
-    position: "absolute",
-    top: 16,
-    right: 16,
-    padding: 4,
-  },
-  languageModalList: {
-    maxHeight: 320,
-    paddingVertical: 8,
-  },
-  languageModalRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-  },
-  languageModalRowSelectedFriends: {
-    backgroundColor: Colors.friends.secondary,
-  },
-  languageModalRowDisabled: {
-    opacity: 0.5,
-  },
-  languageModalRowText: {
-    ...Typography.body,
-    color: Colors.textPrimary,
-    flex: 1,
-  },
-  languageModalRowTextSelectedFriends: {
-    fontWeight: "600",
-    color: Colors.friends.primary,
-  },
-  languageModalRowTextDisabled: {
-    color: Colors.gray500,
-  },
-  languageModalFooter: {
-    padding: 20,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.gray200,
-  },
-  languageModalDoneBtn: {
-    paddingVertical: 14,
-    borderRadius: Layout.radii.control,
-    alignItems: "center",
-  },
-  languageModalDoneText: {
-    ...Typography.button,
-    color: Colors.white,
-    fontFamily: FontFamily.heading,
-  },
-  toggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 8,
-  },
-  toggleLabel: {
-    ...Typography.body,
-    fontSize: 14,
-    color: Colors.textPrimary,
-  },
-  toggleTrack: {
-    width: 52,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: Colors.gray300,
-    justifyContent: "center",
-    paddingHorizontal: 2,
-  },
-  toggleTrackOn: {
-    backgroundColor: Colors.friends.primary,
-  },
-  toggleThumb: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: Colors.white,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  toggleThumbOn: {},
-  upsellCard: {
-    padding: 20,
-    borderRadius: 16,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  upsellTitle: {
-    ...Typography.h3,
-    fontSize: 16,
-    marginTop: 8,
-    marginBottom: 4,
-    color: Colors.textPrimary,
-  },
-  upsellText: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    textAlign: "center",
-    marginBottom: 12,
-  },
-  upsellCta: {
-    ...Typography.button,
-    fontSize: 14,
-    color: Colors.friends.primary,
-    fontWeight: "600",
-  },
-  sectionTitle: {
-    ...Typography.h3,
-    fontSize: 18,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
-  },
-  sectionHint: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  label: {
-    ...Typography.caption,
-    fontWeight: "600",
-    color: Colors.gray700,
-    marginBottom: 10,
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 18,
-  },
-  chipRowWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 14,
-  },
-  chip: {
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-  },
-  chipSmall: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: Colors.gray100,
-  },
-  chipSelected: {
-    backgroundColor: Colors.friends.primary,
-  },
-  chipText: {
-    ...Typography.caption,
-    color: Colors.textPrimary,
-    fontWeight: "500",
-  },
-  chipTextSmall: {
-    ...Typography.caption,
-    fontSize: 13,
-    color: Colors.textPrimary,
-  },
-  chipTextSelected: {
-    color: Colors.white,
-  },
-  applyBtn: {
-    paddingVertical: 18,
-    borderRadius: 16,
-    backgroundColor: Colors.friends.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: Colors.friends.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  applyBtnText: {
-    ...Typography.button,
-    fontFamily: FontFamily.heading,
-    color: Colors.white,
-    fontSize: 17,
-  },
-});
+function createStyles(theme: AppTheme) {
+  const friendsAccent = theme.modeAccent("friends").primary;
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    scroll: { flex: 1 },
+    scrollContent: { padding: theme.spacing.xl, paddingTop: theme.spacing.xl, paddingBottom: theme.spacing.xxl },
+    sectionCard: { marginBottom: theme.spacing.xxl },
+    sectionCardBasic: {
+      borderLeftWidth: 4,
+      borderLeftColor: friendsAccent,
+    },
+    sectionCardSubscription: {
+      borderLeftWidth: 4,
+      borderLeftColor: friendsAccent,
+    },
+    sectionHeaderRowWithBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: theme.spacing.xxs,
+      gap: theme.spacing.md,
+    },
+    sectionHeaderTitleWrap: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      minWidth: 0,
+    },
+    sectionHeaderRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, marginBottom: theme.spacing.xxs },
+    badge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.xxs,
+      paddingVertical: 5,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.sm,
+    },
+    badgeText: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontSize: 11,
+      fontWeight: "600",
+      color: theme.colors.onPrimary,
+    },
+    languageDropdownTrigger: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      minHeight: 48,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      borderRadius: theme.radii.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.background,
+      marginTop: theme.spacing.sm,
+    },
+    languageDropdownText: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textPrimary,
+      flex: 1,
+      marginRight: theme.spacing.sm,
+    },
+    languageHint: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.xs,
+      marginLeft: 2,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: theme.colors.overlay,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: theme.spacing.xl,
+    },
+    languageModalContent: {
+      width: "100%",
+      maxWidth: 400,
+      maxHeight: "80%",
+      backgroundColor: theme.colors.background,
+      borderRadius: theme.radii.lg,
+      overflow: "hidden",
+      ...theme.elevation(3),
+    },
+    languageModalHeader: {
+      paddingHorizontal: theme.spacing.xl,
+      paddingTop: theme.spacing.xl,
+      paddingBottom: theme.spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    languageModalTitle: {
+      ...theme.type.h3,
+      fontFamily: theme.type.h3.fontFamily,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.xxs,
+    },
+    languageModalSubtitle: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.sm,
+    },
+    languageModalClose: {
+      position: "absolute",
+      top: theme.spacing.md,
+      right: theme.spacing.md,
+      padding: theme.spacing.xxs,
+    },
+    languageModalList: {
+      maxHeight: 320,
+      paddingVertical: theme.spacing.sm,
+    },
+    languageModalRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.xl,
+    },
+    languageModalRowSelectedFriends: {
+      backgroundColor: theme.modeAccent("friends").bg,
+    },
+    languageModalRowDisabled: {
+      opacity: 0.5,
+    },
+    languageModalRowText: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textPrimary,
+      flex: 1,
+    },
+    languageModalRowTextSelectedFriends: {
+      fontWeight: "600",
+      color: friendsAccent,
+    },
+    languageModalRowTextDisabled: {
+      color: theme.colors.textMuted,
+    },
+    languageModalFooter: {
+      padding: theme.spacing.xl,
+      paddingTop: theme.spacing.md,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
+    languageModalDoneBtn: {
+      paddingVertical: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      alignItems: "center",
+      alignSelf: "stretch",
+    },
+    toggleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: theme.spacing.sm,
+    },
+    toggleLabel: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      fontSize: 14,
+      color: theme.colors.textPrimary,
+    },
+    upsellCard: {
+      padding: theme.spacing.xl,
+      borderRadius: theme.radii.lg,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    upsellTitle: {
+      ...theme.type.h3,
+      fontFamily: theme.type.h3.fontFamily,
+      fontSize: 16,
+      marginTop: theme.spacing.sm,
+      marginBottom: theme.spacing.xxs,
+      color: theme.colors.textPrimary,
+    },
+    upsellText: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      textAlign: "center",
+      marginBottom: theme.spacing.md,
+    },
+    upsellCta: {
+      ...theme.type.button,
+      fontFamily: theme.type.button.fontFamily,
+      fontSize: 14,
+      color: friendsAccent,
+      fontWeight: "600",
+    },
+    sectionTitle: {
+      ...theme.type.h3,
+      fontFamily: theme.type.h3.fontFamily,
+      color: theme.colors.textPrimary,
+    },
+    sectionHint: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.md,
+    },
+    label: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontWeight: "600",
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.sm,
+    },
+    chipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      marginBottom: theme.spacing.lg,
+    },
+    chipRowWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: theme.spacing.sm,
+      marginBottom: theme.spacing.md,
+    },
+    chipText: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textPrimary,
+      fontWeight: "500",
+    },
+  });
+}

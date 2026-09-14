@@ -1,6 +1,7 @@
 import { Alert } from "react-native";
 import * as Haptics from "expo-haptics";
 import { blockUser, reportUser } from "@/lib/matching/actions";
+import { showReportReceivedNotice } from "@/lib/safety/reportNotice";
 
 const BLOCK_REASONS = ["Not what I'm looking for", "Card is repeating", "Other"] as const;
 const REPORT_REASONS = ["Inappropriate content", "Fake profile", "Harassment", "Spam", "Other"] as const;
@@ -49,7 +50,7 @@ export function showProfileBlockReportMenu(targetUserId: string, onDone?: () => 
                 await reportUser({ targetUserId, reason: mapReportReason(reason) });
                 await blockUser({ targetUserId, reason: "Reported: " + reason });
                 onDone?.();
-                Alert.alert("Report sent", "Thanks for helping keep Winkly safe.");
+                showReportReceivedNotice("Report: profile");
               } catch {
                 Alert.alert("Error", "Could not report. Please try again.");
               }

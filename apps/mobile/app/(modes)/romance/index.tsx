@@ -13,7 +13,6 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { chatRoutes } from "@/lib/navigation/modeHub";
@@ -24,7 +23,7 @@ import { RomanceBottomNav } from "@/components/layout/RomanceBottomNav";
 import { MatchCardOverlay } from "@/components/matching/MatchCardOverlay";
 import { MatchCelebration } from "@/components/matching/MatchCelebration";
 import { SwipeDeckEmptyState } from "@/components/matching/SwipeDeckEmptyState";
-import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { HIT_SLOP } from "@/constants/a11y";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { useModeContext } from "@/providers/ModeContextProvider";
@@ -34,6 +33,7 @@ import { hasAnyAIAccess } from "@/lib/ai/aiFeatureGate";
 import { supabase } from "@/lib/supabase";
 import { SuperLikeInviteModal } from "@/components/romance/SuperLikeInviteModal";
 import { blockUser, recordSwipe, reportUser } from "@/lib/matching/actions";
+import { showReportReceivedNotice } from "@/lib/safety/reportNotice";
 import { buildRomanceSuperLikeIcebreaker, buildRomanceSuperLikeIcebreakerAI } from "@/lib/matching/romanceIcebreaker";
 import { fetchRomanceSwipeDeckProfiles } from "@/lib/discover/romanceSwipeDeck";
 import { keyboardAvoidingProps } from "@/lib/ui/keyboardAvoiding";
@@ -53,7 +53,6 @@ const CARD_HEIGHT = Math.min(SCREEN_WIDTH * 0.9 * (4 / 3), SCREEN_HEIGHT * 0.52)
 const SWIPE_THRESHOLD = 80;
 const ACTION_BUTTON_SIZE = 64; // 10% bigger than 58
 const ACTION_ICON_SIZE = 35;  // 10% bigger than 32
-const CARD_RADIUS = Layout.radii.card;
 const INTENT_FREE_PER_DAY = 1;
 const INTENT_SUBSCRIBER_PER_DAY = 10;
 const STACK_OFFSET = 8;
@@ -93,6 +92,10 @@ type MatchState = {
 
 export default function RomanceHome() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
+  const CARD_RADIUS = theme.radii.lg;
+  const romanceAccent = theme.modeAccent("romance").primary;
   const { context } = useModeContext();
   const hasIntentSubscription = context.subscription_tier === "premium";
   const showAiHints = hasAnyAIAccess(context.subscription_tier ?? "free");
@@ -392,6 +395,7 @@ export default function RomanceHome() {
                 : "other";
       await reportUser({ targetUserId: profileId, reason: mapped });
       await blockUser({ targetUserId: profileId, reason: "Reported: " + reason });
+      showReportReceivedNotice("Report: profile");
     } catch (e) {
       console.warn("Report failed", e);
     }
@@ -659,7 +663,7 @@ export default function RomanceHome() {
 
       {deckLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.romance.primary} />
+          <ActivityIndicator size="large" color={romanceAccent} />
         </View>
       ) : !currentProfile ? (
         <SwipeDeckEmptyState
@@ -784,7 +788,7 @@ export default function RomanceHome() {
                   accessibilityRole="button"
                   accessibilityLabel="Block or report"
                 >
-                  <Ionicons name="ellipsis-vertical" size={22} color={Colors.romance.primary} />
+                  <Ionicons name="ellipsis-vertical" size={22} color={romanceAccent} />
                 </Pressable>
 
                 <MatchCardOverlay
@@ -817,7 +821,7 @@ export default function RomanceHome() {
                   accessibilityLabel="Pass"
                   accessibilityState={{ disabled: transitioning }}
                 >
-                  <Ionicons name="close" size={ACTION_ICON_SIZE} color={Colors.romance.primary} />
+                  <Ionicons name="close" size={ACTION_ICON_SIZE} color={romanceAccent} />
                 </Pressable>
               </View>
 
@@ -850,7 +854,7 @@ export default function RomanceHome() {
                   accessibilityLabel="Like"
                   accessibilityState={{ disabled: transitioning }}
                 >
-                  <Ionicons name="heart" size={ACTION_ICON_SIZE} color={Colors.romance.primary} />
+                  <Ionicons name="heart" size={ACTION_ICON_SIZE} color={romanceAccent} />
                 </Pressable>
               </View>
             </View>
@@ -904,13 +908,13 @@ export default function RomanceHome() {
                     accessibilityRole="button"
                     accessibilityLabel="Use suggested opener"
                   >
-                    <SparklesIcon size={16} color={Colors.primaryViolet} />
+                    <SparklesIcon size={16} color={theme.colors.primary} />
                     <Text style={styles.icebreakerChipText}>Use suggested opener</Text>
                   </Pressable>
                   <TextInput
                     style={styles.intentMessageInput}
                     placeholder="Or write your own..."
-                    placeholderTextColor={Colors.gray500}
+                    placeholderTextColor={theme.colors.textMuted}
                     value={intentMessage}
                     onChangeText={setIntentMessage}
                     multiline
@@ -925,7 +929,7 @@ export default function RomanceHome() {
                     accessibilityRole="button"
                     accessibilityLabel="Send Super Like with an invite"
                   >
-                    <Ionicons name="calendar-outline" size={18} color={Colors.primaryViolet} />
+                    <Ionicons name="calendar-outline" size={18} color={theme.colors.primary} />
                     <Text style={styles.intentInviteChipText}>Send with an invite (place & time)</Text>
                   </Pressable>
                   <View style={styles.intentModalActions}>
@@ -994,328 +998,339 @@ export default function RomanceHome() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.backgroundMuted,
-  },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  cardContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: Layout.spacing.sm,
-    paddingBottom: 2,
-    minHeight: 0,
-  },
-  cardStackWrap: {
-    alignItems: "center",
-    justifyContent: "flex-end",
-  },
-  cardWrapper: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  card: {
-    backgroundColor: Colors.white,
-    overflow: "hidden",
-    ...Shadow.card,
-    shadowRadius: 20,
-    shadowOpacity: 0.12,
-    elevation: 8,
-  },
-  stackCard: {
-    position: "absolute",
-    backgroundColor: Colors.gray100,
-    opacity: 0.95,
-  },
-  mediaArea: {
-    width: "100%",
-    flex: 1,
-    backgroundColor: Colors.gray200,
-    overflow: "hidden",
-    position: "relative",
-  },
-  photoDotsRow: {
-    position: "absolute",
-    top: 10,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 6,
-    zIndex: 2,
-  },
-  photoDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.white,
-    opacity: 0.45,
-  },
-  photoDotActive: {
-    opacity: 1,
-  },
-  mediaTapLeft: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    bottom: 0,
-    width: "50%",
-    zIndex: 1,
-  },
-  mediaTapRight: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: "50%",
-    zIndex: 1,
-  },
-  cardImage: {
-    width: "100%",
-    height: "100%",
-  },
-  swipeStamp: {
-    position: "absolute",
-    top: 36,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderWidth: 3,
-    borderRadius: 6,
-    zIndex: 3,
-  },
-  swipeStampNope: {
-    left: 24,
-    transform: [{ rotate: "-15deg" }],
-    borderColor: "#E53935",
-  },
-  swipeStampLike: {
-    right: 24,
-    transform: [{ rotate: "15deg" }],
-    borderColor: Colors.romance.primary,
-  },
-  swipeStampTextNope: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 28,
-    fontWeight: "800",
-    letterSpacing: 2,
-    color: "#E53935",
-  },
-  swipeStampTextLike: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 28,
-    fontWeight: "800",
-    letterSpacing: 2,
-    color: Colors.romance.primary,
-  },
-  cardMenuBtn: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(255,255,255,0.92)",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  actionBarContainer: {
-    alignItems: "center",
-    width: "100%",
-    paddingBottom: 28,
-  },
-  actionRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
-    paddingTop: 2,
-    paddingBottom: 4,
-  },
-  actionButtonColumn: {
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 40,
-  },
-  actionIconWrap: {
-    width: ACTION_BUTTON_SIZE,
-    height: ACTION_BUTTON_SIZE,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  actionIconGlowPass: {
-    shadowColor: Colors.romance.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.38,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  actionIconGlowIntent: {
-    shadowColor: "#E6B800",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.42,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  actionIconGlowLike: {
-    shadowColor: Colors.romance.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.38,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  actionBarSubtitle: {
-    width: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-    paddingTop: 2,
-    paddingBottom: 8,
-  },
-  actionBtnDisabled: {
-    opacity: 0.5,
-  },
-  actionBtnPressed: {
-    transform: [{ scale: 0.92 }],
-  },
-  intentSubtitleLine1: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: Colors.gray600,
-    marginTop: 0,
-    textAlign: "center",
-    width: "100%",
-  },
-  intentSubtitleLine2: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: Colors.gray600,
-    marginTop: 2,
-    textAlign: "center",
-    width: "100%",
-  },
-  intentSubtitleLink: {
-    marginTop: 4,
-  },
-  intentSubtitleLinkText: {
-    ...Typography.caption,
-    fontSize: 12,
-    fontWeight: "600",
-    color: Colors.romance.primary,
-    textAlign: "center",
-    textDecorationLine: "underline",
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  modalContentWrap: {
-    width: "100%",
-    maxWidth: 360,
-  },
-  intentModalCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: 24,
-    ...Shadow.card,
-  },
-  intentModalTitle: {
-    ...Typography.h3,
-    fontFamily: FontFamily.headingBold,
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  intentModalHint: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginBottom: 14,
-  },
-  icebreakerChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: Colors.romance.secondary,
-    borderWidth: 1,
-    borderColor: "rgba(232,56,56,0.2)",
-    marginBottom: 12,
-  },
-  icebreakerChipText: {
-    ...Typography.caption,
-    fontWeight: "600",
-    color: Colors.romance.primary,
-  },
-  intentInviteChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.primaryViolet,
-    backgroundColor: Colors.primaryViolet + "12",
-  },
-  intentInviteChipText: {
-    ...Typography.caption,
-    fontWeight: "600",
-    color: Colors.primaryViolet,
-  },
-  intentMessageInput: {
-    borderWidth: 1,
-    borderColor: Colors.gray300,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    minHeight: 88,
-    ...Typography.body,
-    color: Colors.textPrimary,
-    marginBottom: 20,
-    textAlignVertical: "top",
-  },
-  intentModalActions: {
-    flexDirection: "row",
-    gap: 12,
-    justifyContent: "flex-end",
-  },
-  intentModalBtnSecondary: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: Colors.gray100,
-  },
-  intentModalBtnSecondaryText: {
-    ...Typography.button,
-    color: Colors.gray700,
-  },
-  intentModalBtnPrimary: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.romance.primary,
-  },
-  intentModalBtnPrimaryText: {
-    ...Typography.button,
-    fontFamily: FontFamily.headingBold,
-    color: Colors.white,
-  },
-});
+function createStyles(theme: AppTheme) {
+  const romanceAccent = theme.modeAccent("romance").primary;
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.backgroundMuted,
+    },
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: theme.spacing.xxl,
+    },
+    cardContainer: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingTop: theme.spacing.sm,
+      paddingBottom: 2,
+      minHeight: 0,
+    },
+    cardStackWrap: {
+      alignItems: "center",
+      justifyContent: "flex-end",
+    },
+    cardWrapper: {
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    card: {
+      backgroundColor: theme.colors.surface,
+      overflow: "hidden",
+      ...theme.elevation(2),
+      shadowRadius: 20,
+      shadowOpacity: 0.12,
+      elevation: 8,
+    },
+    stackCard: {
+      position: "absolute",
+      backgroundColor: theme.colors.backgroundMuted,
+      opacity: 0.95,
+    },
+    mediaArea: {
+      width: "100%",
+      flex: 1,
+      backgroundColor: theme.colors.border,
+      overflow: "hidden",
+      position: "relative",
+    },
+    photoDotsRow: {
+      position: "absolute",
+      top: 10,
+      left: 0,
+      right: 0,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: 6,
+      zIndex: 2,
+    },
+    photoDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: "#FFFFFF",
+      opacity: 0.45,
+    },
+    photoDotActive: {
+      opacity: 1,
+    },
+    mediaTapLeft: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      bottom: 0,
+      width: "50%",
+      zIndex: 1,
+    },
+    mediaTapRight: {
+      position: "absolute",
+      top: 0,
+      right: 0,
+      bottom: 0,
+      width: "50%",
+      zIndex: 1,
+    },
+    cardImage: {
+      width: "100%",
+      height: "100%",
+    },
+    swipeStamp: {
+      position: "absolute",
+      top: 36,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.xs,
+      borderWidth: 3,
+      borderRadius: theme.radii.xs,
+      zIndex: 3,
+    },
+    swipeStampNope: {
+      left: 24,
+      transform: [{ rotate: "-15deg" }],
+      borderColor: theme.colors.error,
+    },
+    swipeStampLike: {
+      right: 24,
+      transform: [{ rotate: "15deg" }],
+      borderColor: romanceAccent,
+    },
+    swipeStampTextNope: {
+      fontFamily: theme.type.h1.fontFamily,
+      fontSize: 28,
+      fontWeight: "800",
+      letterSpacing: 2,
+      color: theme.colors.error,
+    },
+    swipeStampTextLike: {
+      fontFamily: theme.type.h1.fontFamily,
+      fontSize: 28,
+      fontWeight: "800",
+      letterSpacing: 2,
+      color: romanceAccent,
+    },
+    cardMenuBtn: {
+      position: "absolute",
+      top: 12,
+      right: 12,
+      width: 44,
+      height: 44,
+      borderRadius: theme.radii.pill,
+      backgroundColor: "rgba(255,255,255,0.92)",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 2,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    actionBarContainer: {
+      alignItems: "center",
+      width: "100%",
+      paddingBottom: theme.spacing.xxl,
+    },
+    actionRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      paddingTop: 2,
+      paddingBottom: theme.spacing.xs,
+    },
+    actionButtonColumn: {
+      alignItems: "center",
+      justifyContent: "center",
+      minWidth: 40,
+    },
+    actionIconWrap: {
+      width: ACTION_BUTTON_SIZE,
+      height: ACTION_BUTTON_SIZE,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    actionIconGlowPass: {
+      shadowColor: romanceAccent,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.38,
+      shadowRadius: 12,
+      elevation: 4,
+    },
+    actionIconGlowIntent: {
+      shadowColor: "#E6B800",
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.42,
+      shadowRadius: 12,
+      elevation: 4,
+    },
+    actionIconGlowLike: {
+      shadowColor: romanceAccent,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.38,
+      shadowRadius: 12,
+      elevation: 4,
+    },
+    actionBarSubtitle: {
+      width: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: theme.spacing.xxl,
+      paddingTop: 2,
+      paddingBottom: theme.spacing.sm,
+    },
+    actionBtnDisabled: {
+      opacity: 0.5,
+    },
+    actionBtnPressed: {
+      transform: [{ scale: 0.92 }],
+    },
+    intentSubtitleLine1: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontSize: 11,
+      color: theme.colors.textSecondary,
+      marginTop: 0,
+      textAlign: "center",
+      width: "100%",
+    },
+    intentSubtitleLine2: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontSize: 11,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+      textAlign: "center",
+      width: "100%",
+    },
+    intentSubtitleLink: {
+      marginTop: 4,
+    },
+    intentSubtitleLinkText: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontSize: 12,
+      fontWeight: "600",
+      color: romanceAccent,
+      textAlign: "center",
+      textDecorationLine: "underline",
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: theme.colors.overlay,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: theme.spacing.xxl,
+    },
+    modalContentWrap: {
+      width: "100%",
+      maxWidth: 360,
+    },
+    intentModalCard: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      padding: theme.spacing.xxl,
+      ...theme.elevation(2),
+    },
+    intentModalTitle: {
+      ...theme.type.h3,
+      fontFamily: theme.type.h3.fontFamily,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.sm,
+    },
+    intentModalHint: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.md,
+    },
+    icebreakerChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.sm,
+      backgroundColor: theme.modeAccent("romance").bg,
+      borderWidth: 1,
+      borderColor: romanceAccent + "33",
+      marginBottom: theme.spacing.md,
+    },
+    icebreakerChipText: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontWeight: "600",
+      color: romanceAccent,
+    },
+    intentInviteChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.md,
+      marginBottom: theme.spacing.md,
+      borderRadius: theme.radii.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.primary,
+      backgroundColor: theme.colors.primary + "12",
+    },
+    intentInviteChipText: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontWeight: "600",
+      color: theme.colors.primary,
+    },
+    intentMessageInput: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.sm,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.md,
+      minHeight: 88,
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.xl,
+      textAlignVertical: "top",
+    },
+    intentModalActions: {
+      flexDirection: "row",
+      gap: theme.spacing.md,
+      justifyContent: "flex-end",
+    },
+    intentModalBtnSecondary: {
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.xl,
+      borderRadius: theme.radii.sm,
+      backgroundColor: theme.colors.backgroundMuted,
+    },
+    intentModalBtnSecondaryText: {
+      ...theme.type.button,
+      fontFamily: theme.type.button.fontFamily,
+      color: theme.colors.textSecondary,
+    },
+    intentModalBtnPrimary: {
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.xxl,
+      borderRadius: theme.radii.sm,
+      backgroundColor: romanceAccent,
+    },
+    intentModalBtnPrimaryText: {
+      ...theme.type.button,
+      fontFamily: theme.type.button.fontFamily,
+      color: theme.colors.onPrimary,
+    },
+  });
+}

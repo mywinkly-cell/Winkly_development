@@ -21,7 +21,7 @@ import {
 } from "react-native";
 import * as Contacts from "expo-contacts";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 import { hashContactIdentifiers } from "@/lib/contacts/matching";
 import { getPartnersForConcierge, type ConciergePartner } from "@/lib/ai/conciergePartners";
@@ -33,6 +33,8 @@ type Candidate = { id: string; displayName: string; avatar_url?: string | null; 
 
 export default function InviteToGroup() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const { groupId, mode } = useLocalSearchParams<{ groupId?: string; mode?: Mode }>();
   const gid = String(groupId ?? "");
   const groupMode = (mode as Mode) ?? "friends";
@@ -172,7 +174,7 @@ export default function InviteToGroup() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Invite people</Text>
           <View style={{ width: 44 }} />
@@ -180,17 +182,17 @@ export default function InviteToGroup() {
 
         <TouchableOpacity onPress={onConnectContacts} style={styles.contactsBtn} activeOpacity={0.9} disabled={contactsLoading}>
           {contactsLoading ? (
-            <ActivityIndicator size="small" color={Colors.primaryViolet} />
+            <ActivityIndicator size="small" color={theme.colors.primary} />
           ) : (
             <>
-              <Ionicons name="people-outline" size={18} color={Colors.primaryViolet} />
+              <Ionicons name="people-outline" size={18} color={theme.colors.primary} />
               <Text style={styles.contactsText}>Find friends from contacts</Text>
             </>
           )}
         </TouchableOpacity>
 
         {loading ? (
-          <ActivityIndicator size="small" color={Colors.primaryViolet} style={{ marginTop: 24 }} />
+          <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 24 }} />
         ) : sorted.length === 0 ? (
           <Text style={styles.empty}>No connections to invite yet. Share an invite link instead.</Text>
         ) : (
@@ -212,7 +214,7 @@ export default function InviteToGroup() {
                 {c.source === "contact" ? <Text style={styles.tag}>From contacts</Text> : null}
               </View>
               <View style={[styles.checkbox, selected.has(c.id) && styles.checkboxChecked]}>
-                {selected.has(c.id) ? <Ionicons name="checkmark" size={16} color="#FFF" /> : null}
+                {selected.has(c.id) ? <Ionicons name="checkmark" size={16} color={theme.colors.onPrimary} /> : null}
               </View>
             </Pressable>
           ))
@@ -225,14 +227,14 @@ export default function InviteToGroup() {
           activeOpacity={0.9}
         >
           {submitting ? (
-            <ActivityIndicator size="small" color="#FFF" />
+            <ActivityIndicator size="small" color={theme.colors.onPrimary} />
           ) : (
             <Text style={styles.primaryText}>{selected.size > 0 ? `Invite ${selected.size}` : "Select people to invite"}</Text>
           )}
         </TouchableOpacity>
 
         <TouchableOpacity onPress={onShareLink} style={styles.secondaryBtn} activeOpacity={0.9}>
-          <Ionicons name="link-outline" size={18} color={Colors.textPrimary} />
+          <Ionicons name="link-outline" size={18} color={theme.colors.textPrimary} />
           <Text style={styles.secondaryText}>Share invite link</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -240,93 +242,95 @@ export default function InviteToGroup() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { padding: 20, paddingBottom: 40 },
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { padding: 20, paddingBottom: 40 },
+    headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+    backBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary },
 
-  contactsBtn: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: Layout.radii.control,
-    borderWidth: 1,
-    borderColor: Colors.primaryViolet + "55",
-    backgroundColor: Colors.primaryViolet + "10",
-    marginBottom: 16,
-  },
-  contactsText: { ...Typography.button, color: Colors.primaryViolet },
+    contactsBtn: {
+      flexDirection: "row",
+      gap: 8,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 12,
+      borderRadius: theme.radii.md,
+      borderWidth: 1,
+      borderColor: theme.colors.primary + "55",
+      backgroundColor: theme.colors.primary + "10",
+      marginBottom: 16,
+    },
+    contactsText: { ...theme.type.button, color: theme.colors.primary },
 
-  empty: { ...Typography.body, color: Colors.gray600, textAlign: "center", marginVertical: 20 },
+    empty: { ...theme.type.body, color: theme.colors.textSecondary, textAlign: "center", marginVertical: 20 },
 
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: "#FFF",
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  rowSelected: { borderColor: Colors.primaryViolet, backgroundColor: Colors.primaryViolet + "10" },
-  avatar: { width: 40, height: 40, borderRadius: 20 },
-  avatarFallback: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primaryViolet + "22",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: { ...Typography.body, fontWeight: "700", color: Colors.primaryViolet },
-  name: { ...Typography.body, color: Colors.textPrimary },
-  tag: { ...Typography.caption, color: Colors.gray500, marginTop: 2 },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      backgroundColor: theme.colors.surface,
+      marginBottom: 8,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    rowSelected: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary + "10" },
+    avatar: { width: 40, height: 40, borderRadius: 20 },
+    avatarFallback: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: theme.colors.primary + "22",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    avatarText: { ...theme.type.body, fontWeight: "700", color: theme.colors.primary },
+    name: { ...theme.type.body, color: theme.colors.textPrimary },
+    tag: { ...theme.type.caption, color: theme.colors.textMuted, marginTop: 2 },
 
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.gray400,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  checkboxChecked: { backgroundColor: Colors.primaryViolet, borderColor: Colors.primaryViolet },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      borderWidth: 2,
+      borderColor: theme.colors.textMuted,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    checkboxChecked: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
 
-  primaryBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 16,
-  },
-  btnDisabled: { opacity: 0.5 },
-  primaryText: { ...Typography.button, color: "#FFF" },
+    primaryBtn: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.radii.md,
+      paddingVertical: 14,
+      alignItems: "center",
+      marginTop: 16,
+    },
+    btnDisabled: { opacity: 0.5 },
+    primaryText: { ...theme.type.button, color: theme.colors.onPrimary },
 
-  secondaryBtn: {
-    flexDirection: "row",
-    gap: 8,
-    backgroundColor: Colors.gray100,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    marginTop: 10,
-  },
-  secondaryText: { ...Typography.button, color: Colors.textPrimary },
-});
+    secondaryBtn: {
+      flexDirection: "row",
+      gap: 8,
+      backgroundColor: theme.colors.backgroundMuted,
+      borderRadius: theme.radii.md,
+      paddingVertical: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      marginTop: 10,
+    },
+    secondaryText: { ...theme.type.button, color: theme.colors.textPrimary },
+  });
+}

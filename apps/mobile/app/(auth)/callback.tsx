@@ -7,7 +7,7 @@ import * as Linking from "expo-linking";
 import { View, Text, ActivityIndicator } from "react-native";
 import { useTranslation } from "react-i18next";
 import { createSessionFromUrl, isRecoveryUrl } from "@/lib/authDeepLink";
-import { Colors } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 import { getTermsAndCookiesAccepted } from "@/lib/legalFlags";
 import {
   clearPendingAuthCallbackUrl,
@@ -18,6 +18,7 @@ import {
 export default function AuthCallback() {
   const router = useRouter();
   const { t } = useTranslation();
+  const theme = useAppTheme();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
 
   useEffect(() => {
@@ -69,7 +70,7 @@ export default function AuthCallback() {
   if (status === "error") {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24 }}>
-        <Text style={{ color: Colors.textSecondary, textAlign: "center" }}>
+        <Text style={{ color: theme.colors.textSecondary, textAlign: "center" }}>
           {t("auth.callback.expiredLink")}
         </Text>
       </View>
@@ -78,8 +79,8 @@ export default function AuthCallback() {
 
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-      <ActivityIndicator size="large" color={Colors.primaryViolet} />
-      <Text style={{ marginTop: 16, color: Colors.textSecondary }}>{t("auth.callback.completing")}</Text>
+      <ActivityIndicator size="large" color={theme.colors.primary} />
+      <Text style={{ marginTop: 16, color: theme.colors.textSecondary }}>{t("auth.callback.completing")}</Text>
     </View>
   );
 }

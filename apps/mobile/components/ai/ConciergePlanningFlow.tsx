@@ -37,6 +37,7 @@ import {
 } from "@/lib/weatherClient";
 import { formatDefaultLocationDisplay, normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { ConciergeIntentStep } from "@/components/ai/ConciergeIntentStep";
+import { AIDisclosureNote } from "@/components/ai/AIDisclosureNote";
 import { ConciergeSubActivityStep } from "@/components/ai/ConciergeSubActivityStep";
 import { ConciergeQuickRequestStep } from "@/components/ai/ConciergeQuickRequestStep";
 import { ConciergeActivityDetailsStep } from "@/components/ai/ConciergeActivityDetailsStep";
@@ -63,6 +64,13 @@ import {
   FOOD_AND_DRINKS_FORMAT_PROMPTS,
 } from "@/lib/ai/conciergePlanningFlow";
 import { buildPlanRequestText, inclusivePlanDayCount } from "@/lib/ai/buildPlanRequestText";
+import {
+  clampTimeOfDayToFutureIfToday,
+  combineDateAndClockTime,
+  filterFuturePlanOptions,
+  formatLocalIsoDateTime,
+  resolveOptionClockTime,
+} from "@/lib/ai/planTimeValidation";
 import { loadPlanningProfileContext, formatSanitizedPersonaForConciergePrompt } from "@/lib/ai/customPlanPresets";
 import { supabase } from "@/lib/supabase";
 import { getPartnersForConcierge, searchWinklyUsersForInvite, type ConciergePartner } from "@/lib/ai/conciergePartners";
@@ -70,7 +78,10 @@ import { getMergedDeviceWhiteSpaceSlots, formatCalendarWhiteSpaceForGateway } fr
 import { buildBookingContextForAi } from "@/lib/integrations/bookingLinks";
 import { Avatar } from "@/components/ui/Avatar";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
-import { Colors, Typography, HEADER, HEADER_BAR_HEIGHT, Layout } from "@/constants/tokens";
+import { Colors, Typography } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
+import { Header } from "@/components/ds";
+import { PlanCard, PlanCardBadge, PlanCardMeta, PlanCardMapLink, PlanCardIconAction } from "@/components/plans/PlanCard";
 import type { Mode } from "@/types";
 
 function dayKey(d: Date): string {
@@ -133,6 +144,7 @@ export function ConciergePlanningFlow({
   onClose,
   onBack,
 }: ConciergePlanningFlowProps) {
+  const theme = useAppTheme();
   const { i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
   const router = useRouter();
@@ -414,6 +426,10 @@ export function ConciergePlanningFlow({
       .filter(Boolean)
       .join("\n\n");
 
+    const nowForRequest = new Date();
+    const currentDateTimeLocal = formatLocalIsoDateTime(nowForRequest);
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
     const plan_request_text = buildPlanRequestText({
       mode: effectiveMode,
       planningEntrySurface: "planner",
@@ -426,6 +442,8 @@ export function ConciergePlanningFlow({
       searchRadiusKm: typeof details.searchRadiusKm === "number" ? details.searchRadiusKm : undefined,
       originLocationLabel: details.originLocationLabel,
       exactTimeHm: details.singleDay !== false ? details.exactTimeHm : undefined,
+      currentDateTimeLocal,
+      timezone,
       dateFrom: dateStr,
       dateTo: dateEndStr,
       singleDay: details.singleDay !== false,
@@ -470,6 +488,8 @@ export function ConciergePlanningFlow({
       pin_label: details.pinLabel,
       date_from: dateStr,
       date_to: dateEndStr,
+      timezone,
+      current_datetime_local: currentDateTimeLocal,
       budget_tier: budgetTier,
       budget_amount: amount != null && !Number.isNaN(amount) ? amount : undefined,
       budget_currency: details.budgetCurrency || undefined,
@@ -509,6 +529,8 @@ export function ConciergePlanningFlow({
     previousOptions?: ExperienceOption[] | null;
     /** Free-text Quick plan request — bypasses stale activityLabel closure. */
     requestOverride?: string;
+    /** Internal: set on the single auto-retry after every option came back in the past. */
+    retryForPastTimes?: boolean;
   }) => {
     const genId = ++genAttemptRef.current;
     const requestOverride = opts?.requestOverride?.trim() || undefined;
@@ -568,13 +590,16 @@ export function ConciergePlanningFlow({
         country = parsed.country ?? country;
       }
       const date = details.date ?? new Date();
-      const dt = new Date(date);
+      let dt = new Date(date);
       // If user set exact HH:mm, keep that; else default to 18:00 local for planning.
       if (details.singleDay !== false && typeof details.exactTimeHm === "string" && /^\d{2}:\d{2}$/.test(details.exactTimeHm)) {
         dt.setHours(parseInt(details.exactTimeHm.slice(0, 2), 10), parseInt(details.exactTimeHm.slice(3, 5), 10), 0, 0);
       } else {
         dt.setHours(18, 0, 0, 0);
       }
+      // The 18:00 default (or a stale exact time) can itself already be in the past for "today" —
+      // never send the AI a request anchored to a past moment.
+      dt = clampTimeOfDayToFutureIfToday(date, dt);
       const theme = String(requestOverride ?? activityLabel ?? activityKey ?? "Custom").trim();
       const previousVenueHint =
         priorVenueNames.length && refinement_feedback
@@ -619,14 +644,52 @@ export function ConciergePlanningFlow({
         venues: plans.slice(0, 2).map((p) => p?.venue?.name).filter(Boolean),
         providerFallback,
       });
-      setLoading(false);
       if (providerFallback) {
+        setLoading(false);
         setStructuredPlans([]);
         setError("We couldn't build real venue suggestions. Please wait a moment and try again.");
         return;
       }
-      setStructuredPlans(plans.slice(0, 2));
-      if (!plans.length) {
+
+      // Authoritative guard: never render (or let the user add to the planner) an option whose
+      // actual start — day + exact time / itinerary time — has already passed. Multi-day trips
+      // aren't judged here (their per-day slots aren't a single "start").
+      const nowForFilter = new Date();
+      const baseDay = details.date ?? new Date();
+      const exactTimeHmForFilter = details.singleDay !== false ? details.exactTimeHm : undefined;
+      const { kept: futurePlans, droppedCount } = filterFuturePlanOptions(
+        plans,
+        (p) => {
+          if (Array.isArray(p?.trip_days) && p.trip_days.length) return null;
+          const itineraryTime = p?.itinerary?.[0]?.time;
+          const clock = resolveOptionClockTime({ itineraryTime, exactTimeHm: exactTimeHmForFilter });
+          if (!clock) return null;
+          return combineDateAndClockTime(baseDay, clock.hour, clock.minute);
+        },
+        nowForFilter
+      );
+      if (droppedCount > 0) {
+        trace("generate:dropped_past_options", { droppedCount, kept: futurePlans.length });
+      }
+      if (plans.length > 0 && futurePlans.length === 0 && !opts?.retryForPastTimes) {
+        // Every option came back in the past — re-request once, steering the model forward,
+        // instead of ever showing a stale option.
+        await handleGenerate({
+          ...opts,
+          refinementFeedback: [
+            opts?.refinementFeedback,
+            `All previously suggested start times were already in the past (current local time: ${formatLocalIsoDateTime(nowForFilter)}). Every new option must start strictly after this time.`,
+          ]
+            .filter(Boolean)
+            .join(" "),
+          retryForPastTimes: true,
+        });
+        return;
+      }
+
+      setLoading(false);
+      setStructuredPlans(futurePlans.slice(0, 2));
+      if (!futurePlans.length) {
         setMessage(
           activityKey === "quick"
             ? "No venue options returned. Try a clearer request or a nearby city."
@@ -797,47 +860,60 @@ export function ConciergePlanningFlow({
   return (
     <View style={styles.container}>
       <GestureDetector gesture={headerBackSwipe}>
-        <View style={styles.flowHeader}>
-        <TouchableOpacity
-          onPress={handleFlowBack}
-          style={styles.flowHeaderBtn}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityLabel={flowStep === "intent" ? "Go back" : "Previous step"}
-        >
-          <Ionicons name="arrow-back" size={HEADER.iconSize} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.flowHeaderTitle} numberOfLines={1}>
-          {headerTitle}
-        </Text>
-        <TouchableOpacity
-          onPress={() => {
-            Haptics.selectionAsync();
-            onClose();
-          }}
-          style={styles.flowHeaderBtn}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityLabel="Close"
-        >
-          <Ionicons name="close" size={22} color={Colors.gray600} />
-        </TouchableOpacity>
+        <View style={{ zIndex: 50, elevation: 10 }}>
+          <Header
+            title={headerTitle}
+            onBack={handleFlowBack}
+            trailing={
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  onClose();
+                }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityLabel="Close"
+                accessibilityRole="button"
+              >
+                <Ionicons name="close" size={22} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            }
+          />
         </View>
       </GestureDetector>
 
       {/* Step indicator: 5 dots */}
-      <View style={styles.stepRow}>
-        {[1, 2, 3, 4, 5].map((i) => (
-          <View
-            key={i}
-            style={[
-              styles.stepDot,
-              i === currentStepIndex && styles.stepDotActive,
-              i < currentStepIndex && styles.stepDotDone,
-            ]}
-          />
-        ))}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: theme.spacing.sm,
+          paddingVertical: theme.spacing.sm,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: theme.colors.border,
+          backgroundColor: theme.colors.surface,
+        }}
+      >
+        {[1, 2, 3, 4, 5].map((i) => {
+          const active = i === currentStepIndex;
+          const done = i < currentStepIndex;
+          return (
+            <View
+              key={i}
+              style={{
+                width: active ? 8 : 6,
+                height: active ? 8 : 6,
+                borderRadius: theme.radii.pill,
+                backgroundColor: active || done ? theme.colors.primary : theme.colors.border,
+                opacity: done ? 0.6 : 1,
+              }}
+            />
+          );
+        })}
       </View>
 
       <View style={styles.stepBody}>
+      {flowStep === "intent" && <AIDisclosureNote />}
       {flowStep === "intent" && (
         <ConciergeIntentStep
           mode={mode}
@@ -1137,86 +1213,71 @@ export function ConciergePlanningFlow({
                 .slice(0, 2)
                 .map((p: any, idx) => {
                 const isOptionA = p.option_id === "A" || idx === 0;
-                const modeAccent = (Colors as any)[effectiveMode]?.primary ?? Colors.primaryViolet;
+                const modeAccent = (Colors as any)[effectiveMode]?.primary ?? theme.colors.primary;
                 const characterLabel = p.character_label || (isOptionA ? "Bolder pick" : "Classic choice");
+                const venueLine = [p.venue?.name, p.venue?.address, p.venue?.estimated_cost].filter(Boolean).join(" • ");
                 return (
-                  <View
+                  <PlanCard
                     key={idx}
-                    style={[
-                      styles.planCard,
-                      isOptionA && { borderLeftWidth: 6, borderLeftColor: modeAccent, paddingLeft: 14, elevation: 5, shadowOpacity: 0.1 },
-                    ]}
-                  >
-                    <TouchableOpacity
-                      style={styles.planCardTouch}
-                      onPress={() => { Haptics.selectionAsync(); setChosenStructuredIndex(idx); }}
-                      activeOpacity={0.9}
-                    >
-                      <View style={styles.optionTopRow}>
-                        <View style={[styles.optionChip, isOptionA ? { backgroundColor: modeAccent } : null]}>
-                          <Text style={[styles.optionChipText, isOptionA ? { color: Colors.white } : null]}>
-                            {isOptionA ? "Option A" : "Option B"}
-                          </Text>
-                        </View>
-                        <View style={styles.characterChip}>
-                          <Text style={styles.characterChipText}>{characterLabel}</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.planTitle} numberOfLines={1}>{p.title}</Text>
-                      <Text style={styles.planPlace} numberOfLines={2}>
-                        {[p.venue?.name, p.venue?.address, p.venue?.estimated_cost].filter(Boolean).join(" • ")}
-                      </Text>
-                      <View style={styles.planItinerary}>
-                        {p.trip_days?.length ? (
-                          p.trip_days.map((d: { day: number; date: string; morning: { summary: string }; afternoon: { summary: string }; evening?: { summary: string } }) => (
-                            <View key={`${idx}-d${d.day}`} style={styles.planItineraryRow}>
-                              <Text style={styles.planItineraryTime}>D{d.day}</Text>
-                              <Text style={styles.planItineraryActivity} numberOfLines={5}>
-                                {d.date}: {d.morning.summary} · {d.afternoon.summary}
-                                {d.evening ? ` · ${d.evening.summary}` : ""}
-                              </Text>
-                            </View>
-                          ))
-                        ) : (
-                          <View style={styles.planItineraryRow}>
-                            <Text style={styles.planItineraryActivity} numberOfLines={4}>
-                              {(p.itinerary ?? []).slice(0, 3).map((s: { time: string; description: string }) => `${s.time} ${s.description}`.trim()).join(" · ")}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                      <View style={styles.planMeta}>
-                        <Text style={styles.planMetaText} numberOfLines={2}>{p.weather_note}</Text>
-                      </View>
-                    </TouchableOpacity>
-                    <View style={styles.planActions}>
-                      <TouchableOpacity
-                        style={styles.planActionBtn}
+                    accentColor={modeAccent}
+                    onPress={() => { setChosenStructuredIndex(idx); }}
+                    title={p.title}
+                    badges={
+                      <>
+                        <PlanCardBadge label={isOptionA ? "Option A" : "Option B"} variant={isOptionA ? "solid" : "outlined"} color={modeAccent} />
+                        <PlanCardBadge label={characterLabel} />
+                      </>
+                    }
+                    meta={venueLine ? <PlanCardMeta icon="location-outline" numberOfLines={2}>{venueLine}</PlanCardMeta> : undefined}
+                    mapAction={p.venue?.google_maps_link ? <PlanCardMapLink onPress={() => Linking.openURL(p.venue.google_maps_link)} /> : undefined}
+                    primaryAction={{
+                      label: "Add to planner",
+                      tone: modeAccent,
+                      onPress: () => {
+                        setChosenStructuredIndex(idx);
+                        setFlowStep(showInviteStepBeforePlanner ? "invite" : "add_to_planner");
+                      },
+                    }}
+                    secondaryActions={
+                      <PlanCardIconAction
+                        icon="person-add-outline"
+                        accessibilityLabel="Invite someone"
                         onPress={() => {
-                          Haptics.selectionAsync();
-                          setChosenStructuredIndex(idx);
-                          setFlowStep(showInviteStepBeforePlanner ? "invite" : "add_to_planner");
-                        }}
-                      >
-                        <Text style={styles.planActionText}>Add to planner</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.planActionIcon}
-                        onPress={() => {
-                          Haptics.selectionAsync();
                           setChosenStructuredIndex(idx);
                           setFlowStep("invite");
                         }}
+                      />
+                    }
+                  >
+                    {p.trip_days?.length ? (
+                      p.trip_days.map((d: { day: number; date: string; morning: { summary: string }; afternoon: { summary: string }; evening?: { summary: string } }) => (
+                        <Text
+                          key={`${idx}-d${d.day}`}
+                          numberOfLines={5}
+                          style={[theme.type.caption, { color: theme.colors.textSecondary, fontFamily: theme.type.caption.fontFamily, marginBottom: theme.spacing.xs }]}
+                        >
+                          <Text style={{ fontFamily: theme.type.bodyMedium.fontFamily, fontWeight: "600" }}>{`D${d.day} `}</Text>
+                          {d.date}: {d.morning.summary} · {d.afternoon.summary}
+                          {d.evening ? ` · ${d.evening.summary}` : ""}
+                        </Text>
+                      ))
+                    ) : (p.itinerary ?? []).length > 0 ? (
+                      <Text
+                        numberOfLines={4}
+                        style={[theme.type.caption, { color: theme.colors.textSecondary, fontFamily: theme.type.caption.fontFamily }]}
                       >
-                        <Ionicons name="person-add-outline" size={20} color={Colors.primaryViolet} />
-                      </TouchableOpacity>
-                      {p.venue?.google_maps_link ? (
-                        <TouchableOpacity style={styles.planActionIcon} onPress={() => Linking.openURL(p.venue.google_maps_link)}>
-                          <Ionicons name="map-outline" size={20} color={Colors.primaryViolet} />
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                  </View>
+                        {(p.itinerary ?? []).slice(0, 3).map((s: { time: string; description: string }) => `${s.time} ${s.description}`.trim()).join(" · ")}
+                      </Text>
+                    ) : null}
+                    {p.weather_note ? (
+                      <Text
+                        numberOfLines={2}
+                        style={[theme.type.caption, { color: theme.colors.textSecondary, fontFamily: theme.type.caption.fontFamily, marginTop: theme.spacing.xs }]}
+                      >
+                        {p.weather_note}
+                      </Text>
+                    ) : null}
+                  </PlanCard>
                 );
               })}
               <View style={styles.conciergeUpsell}>
@@ -1260,86 +1321,77 @@ export function ConciergePlanningFlow({
                   opt.itinerary ??
                   scheduleArr.map((s) => (typeof s === "string" ? { time: "", activity: s } : s));
                 return (
-                  <View key={idx} style={styles.planCard}>
-                    <TouchableOpacity
-                      style={styles.planCardTouch}
-                      onPress={() => { Haptics.selectionAsync(); setChosenIndex(idx); }}
-                      activeOpacity={0.9}
-                    >
-                      {timeStr ? <Text style={styles.planTime}>{timeStr}</Text> : null}
-                      <Text style={styles.planTitle} numberOfLines={1}>
-                        {String(opt.option_name ?? opt.narrative ?? `Option ${idx + 1}`)}
-                      </Text>
-                      {placeName ? <Text style={styles.planPlace} numberOfLines={1}>{placeName}</Text> : null}
-                      {Array.isArray(itinerarySteps) && itinerarySteps.length > 0 ? (
-                        <View style={styles.planItinerary}>
-                          {itinerarySteps.slice(0, 3).map((step, i) => {
-                            const t = (step as { time?: string }).time ?? "";
-                            const a = (step as { activity?: string }).activity ?? String(step);
-                            return (
-                              <View key={i} style={styles.planItineraryRow}>
-                                {t ? <Text style={styles.planItineraryTime}>{t}</Text> : null}
-                                <Text style={styles.planItineraryActivity} numberOfLines={1}>{a}</Text>
-                              </View>
-                            );
-                          })}
-                        </View>
-                      ) : null}
-                      <View style={styles.planMeta}>
-                        {opt.why_this_fits ? (
-                          <View style={styles.planRating}>
-                            <Ionicons name="star" size={14} color={Colors.accentYellow} />
-                            <Text style={styles.planMetaText}>Picked for you</Text>
-                          </View>
-                        ) : null}
-                        {price ? <Text style={styles.planMetaText}>{price}</Text> : null}
-                        {distance ? <Text style={styles.planMetaText}>{distance}</Text> : null}
-                      </View>
-                    </TouchableOpacity>
-                    <View style={styles.planActions}>
-                      <TouchableOpacity
-                        style={styles.planActionBtn}
-                        onPress={() => {
-                          Haptics.selectionAsync();
-                          setChosenIndex(idx);
-                          setFlowStep(showInviteStepBeforePlanner ? "invite" : "add_to_planner");
-                        }}
-                      >
-                        <Text style={styles.planActionText}>Add to planner</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.planActionIcon}
-                        onPress={() => {
-                          Haptics.selectionAsync();
-                          setChosenIndex(idx);
-                          setFlowStep("invite");
-                        }}
-                      >
-                        <Ionicons name="person-add-outline" size={20} color={Colors.primaryViolet} />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.planActionIcon}
-                        onPress={() => {
-                          Haptics.selectionAsync();
-                          const dateStr = details.date ? details.date.toLocaleDateString() : "";
-                          Share.share({
-                            message: [opt.option_name ?? opt.narrative, locationLineDisplay, dateStr].filter(Boolean).join("\n"),
-                            title: String(opt.option_name ?? "Plan"),
-                          }).catch(() => {});
-                        }}
-                      >
-                        <Ionicons name="share-outline" size={20} color={Colors.primaryViolet} />
-                      </TouchableOpacity>
-                      {mapQuery ? (
-                        <TouchableOpacity
-                          style={styles.planActionIcon}
-                          onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`)}
-                        >
-                          <Ionicons name="map-outline" size={20} color={Colors.primaryViolet} />
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                  </View>
+                  <PlanCard
+                    key={idx}
+                    onPress={() => setChosenIndex(idx)}
+                    title={String(opt.option_name ?? opt.narrative ?? `Option ${idx + 1}`)}
+                    badges={opt.why_this_fits ? <PlanCardBadge label="Picked for you" icon="star" tone="primary" /> : undefined}
+                    meta={
+                      <>
+                        {timeStr ? <PlanCardMeta icon="time-outline">{timeStr}</PlanCardMeta> : null}
+                        {placeName ? <PlanCardMeta icon="location-outline" numberOfLines={1}>{placeName}</PlanCardMeta> : null}
+                        {price ? <PlanCardMeta icon="cash-outline">{price}</PlanCardMeta> : null}
+                        {distance ? <PlanCardMeta icon="navigate-outline">{distance}</PlanCardMeta> : null}
+                      </>
+                    }
+                    mapAction={
+                      mapQuery ? (
+                        <PlanCardMapLink onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`)} />
+                      ) : undefined
+                    }
+                    primaryAction={{
+                      label: "Add to planner",
+                      onPress: () => {
+                        setChosenIndex(idx);
+                        setFlowStep(showInviteStepBeforePlanner ? "invite" : "add_to_planner");
+                      },
+                    }}
+                    secondaryActions={
+                      <>
+                        <PlanCardIconAction
+                          icon="person-add-outline"
+                          accessibilityLabel="Invite someone"
+                          onPress={() => {
+                            setChosenIndex(idx);
+                            setFlowStep("invite");
+                          }}
+                        />
+                        <PlanCardIconAction
+                          icon="share-outline"
+                          accessibilityLabel="Share this plan"
+                          onPress={() => {
+                            const dateStr = details.date ? details.date.toLocaleDateString() : "";
+                            Share.share({
+                              message: [opt.option_name ?? opt.narrative, locationLineDisplay, dateStr].filter(Boolean).join("\n"),
+                              title: String(opt.option_name ?? "Plan"),
+                            }).catch(() => {});
+                          }}
+                        />
+                      </>
+                    }
+                  >
+                    {Array.isArray(itinerarySteps) && itinerarySteps.length > 0
+                      ? itinerarySteps.slice(0, 3).map((step, i) => {
+                          const t = (step as { time?: string }).time ?? "";
+                          const a = (step as { activity?: string }).activity ?? String(step);
+                          return (
+                            <View key={i} style={{ flexDirection: "row", gap: theme.spacing.xs, marginBottom: theme.spacing.xxs }}>
+                              {t ? (
+                                <Text style={[theme.type.caption, { color: theme.colors.textSecondary, fontFamily: theme.type.bodyMedium.fontFamily, fontWeight: "600" }]}>
+                                  {t}
+                                </Text>
+                              ) : null}
+                              <Text
+                                numberOfLines={1}
+                                style={[theme.type.caption, { color: theme.colors.textSecondary, fontFamily: theme.type.caption.fontFamily, flex: 1 }]}
+                              >
+                                {a}
+                              </Text>
+                            </View>
+                          );
+                        })
+                      : null}
+                  </PlanCard>
                 );
               })}
             </GestureScrollView>
@@ -1538,57 +1590,6 @@ export function ConciergePlanningFlow({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   stepBody: { flex: 1, minHeight: 0 },
-  flowHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Layout.spacing.md,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.gray200,
-    backgroundColor: Colors.white,
-    minHeight: HEADER_BAR_HEIGHT,
-    zIndex: 50,
-    elevation: 10,
-  },
-  flowHeaderBtn: {
-    width: HEADER.buttonSize,
-    height: HEADER.buttonSize,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  flowHeaderTitle: {
-    ...Typography.headerTitle,
-    flex: 1,
-    textAlign: "center",
-    marginHorizontal: 8,
-    color: Colors.textPrimary,
-  },
-  stepRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.gray200,
-  },
-  stepDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.gray300,
-  },
-  stepDotActive: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.primaryViolet,
-  },
-  stepDotDone: {
-    backgroundColor: Colors.primaryViolet,
-    opacity: 0.6,
-  },
   suggestionsWrap: { flex: 1 },
   loadingWrap: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
   loadingText: { ...Typography.caption, color: Colors.gray600 },
@@ -1674,58 +1675,6 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   conciergeUpsellBtnText: { ...Typography.button, color: Colors.white },
-  planCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  planCardTouch: { marginBottom: 12 },
-  planTime: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600", marginBottom: 4 },
-  planTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 4 },
-  planPlace: { ...Typography.caption, color: Colors.gray600, marginBottom: 8 },
-  optionTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8, flexWrap: "wrap" },
-  optionChip: {
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: Colors.gray100,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  optionChipText: { ...Typography.caption, color: Colors.gray700, fontWeight: "800" },
-  characterChip: {
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: Colors.gray100,
-  },
-  characterChipText: { ...Typography.caption, color: Colors.gray700, fontWeight: "700" },
-  planItinerary: { marginTop: 8, marginBottom: 8, paddingLeft: 4 },
-  planItineraryRow: { flexDirection: "row", alignItems: "center", marginBottom: 4, gap: 10 },
-  planItineraryTime: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600", minWidth: 36 },
-  planItineraryActivity: { ...Typography.caption, color: Colors.gray600, flex: 1 },
-  planMeta: { flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "center" },
-  planRating: { flexDirection: "row", alignItems: "center", gap: 4 },
-  planMetaText: { ...Typography.caption, color: Colors.gray600 },
-  planActions: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  planActionBtn: {
-    flex: 1,
-    minWidth: 120,
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  planActionText: { ...Typography.caption, color: Colors.white, fontWeight: "600" },
-  planActionIcon: { padding: 10 },
   backRow: {
     flexDirection: "row",
     alignItems: "center",

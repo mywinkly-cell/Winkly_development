@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { SafeScreenView } from "@/components/SafeScreenView";
-import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { useModeContext } from "@/providers";
 import type { Mode } from "@/types";
 import { requestDeleteAiMemory, type DeleteAiMemoryScope } from "@/lib/account/deleteAiMemory";
@@ -18,6 +18,8 @@ function scopeLabel(scope: DeleteAiMemoryScope): string {
 
 export default function AiMemoryScreen() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const { context } = useModeContext();
   const activeMode = (context.active_mode ?? "romance") as Mode;
 
@@ -67,7 +69,7 @@ export default function AiMemoryScreen() {
     <SafeScreenView style={styles.screen}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>AI memory</Text>
         <View style={styles.placeholder} />
@@ -141,7 +143,7 @@ export default function AiMemoryScreen() {
           activeOpacity={0.8}
           disabled={loading}
         >
-          <Ionicons name="trash-outline" size={18} color={Colors.white} />
+          <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
           <Text style={styles.dangerBtnText}>{loading ? "Deleting…" : "Delete AI memory"}</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -149,77 +151,76 @@ export default function AiMemoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundMuted },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    ...Layout.topHeaderBar,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, fontFamily: FontFamily.heading, color: Colors.textPrimary },
-  placeholder: { width: 40 },
-  scroll: { padding: Layout.screenPadding, paddingBottom: 40 },
-  card: { backgroundColor: Colors.white, borderRadius: Layout.radii.card, padding: 20, marginBottom: 16 },
-  cardTitle: { ...Typography.h3, fontFamily: FontFamily.heading, color: Colors.textPrimary, marginBottom: 10 },
-  body: { ...Typography.body, color: Colors.gray700, lineHeight: 22 },
-  hint: { ...Typography.caption, color: Colors.gray600, marginTop: 10, lineHeight: 18 },
-  divider: { height: 1, backgroundColor: Colors.gray200, marginVertical: 10 },
-  sectionLabel: { ...Typography.caption, color: Colors.gray600, marginTop: 4, marginBottom: 10 },
-  choiceRow: {
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: Colors.gray100,
-  },
-  choiceRowActive: { backgroundColor: Colors.primaryViolet + "12" },
-  choiceTitle: { ...Typography.body, fontWeight: "600", color: Colors.textPrimary },
-  choiceValue: { ...Typography.caption, color: Colors.gray700 },
-  pills: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  pill: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    backgroundColor: Colors.white,
-  },
-  pillActive: { borderColor: Colors.primaryViolet, backgroundColor: Colors.primaryViolet + "12" },
-  pillText: { ...Typography.caption, color: Colors.gray700, fontWeight: "600" },
-  pillTextActive: { color: Colors.primaryViolet },
-  switchRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  switchHint: { ...Typography.caption, color: Colors.gray600, marginTop: 4, lineHeight: 18 },
-  dangerBtn: {
-    backgroundColor: Colors.errorRed,
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    marginTop: 6,
-  },
-  dangerBtnText: { ...Typography.body, fontWeight: "700", color: Colors.white },
-});
-
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      paddingTop: theme.spacing.sm,
+      paddingBottom: theme.spacing.md,
+      minHeight: 56,
+      backgroundColor: theme.colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    backBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+      ...theme.elevation(1),
+    },
+    headerTitle: { ...theme.type.h2, fontFamily: theme.type.h1.fontFamily, color: theme.colors.textPrimary },
+    placeholder: { width: 40 },
+    scroll: { padding: theme.spacing.xl, paddingBottom: 40 },
+    card: { backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, padding: 20, marginBottom: 16 },
+    cardTitle: { ...theme.type.h3, fontFamily: theme.type.h1.fontFamily, color: theme.colors.textPrimary, marginBottom: 10 },
+    body: { ...theme.type.body, color: theme.colors.textSecondary, lineHeight: 22 },
+    hint: { ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 10, lineHeight: 18 },
+    divider: { height: 1, backgroundColor: theme.colors.border, marginVertical: 10 },
+    sectionLabel: { ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 4, marginBottom: 10 },
+    choiceRow: {
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: theme.colors.backgroundMuted,
+    },
+    choiceRowActive: { backgroundColor: theme.colors.primary + "12" },
+    choiceTitle: { ...theme.type.body, fontWeight: "600", color: theme.colors.textPrimary },
+    choiceValue: { ...theme.type.caption, color: theme.colors.textSecondary },
+    pills: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+    pill: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    pillActive: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary + "12" },
+    pillText: { ...theme.type.caption, color: theme.colors.textSecondary, fontWeight: "600" },
+    pillTextActive: { color: theme.colors.primary },
+    switchRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+    switchHint: { ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 4, lineHeight: 18 },
+    dangerBtn: {
+      backgroundColor: theme.colors.error,
+      borderRadius: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+      marginTop: 6,
+    },
+    dangerBtnText: { ...theme.type.body, fontWeight: "700", color: "#FFFFFF" },
+  });
+}

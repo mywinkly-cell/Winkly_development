@@ -26,8 +26,7 @@ import {
 } from "react-native";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
-import { cacheDirectory } from "expo-file-system/legacy";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Location from "expo-location";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -38,8 +37,7 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { Routes } from "@/constants/routes";
 import { trackOnboardingCompleted, trackOnboardingSubProfileSkipped } from "@/lib/analytics/events";
-import { setOnboardingSubProfileSkipped } from "@/lib/introFlags";
-import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { searchCities, type CityCountry } from "@/lib/location/citySearch";
 import {
   normalizeLocationDisplayString,
@@ -55,14 +53,20 @@ import { FriendsSubProfile } from "@/components/onboarding/FriendsSubProfile";
 import { BusinessSubProfile } from "@/components/onboarding/BusinessSubProfile";
 import { InterestPickerModal } from "@/components/onboarding/InterestPickerModal";
 import { GENERAL_INTERESTS_MAX, interestEmoji } from "@/constants/interestCategories";
-import { OnboardingStepIndicator } from "@/components/onboarding/OnboardingStepIndicator";
 import {
-  ONBOARDING_STEP_COUNT,
-  inferOnboardingResumeStep,
-  validateOnboardingStep,
-  type OnboardingStep,
+  buildWizardSteps,
+  validateWizardStep,
+  inferWizardResumeStep,
+  wizardStepLabel,
+  clampWizardStepIndex,
+  ALL_ONBOARDING_MODES,
+  type WizardStep,
   type PrimaryOnboardingMode,
-} from "@/lib/profile/onboardingSteps";
+} from "@/lib/profile/onboardingWizard";
+import { WizardShell } from "@/components/onboarding/wizard/WizardShell";
+import { NameStep, PhotosStep, LocationStep, AboutStep, LanguageModal } from "@/components/onboarding/wizard/GeneralSteps";
+import { ModeSelectStep } from "@/components/onboarding/wizard/ModeSelectStep";
+import { ReviewStep } from "@/components/onboarding/wizard/ReviewStep";
 import { PhotoConfirmModal } from "@/components/media/PhotoConfirmModal";
 import { uploadLocalPhotos, uploadLocalVideos } from "@/lib/uploadMedia";
 import { validatePickerAsset } from "@/lib/mediaValidation";
@@ -106,7 +110,36 @@ function ensureLength<T>(arr: T[], len: number): T[] {
 
 function isAuthSessionMissing(err: any) {
   const msg = String(err?.message ?? err ?? "").toLowerCase();
-  return msg.includes("auth session missing");
+  return (
+    msg.includes("auth session missing") ||
+    msg.includes("session from session_id") ||
+    msg.includes("jwt expired") ||
+    msg.includes("invalid refresh token") ||
+    msg.includes("refresh_token_not_found") ||
+    msg.includes("not authenticated")
+  );
+}
+
+/**
+ * Turns a thrown error (Supabase PostgrestError/AuthError or a plain JS Error)
+ * into a message safe to show the user, while logging the full diagnostic
+ * shape (message/code/details/hint) to the console for debugging. Postgres
+ * errors often carry the real reason in `.details`/`.hint` rather than
+ * `.message` alone (e.g. a check-constraint or RLS violation).
+ */
+function describeSaveError(context: string, err: any): string {
+  const message = err?.message ?? String(err ?? "Unknown error");
+  console.error(`[profile-core] ${context} failed:`, {
+    message,
+    code: err?.code,
+    details: err?.details,
+    hint: err?.hint,
+    status: err?.status,
+  });
+  const parts = [message, err?.details, err?.hint].filter(
+    (p) => typeof p === "string" && p.trim() && p.trim() !== message.trim()
+  );
+  return parts.join(" — ") || "Something went wrong while saving your profile.";
 }
 
 export default function ProfileCore() {
@@ -117,6 +150,8 @@ export default function ProfileCore() {
   const isEditFlow = edit === "1";
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 320, useNativeDriver: true }).start();
@@ -227,18 +262,38 @@ export default function ProfileCore() {
   const [interestsBusiness, setInterestsBusiness] = useState<string[]>([]);
 
   const [saving, setSaving] = useState(false);
-  const [currentStep, setCurrentStep] = useState<OnboardingStep>(1);
-  const [selectedPrimaryMode, setSelectedPrimaryMode] = useState<PrimaryOnboardingMode>("romance");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [cropModalVisible, setCropModalVisible] = useState(false);
   const [pendingCrop, setPendingCrop] = useState<{ uri: string; type: "core" | "romance" | "friends" | "business"; index: number } | null>(null);
 
-  const selectPrimaryMode = useCallback((mode: PrimaryOnboardingMode) => {
-    Haptics.selectionAsync();
-    setSelectedPrimaryMode(mode);
-    setRomanceEnabled(mode === "romance");
-    setFriendsEnabled(mode === "friends");
-    setBusinessEnabled(mode === "business");
-  }, []);
+  /** Modes enabled for the onboarding wizard — derived straight from the same booleans the edit flow's Switches use. */
+  const enabledModes = useMemo(
+    () =>
+      ALL_ONBOARDING_MODES.filter((m) =>
+        m === "romance" ? romanceEnabled : m === "friends" ? friendsEnabled : businessEnabled
+      ),
+    [romanceEnabled, friendsEnabled, businessEnabled]
+  );
+
+  const toggleMode = useCallback(
+    (mode: PrimaryOnboardingMode) => {
+      Haptics.selectionAsync();
+      if (mode === "romance") setRomanceEnabled((v) => !v);
+      else if (mode === "friends") setFriendsEnabled((v) => !v);
+      else setBusinessEnabled((v) => !v);
+    },
+    []
+  );
+
+  const wizardSteps = useMemo(() => buildWizardSteps(enabledModes), [enabledModes]);
+
+  // Keep the current step in range when a mode gets deselected and its steps disappear.
+  useEffect(() => {
+    setCurrentStepIndex((i) => clampWizardStepIndex(i, wizardSteps.length));
+  }, [wizardSteps.length]);
+
+  const currentWizardStep: WizardStep = wizardSteps[clampWizardStepIndex(currentStepIndex, wizardSteps.length)];
 
   const maxAdultDate = useMemo(() => {
     const d = new Date();
@@ -252,7 +307,14 @@ export default function ProfileCore() {
       try {
         const { data: userData, error: userError } = await supabase.auth.getUser();
         let loadedFromSupabase = false;
-        let resumeFromDb: Parameters<typeof inferOnboardingResumeStep>[0] | null = null;
+        let resumeFromDb: Parameters<typeof inferWizardResumeStep>[0] | null = null;
+        let dbEnabledModes: PrimaryOnboardingMode[] = [];
+        const dbModeComplete: Partial<Record<PrimaryOnboardingMode, boolean>> = {};
+        let dbFirstName = "";
+        let dbLastName = "";
+        let dbBirthday: Date | null = null;
+        let dbCityValue = "";
+        let dbCorePhotoCount = 0;
 
         if (!userError && userData?.user) {
           const userId = userData.user.id;
@@ -301,13 +363,11 @@ export default function ProfileCore() {
                 ? [upRow.main_photo_url]
                 : [];
             setCorePhotos(photos);
-            resumeFromDb = {
-              firstName: upRow.first_name ?? "",
-              lastName: upRow.last_name ?? "",
-              birthday: myBirthdayDate,
-              city: dbCity,
-              corePhotoCount: photos.length,
-            };
+            dbFirstName = upRow.first_name ?? "";
+            dbLastName = upRow.last_name ?? "";
+            dbBirthday = myBirthdayDate;
+            dbCityValue = dbCity;
+            dbCorePhotoCount = photos.length;
           }
 
           const { data: subs } = await supabase
@@ -320,6 +380,8 @@ export default function ProfileCore() {
             if (row.mode === "romance") {
               loadedFromSupabase = true;
               setRomanceEnabled(true);
+              dbEnabledModes.push("romance");
+              dbModeComplete.romance = !!row.bio?.trim() && Array.isArray(row.photos) && row.photos.some(Boolean);
               setBioRomance(row.bio ?? "");
               setRomancePhotos(Array.isArray(row.photos) && row.photos.length > 0 ? ensureLength(row.photos, 3) : [null, null, null]);
               if (generalInterests.length === 0 && Array.isArray(row.interests) && row.interests.length > 0) {
@@ -343,6 +405,8 @@ export default function ProfileCore() {
             if (row.mode === "friends") {
               loadedFromSupabase = true;
               setFriendsEnabled(true);
+              dbEnabledModes.push("friends");
+              dbModeComplete.friends = !!row.bio?.trim() && Array.isArray(row.photos) && row.photos.some(Boolean);
               setBioFriends(row.bio ?? "");
               setFriendsPhotos(Array.isArray(row.photos) && row.photos.length > 0 ? ensureLength(row.photos, 3) : [null, null, null]);
               if (generalInterests.length === 0 && Array.isArray(row.interests) && row.interests.length > 0) {
@@ -361,6 +425,8 @@ export default function ProfileCore() {
             if (row.mode === "business") {
               loadedFromSupabase = true;
               setBusinessEnabled(true);
+              dbEnabledModes.push("business");
+              dbModeComplete.business = !!row.bio?.trim() && Array.isArray(row.photos) && row.photos.some(Boolean);
               setBioBusiness(row.bio ?? "");
               setBusinessPhotos(Array.isArray(row.photos) && row.photos.length > 0 ? ensureLength(row.photos, 3) : [null, null, null]);
               setInterestsBusiness(Array.isArray(row.interests) ? row.interests : []);
@@ -383,6 +449,18 @@ export default function ProfileCore() {
           });
 
           setInterests(generalInterests);
+
+          if (loadedFromSupabase) {
+            resumeFromDb = {
+              firstName: dbFirstName,
+              lastName: dbLastName,
+              birthday: dbBirthday,
+              city: dbCityValue,
+              corePhotoCount: dbCorePhotoCount,
+              enabledModes: dbEnabledModes,
+              modeComplete: dbModeComplete,
+            };
+          }
         }
 
         if (!loadedFromSupabase) {
@@ -444,26 +522,25 @@ export default function ProfileCore() {
             setRomanceVideos(ensureLength(data.romanceVideos ?? [null], 1));
             setFriendsVideos(ensureLength(data.friendsVideos ?? [null], 1));
             setBusinessVideos(ensureLength(data.businessVideos ?? [null], 1));
-            if (data.selectedPrimaryMode === "friends" || data.selectedPrimaryMode === "business" || data.selectedPrimaryMode === "romance") {
-              setSelectedPrimaryMode(data.selectedPrimaryMode);
-              selectPrimaryMode(data.selectedPrimaryMode);
-            } else if (data.romanceEnabled) {
-              selectPrimaryMode("romance");
-            } else if (data.friendsEnabled) {
-              selectPrimaryMode("friends");
-            } else if (data.businessEnabled) {
-              selectPrimaryMode("business");
-            }
             if (!isEditFlow) {
               const photoCount = Array.isArray(data.corePhotos) ? data.corePhotos.filter(Boolean).length : 0;
-              setCurrentStep(
-                inferOnboardingResumeStep({
+              const draftEnabledModes = ALL_ONBOARDING_MODES.filter((m) =>
+                m === "romance" ? (data.romanceEnabled ?? true) : m === "friends" ? !!data.friendsEnabled : !!data.businessEnabled
+              );
+              setCurrentStepIndex(
+                inferWizardResumeStep({
                   firstName: data.firstName ?? "",
                   lastName: data.lastName ?? "",
                   birthday: data.birthday ? new Date(data.birthday) : null,
                   city: data.city ?? "",
                   corePhotoCount: photoCount,
-                  savedStep: data.onboardingStep ?? null,
+                  enabledModes: draftEnabledModes,
+                  modeComplete: {
+                    romance: !!data.bioRomance?.trim() && Array.isArray(data.romancePhotos) && data.romancePhotos.some(Boolean),
+                    friends: !!data.bioFriends?.trim() && Array.isArray(data.friendsPhotos) && data.friendsPhotos.some(Boolean),
+                    business: !!data.bioBusiness?.trim() && Array.isArray(data.businessPhotos) && data.businessPhotos.some(Boolean),
+                  },
+                  savedStepIndex: typeof data.onboardingStepIndex === "number" ? data.onboardingStepIndex : null,
                 })
               );
             }
@@ -472,14 +549,14 @@ export default function ProfileCore() {
 
         if (resumeFromDb && !isEditFlow) {
           const draftRaw = await AsyncStorage.getItem("winkly_profile_draft");
-          const savedStep = draftRaw ? (JSON.parse(draftRaw).onboardingStep as number | undefined) : undefined;
-          setCurrentStep(inferOnboardingResumeStep({ ...resumeFromDb, savedStep: savedStep ?? null }));
+          const savedStepIndex = draftRaw ? (JSON.parse(draftRaw).onboardingStepIndex as number | undefined) : undefined;
+          setCurrentStepIndex(inferWizardResumeStep({ ...resumeFromDb, savedStepIndex: savedStepIndex ?? null }));
         }
       } catch (e) {
         console.warn("Profile draft/location init warning:", e);
       }
     })();
-  }, [appLanguage, isEditFlow, selectPrimaryMode]);
+  }, [appLanguage, isEditFlow]);
 
   // ─────────────── AUTO-SAVE DRAFT ───────────────
   const autoSave = useCallback(async () => {
@@ -536,8 +613,7 @@ export default function ProfileCore() {
       romanceVideos,
       friendsVideos,
       businessVideos,
-      onboardingStep: currentStep,
-      selectedPrimaryMode,
+      onboardingStepIndex: currentStepIndex,
     };
     try {
       await AsyncStorage.setItem("winkly_profile_draft", JSON.stringify(data));
@@ -598,8 +674,7 @@ export default function ProfileCore() {
     romanceVideos,
     friendsVideos,
     businessVideos,
-    currentStep,
-    selectedPrimaryMode,
+    currentStepIndex,
   ]);
 
   useEffect(() => {
@@ -845,7 +920,7 @@ export default function ProfileCore() {
     if (!uri.startsWith("http")) {
       try {
         const ext = uri.toLowerCase().includes(".png") ? "png" : "jpg";
-        const dest = `${cacheDirectory ?? ""}winkly_photo_${Date.now()}.${ext}`;
+        const dest = `${FileSystem.cacheDirectory ?? ""}winkly_photo_${Date.now()}.${ext}`;
         await FileSystem.copyAsync({ from: uri, to: dest });
         uri = dest.startsWith("file://") ? dest : `file://${dest}`;
       } catch {
@@ -947,7 +1022,7 @@ export default function ProfileCore() {
     let uri = asset.uri;
     if (!uri.startsWith("http")) {
       try {
-        const dest = `${cacheDirectory ?? ""}winkly_video_${Date.now()}.mp4`;
+        const dest = `${FileSystem.cacheDirectory ?? ""}winkly_video_${Date.now()}.mp4`;
         await FileSystem.copyAsync({ from: uri, to: dest });
         uri = dest;
       } catch { /* use original */ }
@@ -973,6 +1048,7 @@ export default function ProfileCore() {
     }
     if (!birthday) return;
 
+    setSaveError(null);
     try {
       setSaving(true);
 
@@ -1001,8 +1077,23 @@ export default function ProfileCore() {
 
       const cityNorm = normalizeLocationDisplayString(city.trim(), appLanguage);
 
-      // Persist local photos to Supabase Storage; remote URLs pass through untouched.
-      const uploadedCorePhotos = await uploadLocalPhotos(authUser.id, "core", corePhotos);
+      // Persist local photos to Supabase Storage BEFORE writing the DB row, so
+      // the profile never ends up pointing at a dead file:// URI. uploadLocalPhotos
+      // already tolerates individual photo failures (it alerts and skips them) —
+      // we only hard-fail the save here if too few photos survive to still meet
+      // the product minimum the user already satisfied on-device.
+      let uploadedCorePhotos: string[];
+      try {
+        uploadedCorePhotos = await uploadLocalPhotos(authUser.id, "core", corePhotos);
+      } catch (uploadErr) {
+        console.error("[profile-core] core photo upload threw:", uploadErr);
+        throw uploadErr;
+      }
+      if (uploadedCorePhotos.length < MIN_CORE_PHOTOS) {
+        throw new Error(
+          `Only ${uploadedCorePhotos.length} of ${corePhotos.length} photo(s) uploaded successfully. Please check your connection and try again.`
+        );
+      }
       setCorePhotos(uploadedCorePhotos);
 
       const payload: Record<string, any> = {
@@ -1037,9 +1128,18 @@ export default function ProfileCore() {
       });
       if (coreErr) throw coreErr;
 
-      const saveRomance = isEditFlow ? romanceEnabled : selectedPrimaryMode === "romance";
-      const saveFriends = isEditFlow ? friendsEnabled : selectedPrimaryMode === "friends";
-      const saveBusiness = isEditFlow ? businessEnabled : selectedPrimaryMode === "business";
+      // The wizard's "modes" step lets the user enable any combination of
+      // Romance/Friends/Business, same as the edit flow's per-mode Switches —
+      // whichever are enabled get their sub-profile written, regardless of flow.
+      const saveRomance = romanceEnabled;
+      const saveFriends = friendsEnabled;
+      const saveBusiness = businessEnabled;
+
+      // Sub-profile writes are best-effort: a hiccup saving the Romance bio
+      // shouldn't strand the user on this screen after their core profile and
+      // photos already saved successfully. Failures are logged and surfaced as
+      // a non-blocking warning once onboarding otherwise completes.
+      const subProfileWarnings: string[] = [];
 
       if (saveRomance) {
         const uploadedRomancePhotos = await uploadLocalPhotos(authUser.id, "romance", romancePhotos);
@@ -1068,11 +1168,15 @@ export default function ProfileCore() {
           interests: interests.length ? interests : null,
           meta: romanceMeta,
         };
-        await supabase.from("sub_profiles").upsert(romancePayload, { onConflict: "user_id,mode" });
-        await supabase.from("profiles_mode").upsert(
+        const { error: romanceSubErr } = await supabase
+          .from("sub_profiles")
+          .upsert(romancePayload, { onConflict: "user_id,mode" });
+        if (romanceSubErr) subProfileWarnings.push(describeSaveError("romance sub_profiles", romanceSubErr));
+        const { error: romanceModeErr } = await supabase.from("profiles_mode").upsert(
           { ...romancePayload, updated_at: new Date().toISOString() },
           { onConflict: "user_id,mode" }
         );
+        if (romanceModeErr) subProfileWarnings.push(describeSaveError("romance profiles_mode", romanceModeErr));
       }
       if (saveFriends) {
         const uploadedFriendsPhotos = await uploadLocalPhotos(authUser.id, "friends", friendsPhotos);
@@ -1096,11 +1200,15 @@ export default function ProfileCore() {
           interests: interests.length ? interests : null,
           meta: friendsMeta,
         };
-        await supabase.from("sub_profiles").upsert(friendsPayload, { onConflict: "user_id,mode" });
-        await supabase.from("profiles_mode").upsert(
+        const { error: friendsSubErr } = await supabase
+          .from("sub_profiles")
+          .upsert(friendsPayload, { onConflict: "user_id,mode" });
+        if (friendsSubErr) subProfileWarnings.push(describeSaveError("friends sub_profiles", friendsSubErr));
+        const { error: friendsModeErr } = await supabase.from("profiles_mode").upsert(
           { ...friendsPayload, updated_at: new Date().toISOString() },
           { onConflict: "user_id,mode" }
         );
+        if (friendsModeErr) subProfileWarnings.push(describeSaveError("friends profiles_mode", friendsModeErr));
       }
       if (saveBusiness) {
         const uploadedBusinessPhotos = await uploadLocalPhotos(authUser.id, "business", businessPhotos);
@@ -1123,14 +1231,25 @@ export default function ProfileCore() {
           interests: interestsBusiness.length ? interestsBusiness : null,
           meta: businessMeta,
         };
-        await supabase.from("sub_profiles").upsert(businessPayload, { onConflict: "user_id,mode" });
-        await supabase.from("profiles_mode").upsert(
+        const { error: businessSubErr } = await supabase
+          .from("sub_profiles")
+          .upsert(businessPayload, { onConflict: "user_id,mode" });
+        if (businessSubErr) subProfileWarnings.push(describeSaveError("business sub_profiles", businessSubErr));
+        const { error: businessModeErr } = await supabase.from("profiles_mode").upsert(
           { ...businessPayload, updated_at: new Date().toISOString() },
           { onConflict: "user_id,mode" }
         );
+        if (businessModeErr) subProfileWarnings.push(describeSaveError("business profiles_mode", businessModeErr));
+      }
+
+      if (subProfileWarnings.length) {
+        console.warn("[profile-core] non-fatal sub-profile save issues:", subProfileWarnings);
       }
 
       await AsyncStorage.removeItem("winkly_profile_draft");
+      if (!isEditFlow && !saveRomance && !saveFriends && !saveBusiness) {
+        trackOnboardingSubProfileSkipped({ skipped_mode: "none", onboarding_step: wizardSteps.length });
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (isEditFlow) {
         router.back();
@@ -1144,10 +1263,9 @@ export default function ProfileCore() {
         router.push("/(onboarding-personal)/winkly-world?variant=personal");
       }
     } catch (err: any) {
-      Alert.alert(
-        "Save failed",
-        err?.message ?? "Something went wrong while saving your profile. Please try again."
-      );
+      const message = describeSaveError("profile save", err);
+      setSaveError(message);
+      Alert.alert("Save failed", message);
     } finally {
       setSaving(false);
     }
@@ -1158,116 +1276,45 @@ export default function ProfileCore() {
       await handleContinue();
       return;
     }
-    const stepValidation = validateOnboardingStep(currentStep, {
+    if (currentWizardStep.kind === "review") {
+      await handleContinue();
+      return;
+    }
+    const stepValidation = validateWizardStep(currentWizardStep, {
       firstName,
       lastName,
       birthday,
       city,
-      corePhotoCount: corePhotos.length,
       gender,
-      selectedMode: selectedPrimaryMode,
+      corePhotoCount: corePhotos.length,
+      romance: { bio: bioRomance, photos: romancePhotos, relationshipGoals: relationshipGoalsRomance },
+      friends: { bio: bioFriends, photos: friendsPhotos, meetupGoals: meetupGoalsFriends },
+      business: { bio: bioBusiness, photos: businessPhotos, networkingGoals: networkingGoalsBusiness },
     });
     if (!stepValidation.ok) {
       Alert.alert(stepValidation.title, stepValidation.message);
       return;
     }
-    if (currentStep < ONBOARDING_STEP_COUNT) {
-      await autoSave();
-      await saveToSupabase();
-      Haptics.selectionAsync();
-      setCurrentStep((s) => (s + 1) as OnboardingStep);
-      return;
-    }
-    await handleContinue();
-  };
-
-  const handleSkipSubProfile = async () => {
-    // Skipping the sub-profile still requires the shared basics (steps 1–2).
-    for (const step of [1, 2] as const) {
-      const stepValidation = validateOnboardingStep(step, {
-        firstName,
-        lastName,
-        birthday,
-        city,
-        corePhotoCount: corePhotos.length,
-        gender,
-        selectedMode: selectedPrimaryMode,
-      });
-      if (!stepValidation.ok) {
-        Alert.alert(stepValidation.title, stepValidation.message);
-        return;
-      }
-    }
-
-    try {
-      setSaving(true);
-      const { data, error: userError } = await supabase.auth.getUser();
-      if (userError || !data?.user?.id) {
-        Alert.alert("Session expired", "Please sign in again to continue.", [
-          { text: "Go to Sign in", onPress: () => router.replace("/(auth)/signin") },
-        ]);
-        return;
-      }
-
-      const authUser = data.user;
-      const cityNorm = normalizeLocationDisplayString(city.trim(), appLanguage);
-      const uploadedCorePhotos = await uploadLocalPhotos(authUser.id, "core", corePhotos);
-      setCorePhotos(uploadedCorePhotos);
-
-      const payload: Record<string, unknown> = {
-        id: authUser.id,
-        first_name: firstName,
-        last_name: lastName,
-        gender: gender || null,
-        birthday: birthday ? toISODateOnly(birthday) : null,
-        city: cityNorm,
-        education: education || null,
-        occupation: occupation || null,
-        languages: languages.length ? languages : null,
-        instagram: instagram.trim() || null,
-        interests: interests.length ? interests : null,
-        show_full_name: showFullName,
-        core_photos: uploadedCorePhotos,
-        main_photo_url: uploadedCorePhotos[0] || null,
-      };
-
-      const { error: upsertErr } = await supabase.from("user_profiles").upsert(payload, { onConflict: "id" });
-      if (upsertErr) throw upsertErr;
-
-      await upsertOwnProfileCore(authUser.id, {
-        first_name: firstName.trim() || null,
-        last_name: lastName.trim() || null,
-        city: cityNorm,
-        interests: interests.length ? interests : null,
-        show_full_name: showFullName,
-      });
-
-      await AsyncStorage.removeItem("winkly_profile_draft");
-      await setOnboardingSubProfileSkipped(selectedPrimaryMode);
-      trackOnboardingSubProfileSkipped({
-        skipped_mode: selectedPrimaryMode,
-        onboarding_step: ONBOARDING_STEP_COUNT,
-      });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.push(Routes.modeSelection);
-    } catch (err: unknown) {
-      Alert.alert(
-        "Could not save",
-        err instanceof Error ? err.message : "Something went wrong. Please try again."
-      );
-    } finally {
-      setSaving(false);
-    }
+    await autoSave();
+    await saveToSupabase();
+    Haptics.selectionAsync();
+    setCurrentStepIndex((i) => Math.min(i + 1, wizardSteps.length - 1));
   };
 
   const handleHeaderBack = () => {
     Haptics.selectionAsync();
-    if (!isEditFlow && currentStep > 1) {
-      setCurrentStep((s) => (s - 1) as OnboardingStep);
+    if (!isEditFlow && currentStepIndex > 0) {
+      setCurrentStepIndex((i) => i - 1);
       return;
     }
     router.back();
   };
+
+  const jumpToStep = useCallback((predicate: (step: WizardStep) => boolean) => {
+    Haptics.selectionAsync();
+    const index = wizardSteps.findIndex(predicate);
+    if (index >= 0) setCurrentStepIndex(index);
+  }, [wizardSteps]);
 
   const photoStepSubProgress = useMemo(
     () => Math.min(corePhotos.length / MIN_CORE_PHOTOS, 1),
@@ -1319,36 +1366,243 @@ export default function ProfileCore() {
 
   const inputBase = {
     borderWidth: 2,
-    borderColor: Colors.gray200,
-    borderRadius: Layout.radii.control,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.md,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 12,
-    backgroundColor: Colors.white,
-    color: Colors.textPrimary,
+    backgroundColor: theme.colors.surface,
+    color: theme.colors.textPrimary,
     fontSize: 16,
-    minHeight: Layout.touchTargetMin,
+    minHeight: 44,
   };
-  const inputFocused = { borderColor: Colors.primaryViolet, ...Shadow.card };
+  const inputFocused = { borderColor: theme.colors.primary, ...theme.elevation(1) };
+
+  const birthdayLabel = birthday
+    ? `${birthday.getDate()}.${birthday.getMonth() + 1}.${birthday.getFullYear()}`
+    : "";
+
+  function renderWizardStepBody(): React.ReactNode {
+    const step = currentWizardStep;
+
+    if (step.kind === "general") {
+      switch (step.id) {
+        case "name":
+          return (
+            <NameStep
+              firstName={firstName}
+              onFirstNameChange={setFirstName}
+              lastName={lastName}
+              onLastNameChange={setLastName}
+              birthday={birthday}
+              showDatePicker={showDatePicker}
+              onShowDatePicker={() => { Haptics.selectionAsync(); setShowDatePicker(true); }}
+              onDatePickerChange={setBirthday}
+              onDatePickerDismiss={() => setShowDatePicker(false)}
+              maxAdultDate={maxAdultDate}
+            />
+          );
+        case "photos":
+          return (
+            <PhotosStep
+              corePhotos={corePhotos}
+              onOpenPhotoOptions={openCorePhotoOptions}
+              onAddPhoto={() => pickImage("core", corePhotos.length)}
+              onRemovePhoto={removeCorePhoto}
+            />
+          );
+        case "location":
+          return (
+            <LocationStep
+              city={city}
+              onCityChange={onCityChange}
+              suggestions={suggestions}
+              cityConfirmed={cityConfirmed}
+              onSelectCity={selectCity}
+              appLanguage={appLanguage}
+              onRequestLocation={() => { Haptics.selectionAsync(); requestLocationForCity(); }}
+              locationLoading={locationLoading}
+              locationPermissionStatus={locationPermissionStatus}
+              gender={gender}
+              onGenderChange={(g) => { Haptics.selectionAsync(); setGender(g); }}
+              showFullName={showFullName}
+              onShowFullNameChange={(v) => { Haptics.selectionAsync(); setShowFullName(v); }}
+            />
+          );
+        case "about":
+          return (
+            <AboutStep
+              education={education}
+              onEducationChange={(e) => { Haptics.selectionAsync(); setEducation(e); }}
+              occupation={occupation}
+              onOccupationChange={setOccupation}
+              languages={languages}
+              onOpenLanguageModal={() => { Haptics.selectionAsync(); setLanguageModalVisible(true); }}
+              instagram={instagram}
+              onInstagramChange={setInstagram}
+              interests={interests}
+              onRemoveInterest={(it) => { Haptics.selectionAsync(); setInterests((prev) => prev.filter((x) => x !== it)); }}
+              onOpenInterestsModal={() => { Haptics.selectionAsync(); setInterestsModalVisible(true); }}
+            />
+          );
+        case "modes":
+          return <ModeSelectStep enabledModes={new Set(enabledModes)} onToggleMode={toggleMode} />;
+      }
+    }
+
+    if (step.kind === "mode") {
+      const section = step.id;
+      if (step.mode === "romance") {
+        return (
+          <RomanceSubProfile
+            enabled
+            hideToggle
+            hideHeader
+            toggle={() => {}}
+            section={section}
+            photos={romancePhotos}
+            onPickPhoto={(i) => pickImage("romance", i)}
+            video={romanceVideos[0]}
+            onPickVideo={() => pickVideo("romance")}
+            bio={bioRomance}
+            onBioChange={setBioRomance}
+            height={heightRomance}
+            onHeightChange={setHeightRomance}
+            weight={weightRomance}
+            onWeightChange={setWeightRomance}
+            lifestyle={lifestyleRomance}
+            onLifestyleChange={setLifestyleRomance}
+            smoking={smokingRomance}
+            onSmokingChange={setSmokingRomance}
+            alcohol={alcoholRomance}
+            onAlcoholChange={setAlcoholRomance}
+            kids={kidsRomance}
+            onKidsChange={setKidsRomance}
+            sexualViews={sexualViewsRomance}
+            onSexualViewsChange={setSexualViewsRomance}
+            relationshipGoals={relationshipGoalsRomance}
+            onRelationshipGoalsChange={setRelationshipGoalsRomance}
+            religion={religionRomance}
+            onReligionChange={setReligionRomance}
+            politicalViews={politicalViewsRomance}
+            onPoliticalViewsChange={setPoliticalViewsRomance}
+            values={valuesRomance}
+            onValuesChange={setValuesRomance}
+            pets={petsRomance}
+            onPetsChange={setPetsRomance}
+            onPetsToggle={petsToggleRomance}
+            food={foodRomance}
+            onFoodChange={setFoodRomance}
+            toggleMulti={toggleMulti}
+          />
+        );
+      }
+      if (step.mode === "friends") {
+        return (
+          <FriendsSubProfile
+            enabled
+            hideToggle
+            hideHeader
+            toggle={() => {}}
+            section={section}
+            photos={friendsPhotos}
+            onPickPhoto={(i) => pickImage("friends", i)}
+            video={friendsVideos[0]}
+            onPickVideo={() => pickVideo("friends")}
+            bio={bioFriends}
+            onBioChange={setBioFriends}
+            lifestyle={lifestyleFriends}
+            onLifestyleChange={setLifestyleFriends}
+            alcohol={alcoholFriends}
+            onAlcoholChange={setAlcoholFriends}
+            smoking={smokingFriends}
+            onSmokingChange={setSmokingFriends}
+            meetupGoals={meetupGoalsFriends}
+            onMeetupGoalsChange={setMeetupGoalsFriends}
+            status={statusFriends}
+            onStatusChange={setStatusFriends}
+            kids={kidsFriends}
+            onKidsChange={setKidsFriends}
+            pets={petsFriends}
+            onPetsChange={setPetsFriends}
+            onPetsToggle={petsToggleFriends}
+            food={foodFriends}
+            onFoodChange={setFoodFriends}
+            toggleMulti={toggleMulti}
+          />
+        );
+      }
+      return (
+        <BusinessSubProfile
+          enabled
+          hideToggle
+          hideHeader
+          toggle={() => {}}
+          section={section}
+          photos={businessPhotos}
+          onPickPhoto={(i) => pickImage("business", i)}
+          video={businessVideos[0]}
+          onPickVideo={() => pickVideo("business")}
+          bio={bioBusiness}
+          onBioChange={setBioBusiness}
+          role={roleBusiness}
+          onRoleChange={setRoleBusiness}
+          company={companyBusiness}
+          onCompanyChange={setCompanyBusiness}
+          area={areaBusiness}
+          onAreaChange={setAreaBusiness}
+          networkingGoals={networkingGoalsBusiness}
+          onNetworkingGoalsChange={setNetworkingGoalsBusiness}
+          skills={skillsBusiness}
+          onSkillsChange={setSkillsBusiness}
+          interests={interestsBusiness}
+          onInterestsChange={setInterestsBusiness}
+          instagram={instagramBusiness}
+          onInstagramChange={setInstagramBusiness}
+          toggleMulti={toggleMulti}
+        />
+      );
+    }
+
+    // review
+    return (
+      <ReviewStep
+        onEditGeneral={() => jumpToStep((s) => s.kind === "general" && s.id === "name")}
+        firstName={firstName}
+        lastName={lastName}
+        birthdayLabel={birthdayLabel}
+        city={city}
+        gender={gender}
+        corePhotos={corePhotos}
+        enabledModes={enabledModes}
+        onEditMode={(mode) => jumpToStep((s) => s.kind === "mode" && s.mode === mode && s.id === "photosBio")}
+        modeSummary={{
+          romance: { bio: bioRomance, photos: romancePhotos },
+          friends: { bio: bioFriends, photos: friendsPhotos },
+          business: { bio: bioBusiness, photos: businessPhotos },
+        }}
+      />
+    );
+  }
 
   // ─────────────── UI ───────────────
   return (
-    <SafeScreenView style={{ flex: 1, backgroundColor: Colors.backgroundMuted }}>
+    <SafeScreenView style={{ flex: 1, backgroundColor: theme.colors.backgroundMuted }}>
       <KeyboardAvoidingView
         {...keyboardAvoidingProps(PROFILE_HEADER_KEYBOARD_OFFSET)}
         style={{ flex: 1 }}
       >
         {/* Header */}
-        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.gray200, shadowColor: "#1C1C1E", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, backgroundColor: theme.colors.surface, borderBottomWidth: 1, borderBottomColor: theme.colors.border, ...theme.elevation(1) }}>
           <TouchableOpacity
             onPress={handleHeaderBack}
-            style={headerBtn}
+            style={styles.headerBtn}
             activeOpacity={0.9}
           >
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <View style={{ flex: 1, alignItems: "center" }}>
-            <Text style={{ ...Typography.headerTitle, color: Colors.textPrimary, fontFamily: FontFamily.headingBold }}>Your Profile</Text>
+            <Text style={{ ...theme.type.h2, color: theme.colors.textPrimary, fontFamily: theme.type.h2.fontFamily }}>Your Profile</Text>
           </View>
           <TouchableOpacity
             onPress={async () => {
@@ -1356,17 +1610,17 @@ export default function ProfileCore() {
               await autoSave();
               router.push("/profile/view-profile");
             }}
-            style={headerBtn}
+            style={styles.headerBtn}
             activeOpacity={0.9}
             accessibilityLabel="Preview how your card looks to others"
           >
-            <Ionicons name="eye-outline" size={22} color={Colors.textPrimary} />
+            <Ionicons name="eye-outline" size={22} color={theme.colors.textPrimary} />
           </TouchableOpacity>
         </View>
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: Layout.screenPadding, paddingTop: Layout.screenPadding, paddingBottom: 100 }}
+          contentContainerStyle={{ paddingHorizontal: theme.spacing.xl, paddingTop: theme.spacing.xl, paddingBottom: 100 }}
           keyboardShouldPersistTaps="handled"
         >
           <Animated.View style={{ opacity: fadeAnim }}>
@@ -1375,32 +1629,21 @@ export default function ProfileCore() {
             {/* Progress — matches mode selection formula (bio, photos, interests per sub-profile) */}
             <View style={{ marginBottom: 20 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
-                <Text style={{ ...Typography.body, color: Colors.gray700 }}>Profile completion</Text>
-                <Text style={{ ...Typography.button, color: Colors.primaryViolet }}>{overallProgress}%</Text>
+                <Text style={{ ...theme.type.body, color: theme.colors.textSecondary }}>Profile completion</Text>
+                <Text style={{ ...theme.type.button, color: theme.colors.primary }}>{overallProgress}%</Text>
               </View>
-              <View style={{ height: 6, borderRadius: 3, backgroundColor: Colors.gray200, overflow: "hidden" }}>
-                <View style={{ height: "100%", width: `${overallProgress}%`, backgroundColor: Colors.primaryViolet, borderRadius: 3 }} />
+              <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.border, overflow: "hidden" }}>
+                <View style={{ height: "100%", width: `${overallProgress}%`, backgroundColor: theme.colors.primary, borderRadius: 3 }} />
               </View>
             </View>
-              </>
-            ) : (
-              <OnboardingStepIndicator
-                currentStep={currentStep}
-                totalSteps={ONBOARDING_STEP_COUNT}
-                subProgress={currentStep === 2 ? photoStepSubProgress : undefined}
-              />
-            )}
 
-            {(isEditFlow || currentStep === 1) && (
-            <View style={[sectionCard, { marginBottom: 20 }]}>
-              <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 16, fontFamily: FontFamily.headingBold }}>
-                {isEditFlow ? "About you 💫" : "Let's start with the basics ✨"}
+            <View style={[styles.sectionCard, { marginBottom: 20 }]}>
+              <Text style={{ ...theme.type.h3, color: theme.colors.textSecondary, marginBottom: 16, fontFamily: theme.type.h3.fontFamily }}>
+                About you 💫
               </Text>
 
-              {isEditFlow && (
-              <>
-              <Text style={label}>Photos <Text style={requiredMark}>*</Text></Text>
-              <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 12 }}>
+              <Text style={styles.label}>Photos <Text style={styles.requiredMark}>*</Text></Text>
+              <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary, marginBottom: 12 }}>
                 Add {MIN_CORE_PHOTOS}–{MAX_CORE_PHOTOS} photos. Your first photo is your main one — tap any photo to reorder or remove it. ({corePhotos.length}/{MAX_CORE_PHOTOS})
               </Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -6 }}>
@@ -1409,21 +1652,21 @@ export default function ProfileCore() {
                     <TouchableOpacity
                       activeOpacity={0.85}
                       onPress={() => openCorePhotoOptions(i)}
-                      style={corePhotoTile}
+                      style={styles.corePhotoTile}
                     >
                       <Image source={{ uri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
                       {i === 0 && (
-                        <View style={mainBadge}>
-                          <Text style={mainBadgeText}>Main</Text>
+                        <View style={styles.mainBadge}>
+                          <Text style={styles.mainBadgeText}>Main</Text>
                         </View>
                       )}
                       <TouchableOpacity
                         onPress={() => removeCorePhoto(i)}
-                        style={removeBadge}
+                        style={styles.removeBadge}
                         hitSlop={8}
                         accessibilityLabel="Remove photo"
                       >
-                        <Ionicons name="close" size={14} color={Colors.white} />
+                        <Ionicons name="close" size={14} color="#FFFFFF" />
                       </TouchableOpacity>
                     </TouchableOpacity>
                   </View>
@@ -1432,47 +1675,39 @@ export default function ProfileCore() {
                   <View style={{ width: "33.333%", padding: 6 }}>
                     <TouchableOpacity
                       onPress={() => pickImage("core", corePhotos.length)}
-                      style={corePhotoAddTile}
+                      style={styles.corePhotoAddTile}
                       accessibilityLabel="Add photo"
                     >
-                      <Ionicons name="add" size={30} color={Colors.primaryViolet} />
-                      <Text style={{ ...Typography.caption, color: Colors.gray600, marginTop: 4 }}>Add</Text>
+                      <Ionicons name="add" size={30} color={theme.colors.primary} />
+                      <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 4 }}>Add</Text>
                     </TouchableOpacity>
                   </View>
                 )}
               </View>
               {corePhotos.length < MIN_CORE_PHOTOS ? (
-                <Text style={{ ...Typography.caption, color: Colors.errorRed, marginTop: 6, marginBottom: 18 }}>
+                <Text style={{ ...theme.type.caption, color: theme.colors.error, marginTop: 6, marginBottom: 18 }}>
                   Add at least {MIN_CORE_PHOTOS} photos to start matching.
                 </Text>
               ) : (
-                <Text style={{ ...Typography.caption, color: Colors.gray500, marginTop: 6, marginBottom: 18 }}>
+                <Text style={{ ...theme.type.caption, color: theme.colors.textMuted, marginTop: 6, marginBottom: 18 }}>
                   Tip: clear, well-lit photos of your face get more matches.
                 </Text>
               )}
-              </>
-              )}
 
-              {!isEditFlow && (
-                <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 16 }}>
-                  Just the essentials — you can add more details later.
-                </Text>
-              )}
-
-              <Text style={label}>First name <Text style={requiredMark}>*</Text></Text>
+              <Text style={styles.label}>First name <Text style={styles.requiredMark}>*</Text></Text>
               <TextInput
                 placeholder="First name"
-                placeholderTextColor={Colors.gray500}
+                placeholderTextColor={theme.colors.textMuted}
                 value={firstName}
                 onChangeText={setFirstName}
                 onFocus={() => setFocusedField("firstName")}
                 onBlur={() => setFocusedField(null)}
                 style={[inputBase, focusedField === "firstName" && inputFocused]}
               />
-              <Text style={label}>Last name <Text style={requiredMark}>*</Text></Text>
+              <Text style={styles.label}>Last name <Text style={styles.requiredMark}>*</Text></Text>
               <TextInput
                 placeholder="Last name"
-                placeholderTextColor={Colors.gray500}
+                placeholderTextColor={theme.colors.textMuted}
                 value={lastName}
                 onChangeText={setLastName}
                 onFocus={() => setFocusedField("lastName")}
@@ -1480,12 +1715,12 @@ export default function ProfileCore() {
                 style={[inputBase, focusedField === "lastName" && inputFocused]}
               />
 
-              <Text style={label}>Birth date <Text style={requiredMark}>*</Text></Text>
+              <Text style={styles.label}>Birth date <Text style={styles.requiredMark}>*</Text></Text>
               <TouchableOpacity
                 onPress={() => { Haptics.selectionAsync(); setShowDatePicker(true); }}
                 style={[inputBase, { justifyContent: "center" }]}
               >
-                <Text style={{ ...Typography.body, color: birthday ? Colors.textPrimary : Colors.gray400 }}>
+                <Text style={{ ...theme.type.body, color: birthday ? theme.colors.textPrimary : theme.colors.textMuted }}>
                   {birthday
                     ? `${birthday.getDate()}.${birthday.getMonth() + 1}.${birthday.getFullYear()}`
                     : "Select your birth date"}
@@ -1505,7 +1740,7 @@ export default function ProfileCore() {
           />
         )}
 
-        <Text style={{ ...Typography.caption, color: Colors.gray500, marginBottom: 16 }}>
+        <Text style={{ ...theme.type.caption, color: theme.colors.textMuted, marginBottom: 16 }}>
           Your birthday will remain private — only your age will be visible.
         </Text>
 
@@ -1517,29 +1752,27 @@ export default function ProfileCore() {
             paddingVertical: 12,
             paddingHorizontal: 14,
             borderWidth: 1,
-            borderColor: Colors.gray200,
-            borderRadius: Layout.radii.control,
-            backgroundColor: Colors.white,
+            borderColor: theme.colors.border,
+            borderRadius: theme.radii.md,
+            backgroundColor: theme.colors.surface,
             marginBottom: 16,
           }}
         >
           <View style={{ flex: 1, paddingRight: 12 }}>
-            <Text style={[label, { marginBottom: 2 }]}>Show my full name in Romance &amp; Friends</Text>
-            <Text style={{ ...Typography.caption, color: Colors.gray500 }}>
+            <Text style={[styles.label, { marginBottom: 2 }]}>Show my full name in Romance &amp; Friends</Text>
+            <Text style={{ ...theme.type.caption, color: theme.colors.textMuted }}>
               Off by default — others see only your first name on cards and your profile. Business networking always shows your full name.
             </Text>
           </View>
           <Switch
             value={showFullName}
             onValueChange={(v) => { Haptics.selectionAsync(); setShowFullName(v); }}
-            trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }}
-            thumbColor={Colors.white}
+            trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+            thumbColor={theme.colors.surface}
           />
         </View>
 
-        {isEditFlow && (
-        <>
-        <Text style={[label, { marginBottom: 8 }]}>Gender <Text style={requiredMark}>*</Text></Text>
+        <Text style={[styles.label, { marginBottom: 8 }]}>Gender <Text style={styles.requiredMark}>*</Text></Text>
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 16 }}>
           {["Female", "Male", "Other"].map((g) => (
             <TouchableOpacity
@@ -1548,26 +1781,23 @@ export default function ProfileCore() {
               style={{
                 flex: 1,
                 marginHorizontal: 4,
-                backgroundColor: gender === g ? Colors.primaryViolet : Colors.white,
+                backgroundColor: gender === g ? theme.colors.primary : theme.colors.surface,
                 borderWidth: 2,
-                borderColor: gender === g ? Colors.primaryViolet : Colors.gray200,
-                borderRadius: Layout.radii.control,
+                borderColor: gender === g ? theme.colors.primary : theme.colors.border,
+                borderRadius: theme.radii.md,
                 paddingVertical: 12,
                 alignItems: "center",
               }}
             >
-              <Text style={{ ...Typography.body, color: gender === g ? "#FFF" : Colors.textPrimary }}>
+              <Text style={{ ...theme.type.body, color: gender === g ? theme.colors.onPrimary : theme.colors.textPrimary }}>
                 {g}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        </>
-        )}
-
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-          <Text style={[label, { marginBottom: 0 }]}>City <Text style={requiredMark}>*</Text></Text>
+          <Text style={[styles.label, { marginBottom: 0 }]}>City <Text style={styles.requiredMark}>*</Text></Text>
           <TouchableOpacity
             onPress={() => { Haptics.selectionAsync(); requestLocationForCity(); }}
             disabled={locationLoading}
@@ -1577,8 +1807,8 @@ export default function ProfileCore() {
               paddingVertical: 6,
               paddingHorizontal: 12,
               borderRadius: 16,
-              backgroundColor: locationPermissionStatus === "granted" ? Colors.primaryViolet + "15" : Colors.gray200 + "80",
-              shadowColor: locationPermissionStatus === "granted" ? Colors.primaryViolet : "transparent",
+              backgroundColor: locationPermissionStatus === "granted" ? theme.colors.primary + "15" : theme.colors.border + "80",
+              shadowColor: locationPermissionStatus === "granted" ? theme.colors.primary : "transparent",
               shadowOffset: { width: 0, height: 2 },
               shadowOpacity: locationPermissionStatus === "granted" ? 0.15 : 0,
               shadowRadius: 4,
@@ -1587,11 +1817,11 @@ export default function ProfileCore() {
             }}
           >
             {locationLoading ? (
-              <Text style={{ ...Typography.caption, fontWeight: "600", color: Colors.gray600, marginRight: 6 }}>Getting location…</Text>
+              <Text style={{ ...theme.type.caption, fontWeight: "600", color: theme.colors.textSecondary, marginRight: 6 }}>Getting location…</Text>
             ) : (
               <>
-                <Ionicons name="locate" size={16} color={locationPermissionStatus === "granted" ? Colors.primaryViolet : Colors.gray500} style={{ marginRight: 6 }} />
-                <Text style={{ ...Typography.caption, fontWeight: "600", color: locationPermissionStatus === "granted" ? Colors.primaryViolet : Colors.gray600 }}>
+                <Ionicons name="locate" size={16} color={locationPermissionStatus === "granted" ? theme.colors.primary : theme.colors.textMuted} style={{ marginRight: 6 }} />
+                <Text style={{ ...theme.type.caption, fontWeight: "600", color: locationPermissionStatus === "granted" ? theme.colors.primary : theme.colors.textSecondary }}>
                   {locationPermissionStatus === "denied" ? "Enable location" : "Use my location"}
                 </Text>
               </>
@@ -1600,7 +1830,7 @@ export default function ProfileCore() {
         </View>
         <TextInput
           placeholder="e.g. Berlin, London"
-          placeholderTextColor={Colors.gray500}
+          placeholderTextColor={theme.colors.textMuted}
           value={city}
           onChangeText={onCityChange}
           onFocus={() => setFocusedField("city")}
@@ -1609,14 +1839,14 @@ export default function ProfileCore() {
         />
 
         {suggestions.length > 0 && !cityConfirmed && (
-          <View style={[suggestionList, { ...Shadow.card }]}>
+          <View style={[styles.suggestionList, { ...theme.elevation(1) }]}>
             {suggestions.map((item) => (
               <TouchableOpacity
                 key={`${item.city}-${item.country}`}
                 onPress={() => { Haptics.selectionAsync(); selectCity(item); }}
-                style={suggestionItem}
+                style={styles.suggestionItem}
               >
-                <Text style={{ color: Colors.textPrimary }}>
+                <Text style={{ color: theme.colors.textPrimary }}>
                   {formatDefaultLocationDisplay(item.city, item.country, appLanguage)}
                 </Text>
               </TouchableOpacity>
@@ -1625,64 +1855,11 @@ export default function ProfileCore() {
         )}
 
           </View>
-            )}
 
-            {!isEditFlow && currentStep === 2 && (
-            <View style={[sectionCard, { marginBottom: 20 }]}>
-              <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 4, fontFamily: FontFamily.headingBold }}>Add your photos 📸</Text>
-              <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 12 }}>
-                Add {MIN_CORE_PHOTOS}–{MAX_CORE_PHOTOS} clear photos. Minimum {MIN_PHOTO_DIMENSION}px on the short side — we&apos;ll let you know if one is too small.
-              </Text>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
-                <Text style={{ ...Typography.body, color: Colors.gray700 }}>{corePhotos.length} of {MIN_CORE_PHOTOS} required</Text>
-                <Text style={{ ...Typography.caption, color: corePhotos.length >= MIN_CORE_PHOTOS ? Colors.primaryViolet : Colors.errorRed }}>
-                  {corePhotos.length >= MIN_CORE_PHOTOS ? "Ready to continue" : `${MIN_CORE_PHOTOS - corePhotos.length} more needed`}
-                </Text>
-              </View>
-              <View style={{ height: 4, borderRadius: 2, backgroundColor: Colors.gray200, overflow: "hidden", marginBottom: 16 }}>
-                <View
-                  style={{
-                    height: "100%",
-                    width: `${Math.min(100, (corePhotos.length / MIN_CORE_PHOTOS) * 100)}%`,
-                    backgroundColor: corePhotos.length >= MIN_CORE_PHOTOS ? Colors.primaryViolet : Colors.accentYellow,
-                    borderRadius: 2,
-                  }}
-                />
-              </View>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -6 }}>
-                {corePhotos.map((uri, i) => (
-                  <View key={`core-step2-${i}-${uri}`} style={{ width: "33.333%", padding: 6 }}>
-                    <TouchableOpacity activeOpacity={0.85} onPress={() => openCorePhotoOptions(i)} style={corePhotoTile}>
-                      <Image source={{ uri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
-                      {i === 0 && (
-                        <View style={mainBadge}>
-                          <Text style={mainBadgeText}>Main</Text>
-                        </View>
-                      )}
-                      <TouchableOpacity onPress={() => removeCorePhoto(i)} style={removeBadge} hitSlop={8} accessibilityLabel="Remove photo">
-                        <Ionicons name="close" size={14} color={Colors.white} />
-                      </TouchableOpacity>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-                {corePhotos.length < MAX_CORE_PHOTOS && (
-                  <View style={{ width: "33.333%", padding: 6 }}>
-                    <TouchableOpacity onPress={() => pickImage("core", corePhotos.length)} style={corePhotoAddTile} accessibilityLabel="Add photo">
-                      <Ionicons name="add" size={30} color={Colors.primaryViolet} />
-                      <Text style={{ ...Typography.caption, color: Colors.gray600, marginTop: 4 }}>Add</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            </View>
-            )}
+          <View style={[styles.sectionCard, { marginBottom: 20 }]}>
+            <Text style={{ ...theme.type.h3, color: theme.colors.textSecondary, marginBottom: 16, fontFamily: theme.type.h3.fontFamily }}>More about you</Text>
 
-          {/* Section: More about you — edit flow only */}
-          {isEditFlow && (
-          <View style={[sectionCard, { marginBottom: 20 }]}>
-            <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 16, fontFamily: FontFamily.headingBold }}>More about you</Text>
-
-        <Text style={label}>Education</Text>
+        <Text style={styles.label}>Education</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -1698,20 +1875,20 @@ export default function ProfileCore() {
                 paddingHorizontal: 16,
                 borderRadius: 20,
                 marginRight: 8,
-                backgroundColor: education === e ? Colors.primaryViolet : Colors.gray100,
+                backgroundColor: education === e ? theme.colors.primary : theme.colors.backgroundMuted,
               }}
             >
-              <Text style={{ ...Typography.caption, color: education === e ? "#FFF" : Colors.textPrimary }}>
+              <Text style={{ ...theme.type.caption, color: education === e ? theme.colors.onPrimary : theme.colors.textPrimary }}>
                 {e}
               </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        <Text style={label}>Occupation</Text>
+        <Text style={styles.label}>Occupation</Text>
         <TextInput
           placeholder="What do you do?"
-          placeholderTextColor={Colors.gray500}
+          placeholderTextColor={theme.colors.textMuted}
           value={occupation}
           onChangeText={setOccupation}
           onFocus={() => setFocusedField("occupation")}
@@ -1719,7 +1896,7 @@ export default function ProfileCore() {
           style={[inputBase, focusedField === "occupation" && inputFocused]}
         />
 
-        <Text style={label}>Languages</Text>
+        <Text style={styles.label}>Languages</Text>
         <Pressable
           onPress={() => {
             Haptics.selectionAsync();
@@ -1732,17 +1909,17 @@ export default function ProfileCore() {
             minHeight: 48,
             paddingVertical: 12,
             paddingHorizontal: 16,
-            borderRadius: Layout.radii.control,
+            borderRadius: theme.radii.md,
             borderWidth: 1,
-            borderColor: Colors.gray200,
-            backgroundColor: Colors.backgroundLight,
+            borderColor: theme.colors.border,
+            backgroundColor: theme.colors.background,
             marginBottom: 16,
           }}
         >
-          <Text style={{ ...Typography.body, color: Colors.textPrimary, flex: 1 }} numberOfLines={1}>
+          <Text style={{ ...theme.type.body, color: theme.colors.textPrimary, flex: 1 }} numberOfLines={1}>
             {languages.length === 0 ? "Choose languages" : languages.join(", ")}
           </Text>
-          <Ionicons name="chevron-down" size={20} color={Colors.gray600} />
+          <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary} />
         </Pressable>
 
         <Modal
@@ -1751,13 +1928,13 @@ export default function ProfileCore() {
           animationType="fade"
           onRequestClose={() => setLanguageModalVisible(false)}
         >
-          <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center", padding: 20 }} onPress={() => setLanguageModalVisible(false)}>
-            <Pressable style={{ width: "100%", maxWidth: 400, maxHeight: "80%", backgroundColor: Colors.backgroundLight, borderRadius: Layout.radii.card, overflow: "hidden", shadowColor: Colors.softBlack, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 12 }} onPress={(e) => e.stopPropagation()}>
-              <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.gray200 }}>
-                <Text style={{ ...Typography.h3, fontFamily: FontFamily.headingBold, color: Colors.textSecondary, marginBottom: 4 }}>Choose languages</Text>
-                <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 8 }}>Your selections appear first in the list.</Text>
+          <Pressable style={{ flex: 1, backgroundColor: theme.colors.overlay, justifyContent: "center", alignItems: "center", padding: 20 }} onPress={() => setLanguageModalVisible(false)}>
+            <Pressable style={{ width: "100%", maxWidth: 400, maxHeight: "80%", backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, overflow: "hidden", ...theme.elevation(3) }} onPress={(e) => e.stopPropagation()}>
+              <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+                <Text style={{ ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textSecondary, marginBottom: 4 }}>Choose languages</Text>
+                <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary, marginBottom: 8 }}>Your selections appear first in the list.</Text>
                 <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setLanguageModalVisible(false); }} style={{ position: "absolute", top: 16, right: 16, padding: 4 }} hitSlop={12}>
-                  <Ionicons name="close" size={24} color={Colors.gray600} />
+                  <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
                 </TouchableOpacity>
               </View>
               <ScrollView style={{ maxHeight: 320, paddingVertical: 8 }} showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
@@ -1770,17 +1947,17 @@ export default function ProfileCore() {
                         Haptics.selectionAsync();
                         setLanguages((prev) => (selected ? prev.filter((l) => l !== lang) : [...prev, lang]));
                       }}
-                      style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14, paddingHorizontal: 20, backgroundColor: selected ? Colors.primaryViolet + "18" : "transparent" }}
+                      style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14, paddingHorizontal: 20, backgroundColor: selected ? theme.colors.primary + "18" : "transparent" }}
                     >
-                      <Text style={{ ...Typography.body, color: selected ? Colors.primaryViolet : Colors.textPrimary, fontWeight: selected ? "600" : "400" }} numberOfLines={1}>{lang}</Text>
-                      {selected && <Ionicons name="checkmark-circle" size={22} color={Colors.primaryViolet} />}
+                      <Text style={{ ...theme.type.body, color: selected ? theme.colors.primary : theme.colors.textPrimary, fontWeight: selected ? "600" : "400" }} numberOfLines={1}>{lang}</Text>
+                      {selected && <Ionicons name="checkmark-circle" size={22} color={theme.colors.primary} />}
                     </Pressable>
                   );
                 })}
               </ScrollView>
-              <View style={{ padding: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.gray200 }}>
-                <Pressable onPress={() => { Haptics.selectionAsync(); setLanguageModalVisible(false); }} style={{ backgroundColor: Colors.primaryViolet, paddingVertical: 14, borderRadius: Layout.radii.control, alignItems: "center" }}>
-                  <Text style={{ ...Typography.button, color: Colors.white, fontFamily: FontFamily.headingBold }}>Done</Text>
+              <View style={{ padding: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
+                <Pressable onPress={() => { Haptics.selectionAsync(); setLanguageModalVisible(false); }} style={{ backgroundColor: theme.colors.primary, paddingVertical: 14, borderRadius: theme.radii.md, alignItems: "center" }}>
+                  <Text style={{ ...theme.type.button, color: theme.colors.onPrimary, fontFamily: theme.type.button.fontFamily }}>Done</Text>
                 </Pressable>
               </View>
             </Pressable>
@@ -1789,11 +1966,11 @@ export default function ProfileCore() {
 
         <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
           <Image source={require("@/assets/icons/Instagram_icon.png")} style={{ width: 16, height: 16, marginRight: 8 }} resizeMode="contain" />
-          <Text style={[label, { marginBottom: 0 }]}>Instagram</Text>
+          <Text style={[styles.label, { marginBottom: 0 }]}>Instagram</Text>
         </View>
         <TextInput
           placeholder="@username or instagram.com/username"
-          placeholderTextColor={Colors.gray500}
+          placeholderTextColor={theme.colors.textMuted}
           value={instagram}
           onChangeText={setInstagram}
           autoCapitalize="none"
@@ -1804,10 +1981,10 @@ export default function ProfileCore() {
         />
 
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-          <Text style={[label, { marginBottom: 0 }]}>Interests</Text>
-          <Text style={{ ...Typography.caption, color: Colors.gray500 }}>{interests.length}/{GENERAL_INTERESTS_MAX}</Text>
+          <Text style={[styles.label, { marginBottom: 0 }]}>Interests</Text>
+          <Text style={{ ...theme.type.caption, color: theme.colors.textMuted }}>{interests.length}/{GENERAL_INTERESTS_MAX}</Text>
         </View>
-        <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 10 }}>
+        <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary, marginBottom: 10 }}>
           Shared across Romance & Friends — pick what you love.
         </Text>
         <TouchableOpacity
@@ -1817,17 +1994,17 @@ export default function ProfileCore() {
             alignItems: "center",
             justifyContent: "center",
             paddingVertical: 12,
-            borderRadius: Layout.radii.control,
+            borderRadius: theme.radii.md,
             borderWidth: 1,
-            borderColor: Colors.primaryViolet,
-            backgroundColor: Colors.primaryViolet + "10",
+            borderColor: theme.colors.primary,
+            backgroundColor: theme.colors.primary + "10",
             marginBottom: interests.length > 0 ? 12 : 4,
           }}
           accessibilityRole="button"
           accessibilityLabel="Choose interests"
         >
-          <Ionicons name="add-circle-outline" size={18} color={Colors.primaryViolet} style={{ marginRight: 6 }} />
-          <Text style={{ ...Typography.button, color: Colors.primaryViolet }}>
+          <Ionicons name="add-circle-outline" size={18} color={theme.colors.primary} style={{ marginRight: 6 }} />
+          <Text style={{ ...theme.type.button, color: theme.colors.primary }}>
             {interests.length > 0 ? "Edit interests" : "Choose interests"}
           </Text>
         </TouchableOpacity>
@@ -1845,24 +2022,21 @@ export default function ProfileCore() {
                   borderRadius: 20,
                   marginRight: 8,
                   marginBottom: 8,
-                  backgroundColor: Colors.primaryViolet,
+                  backgroundColor: theme.colors.primary,
                 }}
               >
                 <Text style={{ fontSize: 14, marginRight: 6 }}>{interestEmoji(it)}</Text>
-                <Text style={{ ...Typography.caption, color: Colors.white }}>{it}</Text>
-                <Ionicons name="close-circle" size={15} color={Colors.white} style={{ marginLeft: 6 }} />
+                <Text style={{ ...theme.type.caption, color: theme.colors.onPrimary }}>{it}</Text>
+                <Ionicons name="close-circle" size={15} color={theme.colors.onPrimary} style={{ marginLeft: 6 }} />
               </TouchableOpacity>
             ))}
           </View>
         )}
 
           </View>
-          )}
 
-          {/* ─────── SUB-PROFILES ─────── */}
-          {isEditFlow ? (
-          <View style={[sectionCard, { marginBottom: 8 }]}>
-            <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 16, fontFamily: FontFamily.headingBold }}>Mode profiles</Text>
+          <View style={[styles.sectionCard, { marginBottom: 8 }]}>
+            <Text style={{ ...theme.type.h3, color: theme.colors.textSecondary, marginBottom: 16, fontFamily: theme.type.h3.fontFamily }}>Mode profiles</Text>
         <RomanceSubProfile
           enabled={romanceEnabled}
           toggle={() => setRomanceEnabled(!romanceEnabled)}
@@ -1955,221 +2129,71 @@ export default function ProfileCore() {
           toggleMulti={toggleMulti}
         />
           </View>
-          ) : currentStep === 3 ? (
-          <View style={[sectionCard, { marginBottom: 8 }]}>
-            <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 8, fontFamily: FontFamily.headingBold }}>
-              Set up your profile
+
+        {saveError ? (
+          <View
+            style={{
+              backgroundColor: theme.colors.errorBg,
+              borderRadius: 14,
+              padding: 14,
+              marginTop: 20,
+              borderWidth: 1,
+              borderColor: theme.colors.errorBorder,
+            }}
+          >
+            <Text style={{ ...theme.type.body, color: theme.colors.error, fontWeight: "600" as const }}>
+              Couldn't save your profile
             </Text>
-            <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 16 }}>
-              Choose one mode to start — you can add others anytime from mode selection.
+            <Text style={{ ...theme.type.caption, color: theme.colors.error, marginTop: 4 }}>
+              {saveError}
             </Text>
-
-            <View style={{ flexDirection: "row", marginBottom: 20, marginHorizontal: -4 }}>
-              {(
-                [
-                  { key: "romance" as const, label: "Romance", emoji: "💕" },
-                  { key: "friends" as const, label: "Friends", emoji: "🤝" },
-                  { key: "business" as const, label: "Business", emoji: "💼" },
-                ] as const
-              ).map(({ key, label, emoji }) => {
-                const selected = selectedPrimaryMode === key;
-                return (
-                  <TouchableOpacity
-                    key={key}
-                    onPress={() => selectPrimaryMode(key)}
-                    style={{
-                      flex: 1,
-                      marginHorizontal: 4,
-                      paddingVertical: 14,
-                      borderRadius: Layout.radii.control,
-                      borderWidth: 2,
-                      borderColor: selected ? Colors.primaryViolet : Colors.gray200,
-                      backgroundColor: selected ? Colors.primaryViolet + "12" : Colors.white,
-                      alignItems: "center",
-                    }}
-                  >
-                    <Text style={{ fontSize: 22, marginBottom: 4 }}>{emoji}</Text>
-                    <Text style={{ ...Typography.caption, fontWeight: selected ? "700" : "500", color: selected ? Colors.primaryViolet : Colors.textPrimary }}>
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={[label, { marginBottom: 8 }]}>Gender <Text style={requiredMark}>*</Text></Text>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 16 }}>
-              {["Female", "Male", "Other"].map((g) => (
-                <TouchableOpacity
-                  key={g}
-                  onPress={() => { Haptics.selectionAsync(); setGender(g); }}
-                  style={{
-                    flex: 1,
-                    marginHorizontal: 4,
-                    backgroundColor: gender === g ? Colors.primaryViolet : Colors.white,
-                    borderWidth: 2,
-                    borderColor: gender === g ? Colors.primaryViolet : Colors.gray200,
-                    borderRadius: Layout.radii.control,
-                    paddingVertical: 12,
-                    alignItems: "center",
-                  }}
-                >
-                  <Text style={{ ...Typography.body, color: gender === g ? "#FFF" : Colors.textPrimary }}>{g}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {selectedPrimaryMode === "romance" && (
-              <RomanceSubProfile
-                enabled
-                hideToggle
-                toggle={() => {}}
-                photos={romancePhotos}
-                onPickPhoto={(i) => pickImage("romance", i)}
-                video={romanceVideos[0]}
-                onPickVideo={() => pickVideo("romance")}
-                bio={bioRomance}
-                onBioChange={setBioRomance}
-                height={heightRomance}
-                onHeightChange={setHeightRomance}
-                weight={weightRomance}
-                onWeightChange={setWeightRomance}
-                lifestyle={lifestyleRomance}
-                onLifestyleChange={setLifestyleRomance}
-                smoking={smokingRomance}
-                onSmokingChange={setSmokingRomance}
-                alcohol={alcoholRomance}
-                onAlcoholChange={setAlcoholRomance}
-                kids={kidsRomance}
-                onKidsChange={setKidsRomance}
-                sexualViews={sexualViewsRomance}
-                onSexualViewsChange={setSexualViewsRomance}
-                relationshipGoals={relationshipGoalsRomance}
-                onRelationshipGoalsChange={setRelationshipGoalsRomance}
-                religion={religionRomance}
-                onReligionChange={setReligionRomance}
-                politicalViews={politicalViewsRomance}
-                onPoliticalViewsChange={setPoliticalViewsRomance}
-                values={valuesRomance}
-                onValuesChange={setValuesRomance}
-                pets={petsRomance}
-                onPetsChange={setPetsRomance}
-                onPetsToggle={petsToggleRomance}
-                food={foodRomance}
-                onFoodChange={setFoodRomance}
-                toggleMulti={toggleMulti}
-              />
-            )}
-            {selectedPrimaryMode === "friends" && (
-              <FriendsSubProfile
-                enabled
-                hideToggle
-                toggle={() => {}}
-                photos={friendsPhotos}
-                onPickPhoto={(i) => pickImage("friends", i)}
-                video={friendsVideos[0]}
-                onPickVideo={() => pickVideo("friends")}
-                bio={bioFriends}
-                onBioChange={setBioFriends}
-                lifestyle={lifestyleFriends}
-                onLifestyleChange={setLifestyleFriends}
-                alcohol={alcoholFriends}
-                onAlcoholChange={setAlcoholFriends}
-                smoking={smokingFriends}
-                onSmokingChange={setSmokingFriends}
-                meetupGoals={meetupGoalsFriends}
-                onMeetupGoalsChange={setMeetupGoalsFriends}
-                status={statusFriends}
-                onStatusChange={setStatusFriends}
-                kids={kidsFriends}
-                onKidsChange={setKidsFriends}
-                pets={petsFriends}
-                onPetsChange={setPetsFriends}
-                onPetsToggle={petsToggleFriends}
-                food={foodFriends}
-                onFoodChange={setFoodFriends}
-                toggleMulti={toggleMulti}
-              />
-            )}
-            {selectedPrimaryMode === "business" && (
-              <BusinessSubProfile
-                enabled
-                hideToggle
-                toggle={() => {}}
-                photos={businessPhotos}
-                onPickPhoto={(i) => pickImage("business", i)}
-                video={businessVideos[0]}
-                onPickVideo={() => pickVideo("business")}
-                bio={bioBusiness}
-                onBioChange={setBioBusiness}
-                role={roleBusiness}
-                onRoleChange={setRoleBusiness}
-                company={companyBusiness}
-                onCompanyChange={setCompanyBusiness}
-                area={areaBusiness}
-                onAreaChange={setAreaBusiness}
-                networkingGoals={networkingGoalsBusiness}
-                onNetworkingGoalsChange={setNetworkingGoalsBusiness}
-                skills={skillsBusiness}
-                onSkillsChange={setSkillsBusiness}
-                interests={interestsBusiness}
-                onInterestsChange={setInterestsBusiness}
-                instagram={instagramBusiness}
-                onInstagramChange={setInstagramBusiness}
-                toggleMulti={toggleMulti}
-              />
-            )}
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); void handleStepContinue(); }}
+              disabled={saving}
+              style={{ marginTop: 10, alignSelf: "flex-start" }}
+            >
+              <Text style={{ ...theme.type.button, color: theme.colors.error, fontWeight: "700" as const }}>
+                {saving ? "Retrying…" : "Tap to retry"}
+              </Text>
+            </TouchableOpacity>
           </View>
-          ) : null}
+        ) : null}
 
-        {/* ─────── Continue ─────── */}
+        {/* ─────── Save ─────── */}
         <TouchableOpacity
           onPress={() => { Haptics.selectionAsync(); void handleStepContinue(); }}
           disabled={saving}
           style={{
-            backgroundColor: Colors.primaryViolet,
+            backgroundColor: theme.colors.primary,
             borderRadius: 16,
             paddingVertical: 16,
             alignItems: "center",
             marginTop: 28,
             opacity: saving ? 0.6 : 1,
-            shadowColor: "#5A189A",
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.3,
-            shadowRadius: 6,
-            elevation: 5,
+            ...theme.elevation(2),
           }}
         >
-          <Text style={{ ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.headingBold }}>
-            {saving
-              ? "Saving..."
-              : isEditFlow
-                ? "Save"
-                : currentStep === ONBOARDING_STEP_COUNT
-                  ? "Finish profile"
-                  : "Continue"}
+          <Text style={{ ...theme.type.button, color: theme.colors.onPrimary, fontFamily: theme.type.button.fontFamily }}>
+            {saving ? "Saving..." : "Save"}
           </Text>
         </TouchableOpacity>
-
-        {!isEditFlow && currentStep === ONBOARDING_STEP_COUNT ? (
-          <TouchableOpacity
-            onPress={() => {
-              Haptics.selectionAsync();
-              void handleSkipSubProfile();
-            }}
-            disabled={saving}
-            style={{
-              paddingVertical: 14,
-              alignItems: "center",
-              marginTop: 12,
-              opacity: saving ? 0.6 : 1,
-            }}
-          >
-            <Text style={{ ...Typography.button, color: Colors.gray600, fontWeight: "600" }}>
-              Skip for now
-            </Text>
-          </TouchableOpacity>
-        ) : null}
+              </>
+            ) : (
+              <WizardShell
+                currentStep={currentStepIndex + 1}
+                totalSteps={wizardSteps.length}
+                stepLabel={wizardStepLabel(currentWizardStep)}
+                subProgress={currentWizardStep.kind === "general" && currentWizardStep.id === "photos" ? photoStepSubProgress : undefined}
+                onBack={handleHeaderBack}
+                onNext={() => { void handleStepContinue(); }}
+                nextLabel={currentWizardStep.kind === "review" ? "Finish profile" : "Continue"}
+                saving={saving}
+                saveError={saveError}
+                onRetry={() => { void handleStepContinue(); }}
+              >
+                {renderWizardStepBody()}
+              </WizardShell>
+            )}
           </Animated.View>
         </ScrollView>
 
@@ -2192,133 +2216,98 @@ export default function ProfileCore() {
   );
 }
 
-const sectionCard = {
-  backgroundColor: Colors.white,
-  borderRadius: Layout.radii.card,
-  padding: 20,
-  ...Shadow.card,
-};
+function createStyles(theme: AppTheme) {
+  return {
+    sectionCard: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      padding: 20,
+      ...theme.elevation(1),
+    },
 
-const corePhotoTile = {
-  width: "100%" as const,
-  aspectRatio: 1,
-  borderRadius: 14,
-  backgroundColor: Colors.gray100,
-  overflow: "hidden" as const,
-  borderWidth: 1,
-  borderColor: Colors.gray200,
-};
+    corePhotoTile: {
+      width: "100%" as const,
+      aspectRatio: 1,
+      borderRadius: 14,
+      backgroundColor: theme.colors.backgroundMuted,
+      overflow: "hidden" as const,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
 
-const corePhotoAddTile = {
-  width: "100%" as const,
-  aspectRatio: 1,
-  borderRadius: 14,
-  backgroundColor: Colors.gray100,
-  justifyContent: "center" as const,
-  alignItems: "center" as const,
-  borderWidth: 2,
-  borderStyle: "dashed" as const,
-  borderColor: Colors.gray300,
-};
+    corePhotoAddTile: {
+      width: "100%" as const,
+      aspectRatio: 1,
+      borderRadius: 14,
+      backgroundColor: theme.colors.backgroundMuted,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      borderWidth: 2,
+      borderStyle: "dashed" as const,
+      borderColor: theme.colors.border,
+    },
 
-const mainBadge = {
-  position: "absolute" as const,
-  top: 6,
-  left: 6,
-  backgroundColor: Colors.primaryViolet,
-  borderRadius: 8,
-  paddingVertical: 2,
-  paddingHorizontal: 8,
-};
+    mainBadge: {
+      position: "absolute" as const,
+      top: 6,
+      left: 6,
+      backgroundColor: theme.colors.primary,
+      borderRadius: 8,
+      paddingVertical: 2,
+      paddingHorizontal: 8,
+    },
 
-const mainBadgeText = {
-  ...Typography.caption,
-  color: Colors.white,
-  fontWeight: "700" as const,
-  fontSize: 11,
-};
+    mainBadgeText: {
+      ...theme.type.caption,
+      color: theme.colors.onPrimary,
+      fontWeight: "700" as const,
+      fontSize: 11,
+    },
 
-const removeBadge = {
-  position: "absolute" as const,
-  top: 6,
-  right: 6,
-  width: 24,
-  height: 24,
-  borderRadius: 12,
-  backgroundColor: "rgba(0,0,0,0.55)",
-  justifyContent: "center" as const,
-  alignItems: "center" as const,
-};
+    removeBadge: {
+      position: "absolute" as const,
+      top: 6,
+      right: 6,
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
 
-const inputStyle = {
-  borderWidth: 2,
-  borderColor: Colors.gray200,
-  borderRadius: Layout.radii.control,
-  padding: 12,
-  paddingHorizontal: 16,
-  paddingVertical: 14,
-  backgroundColor: Colors.white,
-  marginBottom: 12,
-  minHeight: Layout.touchTargetMin,
-};
+    label: {
+      ...theme.type.body,
+      color: theme.colors.textSecondary,
+      marginBottom: 6,
+    },
 
-const chip = {
-  backgroundColor: Colors.primaryViolet,
-  borderRadius: 20,
-  paddingVertical: 6,
-  paddingHorizontal: 12,
-  marginRight: 6,
-  marginBottom: 6,
-};
+    requiredMark: { color: theme.colors.error, fontWeight: "700" as const },
 
-const addButton = {
-  backgroundColor: Colors.primaryViolet,
-  borderRadius: Layout.radii.control,
-  width: 40,
-  height: 40,
-  justifyContent: "center" as const,
-  alignItems: "center" as const,
-  shadowColor: "#5A189A",
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.25,
-  shadowRadius: 4,
-  elevation: 4,
-};
+    headerBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      ...theme.elevation(1),
+    },
 
-const label = {
-  ...Typography.body,
-  color: Colors.gray700,
-  marginBottom: 6,
-};
+    suggestionList: {
+      borderWidth: 1,
+      borderColor: theme.colors.backgroundMuted,
+      borderRadius: theme.radii.md,
+      maxHeight: 200,
+      marginBottom: 12,
+      backgroundColor: theme.colors.surface,
+    },
 
-const requiredMark = { color: Colors.errorRed, fontWeight: "700" as const };
-
-const headerBtn = {
-  width: 44,
-  height: 44,
-  borderRadius: 22,
-  backgroundColor: Colors.gray100,
-  alignItems: "center" as const,
-  justifyContent: "center" as const,
-  shadowColor: "#1C1C1E",
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.15,
-  shadowRadius: 4,
-  elevation: 4,
-};
-
-const suggestionList = {
-  borderWidth: 1,
-  borderColor: Colors.gray100,
-  borderRadius: Layout.radii.control,
-  maxHeight: 200,
-  marginBottom: 12,
-  backgroundColor: "#FFF",
-};
-
-const suggestionItem = {
-  paddingVertical: 10,
-  paddingHorizontal: 12,
-  borderBottomWidth: 1,
-  borderBottomColor: Colors.gray100,
-};
+    suggestionItem: {
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.backgroundMuted,
+    },
+  };
+}

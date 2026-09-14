@@ -14,7 +14,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { Avatar } from "@/components/ui/Avatar";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Card, Header, ListRow } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import {
   leaveConversation,
   setConversationMuted,
@@ -48,6 +49,8 @@ function memberInitials(member: ConversationMemberInfo) {
 
 export default function ConversationInfoScreen() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const chatHub = useModeHub();
   const { conversationId } = useLocalSearchParams<{ conversationId?: string }>();
   const convId = String(conversationId ?? "");
@@ -168,34 +171,28 @@ export default function ConversationInfoScreen() {
   if (!convId) {
     return (
       <SafeScreenView style={styles.centered}>
-        <ActivityIndicator size="large" color={Colors.primaryViolet} />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </SafeScreenView>
     );
   }
 
   return (
     <SafeScreenView style={styles.screen}>
-      <View style={styles.topBar}>
-        <Pressable
-          onPress={() => router.back()}
-          style={styles.iconBtn}
-          accessibilityLabel="Back"
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.topTitle}>Group info</Text>
-        {canEditGroup ? (
-          <Pressable onPress={handleEditGroup} style={styles.editBtn} accessibilityLabel="Edit group">
-            <Text style={styles.editText}>Edit</Text>
-          </Pressable>
-        ) : (
-          <View style={styles.iconBtnPlaceholder} />
-        )}
-      </View>
+      <Header
+        title="Group info"
+        onBack={() => router.back()}
+        trailing={
+          canEditGroup ? (
+            <Pressable onPress={handleEditGroup} style={styles.editBtn} accessibilityLabel="Edit group">
+              <Text style={styles.editText}>Edit</Text>
+            </Pressable>
+          ) : undefined
+        }
+      />
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.primaryViolet} />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       ) : error ? (
         <View style={styles.centered}>
@@ -206,7 +203,7 @@ export default function ConversationInfoScreen() {
         </View>
       ) : details ? (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <View style={styles.heroCard}>
+          <Card style={styles.heroCard}>
             <Avatar
               uri={details.groupAvatarUrl}
               initials={displayName.slice(0, 2)}
@@ -222,99 +219,80 @@ export default function ConversationInfoScreen() {
               {details.mode} • {details.members.length}{" "}
               {details.members.length === 1 ? "member" : "members"}
             </Text>
-          </View>
+          </Card>
 
           {ownerOrAdmin ? (
-            <View style={styles.sectionCard}>
+            <Card padding="md" style={styles.sectionCard}>
               <Text style={styles.sectionLabel}>Owner / Administrator</Text>
-              <Pressable
+              <ListRow
+                title={formatConversationMemberName(ownerOrAdmin, details.meId)}
+                subtitle={roleLabel(ownerOrAdmin.role)}
+                onPress={
+                  ownerOrAdmin.userId === details.meId
+                    ? undefined
+                    : () => handleOpenMemberProfile(ownerOrAdmin)
+                }
                 style={styles.memberRow}
-                onPress={() => handleOpenMemberProfile(ownerOrAdmin)}
-                disabled={ownerOrAdmin.userId === details.meId}
-              >
-                <Avatar
-                  uri={ownerOrAdmin.photoUrl}
-                  initials={memberInitials(ownerOrAdmin)}
-                  size={44}
-                />
-                <View style={styles.memberTextWrap}>
-                  <Text style={styles.memberName}>
-                    {formatConversationMemberName(ownerOrAdmin, details.meId)}
-                  </Text>
-                  <Text style={styles.memberRole}>{roleLabel(ownerOrAdmin.role)}</Text>
-                </View>
-                {ownerOrAdmin.userId !== details.meId ? (
-                  <Ionicons name="chevron-forward" size={18} color={Colors.gray500} />
-                ) : null}
-              </Pressable>
-            </View>
+                leading={<Avatar uri={ownerOrAdmin.photoUrl} initials={memberInitials(ownerOrAdmin)} size={44} />}
+              />
+            </Card>
           ) : null}
 
-          <View style={styles.sectionCard}>
+          <Card padding="md" style={styles.sectionCard}>
             <Text style={styles.sectionLabel}>Participants</Text>
             {details.members.map((member) => (
-              <Pressable
+              <ListRow
                 key={member.userId}
+                title={formatConversationMemberName(member, details.meId)}
+                subtitle={roleLabel(member.role)}
+                onPress={member.userId === details.meId ? undefined : () => handleOpenMemberProfile(member)}
                 style={styles.memberRow}
-                onPress={() => handleOpenMemberProfile(member)}
-                disabled={member.userId === details.meId}
-              >
-                <Avatar uri={member.photoUrl} initials={memberInitials(member)} size={44} />
-                <View style={styles.memberTextWrap}>
-                  <Text style={styles.memberName}>
-                    {formatConversationMemberName(member, details.meId)}
-                  </Text>
-                  <Text style={styles.memberRole}>{roleLabel(member.role)}</Text>
-                </View>
-                {member.userId !== details.meId ? (
-                  <Ionicons name="chevron-forward" size={18} color={Colors.gray500} />
-                ) : null}
-              </Pressable>
+                leading={<Avatar uri={member.photoUrl} initials={memberInitials(member)} size={44} />}
+              />
             ))}
-          </View>
+          </Card>
 
-          <View style={styles.sectionCard}>
+          <Card padding="md" style={styles.sectionCard}>
             <Text style={styles.sectionLabel}>Chat settings</Text>
 
-            <View style={styles.settingRow}>
-              <View style={styles.settingTextWrap}>
-                <Text style={styles.settingTitle}>Mute notifications</Text>
-                <Text style={styles.settingSub}>Stop push alerts for this chat</Text>
-              </View>
-              <Switch
-                value={details.muted}
-                onValueChange={handleToggleMute}
-                trackColor={{ false: Colors.gray300, true: Colors.primaryViolet + "88" }}
-                thumbColor={details.muted ? Colors.primaryViolet : Colors.gray100}
-              />
-            </View>
-
-            <View style={styles.settingDivider} />
-
-            <View style={styles.settingRow}>
-              <View style={styles.settingTextWrap}>
-                <Text style={styles.settingTitle}>Read receipts</Text>
-                <Text style={styles.settingSub}>Let others see when you have read messages</Text>
-              </View>
-              <Switch
-                value={details.readReceiptsOn}
-                onValueChange={handleToggleReadReceipts}
-                trackColor={{ false: Colors.gray300, true: Colors.primaryViolet + "88" }}
-                thumbColor={details.readReceiptsOn ? Colors.primaryViolet : Colors.gray100}
-              />
-            </View>
-          </View>
+            <ListRow
+              title="Mute notifications"
+              subtitle="Stop push alerts for this chat"
+              style={styles.settingRow}
+              trailing={
+                <Switch
+                  value={details.muted}
+                  onValueChange={handleToggleMute}
+                  trackColor={{ false: theme.colors.border, true: theme.colors.primary + "88" }}
+                  thumbColor={details.muted ? theme.colors.primary : theme.colors.backgroundMuted}
+                />
+              }
+            />
+            <ListRow
+              title="Read receipts"
+              subtitle="Let others see when you have read messages"
+              style={{ ...styles.settingRow, ...styles.settingRowBorder }}
+              trailing={
+                <Switch
+                  value={details.readReceiptsOn}
+                  onValueChange={handleToggleReadReceipts}
+                  trackColor={{ false: theme.colors.border, true: theme.colors.primary + "88" }}
+                  thumbColor={details.readReceiptsOn ? theme.colors.primary : theme.colors.backgroundMuted}
+                />
+              }
+            />
+          </Card>
 
           <Pressable
             onPress={handleLeave}
             disabled={leaving}
-            style={[styles.leaveBtn, leaving ? styles.leaveBtnDisabled : null]}
+            style={{ ...styles.leaveBtn, ...(leaving ? styles.leaveBtnDisabled : null) }}
           >
             {leaving ? (
-              <ActivityIndicator color={Colors.errorRed} />
+              <ActivityIndicator color={theme.colors.error} />
             ) : (
               <>
-                <Ionicons name="exit-outline" size={20} color={Colors.errorRed} />
+                <Ionicons name="exit-outline" size={20} color={theme.colors.error} />
                 <Text style={styles.leaveText}>Leave group</Text>
               </>
             )}
@@ -325,115 +303,66 @@ export default function ConversationInfoScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-  },
-  topTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconBtnPlaceholder: { width: 44, height: 44 },
-  editBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: Colors.primaryViolet,
-  },
-  editText: { ...Typography.caption, color: Colors.accentYellow, fontWeight: "700" },
-  scroll: { padding: 16, paddingBottom: 40, gap: 14 },
-  heroCard: {
-    backgroundColor: "#FFF",
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 20,
-    alignItems: "center",
-  },
-  heroTitle: { ...Typography.h2, color: Colors.textPrimary, marginTop: 14, textAlign: "center" },
-  heroDescription: {
-    ...Typography.body,
-    color: Colors.gray700,
-    marginTop: 8,
-    textAlign: "center",
-    lineHeight: 22,
-  },
-  heroDescriptionMuted: {
-    ...Typography.body,
-    color: Colors.gray500,
-    marginTop: 8,
-    textAlign: "center",
-    fontStyle: "italic",
-  },
-  heroMeta: { ...Typography.caption, color: Colors.gray600, marginTop: 10 },
-  sectionCard: {
-    backgroundColor: "#FFF",
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 14,
-  },
-  sectionLabel: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    fontWeight: "700",
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  memberRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: Colors.gray200,
-  },
-  memberTextWrap: { flex: 1, minWidth: 0 },
-  memberName: { ...Typography.body, color: Colors.textPrimary, fontWeight: "700" },
-  memberRole: { ...Typography.caption, color: Colors.gray600, marginTop: 2 },
-  settingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 8,
-  },
-  settingTextWrap: { flex: 1 },
-  settingTitle: { ...Typography.body, color: Colors.textPrimary, fontWeight: "700" },
-  settingSub: { ...Typography.caption, color: Colors.gray600, marginTop: 2 },
-  settingDivider: { height: 1, backgroundColor: Colors.gray200, marginVertical: 6 },
-  leaveBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: Layout.radii.control,
-    borderWidth: 1,
-    borderColor: Colors.errorRed + "55",
-    backgroundColor: Colors.errorRed + "10",
-  },
-  leaveBtnDisabled: { opacity: 0.7 },
-  leaveText: { ...Typography.button, color: Colors.errorRed },
-  errorText: { ...Typography.body, color: Colors.errorRed, textAlign: "center", marginBottom: 12 },
-  retryBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: Colors.gray100,
-  },
-  retryText: { ...Typography.button, color: Colors.textPrimary },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.spacing.xl },
+    editBtn: {
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      borderRadius: theme.radii.sm,
+      backgroundColor: theme.colors.primary,
+    },
+    editText: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.onPrimary, fontWeight: "700" },
+    scroll: { padding: theme.spacing.lg, paddingBottom: theme.spacing.huge, gap: theme.spacing.md },
+    heroCard: { alignItems: "center" },
+    heroTitle: { ...theme.type.h2, fontFamily: theme.type.h2.fontFamily, color: theme.colors.textPrimary, marginTop: theme.spacing.md, textAlign: "center" },
+    heroDescription: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.sm,
+      textAlign: "center",
+    },
+    heroDescriptionMuted: {
+      ...theme.type.body,
+      fontFamily: theme.type.body.fontFamily,
+      color: theme.colors.textMuted,
+      marginTop: theme.spacing.sm,
+      textAlign: "center",
+      fontStyle: "italic",
+    },
+    heroMeta: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.sm },
+    sectionCard: {},
+    sectionLabel: {
+      ...theme.type.overline,
+      fontFamily: theme.type.overline.fontFamily,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.sm,
+    },
+    memberRow: { borderTopWidth: 1, borderTopColor: theme.colors.border },
+    settingRow: {},
+    settingRowBorder: { borderTopWidth: 1, borderTopColor: theme.colors.border },
+    leaveBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: theme.spacing.sm,
+      paddingVertical: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      borderWidth: 1,
+      borderColor: theme.colors.errorBorder,
+      backgroundColor: theme.colors.errorBg,
+    },
+    leaveBtnDisabled: { opacity: 0.7 },
+    leaveText: { ...theme.type.button, fontFamily: theme.type.button.fontFamily, color: theme.colors.error },
+    errorText: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.error, textAlign: "center", marginBottom: theme.spacing.md },
+    retryBtn: {
+      paddingHorizontal: theme.spacing.lg,
+      paddingVertical: theme.spacing.sm,
+      borderRadius: theme.radii.sm,
+      backgroundColor: theme.colors.backgroundMuted,
+    },
+    retryText: { ...theme.type.button, fontFamily: theme.type.button.fontFamily, color: theme.colors.textPrimary },
+  });
+}

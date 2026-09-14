@@ -73,11 +73,18 @@ export function BusinessSubProfile(props: {
   onInstagramChange: (v: string) => void;
   toggleMulti: (arr: string[], val: string, setter: (v: string[]) => void, max: number) => void;
   hideToggle?: boolean;
+  /** When set, only that section's fields render (used by the onboarding wizard's short steps). Omit to render everything (edit flow). */
+  section?: "photosBio" | "details" | "goals";
+  /** When rendering a single section for the wizard, hide the repeated "💼 Business" header row. */
+  hideHeader?: boolean;
 }) {
-  const { enabled, toggle, photos, onPickPhoto, video, onPickVideo, bio, onBioChange, hideToggle } = props;
+  const { enabled, toggle, photos, onPickPhoto, video, onPickVideo, bio, onBioChange, hideToggle, section, hideHeader } = props;
   const { role, onRoleChange, company, onCompanyChange, area, onAreaChange } = props;
   const { networkingGoals, onNetworkingGoalsChange, skills, onSkillsChange } = props;
   const { interests, onInterestsChange, instagram, onInstagramChange, toggleMulti } = props;
+  const showPhotosBio = !section || section === "photosBio";
+  const showDetails = !section || section === "details";
+  const showGoals = !section || section === "goals";
 
   if (!enabled) {
     return (
@@ -92,11 +99,15 @@ export function BusinessSubProfile(props: {
 
   return (
     <View style={{ marginBottom: 28 }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>💼 Business</Text>
-        {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />}
-      </View>
+      {!hideHeader && (
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>💼 Business</Text>
+          {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />}
+        </View>
+      )}
 
+      {showPhotosBio && (
+      <>
       <Text style={label}>Photos <Text style={requiredMark}>*</Text></Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 16 }}>
         {photos.map((p, i) => {
@@ -134,7 +145,11 @@ export function BusinessSubProfile(props: {
 
       <Text style={label}>Bio <Text style={requiredMark}>*</Text></Text>
       <TextInput placeholder="Professional background and networking focus..." value={bio} onChangeText={onBioChange} multiline style={[inputStyle, { height: 100, textAlignVertical: "top" }]} placeholderTextColor={Colors.gray500} />
+      </>
+      )}
 
+      {showDetails && (
+      <>
       <Text style={label}>Role / Title</Text>
       <TextInput placeholder="e.g. IT Project Manager" value={role} onChangeText={onRoleChange} style={inputStyle} placeholderTextColor={Colors.gray500} />
 
@@ -144,6 +159,24 @@ export function BusinessSubProfile(props: {
       <Text style={label}>Area / Industry</Text>
       <TextInput placeholder="e.g. Tech, Finance" value={area} onChangeText={onAreaChange} style={inputStyle} placeholderTextColor={Colors.gray500} />
 
+      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
+        <Image source={require("@/assets/icons/Instagram_icon.png")} style={{ width: 16, height: 16, marginRight: 8 }} resizeMode="contain" />
+        <Text style={[label, { marginBottom: 0 }]}>Instagram Business Profile</Text>
+      </View>
+      <TextInput
+        placeholder="@username or instagram.com/username"
+        placeholderTextColor={Colors.gray500}
+        value={instagram}
+        onChangeText={onInstagramChange}
+        autoCapitalize="none"
+        autoCorrect={false}
+        style={inputStyle}
+      />
+      </>
+      )}
+
+      {showGoals && (
+      <>
       <Text style={label}>Networking goals (up to 3) <Text style={requiredMark}>*</Text></Text>
       <ChipSelect
         options={NETWORKING_GOALS_OPTIONS}
@@ -169,20 +202,8 @@ export function BusinessSubProfile(props: {
         max={5}
         placeholder="Add a professional interest…"
       />
-
-      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
-        <Image source={require("@/assets/icons/Instagram_icon.png")} style={{ width: 16, height: 16, marginRight: 8 }} resizeMode="contain" />
-        <Text style={[label, { marginBottom: 0 }]}>Instagram Business Profile</Text>
-      </View>
-      <TextInput
-        placeholder="@username or instagram.com/username"
-        placeholderTextColor={Colors.gray500}
-        value={instagram}
-        onChangeText={onInstagramChange}
-        autoCapitalize="none"
-        autoCorrect={false}
-        style={inputStyle}
-      />
+      </>
+      )}
     </View>
   );
 }

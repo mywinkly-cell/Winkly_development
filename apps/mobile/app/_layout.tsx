@@ -16,16 +16,21 @@ import {
   Poppins_600SemiBold,
   Poppins_700Bold,
 } from "@expo-google-fonts/poppins";
+import { Archivo_500Medium, Archivo_600SemiBold, Archivo_700Bold } from "@expo-google-fonts/archivo";
+import { PublicSans_400Regular, PublicSans_500Medium, PublicSans_600SemiBold } from "@expo-google-fonts/public-sans";
 import * as SplashScreen from "expo-splash-screen";
 import { PostHogProvider } from "posthog-react-native";
 import { DateSafetyPromptHost } from "@/components/safety/DateSafetyPromptHost";
-import { AuthProvider, ModeContextProvider, NetworkProvider, ThemeProvider } from "@/providers";
+import { PostPlanReviewHost } from "@/components/ai/PostPlanReviewHost";
+import { AuthProvider, ModeContextProvider, NetworkProvider, ThemeProvider, useAuth } from "@/providers";
+import { hasAuthenticatedUser } from "@/lib/auth/session";
+import { PrivacyConsentGate } from "@/components/consent/PrivacyConsentGate";
 import { LastActivitySync } from "@/components/LastActivitySync";
 import { RouteGuard } from "@/components/RouteGuard";
 import { NotificationDeepLinkHandler } from "@/components/NotificationDeepLinkHandler";
 import { ScreenTopSpacer } from "@/components/ScreenTopSpacer";
 import { PostHogIdentitySync, PostHogScreenTracker } from "@/components/PostHogAnalytics";
-import { Colors } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 import { POSTHOG_API_KEY, POSTHOG_HOST } from "@/constants/config";
 import { initI18n } from "@/lib/i18n";
 import {
@@ -57,8 +62,20 @@ if (!__DEV__) {
 /** Nested layouts only — cross-fade when switching tabs hub ↔ mode sub-app ↔ account. */
 const CONTEXT_ROUTE_GROUPS = ["(tabs)", "(modes)", "account"] as const;
 
+/**
+ * Only gates signed-in users — unauthenticated users must still reach the
+ * (auth) screens (sign in/up) unblocked. Once signed in, this sits in front
+ * of onboarding and the rest of the app until the data-use notice is accepted.
+ */
+function PrivacyConsentGateIfAuthed({ children }: { children: React.ReactNode }) {
+  const { session } = useAuth();
+  if (!hasAuthenticatedUser(session)) return <>{children}</>;
+  return <PrivacyConsentGate>{children}</PrivacyConsentGate>;
+}
+
 function RootLayout() {
   const segments = useSegments();
+  const theme = useAppTheme();
   const isSplash = (segments as string[]).includes("splash") || segments.some((s) => String(s).endsWith("splash"));
 
   const [fontsLoaded] = useFonts({
@@ -66,6 +83,12 @@ function RootLayout() {
     Poppins_500Medium,
     Poppins_600SemiBold,
     Poppins_700Bold,
+    Archivo_500Medium,
+    Archivo_600SemiBold,
+    Archivo_700Bold,
+    PublicSans_400Regular,
+    PublicSans_500Medium,
+    PublicSans_600SemiBold,
   });
 
   const [fontsTimedOut, setFontsTimedOut] = useState(false);
@@ -97,8 +120,8 @@ function RootLayout() {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
-          <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: Colors.primaryViolet }}>
-            <ActivityIndicator size="large" color="#FFFFFF" />
+          <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.colors.primary }}>
+            <ActivityIndicator size="large" color={theme.colors.onPrimary} />
           </View>
         </SafeAreaProvider>
       </GestureHandlerRootView>
@@ -120,38 +143,41 @@ function RootLayout() {
             <DateSafetyPromptHost />
             {posthogEnabled ? <PostHogIdentitySync /> : null}
             <RouteGuard>
-              {posthogEnabled ? <PostHogScreenTracker /> : null}
-              <NotificationDeepLinkHandler />
-              <StatusBar style="dark" backgroundColor={Colors.backgroundMuted} />
-              {isSplash ? null : <ScreenTopSpacer />}
-              <Stack
-                screenOptions={() => ({
-                  ...premiumPushStackScreenOptions({
-                    headerShown: false,
-                    headerShadowVisible: false,
-                    headerTitle: "",
-                    contentStyle: {
-                      backgroundColor: isSplash ? Colors.primaryViolet : Colors.backgroundMuted,
-                    },
-                  }),
-                })}
-              >
-                {CONTEXT_ROUTE_GROUPS.map((name) => (
+              <PrivacyConsentGateIfAuthed>
+                {posthogEnabled ? <PostHogScreenTracker /> : null}
+                <NotificationDeepLinkHandler />
+                <PostPlanReviewHost />
+                <StatusBar style="dark" backgroundColor={theme.colors.backgroundMuted} />
+                {isSplash ? null : <ScreenTopSpacer />}
+                <Stack
+                  screenOptions={() => ({
+                    ...premiumPushStackScreenOptions({
+                      headerShown: false,
+                      headerShadowVisible: false,
+                      headerTitle: "",
+                      contentStyle: {
+                        backgroundColor: isSplash ? theme.colors.primary : theme.colors.backgroundMuted,
+                      },
+                    }),
+                  })}
+                >
+                  {CONTEXT_ROUTE_GROUPS.map((name) => (
+                    <Stack.Screen
+                      key={name}
+                      name={name}
+                      options={premiumContextStackScreenOptions({ headerShown: false })}
+                    />
+                  ))}
                   <Stack.Screen
-                    key={name}
-                    name={name}
-                    options={premiumContextStackScreenOptions({ headerShown: false })}
+                    name="concierge"
+                    options={{
+                      ...premiumPushStackScreenOptions({ headerShown: false }),
+                      // In-flow back is handled inside `ConciergePlanningFlow`; native swipe would exit the whole screen.
+                      gestureEnabled: false,
+                    }}
                   />
-                ))}
-                <Stack.Screen
-                  name="concierge"
-                  options={{
-                    ...premiumPushStackScreenOptions({ headerShown: false }),
-                    // In-flow back is handled inside `ConciergePlanningFlow`; native swipe would exit the whole screen.
-                    gestureEnabled: false,
-                  }}
-                />
-              </Stack>
+                </Stack>
+              </PrivacyConsentGateIfAuthed>
             </RouteGuard>
           </ThemeProvider>
         </ModeContextProvider>
@@ -164,13 +190,11 @@ function RootLayout() {
       <BottomSheetModalProvider>
         <SafeAreaProvider>
           <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-            {posthogEnabled ? (
-              <PostHogProvider apiKey={POSTHOG_API_KEY} options={posthogOptions}>
-                {content}
-              </PostHogProvider>
-            ) : (
-              content
-            )}
+            {/* Always mounted (even when disabled) so usePostHog() has a client to read
+                anywhere in the tree — an absent provider makes the SDK log a "no client" error. */}
+            <PostHogProvider apiKey={POSTHOG_API_KEY} options={posthogOptions}>
+              {content}
+            </PostHogProvider>
           </View>
         </SafeAreaProvider>
       </BottomSheetModalProvider>

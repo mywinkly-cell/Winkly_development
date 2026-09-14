@@ -14,11 +14,13 @@ import {
   Alert,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { listWishlistItems, WishlistItem } from "@/lib/wishlistStore";
 
 export default function WishlistIndex() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<WishlistItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,7 +59,7 @@ export default function WishlistIndex() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Wishlist</Text>
           <TouchableOpacity
@@ -74,14 +76,14 @@ export default function WishlistIndex() {
             value={query}
             onChangeText={setQuery}
             placeholder="Search wishlist…"
-            placeholderTextColor={Colors.gray500}
+            placeholderTextColor={theme.colors.textMuted}
             style={styles.search}
           />
         </View>
 
         {loading ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator size="large" color={Colors.primaryViolet} />
+            <ActivityIndicator size="large" color={theme.colors.primary} />
           </View>
         ) : filtered.length === 0 ? (
           <View style={styles.emptyCard}>
@@ -132,91 +134,89 @@ export default function WishlistIndex() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { padding: 20, paddingBottom: 40 },
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { padding: 20, paddingBottom: 40 },
 
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
-  addBtn: { width: 70, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.primaryViolet, alignItems: "center" },
-  addText: { ...Typography.caption, color: Colors.accentYellow },
+    headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+    backBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+      ...theme.elevation(1),
+    },
+    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary },
+    addBtn: { width: 70, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.colors.primary, alignItems: "center" },
+    addText: { ...theme.type.caption, color: theme.colors.onPrimary },
 
-  searchWrap: { marginBottom: 12 },
-  search: {
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    backgroundColor: "#FFF",
-    borderRadius: Layout.radii.control,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: Colors.textPrimary,
-  },
+    searchWrap: { marginBottom: 12 },
+    search: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.md,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: theme.colors.textPrimary,
+    },
 
-  loadingWrap: { paddingVertical: 40, alignItems: "center" },
+    loadingWrap: { paddingVertical: 40, alignItems: "center" },
 
-  sectionTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 10 },
+    sectionTitle: { ...theme.type.h3, color: theme.colors.textPrimary, marginBottom: 10 },
 
-  card: {
-    backgroundColor: "#FFF",
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  title: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 4 },
-  subtitle: { ...Typography.body, color: Colors.gray700, marginBottom: 10 },
+    card: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: 16,
+      marginBottom: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    title: { ...theme.type.h3, color: theme.colors.textPrimary, marginBottom: 4 },
+    subtitle: { ...theme.type.body, color: theme.colors.textSecondary, marginBottom: 10 },
 
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  metaPill: {
-    ...Typography.caption,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.gray100,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  metaText: { ...Typography.caption, color: Colors.gray600 },
+    metaRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+    metaPill: {
+      ...theme.type.caption,
+      color: theme.colors.textPrimary,
+      backgroundColor: theme.colors.backgroundMuted,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 999,
+    },
+    metaText: { ...theme.type.caption, color: theme.colors.textSecondary },
 
-  open: { ...Typography.caption, color: Colors.primaryViolet },
+    open: { ...theme.type.caption, color: theme.colors.primary },
 
-  emptyCard: {
-    backgroundColor: "#FFF",
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 18,
-    alignItems: "center",
-    marginTop: 10,
-  },
-  emptyTitle: { ...Typography.h2, color: Colors.textPrimary, marginBottom: 6, textAlign: "center" },
-  emptySub: { ...Typography.body, color: Colors.gray700, textAlign: "center", marginBottom: 14 },
+    emptyCard: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: 18,
+      alignItems: "center",
+      marginTop: 10,
+    },
+    emptyTitle: { ...theme.type.h2, color: theme.colors.textPrimary, marginBottom: 6, textAlign: "center" },
+    emptySub: { ...theme.type.body, color: theme.colors.textSecondary, textAlign: "center", marginBottom: 14 },
 
-  primaryBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    alignItems: "center",
-    width: "100%",
-  },
-  primaryText: { ...Typography.button, color: Colors.accentYellow },
-});
+    primaryBtn: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.radii.md,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      alignItems: "center",
+      width: "100%",
+    },
+    primaryText: { ...theme.type.button, color: theme.colors.onPrimary },
+  });
+}

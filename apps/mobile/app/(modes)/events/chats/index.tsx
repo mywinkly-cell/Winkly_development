@@ -3,13 +3,14 @@ import { View } from "react-native";
 import { ChatsHeader } from "@/components/layout/ChatsHeader";
 import { EventsBottomNav } from "@/components/layout/EventsBottomNav";
 import { ChatsInboxContent } from "@/components/chats/ChatsInboxContent";
-import { Colors } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 import { useModeContext } from "@/providers";
 
 export default function EventsChats() {
   const { context: modeContext } = useModeContext();
+  const theme = useAppTheme();
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <ChatsHeader mode={modeContext.active_mode ?? "events"} />
       <ChatsInboxContent sourceMode="events" />
       <EventsBottomNav />

@@ -4,11 +4,9 @@
  */
 
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import * as Haptics from "expo-haptics";
-import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { Colors, Typography } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
+import { PlanCard, PlanCardBadge, PlanCardMeta } from "@/components/plans/PlanCard";
 import {
   sparkVenueDisplayLine,
   type WeeklySparkPlan,
@@ -17,7 +15,7 @@ import {
 
 export type WeeklySparkCardProps = {
   plan: WeeklySparkPlan;
-  /** Accent for the card border / slot chip / CTA (per-slot or per-mode color). */
+  /** Accent for the card stripe / slot chip / CTA (per-slot or per-mode color). */
   accentColor?: string;
   /** Distance user→venue in km (computed by the section from device coords); null/undefined hides it. */
   distanceKm?: number | null;
@@ -67,7 +65,7 @@ function formatPrice(
 
 export function WeeklySparkCard({
   plan,
-  accentColor = Colors.primaryViolet,
+  accentColor,
   distanceKm,
   locale = "en",
   planned = false,
@@ -75,6 +73,8 @@ export function WeeklySparkCard({
   onReviewPlan,
 }: WeeklySparkCardProps) {
   const { t } = useTranslation();
+  const theme = useAppTheme();
+  const accent = accentColor ?? theme.colors.primary;
   const when = formatWhen(plan.startsAt, locale);
   const price = formatPrice(plan.approxPriceCents, plan.currency, locale, t);
   const distance =
@@ -87,181 +87,48 @@ export function WeeklySparkCard({
   const venueLine = sparkVenueDisplayLine(plan);
 
   const open = () => {
-    Haptics.selectionAsync();
     if (planned) (onReviewPlan ?? onViewPlan)(plan);
     else onViewPlan(plan);
   };
 
+  const metaParts = [venueLine, when, distance, price].filter(Boolean).length;
+
   return (
-    <View style={[styles.card, { borderLeftColor: accentColor }, planned && styles.cardPlanned]}>
-      <View style={styles.header}>
-        {disclosure ? (
-          <View style={styles.disclosureChip} accessibilityLabel={disclosure}>
-            <Ionicons name="pricetag-outline" size={11} color={Colors.gray600} />
-            <Text style={styles.disclosureText} numberOfLines={1}>{disclosure}</Text>
-          </View>
-        ) : planned ? (
-          <View style={styles.plannedChip} accessibilityLabel={t("weeklySpark.planned")}>
-            <Ionicons name="checkmark-circle" size={12} color={Colors.successGreen} />
-            <Text style={styles.plannedChipText} numberOfLines={1}>{t("weeklySpark.planned")}</Text>
-          </View>
-        ) : (
-          <View style={styles.headerSpacer} />
-        )}
-        <View style={[styles.slotChip, { borderColor: accentColor }]}>
-          <Text style={[styles.slotChipText, { color: accentColor }]}>{t(SLOT_KEY[plan.slot])}</Text>
-        </View>
-      </View>
-
-      <TouchableOpacity activeOpacity={0.85} onPress={open} accessibilityRole="button">
-        <Text style={styles.title}>{plan.title}</Text>
-
-        <View style={styles.metaWrap}>
-          {venueLine && (
-            <View style={styles.metaRow}>
-              <Ionicons name="location-outline" size={15} color={Colors.gray500} />
-              <Text style={styles.metaText} numberOfLines={2}>{venueLine}</Text>
-            </View>
-          )}
-          <View style={styles.metaRowGroup}>
-            {when && (
-              <View style={styles.metaRow}>
-                <Ionicons name="time-outline" size={15} color={Colors.gray500} />
-                <Text style={styles.metaText}>{when}</Text>
-              </View>
-            )}
-            {distance && (
-              <View style={styles.metaRow}>
-                <Ionicons name="navigate-outline" size={15} color={Colors.gray500} />
-                <Text style={styles.metaText}>{distance}</Text>
-              </View>
-            )}
-            {price && (
-              <View style={styles.metaRow}>
-                <Ionicons name="cash-outline" size={15} color={Colors.gray500} />
-                <Text style={styles.metaText}>{price}</Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.primaryBtn, { backgroundColor: planned ? Colors.successGreen : accentColor }]}
-        onPress={open}
-        activeOpacity={0.9}
-        accessibilityRole="button"
-      >
-        <Ionicons name={planned ? "checkmark-circle" : "eye-outline"} size={18} color={Colors.white} />
-        <Text style={styles.primaryBtnText}>{t(planned ? "weeklySpark.planned" : "weeklySpark.viewPlan")}</Text>
-      </TouchableOpacity>
-    </View>
+    <PlanCard
+      accentColor={accent}
+      dimmed={planned}
+      onPress={open}
+      title={plan.title}
+      badges={
+        <>
+          {disclosure ? (
+            <PlanCardBadge label={disclosure} icon="pricetag-outline" tone="neutral" />
+          ) : planned ? (
+            <PlanCardBadge label={t("weeklySpark.planned")} icon="checkmark-circle" tone="success" />
+          ) : null}
+          <PlanCardBadge label={t(SLOT_KEY[plan.slot])} variant="outlined" color={accent} />
+        </>
+      }
+      meta={
+        metaParts > 0 ? (
+          <>
+            {venueLine ? (
+              <PlanCardMeta icon="location-outline" numberOfLines={2}>
+                {venueLine}
+              </PlanCardMeta>
+            ) : null}
+            {when ? <PlanCardMeta icon="time-outline">{when}</PlanCardMeta> : null}
+            {distance ? <PlanCardMeta icon="navigate-outline">{distance}</PlanCardMeta> : null}
+            {price ? <PlanCardMeta icon="cash-outline">{price}</PlanCardMeta> : null}
+          </>
+        ) : undefined
+      }
+      primaryAction={{
+        label: t(planned ? "weeklySpark.planned" : "weeklySpark.viewPlan"),
+        onPress: open,
+        icon: planned ? "checkmark-circle" : "eye-outline",
+        tone: planned ? theme.colors.success : accent,
+      }}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderColor: Colors.gray200,
-    borderWidth: 1,
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  cardPlanned: {
-    opacity: 0.75,
-  },
-  plannedChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    backgroundColor: Colors.successGreen + "18",
-    maxWidth: 120,
-    flexShrink: 1,
-  },
-  plannedChipText: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: Colors.successGreen,
-    fontWeight: "700",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 10,
-    gap: 8,
-  },
-  headerSpacer: { flex: 1 },
-  disclosureChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    backgroundColor: Colors.gray100,
-    maxWidth: 120,
-    flexShrink: 1,
-  },
-  disclosureText: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: Colors.gray600,
-    fontWeight: "600",
-  },
-  slotChip: {
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    flexShrink: 0,
-  },
-  slotChipText: {
-    ...Typography.caption,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  title: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
-    marginBottom: 12,
-  },
-  metaWrap: { gap: 6, marginBottom: 14 },
-  metaRowGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 14,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  metaText: {
-    ...Typography.caption,
-    color: Colors.gray600,
-  },
-  primaryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderRadius: 12,
-    paddingVertical: 12,
-  },
-  primaryBtnText: {
-    ...Typography.button,
-    color: Colors.white,
-  },
-});

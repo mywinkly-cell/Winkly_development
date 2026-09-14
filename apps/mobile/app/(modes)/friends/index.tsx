@@ -24,7 +24,7 @@ import { ModeHeader } from "@/components/layout/ModeHeader";
 import { FriendsBottomNav } from "@/components/layout/FriendsBottomNav";
 import { MatchCardOverlay } from "@/components/matching/MatchCardOverlay";
 import { SwipeDeckEmptyState } from "@/components/matching/SwipeDeckEmptyState";
-import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { HIT_SLOP } from "@/constants/a11y";
 import { supabase } from "@/lib/supabase";
 import { buildFriendsMatchTags, computeFriendsCompatibility, type FriendsProfile } from "@/lib/ai/friendsInsights";
@@ -38,6 +38,7 @@ import {
   reportUser,
   sendFriendsRequest,
 } from "@/lib/matching/actions";
+import { showReportReceivedNotice } from "@/lib/safety/reportNotice";
 import { fetchFriendsSwipeDeckProfiles } from "@/lib/discover/friendsSwipeDeck";
 import { fetchFriendsWantToConnectCount } from "@/lib/discover/likesReceivedCount";
 import { friendsFollowProfile } from "@/lib/access/connections";
@@ -48,7 +49,6 @@ const CARD_HEIGHT = Math.min(SCREEN_WIDTH * 0.9 * (4 / 3), SCREEN_HEIGHT * 0.52)
 const SWIPE_THRESHOLD = 80;
 const ACTION_BUTTON_SIZE = 64;
 const ACTION_ICON_SIZE = 35;
-const CARD_RADIUS = Layout.radii.card;
 const STACK_OFFSET = 8;
 const STACK_SCALE = 0.96;
 const SUPER_LIKE_PER_DAY = 10;
@@ -68,6 +68,10 @@ type Profile = {
 
 export default function FriendsHome() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
+  const CARD_RADIUS = theme.radii.lg;
+  const friendsAccent = theme.modeAccent("friends").primary;
   const { context } = useModeContext();
   const showAiHints = hasAnyAIAccess(context.subscription_tier ?? "free");
 
@@ -263,6 +267,7 @@ export default function FriendsHome() {
                 : "other";
       await reportUser({ targetUserId: profileId, reason: mapped });
       await blockUser({ targetUserId: profileId, reason: "Reported: " + reason });
+      showReportReceivedNotice("Report: profile");
     } catch (e) {
       console.warn("Report failed", e);
     }
@@ -453,12 +458,12 @@ export default function FriendsHome() {
         style={styles.planBanner}
         accessibilityLabel="Plan something for a group of friends"
       >
-        <Ionicons name="sparkles" size={20} color={Colors.friends.primary} />
+        <Ionicons name="sparkles" size={20} color={friendsAccent} />
         <View style={{ flex: 1 }}>
           <Text style={styles.planBannerTitle}>Plan something for us</Text>
           <Text style={styles.planBannerSubtitle}>Pick a few friends — get group plan options.</Text>
         </View>
-        <Ionicons name="chevron-forward" size={20} color={Colors.friends.primary} />
+        <Ionicons name="chevron-forward" size={20} color={friendsAccent} />
       </Pressable>
 
       {incomingRequestCount > 0 ? (
@@ -470,17 +475,17 @@ export default function FriendsHome() {
           style={styles.requestsBanner}
           accessibilityLabel="Open connection requests"
         >
-          <Ionicons name="people" size={22} color={Colors.friends.primary} />
+          <Ionicons name="people" size={22} color={friendsAccent} />
           <Text style={styles.requestsBannerText}>
             {incomingRequestCount} connection request{incomingRequestCount === 1 ? "" : "s"}
           </Text>
-          <Ionicons name="chevron-forward" size={20} color={Colors.friends.primary} />
+          <Ionicons name="chevron-forward" size={20} color={friendsAccent} />
         </Pressable>
       ) : null}
 
       {deckLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.friends.primary} />
+          <ActivityIndicator size="large" color={friendsAccent} />
         </View>
       ) : !currentProfile ? (
         <SwipeDeckEmptyState
@@ -547,7 +552,7 @@ export default function FriendsHome() {
                     style={styles.cardMenuBtn}
                     accessibilityLabel="Block or report"
                   >
-                    <Ionicons name="ellipsis-vertical" size={22} color={Colors.friends.primary} />
+                    <Ionicons name="ellipsis-vertical" size={22} color={friendsAccent} />
                   </Pressable>
 
                   <MatchCardOverlay
@@ -578,7 +583,7 @@ export default function FriendsHome() {
                   accessibilityLabel="Pass"
                   accessibilityState={{ disabled: transitioning }}
                 >
-                  <Ionicons name="close" size={ACTION_ICON_SIZE} color={Colors.friends.primary} />
+                  <Ionicons name="close" size={ACTION_ICON_SIZE} color={friendsAccent} />
                 </Pressable>
               </View>
 
@@ -616,7 +621,7 @@ export default function FriendsHome() {
                   accessibilityLabel="Add friend"
                   accessibilityState={{ disabled: transitioning }}
                 >
-                  <Ionicons name="heart" size={ACTION_ICON_SIZE} color={Colors.friends.primary} />
+                  <Ionicons name="heart" size={ACTION_ICON_SIZE} color={friendsAccent} />
                 </Pressable>
               </View>
             </View>
@@ -636,182 +641,187 @@ export default function FriendsHome() {
   );
 }
 
-const styles = StyleSheet.create({
-  requestsBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.friends.primary,
-  },
-  planBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.friends.primary + "55",
-  },
-  planBannerTitle: {
-    ...Typography.button,
-    fontFamily: FontFamily.headingBold,
-    color: Colors.textPrimary,
-  },
-  planBannerSubtitle: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: Colors.gray600,
-    marginTop: 1,
-  },
-  requestsBannerText: {
-    flex: 1,
-    ...Typography.button,
-    fontFamily: FontFamily.headingBold,
-    color: Colors.textPrimary,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: Colors.backgroundMuted,
-  },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  cardContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: Layout.spacing.sm,
-    paddingBottom: 2,
-    minHeight: 0,
-  },
-  cardStackWrap: {
-    alignItems: "center",
-    justifyContent: "flex-end",
-  },
-  cardWrapper: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  card: {
-    backgroundColor: Colors.white,
-    overflow: "hidden",
-    ...Shadow.card,
-    shadowRadius: 20,
-    shadowOpacity: 0.12,
-    elevation: 8,
-  },
-  stackCard: {
-    position: "absolute",
-    backgroundColor: Colors.gray100,
-    opacity: 0.95,
-  },
-  mediaArea: {
-    width: "100%",
-    flex: 1,
-    backgroundColor: Colors.gray200,
-    overflow: "hidden",
-  },
-  cardImage: {
-    width: "100%",
-    height: "100%",
-  },
-  cardMenuBtn: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(255,255,255,0.92)",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  actionBarContainer: {
-    alignItems: "center",
-    width: "100%",
-    paddingBottom: 28,
-  },
-  actionRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
-    paddingTop: 2,
-    paddingBottom: 4,
-  },
-  actionButtonColumn: {
-    alignItems: "center",
-    justifyContent: "center",
-    minWidth: 40,
-  },
-  actionIconWrap: {
-    width: ACTION_BUTTON_SIZE,
-    height: ACTION_BUTTON_SIZE,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  actionIconGlowPass: {
-    shadowColor: Colors.friends.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.38,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  actionIconGlowIntent: {
-    shadowColor: "#E6B800",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.42,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  actionIconGlowLike: {
-    shadowColor: Colors.friends.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.38,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  actionBtnDisabled: {
-    opacity: 0.5,
-  },
-  actionBtnPressed: {
-    transform: [{ scale: 0.92 }],
-  },
-  actionBarSubtitle: {
-    width: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-    paddingTop: 2,
-    paddingBottom: 8,
-  },
-  subtitleLine1: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: Colors.gray600,
-    marginTop: 0,
-    textAlign: "center",
-    width: "100%",
-  },
-});
+function createStyles(theme: AppTheme) {
+  const friendsAccent = theme.modeAccent("friends").primary;
+  return StyleSheet.create({
+    requestsBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      marginHorizontal: theme.spacing.lg,
+      marginBottom: theme.spacing.sm,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: friendsAccent,
+    },
+    planBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      marginHorizontal: theme.spacing.lg,
+      marginTop: theme.spacing.sm,
+      marginBottom: theme.spacing.sm,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: friendsAccent + "55",
+    },
+    planBannerTitle: {
+      ...theme.type.button,
+      fontFamily: theme.type.button.fontFamily,
+      color: theme.colors.textPrimary,
+    },
+    planBannerSubtitle: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontSize: 11,
+      color: theme.colors.textSecondary,
+      marginTop: 1,
+    },
+    requestsBannerText: {
+      flex: 1,
+      ...theme.type.button,
+      fontFamily: theme.type.button.fontFamily,
+      color: theme.colors.textPrimary,
+    },
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.backgroundMuted,
+    },
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: theme.spacing.xxl,
+    },
+    cardContainer: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingTop: theme.spacing.sm,
+      paddingBottom: 2,
+      minHeight: 0,
+    },
+    cardStackWrap: {
+      alignItems: "center",
+      justifyContent: "flex-end",
+    },
+    cardWrapper: {
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    card: {
+      backgroundColor: theme.colors.surface,
+      overflow: "hidden",
+      ...theme.elevation(2),
+      shadowRadius: 20,
+      shadowOpacity: 0.12,
+      elevation: 8,
+    },
+    stackCard: {
+      position: "absolute",
+      backgroundColor: theme.colors.backgroundMuted,
+      opacity: 0.95,
+    },
+    mediaArea: {
+      width: "100%",
+      flex: 1,
+      backgroundColor: theme.colors.border,
+      overflow: "hidden",
+    },
+    cardImage: {
+      width: "100%",
+      height: "100%",
+    },
+    cardMenuBtn: {
+      position: "absolute",
+      top: 12,
+      right: 12,
+      width: 44,
+      height: 44,
+      borderRadius: theme.radii.pill,
+      backgroundColor: "rgba(255,255,255,0.92)",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 2,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    actionBarContainer: {
+      alignItems: "center",
+      width: "100%",
+      paddingBottom: theme.spacing.xxl,
+    },
+    actionRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      paddingTop: 2,
+      paddingBottom: theme.spacing.xs,
+    },
+    actionButtonColumn: {
+      alignItems: "center",
+      justifyContent: "center",
+      minWidth: 40,
+    },
+    actionIconWrap: {
+      width: ACTION_BUTTON_SIZE,
+      height: ACTION_BUTTON_SIZE,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    actionIconGlowPass: {
+      shadowColor: friendsAccent,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.38,
+      shadowRadius: 12,
+      elevation: 4,
+    },
+    actionIconGlowIntent: {
+      shadowColor: "#E6B800",
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.42,
+      shadowRadius: 12,
+      elevation: 4,
+    },
+    actionIconGlowLike: {
+      shadowColor: friendsAccent,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.38,
+      shadowRadius: 12,
+      elevation: 4,
+    },
+    actionBtnDisabled: {
+      opacity: 0.5,
+    },
+    actionBtnPressed: {
+      transform: [{ scale: 0.92 }],
+    },
+    actionBarSubtitle: {
+      width: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: theme.spacing.xxl,
+      paddingTop: 2,
+      paddingBottom: theme.spacing.sm,
+    },
+    subtitleLine1: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      fontSize: 11,
+      color: theme.colors.textSecondary,
+      marginTop: 0,
+      textAlign: "center",
+      width: "100%",
+    },
+  });
+}

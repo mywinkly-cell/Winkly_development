@@ -10,7 +10,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   Share,
   Linking,
   Platform,
@@ -22,6 +21,9 @@ import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Layout, Shadow, Typography } from "@/constants/tokens";
+import { Card, PrimaryButton } from "@/components/ds";
+import { useAppTheme } from "@/constants/design-system";
+import { PlanCardMapLink } from "@/components/plans/PlanCard";
 import {
   callWinklyPlan,
   reportConciergeOutcome,
@@ -39,6 +41,7 @@ import { supabase } from "@/lib/supabase";
 import { recordBusinessAnalyticsEvent } from "@/lib/business/analyticsStore";
 import { PlanRecommendationFeedback } from "@/components/planner/PlanRecommendationFeedback";
 import { sparkVenueFullAddressLine } from "@/lib/ai/weeklySpark";
+import { parseClockTimeFromText } from "@/lib/ai/planTimeValidation";
 
 type PlannerItemRow = { id: string; title: string; starts_at: string; ends_at: string | null };
 
@@ -102,31 +105,23 @@ function findNearbyItems(
   return out.sort((a, b) => a.gapMinutes - b.gapMinutes);
 }
 
-/**
- * The `planner_items_enforce_future_plan_time` trigger (see
- * 20260701120000_events_ends_at_canonical_and_plan_validation.sql) rejects any INSERT whose
- * starts_at is more than 5 minutes in the past. A generated plan's time-of-day (from the option's
- * itinerary, or a user-picked "today" time) can easily fall before the current wall-clock time —
- * e.g. a 19:00 dinner suggestion opened at 20:00 — which previously made "Add to planner" fail
- * outright. Stay comfortably inside the server's grace window and roll the whole range forward by
- * whole days (preserving time-of-day and duration) until it clears the guard.
- */
-const PAST_PLAN_GRACE_MS = 2 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
-function daysUntilFuture(startsAtMs: number): number {
+/**
+ * `buildStartsEnds()` below already guards single-day plans against landing in the past (rolls
+ * forward whole days until the resolved start clears "now"). A multi-day trip doesn't go through
+ * that helper — each day's start is built directly from its own `date` string — so it needs the
+ * same guard applied separately, anchored on day 1's 09:00 start and carried uniformly across
+ * every day so the itinerary's day-to-day spacing isn't compressed.
+ */
+function daysUntilFutureFromIso(iso: string): number {
   let shift = 0;
-  let t = startsAtMs;
-  while (t <= Date.now() + PAST_PLAN_GRACE_MS) {
+  let t = new Date(iso).getTime();
+  while (t <= Date.now()) {
     shift += 1;
     t += ONE_DAY_MS;
   }
   return shift;
-}
-
-function shiftIso(iso: string, days: number): string {
-  if (days === 0) return iso;
-  return new Date(new Date(iso).getTime() + days * ONE_DAY_MS).toISOString();
 }
 
 function shiftDateStr(dateStr: string, days: number): string {
@@ -169,21 +164,7 @@ function parseTimeFromOption(option: ExperienceOption): { hour: number; minute: 
     option.itinerary?.find((s) => (s as { time?: string }).time)?.time ??
     option.itinerary?.[0]?.time ??
     option.schedule?.[0];
-  if (first) {
-    const match = first.match(/(\d{1,2}):(\d{2})/);
-    if (match) return { hour: parseInt(match[1], 10), minute: parseInt(match[2], 10) };
-    const pm = /(\d{1,2})\s*:\s*(\d{2})?\s*PM/i.test(first) || /\b(\d{1,2})\s*PM/i.test(first);
-    const am = /(\d{1,2})\s*:\s*(\d{2})?\s*AM/i.test(first) || /\b(\d{1,2})\s*AM/i.test(first);
-    const hMatch = first.match(/(\d{1,2})/);
-    if (hMatch) {
-      let h = parseInt(hMatch[1], 10);
-      if (pm && h < 12) h += 12;
-      if (am && h === 12) h = 0;
-      const m = first.match(/:(\d{2})/)?.[1];
-      return { hour: h, minute: m ? parseInt(m, 10) : 0 };
-    }
-  }
-  return { hour: 19, minute: 0 };
+  return parseClockTimeFromText(first) ?? { hour: 19, minute: 0 };
 }
 
 function buildStartsEnds(
@@ -197,6 +178,13 @@ function buildStartsEnds(
     : parseTimeFromOption(option);
   const start = new Date(date);
   start.setHours(hour, minute, 0, 0);
+  // Authoritative last guard: a plan is never written to the planner in the past. If the
+  // resolved start has already elapsed (stale AI itinerary time, or the flow sat open past
+  // the chosen slot), roll forward a day at a time until it's genuinely in the future.
+  const now = Date.now();
+  while (start.getTime() <= now) {
+    start.setDate(start.getDate() + 1);
+  }
   const end = new Date(start);
   end.setHours(end.getHours() + 2, end.getMinutes(), 0, 0);
   return {
@@ -277,6 +265,7 @@ export function ConciergeConfirmStep({
   onAddedToPlanner,
   showInlineBack = true,
 }: ConciergeConfirmStepProps) {
+  const theme = useAppTheme();
   const router = useRouter();
   const scrollRef = useRef<React.ComponentRef<typeof GestureScrollView>>(null);
   const [saving, setSaving] = useState(false);
@@ -498,7 +487,7 @@ export function ConciergeConfirmStep({
        * chat CTA and defers the planner_items insert until the invite is accepted. */
       let createdItemId: string | undefined;
       /** Clear success confirmation before leaving the flow — and a heads-up when the plan's
-       * original time had already passed and was rolled forward (see daysUntilFuture above). */
+       * original time had already passed and was rolled forward (see buildStartsEnds/movedForward above). */
       const finishWithConfirmation = (
         itemId?: string,
         opts?: { movedForward?: boolean; kind?: "added" | "invited" }
@@ -514,11 +503,17 @@ export function ConciergeConfirmStep({
           { text: "View planner", onPress: () => onDone(itemId) },
         ]);
       };
+      // Days to shift a trip's first day forward so it isn't past-dated (see daysUntilFutureFromIso).
+      // 0 for every other branch — buildStartsEnds() already guards those itself.
+      let tripShiftDays = 0;
       if (structuredPlan?.trip_days?.length) {
         const first = structuredPlan.trip_days[0];
         const last = structuredPlan.trip_days[structuredPlan.trip_days.length - 1];
-        const start = new Date(`${first.date}T09:00:00`);
-        const end = new Date(`${last.date}T21:00:00`);
+        tripShiftDays = daysUntilFutureFromIso(new Date(`${first.date}T09:00:00`).toISOString());
+        const firstDate = shiftDateStr(first.date, tripShiftDays);
+        const lastDate = shiftDateStr(last.date, tripShiftDays);
+        const start = new Date(`${firstDate}T09:00:00`);
+        const end = new Date(`${lastDate}T21:00:00`);
         starts_at = start.toISOString();
         ends_at = end.toISOString();
       } else if (structuredPlan) {
@@ -535,13 +530,11 @@ export function ConciergeConfirmStep({
         ends_at = se.ends_at;
       }
 
-      // The DB's future-plan guard is INSERT-only; catch a past-dated range here so the whole
-      // range (and, for a trip, every day) shifts forward together instead of the insert failing.
-      const shiftDays = daysUntilFuture(new Date(starts_at).getTime());
-      if (shiftDays > 0) {
-        starts_at = shiftIso(starts_at, shiftDays);
-        ends_at = shiftIso(ends_at, shiftDays);
-      }
+      // buildStartsEnds() already rolled starts_at/ends_at forward if the resolved time had
+      // passed; detect that here (by calendar-day drift from the requested date) purely to tell
+      // the user, not to re-shift anything.
+      const movedForward =
+        !structuredPlan?.trip_days?.length && new Date(starts_at).toDateString() !== effectiveDate.toDateString();
 
       const activity = title;
       const place = allowEditDetails
@@ -592,7 +585,7 @@ export function ConciergeConfirmStep({
         for (const d of structuredPlan.trip_days) {
           // Shift every day by the same amount so a trip starting "today" but generated after
           // 09:00 still lands on future dates without compressing the itinerary.
-          const dayDate = shiftDateStr(d.date, shiftDays);
+          const dayDate = shiftDateStr(d.date, tripShiftDays);
           const dayStart = new Date(`${dayDate}T09:00:00`);
           const dayEnd = new Date(`${dayDate}T21:00:00`);
           const description = [
@@ -627,7 +620,7 @@ export function ConciergeConfirmStep({
           });
           if (firstTripItemId === null) firstTripItemId = dayItemId;
         }
-        finishWithConfirmation(firstTripItemId ?? undefined, { movedForward: shiftDays > 0 });
+        finishWithConfirmation(firstTripItemId ?? undefined, { movedForward: tripShiftDays > 0 });
         return;
       }
 
@@ -723,9 +716,9 @@ export function ConciergeConfirmStep({
         let firstItemId: string | null = null;
         for (const weekOffset of weeks) {
           const startDate = new Date(effectiveDate);
-          // Shift the whole series by the same days-until-future amount as week 0 so every
-          // occurrence lands the same weekday apart instead of only fixing the first week.
-          startDate.setDate(startDate.getDate() + shiftDays + weekOffset * 7);
+          startDate.setDate(startDate.getDate() + weekOffset * 7);
+          // buildStartsEnds() itself guards each occurrence against landing in the past (only
+          // week 0 could ever need it — the rest are always days out).
           const { starts_at: s, ends_at: e } = buildStartsEnds(startDate, recurrenceSeed);
           const weekItemId = await createPlannerItemForSelf(meId, {
             ...payload,
@@ -766,7 +759,7 @@ export function ConciergeConfirmStep({
         }
       }
       finishWithConfirmation(createdItemId, {
-        movedForward: shiftDays > 0,
+        movedForward,
         kind: inviteToo && partner ? "invited" : "added",
       });
     } catch (e) {
@@ -924,7 +917,9 @@ export function ConciergeConfirmStep({
         </TouchableOpacity>
       ) : null}
 
-      <Text style={styles.title}>{allowEditDetails ? "Plan details" : title}</Text>
+      <Text style={[theme.type.h2, { color: theme.colors.textPrimary, fontFamily: theme.type.h2.fontFamily, marginBottom: theme.spacing.sm }]}>
+        {allowEditDetails ? "Plan details" : title}
+      </Text>
       {allowEditDetails ? (
         <View style={styles.editBlock}>
           <Text style={styles.editIntro}>
@@ -940,7 +935,7 @@ export function ConciergeConfirmStep({
             </View>
           ) : null}
 
-          <View style={styles.detailCard}>
+          <Card elevation={1} padding="none" style={styles.detailCard}>
             {renderDetailRow({
               field: "title",
               icon: "sparkles-outline",
@@ -980,60 +975,49 @@ export function ConciergeConfirmStep({
               placeholder: "Street + number, PLZ, City, Country",
               multiline: true,
             })}
-          </View>
+          </Card>
 
           {(structuredPlan?.venue?.google_maps_link || editPlace.trim() || editAddress.trim()) ? (
-            <TouchableOpacity
-              style={styles.mapsBtnInline}
-              onPress={() => {
-                Haptics.selectionAsync();
-                const q = [editPlace.trim(), editAddress.trim()].filter(Boolean).join(", ");
-                const venueChanged =
-                  editPlace.trim() !== (structuredPlan?.venue?.name ?? "").trim() ||
-                  editAddress.trim() !== (structuredPlan?.venue?.address ?? locationLineDisplay?.trim() ?? "").trim();
-                const url = venueChanged
-                  ? (q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : null)
-                  : structuredPlan?.venue?.google_maps_link?.trim() ||
-                    (q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : null);
-                if (url) void Linking.openURL(url).catch(() => {});
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Open in Maps"
-              activeOpacity={0.85}
-            >
-              <Ionicons name="map-outline" size={18} color={Colors.primaryViolet} />
-              <Text style={styles.mapsBtnText}>Open in Maps</Text>
-            </TouchableOpacity>
+            <View style={{ marginTop: theme.spacing.md, alignSelf: "flex-start" }}>
+              <PlanCardMapLink
+                onPress={() => {
+                  const q = [editPlace.trim(), editAddress.trim()].filter(Boolean).join(", ");
+                  const venueChanged =
+                    editPlace.trim() !== (structuredPlan?.venue?.name ?? "").trim() ||
+                    editAddress.trim() !== (structuredPlan?.venue?.address ?? locationLineDisplay?.trim() ?? "").trim();
+                  const url = venueChanged
+                    ? (q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : null)
+                    : structuredPlan?.venue?.google_maps_link?.trim() ||
+                      (q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}` : null);
+                  if (url) void Linking.openURL(url).catch(() => {});
+                }}
+              />
+            </View>
           ) : null}
         </View>
       ) : null}
       {!allowEditDetails && structuredPlan?.venue?.name ? (
-        <View style={styles.venueBlock}>
-          <View style={styles.venueTextCol}>
+        <Card elevation={0} padding="md" style={{ flexDirection: "row", alignItems: "center", gap: theme.spacing.md, marginBottom: theme.spacing.lg }}>
+          <View style={{ flex: 1, gap: 2 }}>
             {(() => {
               const line = sparkVenueFullAddressLine({
                 name: structuredPlan.venue.name,
                 address: structuredPlan.venue.address || locationLineDisplay?.trim() || null,
               });
-              return line ? <Text style={styles.venueName}>{line}</Text> : null;
+              return line ? (
+                <Text style={[theme.type.bodyMedium, { color: theme.colors.textPrimary, fontFamily: theme.type.bodyMedium.fontFamily }]}>
+                  {line}
+                </Text>
+              ) : null;
             })()}
           </View>
           {structuredPlan.venue.google_maps_link ? (
-            <TouchableOpacity
-              style={styles.mapsBtn}
-              onPress={() => {
-                Haptics.selectionAsync();
-                void Linking.openURL(structuredPlan.venue.google_maps_link).catch(() => {});
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Open in Maps"
-              activeOpacity={0.85}
-            >
-              <Ionicons name="map-outline" size={18} color={Colors.primaryViolet} />
-              <Text style={styles.mapsBtnText}>Maps</Text>
-            </TouchableOpacity>
+            <PlanCardMapLink
+              label="Maps"
+              onPress={() => void Linking.openURL(structuredPlan.venue.google_maps_link).catch(() => {})}
+            />
           ) : null}
-        </View>
+        </Card>
       ) : null}
       {/* When editing (e.g. Spark confirm), date/time/venue fields already cover this — skip itinerary echo. */}
       {!allowEditDetails && tripDays?.length ? (
@@ -1201,14 +1185,9 @@ export function ConciergeConfirmStep({
                 {allowEditDetails ? "Change date or time" : "Pick another time"}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.conflictPrimaryBtn, saving && styles.primaryBtnDisabled]}
-              onPress={() => { Haptics.selectionAsync(); handleAddToPlanner(); }}
-              disabled={saving}
-              activeOpacity={0.9}
-            >
-              {saving ? <ActivityIndicator color={Colors.white} size="small" /> : <Text style={styles.conflictPrimaryText}>Add anyway</Text>}
-            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <PrimaryButton title="Add anyway" onPress={handleAddToPlanner} loading={saving} />
+            </View>
           </View>
           <TouchableOpacity onPress={handleReviewPlanner} activeOpacity={0.7} style={styles.conflictLinkBtn}>
             <Text style={styles.conflictLinkText}>Review my Planner</Text>
@@ -1304,20 +1283,12 @@ export function ConciergeConfirmStep({
 
       {!(conflictChecked && conflictingItems.length > 0) && (
         <>
-          <TouchableOpacity
-            style={[styles.primaryBtn, (saving || editingField !== null) && styles.primaryBtnDisabled]}
+          <PrimaryButton
+            title={inviteToo && partner ? `Send selection & invite ${partner.displayName}` : "Add to planner"}
             onPress={handleAddToPlanner}
-            disabled={saving || editingField !== null}
-            activeOpacity={0.9}
-          >
-            {saving ? (
-              <ActivityIndicator color={Colors.white} />
-            ) : (
-              <Text style={styles.primaryBtnText}>
-                {inviteToo && partner ? `Send selection & invite ${partner.displayName}` : "Add to planner"}
-              </Text>
-            )}
-          </TouchableOpacity>
+            loading={saving}
+            disabled={editingField !== null}
+          />
           {editingField !== null ? (
             <Text style={styles.pendingEditHint}>Apply your change with the check to continue.</Text>
           ) : null}
@@ -1341,11 +1312,6 @@ const styles = StyleSheet.create({
     color: Colors.primaryViolet,
     fontWeight: "600",
   },
-  title: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
   editBlock: { marginBottom: 20 },
   editIntro: {
     ...Typography.caption,
@@ -1353,12 +1319,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   detailCard: {
-    backgroundColor: Colors.white,
-    borderRadius: Layout.radii.card,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
     overflow: "hidden",
-    ...Shadow.card,
   },
   detailRow: {
     flexDirection: "row",
@@ -1366,7 +1327,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    backgroundColor: Colors.white,
   },
   detailRowDivided: {
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -1468,51 +1428,6 @@ const styles = StyleSheet.create({
     flex: 1,
     color: Colors.textPrimary,
     lineHeight: 18,
-  },
-  mapsBtnInline: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: Layout.radii.control,
-    backgroundColor: Colors.primaryViolet + "0F",
-    borderWidth: 1,
-    borderColor: Colors.primaryViolet + "33",
-  },
-  venueBlock: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: Colors.gray100,
-  },
-  venueTextCol: { flex: 1, gap: 2 },
-  venueName: {
-    ...Typography.body,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-  },
-  mapsBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.primaryViolet + "40",
-  },
-  mapsBtnText: {
-    ...Typography.caption,
-    fontWeight: "700",
-    color: Colors.primaryViolet,
   },
   correctDetailsSection: {
     marginBottom: 16,
@@ -1724,19 +1639,6 @@ const styles = StyleSheet.create({
     color: Colors.primaryViolet,
     fontWeight: "600",
   },
-  conflictPrimaryBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: Colors.primaryViolet,
-    minWidth: 120,
-    alignItems: "center",
-  },
-  conflictPrimaryText: {
-    ...Typography.caption,
-    color: Colors.white,
-    fontWeight: "600",
-  },
   conflictLinkBtn: { marginTop: 10, alignSelf: "flex-start" },
   conflictLinkText: {
     ...Typography.caption,
@@ -1769,16 +1671,5 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.errorRed,
     marginBottom: 12,
-  },
-  primaryBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  primaryBtnDisabled: { opacity: 0.7 },
-  primaryBtnText: {
-    ...Typography.button,
-    color: Colors.white,
   },
 });

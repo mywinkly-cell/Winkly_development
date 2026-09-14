@@ -5,7 +5,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
-  TextInput,
   FlatList,
   Pressable,
   ActivityIndicator,
@@ -18,7 +17,8 @@ import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeScreenView } from "@/components/SafeScreenView";
-import { Colors, Typography, Layout, HEADER } from "@/constants/tokens";
+import { Card, Header, Input, ListRow } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 import { normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 import { createDirectChat } from "@/lib/chats";
@@ -90,6 +90,8 @@ export default function StartChat() {
   const { i18n } = useTranslation();
   const router = useRouter();
   const chatHub = useModeHub();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
 
   useEffect(() => {
     if (chatHub === "romance") {
@@ -174,79 +176,69 @@ export default function StartChat() {
 
   return (
     <SafeScreenView style={styles.screen}>
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => {
-            Haptics.selectionAsync();
-            router.back();
-          }}
-          style={styles.backBtn}
-          accessibilityLabel="Back"
-        >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.headerTitle}>New conversation</Text>
-        <View style={styles.headerRight} />
-      </View>
+      <Header
+        title="New conversation"
+        onBack={() => {
+          Haptics.selectionAsync();
+          router.back();
+        }}
+      />
 
       <View style={styles.content}>
         <View style={styles.optionsRow}>
-          <Pressable
-            onPress={() => router.push(chatRoutes.newChat(chatHub, "friends"))}
-            style={styles.optionCard}
-          >
-            <View style={styles.optionIconWrap}>
-              <Ionicons name="chatbubble-outline" size={26} color={Colors.primaryViolet} />
-            </View>
-            <Text style={styles.optionTitle}>New chat</Text>
-            <Text style={styles.optionSub}>Start a 1:1 chat</Text>
-          </Pressable>
-          <Pressable onPress={handleNewGroupChat} style={styles.optionCard}>
-            <View style={styles.optionIconWrap}>
-              <Ionicons name="people-outline" size={26} color={Colors.primaryViolet} />
-            </View>
-            <Text style={styles.optionTitle}>Group chat</Text>
-            <Text style={styles.optionSub}>Create a group</Text>
-          </Pressable>
+          <Card padding="md" style={styles.optionCard}>
+            <Pressable onPress={() => router.push(chatRoutes.newChat(chatHub, "friends"))} style={styles.optionPressable}>
+              <View style={styles.optionIconWrap}>
+                <Ionicons name="chatbubble-outline" size={26} color={theme.colors.primary} />
+              </View>
+              <Text style={styles.optionTitle}>New chat</Text>
+              <Text style={styles.optionSub}>Start a 1:1 chat</Text>
+            </Pressable>
+          </Card>
+          <Card padding="md" style={styles.optionCard}>
+            <Pressable onPress={handleNewGroupChat} style={styles.optionPressable}>
+              <View style={styles.optionIconWrap}>
+                <Ionicons name="people-outline" size={26} color={theme.colors.primary} />
+              </View>
+              <Text style={styles.optionTitle}>Group chat</Text>
+              <Text style={styles.optionSub}>Create a group</Text>
+            </Pressable>
+          </Card>
         </View>
-        <Pressable
+        <ListRow
+          title="Group invitations"
           onPress={() => { Haptics.selectionAsync(); router.push("/groups/invitations"); }}
-          style={styles.invitationsLink}
-        >
-          <Ionicons name="mail-outline" size={20} color={Colors.primaryViolet} />
-          <Text style={styles.invitationsLinkText}>Group invitations</Text>
-        </Pressable>
-        <Pressable
+          style={styles.linkRow}
+          leading={<Ionicons name="mail-outline" size={20} color={theme.colors.primary} />}
+          showChevron={false}
+        />
+        <ListRow
+          title="Friends connection requests"
           onPress={() => {
             Haptics.selectionAsync();
             router.push("/(modes)/friends/friend-requests");
           }}
-          style={styles.invitationsLink}
-        >
-          <Ionicons name="people-outline" size={20} color={Colors.primaryViolet} />
-          <Text style={styles.invitationsLinkText}>Friends connection requests</Text>
-        </Pressable>
+          style={styles.linkRow}
+          leading={<Ionicons name="people-outline" size={20} color={theme.colors.primary} />}
+          showChevron={false}
+        />
 
-        <TextInput
+        <Input
           value={q}
           onChangeText={setQ}
           placeholder="Search by name or number…"
-          placeholderTextColor={Colors.gray500}
           autoCorrect={false}
           autoCapitalize="none"
-          style={styles.searchInput}
         />
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
         {creating ? <Text style={styles.creatingText}>Starting chat…</Text> : null}
 
-        <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Contacts on Winkly</Text>
-        </View>
+        <Text style={styles.sectionTitle}>Contacts on Winkly</Text>
 
         {loading ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator size="large" color={Colors.primaryViolet} />
+            <ActivityIndicator size="large" color={theme.colors.primary} />
             <Text style={styles.loadingText}>Loading…</Text>
           </View>
         ) : (
@@ -254,46 +246,20 @@ export default function StartChat() {
             data={filtered}
             keyExtractor={(u) => u.id}
             keyboardShouldPersistTaps="handled"
-            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+            ItemSeparatorComponent={() => <View style={{ height: theme.spacing.sm }} />}
             renderItem={({ item }) => (
-              <Pressable
+              <ListRow
+                title={formatName(item)}
+                subtitle={
+                  item.city?.trim()
+                    ? normalizeLocationDisplayString(item.city, i18n?.language ?? "en")
+                    : "—"
+                }
                 onPress={() => handleNewChat(item)}
                 disabled={creating}
-                style={({ pressed }) => [
-                  styles.contactRow,
-                  pressed && styles.contactRowPressed,
-                  creating && styles.contactRowDisabled,
-                ]}
-              >
-                <View style={styles.avatar}>
-                  {(item.main_photo_url ?? item.romance_photos?.[0] ?? item.core_photos?.[0]) ? (
-                    <Image
-                      source={{
-                        uri:
-                          item.main_photo_url ??
-                          item.romance_photos?.[0] ??
-                          item.core_photos?.[0] ??
-                          "",
-                      }}
-                      style={styles.avatarImg}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={styles.avatarPlaceholder}>
-                      <Ionicons name="person" size={24} color={Colors.gray500} />
-                    </View>
-                  )}
-                </View>
-                <View style={styles.contactInfo}>
-                  <Text style={styles.contactName}>{formatName(item)}</Text>
-                  <Text style={styles.contactMeta}>
-                    {item.city?.trim()
-                      ? normalizeLocationDisplayString(item.city, i18n?.language ?? "en")
-                      : "—"}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
-              </Pressable>
+                style={styles.contactRow}
+                leading={<ContactAvatar item={item} theme={theme} />}
+              />
             )}
             ListEmptyComponent={
               <Text style={styles.emptyText}>
@@ -305,142 +271,79 @@ export default function StartChat() {
           />
         )}
 
-        <Pressable onPress={handleInviteToWinkly} style={styles.inviteRow}>
-          <View style={styles.inviteIconWrap}>
-            <Ionicons name="person-add-outline" size={24} color={Colors.primaryViolet} />
-          </View>
-          <View style={styles.inviteTextWrap}>
-            <Text style={styles.inviteTitle}>Invite to Winkly</Text>
-            <Text style={styles.inviteSub}>Add a contact who isn’t on Winkly yet</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={Colors.gray500} />
-        </Pressable>
+        <ListRow
+          title="Invite to Winkly"
+          subtitle="Add a contact who isn't on Winkly yet"
+          onPress={handleInviteToWinkly}
+          style={styles.inviteRow}
+          leading={<Ionicons name="person-add-outline" size={24} color={theme.colors.primary} />}
+        />
       </View>
     </SafeScreenView>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    ...Layout.topHeaderBar,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-    backgroundColor: Colors.white,
-  },
-  backBtn: {
-    width: HEADER.buttonSize,
-    height: HEADER.buttonSize,
-    borderRadius: HEADER.buttonRadius,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    ...Typography.headerTitle,
-    color: Colors.primaryViolet,
-  },
-  headerRight: { width: HEADER.buttonSize, height: HEADER.buttonSize },
-  content: { flex: 1, padding: 16 },
-  optionsRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 16,
-  },
-  optionCard: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    alignItems: "center",
-  },
-  optionIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.primaryViolet + "18",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  optionTitle: { ...Typography.body, fontWeight: "600", color: Colors.textPrimary },
-  optionSub: { fontSize: 12, color: Colors.gray600, marginTop: 2 },
-  invitationsLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-    marginBottom: 8,
-  },
-  invitationsLinkText: { ...Typography.caption, fontWeight: "600", color: Colors.primaryViolet },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 12,
-    fontSize: 16,
-    color: Colors.textPrimary,
-  },
-  errorText: { color: Colors.errorRed, marginBottom: 8 },
-  creatingText: { opacity: 0.7, marginBottom: 8 },
-  sectionRow: { marginBottom: 10 },
-  sectionTitle: { ...Typography.caption, fontWeight: "600", color: Colors.gray600 },
-  loadingWrap: { flex: 1, justifyContent: "center", alignItems: "center" },
-  loadingText: { marginTop: 8, opacity: 0.7 },
-  contactRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  contactRowPressed: { opacity: 0.85 },
-  contactRowDisabled: { opacity: 0.6 },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.gray100,
-    overflow: "hidden",
-    marginRight: 12,
-  },
-  avatarImg: { width: 48, height: 48 },
-  avatarPlaceholder: { width: 48, height: 48, alignItems: "center", justifyContent: "center" },
-  contactInfo: { flex: 1 },
-  contactName: { ...Typography.body, fontWeight: "600" },
-  contactMeta: { fontSize: 13, color: Colors.gray600, marginTop: 2 },
-  emptyText: { opacity: 0.7, textAlign: "center", marginTop: 24, paddingHorizontal: 20 },
-  inviteRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: Colors.primaryViolet + "0C",
-    borderWidth: 1,
-    borderColor: Colors.primaryViolet + "30",
-    marginTop: 12,
-  },
-  inviteIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.primaryViolet + "20",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  inviteTextWrap: { flex: 1 },
-  inviteTitle: { ...Typography.body, fontWeight: "600", color: Colors.primaryViolet },
-  inviteSub: { fontSize: 12, color: Colors.gray600, marginTop: 2 },
-});
+function ContactAvatar({ item, theme }: { item: UserMini; theme: AppTheme }) {
+  const uri = item.main_photo_url ?? item.romance_photos?.[0] ?? item.core_photos?.[0];
+  return (
+    <View style={{ width: 48, height: 48, borderRadius: theme.radii.pill, backgroundColor: theme.colors.backgroundMuted, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+      {uri ? (
+        <Image source={{ uri }} style={{ width: 48, height: 48 }} resizeMode="cover" />
+      ) : (
+        <Ionicons name="person" size={24} color={theme.colors.textMuted} />
+      )}
+    </View>
+  );
+}
+
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    content: { flex: 1, padding: theme.spacing.lg },
+    optionsRow: {
+      flexDirection: "row",
+      gap: theme.spacing.md,
+      marginBottom: theme.spacing.lg,
+    },
+    optionCard: { flex: 1, alignItems: "center" },
+    optionPressable: { alignItems: "center" },
+    optionIconWrap: {
+      width: 48,
+      height: 48,
+      borderRadius: theme.radii.pill,
+      backgroundColor: theme.colors.primary + "18",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: theme.spacing.sm,
+    },
+    optionTitle: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily, color: theme.colors.textPrimary },
+    optionSub: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.xxs },
+    linkRow: { paddingHorizontal: theme.spacing.xxs, marginBottom: theme.spacing.xs },
+    errorText: { color: theme.colors.error, marginBottom: theme.spacing.sm },
+    creatingText: { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm },
+    sectionTitle: {
+      ...theme.type.overline,
+      fontFamily: theme.type.overline.fontFamily,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.sm,
+    },
+    loadingWrap: { flex: 1, justifyContent: "center", alignItems: "center" },
+    loadingText: { marginTop: theme.spacing.sm, color: theme.colors.textSecondary },
+    contactRow: {
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    emptyText: { textAlign: "center", marginTop: theme.spacing.xxl, paddingHorizontal: theme.spacing.xl, color: theme.colors.textSecondary },
+    inviteRow: {
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.primary + "0C",
+      borderWidth: 1,
+      borderColor: theme.colors.primary + "30",
+      marginTop: theme.spacing.md,
+    },
+  });
+}

@@ -63,6 +63,23 @@ function activityTagsFromMeta(meta: Record<string, unknown> | null): string[] {
   return [];
 }
 
+/** Activity types the user actually rated 4-5 stars on their post-plan reviews — learned-from-experience
+ * preferences that get merged into the profile's stated activity tags below. */
+async function learnedActivityTagsFromReviews(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<string[]> {
+  const { data } = await supabase
+    .from("plan_reviews")
+    .select("activity_type")
+    .eq("user_id", userId)
+    .gte("rating", 4)
+    .not("activity_type", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  return normalizeTags((data ?? []).map((r: { activity_type: string | null }) => r.activity_type));
+}
+
 /** Compute compatibility from two profiles (no LLM). */
 function computePair(
   userA: string,
@@ -165,24 +182,26 @@ serve(async (req) => {
     const uniquePairs = Array.from(new Map(pairs.map((p) => [p.join(","), p])).values());
 
     for (const [uidA, uidB] of uniquePairs) {
-      const [profA, profB, coreA, coreB] = await Promise.all([
+      const [profA, profB, coreA, coreB, reviewTagsA, reviewTagsB] = await Promise.all([
         supabase.from("profiles_mode").select("interests, meta").eq("user_id", uidA).eq("mode", mode).maybeSingle(),
         supabase.from("profiles_mode").select("interests, meta").eq("user_id", uidB).eq("mode", mode).maybeSingle(),
         supabase.from("profiles_core").select("city").eq("id", uidA).maybeSingle(),
         supabase.from("profiles_core").select("city").eq("id", uidB).maybeSingle(),
+        learnedActivityTagsFromReviews(supabase, uidA),
+        learnedActivityTagsFromReviews(supabase, uidB),
       ]);
 
       const metaA = (profA.data?.meta ?? {}) as Record<string, unknown>;
       const metaB = (profB.data?.meta ?? {}) as Record<string, unknown>;
       const profileA = {
         interests: normalizeTags(profA.data?.interests ?? null),
-        activityTags: activityTagsFromMeta(metaA),
+        activityTags: Array.from(new Set([...activityTagsFromMeta(metaA), ...reviewTagsA])),
         city: (coreA.data as CoreRow | null)?.city ?? null,
         budget: budgetFromMeta(metaA),
       };
       const profileB = {
         interests: normalizeTags(profB.data?.interests ?? null),
-        activityTags: activityTagsFromMeta(metaB),
+        activityTags: Array.from(new Set([...activityTagsFromMeta(metaB), ...reviewTagsB])),
         city: (coreB.data as CoreRow | null)?.city ?? null,
         budget: budgetFromMeta(metaB),
       };

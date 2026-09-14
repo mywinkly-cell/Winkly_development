@@ -1,6 +1,6 @@
 # Imprint (Impressum)
 
-**Last updated:** 7 June 2026
+**Last updated:** 12 September 2026
 
 Information pursuant to § 5 DDG (Digitale-Dienste-Gesetz) and § 18 MStV (Medienstaatsvertrag).
 
@@ -8,29 +8,21 @@ Information pursuant to § 5 DDG (Digitale-Dienste-Gesetz) and § 18 MStV (Medie
 
 ## Angaben gemäß § 5 DDG
 
-**Winkly Technologies UG (haftungsbeschränkt)**  
-{{company.streetAddress}}  
-{{company.postalCode}} {{company.city}}  
-{{company.country}}
+Winkly wird derzeit von einer Privatperson betrieben. Diese Angaben werden auf die **Winkly UG (haftungsbeschränkt)** aktualisiert, sobald diese im Handelsregister eingetragen ist.
 
-**Vertreten durch:** {{company.managingDirector}} (Geschäftsführer)
+**{{company.legalName}}**  
+{{company.streetAddress}} {{company.postalCode}} {{company.city}}, {{company.country}}
 
 **Kontakt:**  
 E-Mail: [{{company.contactEmail}}](mailto:{{company.contactEmail}})
 
-**Registereintrag:**  
-Eingetragen im Handelsregister.  
-Registergericht: {{company.registerCourt}}  
-Registernummer: {{company.registerNumber}}
-
-**Umsatzsteuer-ID:** {{company.vatId}}
+**Umsatzsteuer:** Derzeit nicht umsatzsteuerlich registriert. Eine Umsatzsteuer-Identifikationsnummer wird nach Gründung der UG ergänzt.
 
 ---
 
 ## Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV
 
-{{company.managingDirector}}  
-{{company.streetAddress}}, {{company.postalCode}} {{company.city}}, {{company.country}}
+{{company.legalName}}, {{company.city}}, {{company.country}}
 
 ---
 
@@ -38,19 +30,16 @@ Registernummer: {{company.registerNumber}}
 
 | Field | Details |
 |-------|---------|
-| **Legal name** | Winkly Technologies UG (haftungsbeschränkt) |
-| **Address** | {{company.streetAddress}}, {{company.postalCode}} {{company.city}}, {{company.country}} |
-| **Managing director** | {{company.managingDirector}} |
-| **Contact email** | {{company.contactEmail}} |
-| **Register court** | {{company.registerCourt}} |
-| **Register number** | {{company.registerNumber}} |
-| **VAT ID** | {{company.vatId}} |
+| **Operator** | {{company.legalName}} — operated by a private individual; to become Winkly UG (haftungsbeschränkt) once registered |
+| **Location** | {{company.city}}, {{company.country}} |
+| **Contact** | [{{company.contactEmail}}](mailto:{{company.contactEmail}}) |
+| **VAT** | Not currently VAT-registered; a VAT ID will be added after incorporation |
 
 ---
 
 ## Dispute resolution
 
-The European Commission provides a platform for online dispute resolution (ODR): [https://ec.europa.eu/consumers/odr](https://ec.europa.eu/consumers/odr). We are not obliged or willing to participate in dispute resolution proceedings before a consumer arbitration board unless required by law.
+The European Commission provides a platform for online dispute resolution (ODR): [https://ec.europa.eu/consumers/odr](https://ec.europa.eu/consumers/odr). We are not obliged or willing to participate in dispute-resolution proceedings before a consumer arbitration board unless required by law.
 
 ---
 

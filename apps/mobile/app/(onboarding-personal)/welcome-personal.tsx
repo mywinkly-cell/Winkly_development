@@ -6,14 +6,16 @@
 // ────────────────────────────────────────────────
 
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, Image, ActivityIndicator } from "react-native";
+import { View, Text, Image, ActivityIndicator } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { Routes } from "@/constants/routes";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { PrimaryButton, TextButton } from "@/components/ds";
+import { useAppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 
 export default function WelcomePersonal() {
   const router = useRouter();
+  const theme = useAppTheme();
   const [firstName, setFirstName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -34,28 +36,29 @@ export default function WelcomePersonal() {
     <View
       style={{
         flex: 1,
-        backgroundColor: Colors.backgroundLight,
+        backgroundColor: theme.colors.background,
         alignItems: "center",
         justifyContent: "center",
-        padding: 28,
+        padding: theme.spacing.xxl,
       }}
     >
       {/* Logo */}
       <Image
         source={require("../../assets/icons/winkly-logo.png")}
-        style={{ width: 140, height: 50, marginBottom: 30 }}
+        style={{ width: 140, height: 50, marginBottom: theme.spacing.xxxl }}
         resizeMode="contain"
       />
 
       {/* Emoji illustration */}
-      <Text style={{ fontSize: 64, marginBottom: 12 }}>😉</Text>
+      <Text style={{ fontSize: 64, marginBottom: theme.spacing.md }}>😉</Text>
 
       <Text
         style={{
-          ...Typography.h2,
-          color: Colors.textPrimary,
+          ...theme.type.h2,
+          fontFamily: theme.type.h2.fontFamily,
+          color: theme.colors.textPrimary,
           textAlign: "center",
-          marginBottom: 8,
+          marginBottom: theme.spacing.sm,
         }}
       >
         Welcome {firstName ? firstName : "to Winkly"}!
@@ -63,60 +66,43 @@ export default function WelcomePersonal() {
 
       <Text
         style={{
-          ...Typography.body,
-          color: Colors.gray700,
+          ...theme.type.body,
+          fontFamily: theme.type.body.fontFamily,
+          color: theme.colors.textSecondary,
           textAlign: "center",
-          marginBottom: 32,
-          lineHeight: 24,
+          marginBottom: theme.spacing.xxxl,
         }}
       >
-        Your profile is set, and you’re ready to start connecting.{"\n"}
+        Your profile is set, and you're ready to start connecting.{"\n"}
         Switch modes anytime — Romance, Friends, Business, or Events.
       </Text>
 
       {/* Animation / illustration */}
       <Image
         source={require("../../assets/images/onboarding/welcome-illustration.png")}
-        style={{ width: 280, height: 180, marginBottom: 48 }}
+        style={{ width: 280, height: 180, marginBottom: theme.spacing.massive }}
         resizeMode="contain"
       />
 
       {/* CTA */}
-      <TouchableOpacity
+      <PrimaryButton
+        title="Start exploring"
         onPress={() => router.replace("/(modes)/romance" as Href)}
-        style={{
-          backgroundColor: Colors.primaryViolet,
-          borderRadius: Layout.radii.card,
-          paddingVertical: 16,
-          width: "85%",
-          alignItems: "center",
-        }}
-      >
-        <Text style={{ ...Typography.button, color: Colors.accentYellow }}>
-          Start exploring
-        </Text>
-      </TouchableOpacity>
+        style={{ width: "85%" }}
+      />
 
       {/* Option: Go back to Mode Selection */}
-      <TouchableOpacity
+      <TextButton
+        title="Change my mode"
         onPress={() => router.push(Routes.modeSelection)}
-        style={{ marginTop: 18 }}
-      >
-        <Text
-          style={{
-            ...Typography.caption,
-            color: Colors.primaryViolet,
-            textDecorationLine: "underline",
-          }}
-        >
-          Change my mode
-        </Text>
-      </TouchableOpacity>
+        style={{ marginTop: theme.spacing.md }}
+        textStyle={{ textDecorationLine: "underline" }}
+      />
 
       {!firstName && (
         <ActivityIndicator
           style={{ position: "absolute", top: 40, right: 40 }}
-          color={Colors.primaryViolet}
+          color={theme.colors.primary}
         />
       )}
     </View>

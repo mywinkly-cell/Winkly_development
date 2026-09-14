@@ -9,7 +9,9 @@
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography } from "@/constants/tokens";
+import * as Haptics from "expo-haptics";
+import { useAppTheme } from "@/constants/design-system";
+import { Card, PrimaryButton } from "@/components/ds";
 import { StarRating } from "@/components/planner/StarRating";
 import {
   listPlanRatings,
@@ -32,6 +34,8 @@ type Skeleton = {
 };
 
 export function CommunityPlanCard({ plan, onUse, useLabel = "Use this plan" }: CommunityPlanCardProps) {
+  const theme = useAppTheme();
+  const styles = makeStyles(theme);
   const [expanded, setExpanded] = useState(false);
   const [reviews, setReviews] = useState<PlanRating[] | null>(null);
   const [loadingReviews, setLoadingReviews] = useState(false);
@@ -40,6 +44,7 @@ export function CommunityPlanCard({ plan, onUse, useLabel = "Use this plan" }: C
   const steps = Array.isArray(skeleton.itinerary) ? skeleton.itinerary : [];
 
   const toggle = async () => {
+    Haptics.selectionAsync();
     const next = !expanded;
     setExpanded(next);
     if (next && reviews === null && plan.ratingCount > 0) {
@@ -60,10 +65,10 @@ export function CommunityPlanCard({ plan, onUse, useLabel = "Use this plan" }: C
   const withComments = (reviews ?? []).filter((r) => r.comment?.trim());
 
   return (
-    <View style={styles.card}>
+    <Card style={styles.card} elevation={0}>
       <View style={styles.badgeRow}>
         <View style={styles.badge}>
-          <Ionicons name="people" size={12} color={Colors.primaryViolet} />
+          <Ionicons name="people" size={12} color={theme.colors.primary} />
           <Text style={styles.badgeText}>Tried by others</Text>
         </View>
         {plan.reuseCount > 0 ? (
@@ -85,7 +90,7 @@ export function CommunityPlanCard({ plan, onUse, useLabel = "Use this plan" }: C
 
       {skeleton.venue?.name ? (
         <View style={styles.metaRow}>
-          <Ionicons name="location-outline" size={14} color={Colors.gray600} />
+          <Ionicons name="location-outline" size={14} color={theme.colors.textSecondary} />
           <Text style={styles.meta} numberOfLines={1}>
             {skeleton.venue.name}
             {skeleton.venue.address ? ` · ${skeleton.venue.address}` : ""}
@@ -94,7 +99,7 @@ export function CommunityPlanCard({ plan, onUse, useLabel = "Use this plan" }: C
       ) : null}
 
       <View style={styles.metaRow}>
-        <Ionicons name="person-circle-outline" size={14} color={Colors.gray600} />
+        <Ionicons name="person-circle-outline" size={14} color={theme.colors.textSecondary} />
         <Text style={styles.meta}>{plan.authorLabel}</Text>
         {plan.numDays > 1 ? (
           <Text style={styles.meta}>· {plan.numDays} days</Text>
@@ -115,7 +120,7 @@ export function CommunityPlanCard({ plan, onUse, useLabel = "Use this plan" }: C
           ) : null}
 
           {loadingReviews ? (
-            <ActivityIndicator size="small" color={Colors.primaryViolet} />
+            <ActivityIndicator size="small" color={theme.colors.primary} />
           ) : withComments.length > 0 ? (
             <View style={styles.reviews}>
               <Text style={styles.reviewsTitle}>What people said</Text>
@@ -144,153 +149,137 @@ export function CommunityPlanCard({ plan, onUse, useLabel = "Use this plan" }: C
           <Ionicons
             name={expanded ? "chevron-up" : "chevron-down"}
             size={14}
-            color={Colors.primaryViolet}
+            color={theme.colors.primary}
           />
         </TouchableOpacity>
 
         {onUse ? (
-          <TouchableOpacity
-            onPress={handleUse}
-            style={styles.primaryBtn}
-            accessibilityRole="button"
-            accessibilityLabel={useLabel}
-          >
-            <Text style={styles.primaryText}>{useLabel}</Text>
-          </TouchableOpacity>
+          <View style={styles.primaryBtnWrap}>
+            <PrimaryButton title={useLabel} onPress={handleUse} accessibilityLabel={useLabel} />
+          </View>
         ) : null}
       </View>
-    </View>
+    </Card>
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: Colors.card,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: Colors.primaryViolet,
-    padding: 16,
-    gap: 8,
-    marginVertical: 8,
-  },
-  badgeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#F3E8FF",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  badgeText: {
-    ...Typography.caption,
-    fontSize: 11,
-    fontWeight: "600",
-    color: Colors.primaryViolet,
-  },
-  reuse: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: Colors.gray600,
-  },
-  title: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
-  },
-  summary: {
-    ...Typography.body,
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  meta: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    flexShrink: 1,
-  },
-  details: {
-    gap: 12,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: Colors.gray200,
-  },
-  itinerary: { gap: 8 },
-  step: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  stepTime: {
-    ...Typography.caption,
-    fontWeight: "600",
-    color: Colors.primaryViolet,
-    width: 52,
-  },
-  stepText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-    flex: 1,
-  },
-  reviews: { gap: 10 },
-  reviewsTitle: {
-    ...Typography.caption,
-    fontWeight: "600",
-    color: Colors.textPrimary,
-  },
-  review: {
-    gap: 4,
-    backgroundColor: Colors.gray100,
-    borderRadius: 10,
-    padding: 10,
-  },
-  reviewText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-  },
-  adjusted: {
-    ...Typography.caption,
-    fontSize: 11,
-    color: Colors.gray600,
-    fontStyle: "italic",
-  },
-  actions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 4,
-  },
-  secondaryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  secondaryText: {
-    ...Typography.caption,
-    fontWeight: "600",
-    color: Colors.primaryViolet,
-  },
-  primaryBtn: {
-    flex: 1,
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  primaryText: {
-    ...Typography.button,
-    color: Colors.onPrimary,
-  },
-});
+function makeStyles(theme: ReturnType<typeof useAppTheme>) {
+  return StyleSheet.create({
+    card: {
+      borderWidth: 1.5,
+      borderColor: theme.colors.primary,
+      gap: theme.spacing.sm,
+      marginVertical: theme.spacing.sm,
+    },
+    badgeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    badge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: theme.modeAccent("events").bg,
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: theme.spacing.xs,
+      borderRadius: theme.radii.pill,
+    },
+    badgeText: {
+      ...theme.type.caption,
+      fontSize: 11,
+      fontWeight: "600",
+      color: theme.colors.primary,
+    },
+    reuse: {
+      ...theme.type.caption,
+      fontSize: 11,
+      color: theme.colors.textSecondary,
+    },
+    title: {
+      ...theme.type.h3,
+      color: theme.colors.textPrimary,
+    },
+    summary: {
+      ...theme.type.body,
+      fontSize: 14,
+      color: theme.colors.textSecondary,
+    },
+    metaRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.xs,
+    },
+    meta: {
+      ...theme.type.caption,
+      color: theme.colors.textSecondary,
+      flexShrink: 1,
+    },
+    details: {
+      gap: theme.spacing.md,
+      paddingTop: theme.spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
+    itinerary: { gap: theme.spacing.sm },
+    step: {
+      flexDirection: "row",
+      gap: theme.spacing.sm,
+    },
+    stepTime: {
+      ...theme.type.caption,
+      fontWeight: "600",
+      color: theme.colors.primary,
+      width: 52,
+    },
+    stepText: {
+      ...theme.type.caption,
+      color: theme.colors.textSecondary,
+      flex: 1,
+    },
+    reviews: { gap: theme.spacing.sm },
+    reviewsTitle: {
+      ...theme.type.caption,
+      fontWeight: "600",
+      color: theme.colors.textPrimary,
+    },
+    review: {
+      gap: theme.spacing.xs,
+      backgroundColor: theme.colors.backgroundMuted,
+      borderRadius: theme.radii.sm,
+      padding: theme.spacing.sm,
+    },
+    reviewText: {
+      ...theme.type.caption,
+      color: theme.colors.textSecondary,
+    },
+    adjusted: {
+      ...theme.type.caption,
+      fontSize: 11,
+      color: theme.colors.textSecondary,
+      fontStyle: "italic",
+    },
+    actions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      marginTop: theme.spacing.xs,
+    },
+    secondaryBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.xs,
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    secondaryText: {
+      ...theme.type.caption,
+      fontWeight: "600",
+      color: theme.colors.primary,
+    },
+    primaryBtnWrap: { flex: 1 },
+  });
+}

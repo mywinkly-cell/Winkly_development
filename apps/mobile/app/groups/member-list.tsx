@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, Alert, ActivityIndicator } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import {
   getGroupDetails,
   getGroupMembers,
@@ -18,6 +18,8 @@ import { supabase } from "@/lib/supabase";
 
 export default function MemberList() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const { groupId } = useLocalSearchParams<{ groupId?: string }>();
   const gid = String(groupId ?? "");
 
@@ -118,14 +120,14 @@ export default function MemberList() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Members</Text>
           <View style={{ width: 70 }} />
         </View>
 
         {loading ? (
-          <ActivityIndicator size="small" color={Colors.primaryViolet} style={{ marginTop: 24 }} />
+          <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 24 }} />
         ) : (
           <View style={styles.card}>
             <Text style={styles.title}>{details?.name ?? "Group"}</Text>
@@ -187,7 +189,7 @@ export default function MemberList() {
             ) : null}
 
             <TouchableOpacity onPress={onLeave} disabled={busy} style={styles.leaveBtn} activeOpacity={0.85}>
-              <Ionicons name="exit-outline" size={18} color={Colors.errorRed} />
+              <Ionicons name="exit-outline" size={18} color={theme.colors.error} />
               <Text style={styles.leaveText}>Leave group</Text>
             </TouchableOpacity>
           </View>
@@ -197,98 +199,96 @@ export default function MemberList() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  scroll: { padding: 20, paddingBottom: 40 },
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    scroll: { padding: 20, paddingBottom: 40 },
 
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, color: Colors.textPrimary },
+    headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+    backBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.backgroundMuted,
+      alignItems: "center",
+      justifyContent: "center",
+      ...theme.elevation(1),
+    },
+    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary },
 
-  card: { backgroundColor: "#FFF", borderRadius: Layout.radii.card, borderWidth: 1, borderColor: Colors.gray200, padding: 16 },
-  title: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 4 },
-  subtitle: { ...Typography.caption, color: Colors.gray600 },
+    card: { backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.border, padding: 16 },
+    title: { ...theme.type.h3, color: theme.colors.textPrimary, marginBottom: 4 },
+    subtitle: { ...theme.type.caption, color: theme.colors.textSecondary },
 
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.gray200,
-  },
-  avatar: { width: 40, height: 40, borderRadius: 20 },
-  avatarFallback: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primaryViolet + "22",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: { ...Typography.body, fontWeight: "700", color: Colors.primaryViolet },
-  name: { ...Typography.body, color: Colors.textPrimary },
-  role: { ...Typography.caption, color: Colors.gray600, marginTop: 2 },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 12,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+    },
+    avatar: { width: 40, height: 40, borderRadius: 20 },
+    avatarFallback: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: theme.colors.primary + "22",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    avatarText: { ...theme.type.body, fontWeight: "700", color: theme.colors.primary },
+    name: { ...theme.type.body, color: theme.colors.textPrimary },
+    role: { ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 2 },
 
-  removeBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.gray300,
-  },
-  removeText: { ...Typography.caption, color: Colors.errorRed, fontWeight: "600" },
+    removeBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    removeText: { ...theme.type.caption, color: theme.colors.error, fontWeight: "600" },
 
-  suggestBox: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: Colors.primaryViolet + "0A",
-    borderWidth: 1,
-    borderColor: Colors.primaryViolet + "33",
-  },
-  suggestTitle: { ...Typography.caption, fontWeight: "700", color: Colors.primaryViolet, marginBottom: 8 },
-  suggestRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8 },
-  avatarSmall: { width: 32, height: 32, borderRadius: 16 },
-  avatarFallbackSmall: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primaryViolet + "22",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  suggestText: { flex: 1, ...Typography.caption, color: Colors.textPrimary },
-  addBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: Colors.primaryViolet,
-  },
-  addText: { ...Typography.caption, color: "#FFF", fontWeight: "700" },
+    suggestBox: {
+      marginTop: 16,
+      padding: 12,
+      borderRadius: 12,
+      backgroundColor: theme.colors.primary + "0A",
+      borderWidth: 1,
+      borderColor: theme.colors.primary + "33",
+    },
+    suggestTitle: { ...theme.type.caption, fontWeight: "700", color: theme.colors.primary, marginBottom: 8 },
+    suggestRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8 },
+    avatarSmall: { width: 32, height: 32, borderRadius: 16 },
+    avatarFallbackSmall: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: theme.colors.primary + "22",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    suggestText: { flex: 1, ...theme.type.caption, color: theme.colors.textPrimary },
+    addBtn: {
+      paddingHorizontal: 14,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: theme.colors.primary,
+    },
+    addText: { ...theme.type.caption, color: theme.colors.onPrimary, fontWeight: "700" },
 
-  leaveBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 16,
-    paddingVertical: 12,
-    borderRadius: Layout.radii.control,
-    backgroundColor: Colors.gray100,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  leaveText: { ...Typography.button, color: Colors.errorRed },
-});
+    leaveBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      marginTop: 16,
+      paddingVertical: 12,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.backgroundMuted,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    leaveText: { ...theme.type.button, color: theme.colors.error },
+  });
+}

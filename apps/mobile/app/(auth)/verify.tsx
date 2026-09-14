@@ -22,12 +22,14 @@ import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { createSessionFromUrl } from "@/lib/authDeepLink";
-import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { getEmailRedirectTo } from "@/lib/authRedirectUrl";
 
 export default function Verify() {
   const router = useRouter();
   const { t } = useTranslation();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [loading, setLoading] = useState(false);
   const [emailForResend, setEmailForResend] = useState("");
@@ -116,7 +118,7 @@ export default function Verify() {
                 value={emailForResend}
                 onChangeText={setEmailForResend}
                 placeholder={t("auth.verify.emailPlaceholder")}
-                placeholderTextColor={Colors.gray500}
+                placeholderTextColor={theme.colors.textMuted}
                 autoCapitalize="none"
                 keyboardType="email-address"
                 textContentType="emailAddress"
@@ -130,7 +132,7 @@ export default function Verify() {
                 style={[styles.resendBtn, loading && { opacity: 0.7 }]}
               >
                 {loading ? (
-                  <ActivityIndicator color={Colors.accentYellow} size="small" />
+                  <ActivityIndicator color={theme.colors.onPrimary} size="small" />
                 ) : (
                   <Text style={styles.resendBtnText}>{t("auth.verify.resendButton")}</Text>
                 )}
@@ -145,7 +147,7 @@ export default function Verify() {
                   value={pasteUrl}
                   onChangeText={setPasteUrl}
                   placeholder={t("auth.verify.pastePlaceholder")}
-                  placeholderTextColor={Colors.gray500}
+                  placeholderTextColor={theme.colors.textMuted}
                   autoCapitalize="none"
                   autoCorrect={false}
                   multiline
@@ -158,7 +160,7 @@ export default function Verify() {
                   style={[styles.pasteBtn, pasteLoading && { opacity: 0.7 }]}
                 >
                   {pasteLoading ? (
-                    <ActivityIndicator color={Colors.accentYellow} size="small" />
+                    <ActivityIndicator color={theme.colors.onPrimary} size="small" />
                   ) : (
                     <Text style={styles.pasteBtnText}>{t("auth.verify.pasteAndVerify")}</Text>
                   )}
@@ -180,87 +182,89 @@ export default function Verify() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.backgroundMuted },
-  container: { flexGrow: 1, justifyContent: "center", alignItems: "center", padding: Layout.spacing.lg },
-  inner: { alignItems: "center", width: "100%", maxWidth: 420 },
-  wordmark: { width: 190, height: 60, marginBottom: 24 },
-  card: {
-    width: "100%",
-    backgroundColor: Colors.white,
-    borderRadius: Layout.radii.card,
-    padding: Layout.spacing.xl,
-    ...Shadow.card,
-  },
-  title: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 22,
-    lineHeight: 30,
-    color: Colors.textPrimary,
-    marginBottom: 12,
-    textAlign: "center",
-  },
-  subtitle: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    marginBottom: 24,
-    textAlign: "center",
-    lineHeight: 24,
-  },
-  resendSection: {
-    borderTopWidth: 1,
-    borderTopColor: Colors.gray200,
-    paddingTop: 20,
-    marginBottom: 20,
-  },
-  resendTitle: { fontFamily: FontFamily.headingBold, fontSize: 16, color: Colors.textPrimary, marginBottom: 12 },
-  input: {
-    borderWidth: 2,
-    borderColor: Colors.gray200,
-    backgroundColor: Colors.white,
-    borderRadius: Layout.radii.control,
-    paddingHorizontal: 16,
-    paddingVertical: Platform.OS === "ios" ? 14 : 12,
-    marginBottom: 16,
-    color: Colors.textPrimary,
-    fontSize: 16,
-  },
-  resendBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 16,
-    alignItems: "center",
-    minHeight: Layout.touchTargetMin,
-    justifyContent: "center",
-    ...Shadow.button,
-  },
-  resendBtnText: { ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.headingBold },
-  devSection: {
-    borderTopWidth: 1,
-    borderTopColor: Colors.gray200,
-    paddingTop: 20,
-    marginBottom: 20,
-  },
-  devTitle: { fontFamily: FontFamily.headingBold, fontSize: 14, color: Colors.gray600, marginBottom: 8 },
-  devHint: { ...Typography.caption, color: Colors.gray500, marginBottom: 12 },
-  pasteInput: {
-    borderWidth: 2,
-    borderColor: Colors.gray200,
-    borderRadius: Layout.radii.control,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 12,
-    color: Colors.textPrimary,
-    fontSize: 14,
-    minHeight: 80,
-  },
-  pasteBtn: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  pasteBtnText: { ...Typography.button, color: Colors.accentYellow, fontFamily: FontFamily.headingBold },
-  linkBtn: { alignItems: "center", paddingVertical: 12, minHeight: 44, justifyContent: "center" },
-  linkText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    safe: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    container: { flexGrow: 1, justifyContent: "center", alignItems: "center", padding: theme.spacing.lg },
+    inner: { alignItems: "center", width: "100%", maxWidth: 420 },
+    wordmark: { width: 190, height: 60, marginBottom: 24 },
+    card: {
+      width: "100%",
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      padding: theme.spacing.xl,
+      ...theme.elevation(1),
+    },
+    title: {
+      fontFamily: theme.type.h1.fontFamily,
+      fontSize: 22,
+      lineHeight: 30,
+      color: theme.colors.textPrimary,
+      marginBottom: 12,
+      textAlign: "center",
+    },
+    subtitle: {
+      ...theme.type.body,
+      color: theme.colors.textSecondary,
+      marginBottom: 24,
+      textAlign: "center",
+      lineHeight: 24,
+    },
+    resendSection: {
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+      paddingTop: 20,
+      marginBottom: 20,
+    },
+    resendTitle: { fontFamily: theme.type.h1.fontFamily, fontSize: 16, color: theme.colors.textPrimary, marginBottom: 12 },
+    input: {
+      borderWidth: 2,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.md,
+      paddingHorizontal: 16,
+      paddingVertical: Platform.OS === "ios" ? 14 : 12,
+      marginBottom: 16,
+      color: theme.colors.textPrimary,
+      fontSize: 16,
+    },
+    resendBtn: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.radii.md,
+      paddingVertical: 16,
+      alignItems: "center",
+      minHeight: 44,
+      justifyContent: "center",
+      ...theme.elevation(2),
+    },
+    resendBtnText: { ...theme.type.button, color: theme.colors.onPrimary, fontFamily: theme.type.button.fontFamily },
+    devSection: {
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+      paddingTop: 20,
+      marginBottom: 20,
+    },
+    devTitle: { fontFamily: theme.type.h1.fontFamily, fontSize: 14, color: theme.colors.textSecondary, marginBottom: 8 },
+    devHint: { ...theme.type.caption, color: theme.colors.textMuted, marginBottom: 12 },
+    pasteInput: {
+      borderWidth: 2,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.md,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      marginBottom: 12,
+      color: theme.colors.textPrimary,
+      fontSize: 14,
+      minHeight: 80,
+    },
+    pasteBtn: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.radii.md,
+      paddingVertical: 12,
+      alignItems: "center",
+    },
+    pasteBtnText: { ...theme.type.button, color: theme.colors.onPrimary, fontFamily: theme.type.button.fontFamily },
+    linkBtn: { alignItems: "center", paddingVertical: 12, minHeight: 44, justifyContent: "center" },
+    linkText: { ...theme.type.caption, color: theme.colors.primary, fontWeight: "600" },
+  });
+}

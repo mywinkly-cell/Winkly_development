@@ -8,9 +8,7 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   Alert,
-  ActivityIndicator,
   StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -20,7 +18,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers";
 import { SafeScreenView } from "@/components/SafeScreenView";
-import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
+import { Card, Header, ListRow, PrimaryButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import type { AccountType } from "@/types";
 import {
   accountTypeActionVerb,
@@ -105,31 +104,28 @@ export default function AccountIdentity() {
     router.push("/account/delete-deactivate");
   };
 
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
+
   return (
     <SafeScreenView style={styles.screen}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Account & Identity</Text>
-        <View style={styles.placeholder} />
-      </View>
+      <Header title="Account & Identity" onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <Text style={styles.cardTitle}>Contact information</Text>
           <View style={styles.row}>
             <Text style={styles.label}>Email</Text>
             <Text style={styles.value}>{email || "—"}</Text>
           </View>
           <Text style={styles.hint}>To change your email, sign out and create a new account.</Text>
-        </View>
+        </Card>
 
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <Text style={styles.cardTitle}>{t("auth.accountType")}</Text>
           <View style={styles.row}>
             <Text style={styles.label}>Current</Text>
-            <Text style={[styles.value, { textTransform: "capitalize" }]}>
+            <Text style={{ ...styles.value, textTransform: "capitalize" }}>
               {currentType === "personal" ? t("auth.accountTypePersonal") : t("auth.accountTypeBusiness")}
             </Text>
           </View>
@@ -143,142 +139,81 @@ export default function AccountIdentity() {
               ) : null}
             </View>
           ) : null}
-          <TouchableOpacity
+          <PrimaryButton
+            title={actionLabel}
             onPress={handleSwitchAccountType}
+            loading={switching}
             disabled={switching}
+            icon={<Ionicons name="arrow-forward" size={18} color={theme.colors.onPrimary} />}
             style={styles.primaryBtn}
-            activeOpacity={0.8}
-          >
-            {switching ? (
-              <ActivityIndicator size="small" color={Colors.white} />
-            ) : (
-              <>
-                <Text style={styles.primaryBtnText}>{actionLabel}</Text>
-                <Ionicons name="arrow-forward" size={18} color={Colors.white} />
-              </>
-            )}
-          </TouchableOpacity>
+          />
           <Text style={styles.hint}>{t("auth.accountTypeSwitchHint")}</Text>
-        </View>
+        </Card>
 
-        <View style={styles.card}>
+        <Card style={styles.card}>
           <Text style={styles.cardTitle}>Security</Text>
-          <TouchableOpacity
+          <ListRow
+            title="Change password"
             onPress={() => {
               Haptics.selectionAsync();
               router.push("/(auth)/reset-password");
             }}
             style={styles.linkRow}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.linkText}>Change password</Text>
-            <Ionicons name="chevron-forward" size={20} color={Colors.gray400} />
-          </TouchableOpacity>
-        </View>
+          />
+        </Card>
 
-        <View style={[styles.card, styles.dangerCard]}>
+        <Card style={{ ...styles.card, ...styles.dangerCard }}>
           <Text style={styles.cardTitle}>Danger zone</Text>
-          <TouchableOpacity
+          <ListRow
+            title="Delete or deactivate account"
+            destructive
             onPress={handleDeleteAccount}
+            leading={<Ionicons name="trash-outline" size={20} color={theme.colors.error} />}
             style={styles.dangerBtn}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="trash-outline" size={20} color={Colors.errorRed} />
-            <Text style={styles.dangerBtnText}>Delete or deactivate account</Text>
-            <Ionicons name="chevron-forward" size={20} color={Colors.errorRed} />
-          </TouchableOpacity>
+          />
           <Text style={styles.hint}>
             Multi-step confirmation required. This action can be permanent.
           </Text>
-        </View>
+        </Card>
       </ScrollView>
     </SafeScreenView>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundMuted },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    ...Layout.topHeaderBar,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.gray200,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.gray100,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#1C1C1E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerTitle: { ...Typography.headerTitle, fontFamily: FontFamily.heading, color: Colors.textPrimary },
-  placeholder: { width: 40 },
-  scroll: { padding: Layout.screenPadding, paddingBottom: 40 },
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: Layout.radii.card,
-    padding: 20,
-    marginBottom: 16,
-  },
-  dangerCard: { borderWidth: 1, borderColor: Colors.gray200 },
-  cardTitle: {
-    ...Typography.h3,
-    fontFamily: FontFamily.heading,
-    color: Colors.textPrimary,
-    marginBottom: 14,
-  },
-  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  label: { ...Typography.caption, color: Colors.gray600 },
-  value: { ...Typography.body, fontWeight: "600", color: Colors.textPrimary },
-  profileBadges: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 4 },
-  badge: {
-    ...Typography.caption,
-    color: Colors.primaryViolet,
-    backgroundColor: Colors.backgroundMuted,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Layout.radii.control,
-    overflow: "hidden",
-  },
-  hint: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    marginTop: 10,
-    lineHeight: 18,
-  },
-  primaryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: Colors.primaryViolet,
-    paddingVertical: 14,
-    borderRadius: Layout.radii.control,
-    marginTop: 8,
-  },
-  primaryBtnText: { ...Typography.button, color: Colors.white },
-  linkRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-  },
-  linkText: { ...Typography.body, color: Colors.primaryViolet, fontWeight: "500" },
-  dangerBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 12,
-  },
-  dangerBtnText: { ...Typography.body, color: Colors.errorRed, fontWeight: "600" },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    scroll: { padding: theme.spacing.xl, paddingBottom: theme.spacing.huge },
+    card: { marginBottom: theme.spacing.lg },
+    dangerCard: { borderWidth: 1, borderColor: theme.colors.border },
+    cardTitle: {
+      ...theme.type.h3,
+      fontFamily: theme.type.h3.fontFamily,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.md,
+    },
+    row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: theme.spacing.sm },
+    label: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary },
+    value: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily, color: theme.colors.textPrimary },
+    profileBadges: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm, marginBottom: theme.spacing.xxs },
+    badge: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.primary,
+      backgroundColor: theme.colors.backgroundMuted,
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: theme.spacing.xxs,
+      borderRadius: theme.radii.sm,
+      overflow: "hidden",
+    },
+    hint: {
+      ...theme.type.caption,
+      fontFamily: theme.type.caption.fontFamily,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.sm,
+    },
+    primaryBtn: { marginTop: theme.spacing.sm },
+    linkRow: { paddingHorizontal: 0 },
+    dangerBtn: { paddingHorizontal: 0 },
+  });
+}

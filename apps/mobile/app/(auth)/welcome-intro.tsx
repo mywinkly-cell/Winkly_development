@@ -9,13 +9,15 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { setIntroSeen } from "@/lib/introFlags";
 import { LanguageGlobeButton } from "@/components/i18n/LanguageGlobeButton";
 
 export default function WelcomeIntro() {
   const { t } = useTranslation();
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideY = useRef(new Animated.Value(20)).current;
 
@@ -57,7 +59,7 @@ export default function WelcomeIntro() {
 
           <View style={styles.section}>
             <View style={styles.iconWrap}>
-              <Ionicons name="heart" size={24} color={Colors.primaryViolet} />
+              <Ionicons name="heart" size={24} color={theme.colors.primary} />
             </View>
             <View style={styles.sectionText}>
               <Text style={styles.sectionTitle}>{t("onboarding.welcomeIntro.personalTitle")}</Text>
@@ -67,7 +69,7 @@ export default function WelcomeIntro() {
 
           <View style={styles.section}>
             <View style={styles.iconWrap}>
-              <Ionicons name="briefcase" size={24} color={Colors.primaryViolet} />
+              <Ionicons name="briefcase" size={24} color={theme.colors.primary} />
             </View>
             <View style={styles.sectionText}>
               <Text style={styles.sectionTitle}>{t("onboarding.welcomeIntro.businessTitle")}</Text>
@@ -77,7 +79,7 @@ export default function WelcomeIntro() {
 
           <View style={styles.section}>
             <View style={styles.iconWrap}>
-              <Ionicons name="calendar" size={24} color={Colors.primaryViolet} />
+              <Ionicons name="calendar" size={24} color={theme.colors.primary} />
             </View>
             <View style={styles.sectionText}>
               <Text style={styles.sectionTitle}>{t("onboarding.welcomeIntro.eventsTitle")}</Text>
@@ -101,74 +103,76 @@ export default function WelcomeIntro() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.backgroundMuted },
-  container: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 24,
-    justifyContent: "space-between",
-  },
-  content: { flex: 1 },
-  title: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 28,
-    lineHeight: 36,
-    color: Colors.textPrimary,
-    marginBottom: 16,
-  },
-  subtitle: {
-    ...Typography.body,
-    color: Colors.gray600,
-    lineHeight: 24,
-    marginBottom: 28,
-  },
-  section: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 20,
-  },
-  iconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#F5F1FF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
-  },
-  sectionText: { flex: 1 },
-  sectionTitle: {
-    fontFamily: FontFamily.headingBold,
-    fontSize: 16,
-    color: Colors.textPrimary,
-    marginBottom: 4,
-  },
-  sectionBody: {
-    ...Typography.body,
-    fontSize: 14,
-    color: Colors.gray600,
-    lineHeight: 20,
-  },
-  footer: {
-    paddingTop: 16,
-    alignItems: "center",
-    gap: 16,
-  },
-  cta: {
-    width: "100%",
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 52,
-    ...Shadow.button,
-  },
-  ctaText: {
-    ...Typography.button,
-    color: Colors.accentYellow,
-    fontFamily: FontFamily.headingBold,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    safe: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    container: {
+      flex: 1,
+      paddingHorizontal: 24,
+      paddingTop: 16,
+      paddingBottom: 24,
+      justifyContent: "space-between",
+    },
+    content: { flex: 1 },
+    title: {
+      fontFamily: theme.type.h1.fontFamily,
+      fontSize: 28,
+      lineHeight: 36,
+      color: theme.colors.textPrimary,
+      marginBottom: 16,
+    },
+    subtitle: {
+      ...theme.type.body,
+      color: theme.colors.textSecondary,
+      lineHeight: 24,
+      marginBottom: 28,
+    },
+    section: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      marginBottom: 20,
+    },
+    iconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: theme.colors.primary + "14",
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 14,
+    },
+    sectionText: { flex: 1 },
+    sectionTitle: {
+      fontFamily: theme.type.h1.fontFamily,
+      fontSize: 16,
+      color: theme.colors.textPrimary,
+      marginBottom: 4,
+    },
+    sectionBody: {
+      ...theme.type.body,
+      fontSize: 14,
+      color: theme.colors.textSecondary,
+      lineHeight: 20,
+    },
+    footer: {
+      paddingTop: 16,
+      alignItems: "center",
+      gap: 16,
+    },
+    cta: {
+      width: "100%",
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.radii.md,
+      paddingVertical: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: 52,
+      ...theme.elevation(2),
+    },
+    ctaText: {
+      ...theme.type.button,
+      color: theme.colors.onPrimary,
+      fontFamily: theme.type.button.fontFamily,
+    },
+  });
+}

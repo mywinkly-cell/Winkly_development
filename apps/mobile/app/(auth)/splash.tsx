@@ -7,7 +7,7 @@ import { Animated, Easing, StyleSheet, Image } from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Routes } from "@/constants/routes";
-import { Colors, Typography, FontFamily } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { getIntroSeen, clearIntroSeen } from "@/lib/introFlags";
 import {
   getEffectiveLastActivityMs,
@@ -49,6 +49,8 @@ function destinationToPath(dest: SplashDestination): string {
 export default function Splash() {
   const router = useRouter();
   const { t } = useTranslation();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
 
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.96)).current;
@@ -171,7 +173,7 @@ export default function Splash() {
   }, [opacity, scale, emojiScale, router]);
 
   return (
-    <Animated.View style={[styles.container, { backgroundColor: Colors.primaryViolet }]}>
+    <Animated.View style={[styles.container, { backgroundColor: theme.colors.primary }]}>
       <Animated.View
         style={[
           styles.center,
@@ -189,11 +191,11 @@ export default function Splash() {
           />
         </Animated.View>
 
-        <Animated.Text style={[styles.title, { color: "#FFFFFF" }]}>
+        <Animated.Text style={[styles.title, { color: theme.colors.onPrimary }]}>
           Winkly
         </Animated.Text>
 
-        <Animated.Text style={[styles.subtitle, { color: "rgba(255,255,255,0.85)" }]}>
+        <Animated.Text style={[styles.subtitle, { color: theme.colors.onPrimary, opacity: 0.85 }]}>
           {t("auth.splash.tagline")}
         </Animated.Text>
       </Animated.View>
@@ -201,34 +203,36 @@ export default function Splash() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 28,
-  },
-  center: {
-    alignItems: "center",
-    width: "100%",
-  },
-  logo: {
-    width: 156,
-    height: 156,
-    marginBottom: 14,
-  },
-  title: {
-    ...(Typography?.h2 ?? {}),
-    fontFamily: FontFamily.headingBold,
-    letterSpacing: 0,
-    textAlign: "center",
-    fontWeight: "800",
-    paddingHorizontal: 12,
-  },
-  subtitle: {
-    ...(Typography?.caption ?? {}),
-    marginTop: 8,
-    textAlign: "center",
-    maxWidth: 300,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 28,
+    },
+    center: {
+      alignItems: "center",
+      width: "100%",
+    },
+    logo: {
+      width: 156,
+      height: 156,
+      marginBottom: 14,
+    },
+    title: {
+      ...theme.type.h2,
+      fontFamily: theme.type.h1.fontFamily,
+      letterSpacing: 0,
+      textAlign: "center",
+      fontWeight: "800",
+      paddingHorizontal: 12,
+    },
+    subtitle: {
+      ...theme.type.caption,
+      marginTop: 8,
+      textAlign: "center",
+      maxWidth: 300,
+    },
+  });
+}

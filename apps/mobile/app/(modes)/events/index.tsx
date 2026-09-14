@@ -9,7 +9,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
   TextInput,
   ActivityIndicator,
@@ -23,7 +23,8 @@ import { useRouter } from "expo-router";
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { EventsBottomNav } from "@/components/layout/EventsBottomNav";
 import { EventCard, type EventCardItem } from "@/components/ui/EventCard";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Card, Chip, PrimaryButton, TextButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { EVENT_CATEGORIES, type EventCategoryId, type EventTimeRange } from "@/constants/eventCategories";
 import { addWinklyEventToPlanner } from "@/lib/access/events";
 import { addExternalEventToPlanner, fetchNearbyExternalEvents, type ExternalEventsStatus } from "@/lib/externalEvents";
@@ -79,6 +80,8 @@ function getRangeBounds(range: EventTimeRange, date: Date): { from: string; to: 
 
 export default function EventsHome() {
   const router = useRouter();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   useSafeAreaInsets(); // reserve safe area; values not needed in this screen
 
   const [timeRange, setTimeRange] = useState<EventTimeRange>("week");
@@ -197,55 +200,41 @@ export default function EventsHome() {
   }, [timeRange, selectedDate]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.backgroundLight }}>
+    <View style={styles.screen}>
       <ModeHeader currentMode="events" rightSlot="filterSettings" />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Text style={{ ...Typography.h1, color: Colors.textPrimary, marginBottom: 12 }}>
-          Discover Events
-        </Text>
-        <Text style={{ ...Typography.body, color: Colors.gray700, marginBottom: 16 }}>
-          Explore what&apos;s happening — on Winkly and from Ticketmaster, Meetup and more. Add to your planner or open the link to get tickets.
+        <Text style={styles.pageTitle}>Discover Events</Text>
+        <Text style={styles.pageSubtitle}>
+          Explore what's happening — on Winkly and from Ticketmaster, Meetup and more. Add to your planner or open the link to get tickets.
         </Text>
 
         {/* ─── Filter: Time range + Date ─── */}
-        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", marginBottom: 12, gap: 8 }}>
+        <View style={styles.rangeRow}>
           {(["day", "week", "month"] as const).map((r) => (
-            <TouchableOpacity
+            <Chip
               key={r}
+              label={r === "day" ? "Day" : r === "week" ? "Week" : "Month"}
+              mode="events"
+              selected={timeRange === r}
               onPress={() => setTimeRange(r)}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 14,
-                borderRadius: 20,
-                backgroundColor: timeRange === r ? Colors.primaryViolet : Colors.gray100,
-              }}
-            >
-              <Text style={{ ...Typography.caption, color: timeRange === r ? Colors.accentYellow : Colors.textPrimary, fontWeight: "600" }}>
-                {r === "day" ? "Day" : r === "week" ? "Week" : "Month"}
-              </Text>
-            </TouchableOpacity>
+            />
           ))}
-          <TouchableOpacity
-            onPress={() => setShowDatePicker(true)}
-            style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8, paddingHorizontal: 12, backgroundColor: Colors.gray100, borderRadius: 20, gap: 6 }}
-          >
-            <Ionicons name="calendar-outline" size={18} color={Colors.textPrimary} />
-            <Text style={{ ...Typography.caption, color: Colors.textPrimary }}>{dateLabel}</Text>
-          </TouchableOpacity>
+          <Pressable onPress={() => setShowDatePicker(true)} style={styles.dateBtn}>
+            <Ionicons name="calendar-outline" size={18} color={theme.colors.textPrimary} />
+            <Text style={styles.dateBtnText}>{dateLabel}</Text>
+          </Pressable>
         </View>
 
         {showDatePicker && (
-          <View style={{ marginBottom: 12 }}>
+          <View style={{ marginBottom: theme.spacing.md }}>
             {Platform.OS === "ios" && (
-              <View style={{ flexDirection: "row", justifyContent: "flex-end", marginBottom: 8 }}>
-                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                  <Text style={{ ...Typography.button, color: Colors.primaryViolet }}>Done</Text>
-                </TouchableOpacity>
+              <View style={{ flexDirection: "row", justifyContent: "flex-end", marginBottom: theme.spacing.sm }}>
+                <TextButton title="Done" onPress={() => setShowDatePicker(false)} style={{ paddingHorizontal: 0 }} />
               </View>
             )}
             <DateTimePicker
@@ -261,58 +250,37 @@ export default function EventsHome() {
         )}
 
         {/* ─── Category chips ─── */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }} contentContainerStyle={{ gap: 8, paddingRight: 20 }}>
-          <TouchableOpacity
-            onPress={() => setCategory(null)}
-            style={{
-              paddingVertical: 8,
-              paddingHorizontal: 14,
-              borderRadius: 20,
-              backgroundColor: category === null ? Colors.primaryViolet : Colors.gray100,
-            }}
-          >
-            <Text style={{ ...Typography.caption, color: category === null ? Colors.accentYellow : Colors.textPrimary }}>All</Text>
-          </TouchableOpacity>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: theme.spacing.lg }} contentContainerStyle={styles.categoryRow}>
+          <Chip label="All" mode="events" selected={category === null} onPress={() => setCategory(null)} />
           {EVENT_CATEGORIES.map((c) => (
-            <TouchableOpacity
-              key={c.id}
-              onPress={() => setCategory(c.id)}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 14,
-                borderRadius: 20,
-                backgroundColor: category === c.id ? Colors.primaryViolet : Colors.gray100,
-              }}
-            >
-              <Text style={{ ...Typography.caption, color: category === c.id ? Colors.accentYellow : Colors.textPrimary }} numberOfLines={1}>{c.label}</Text>
-            </TouchableOpacity>
+            <Chip key={c.id} label={c.label} mode="events" selected={category === c.id} onPress={() => setCategory(c.id)} />
           ))}
         </ScrollView>
 
         {/* ─── Search ─── */}
-        <View style={{ flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: Colors.gray300, borderRadius: Layout.radii.control, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 20 }}>
-          <Ionicons name="search-outline" size={20} color={Colors.gray500} style={{ marginRight: 8 }} />
+        <View style={styles.searchBox}>
+          <Ionicons name="search-outline" size={20} color={theme.colors.textMuted} style={{ marginRight: theme.spacing.sm }} />
           <TextInput
             placeholder="Search events or locations..."
-            placeholderTextColor={Colors.gray500}
+            placeholderTextColor={theme.colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            style={{ flex: 1, ...Typography.body, color: Colors.textPrimary }}
+            style={styles.searchInput}
           />
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color={Colors.events.primary} style={{ marginVertical: 24 }} />
+          <ActivityIndicator size="large" color={theme.modeAccent("events").primary} style={{ marginVertical: theme.spacing.xxl }} />
         ) : (
           <>
             {/* Winkly events strip */}
-            <View style={{ marginBottom: 24 }}>
-              <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 12 }}>Winkly events</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }}>
+            <View style={styles.strip}>
+              <Text style={styles.stripTitle}>Winkly events</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: theme.spacing.xl }}>
                 {filteredWinkly.length === 0 ? (
-                  <View style={{ width: 200, padding: 16, backgroundColor: Colors.gray100, borderRadius: Layout.radii.card }}>
-                    <Text style={{ ...Typography.caption, color: Colors.gray600 }}>No Winkly events in this range. Create one or check external events below.</Text>
-                  </View>
+                  <Card style={styles.stripEmptyCard}>
+                    <Text style={styles.stripEmptyText}>No Winkly events in this range. Create one or check external events below.</Text>
+                  </Card>
                 ) : (
                   filteredWinkly.map((item) => (
                     <EventCard key={item.id} item={item} onAddToPlanner={handleAddToPlanner} onPress={(e) => e.winklyEventId && router.push(`/(modes)/events/event-details?event_id=${e.winklyEventId}`)} />
@@ -322,24 +290,24 @@ export default function EventsHome() {
             </View>
 
             {/* Nearby external events — degrades gracefully if external APIs are unavailable */}
-            <View style={{ marginBottom: 24 }}>
-              <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 12 }}>Nearby on Ticketmaster &amp; more</Text>
+            <View style={styles.strip}>
+              <Text style={styles.stripTitle}>Nearby on Ticketmaster &amp; more</Text>
               {externalStatus === "loading" ? (
-                <ActivityIndicator size="small" color={Colors.events.primary} style={{ marginVertical: 12, alignSelf: "flex-start" }} />
+                <ActivityIndicator size="small" color={theme.modeAccent("events").primary} style={{ marginVertical: theme.spacing.md, alignSelf: "flex-start" }} />
               ) : filteredExternal.length > 0 ? (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: theme.spacing.xl }}>
                   {filteredExternal.map((item) => (
                     <EventCard key={item.id} item={item} onAddToPlanner={handleAddToPlanner} onPress={(e) => e.winklyEventId && router.push(`/(modes)/events/event-details?event_id=${e.winklyEventId}`)} />
                   ))}
                 </ScrollView>
               ) : (
-                <View style={{ padding: 16, backgroundColor: Colors.gray100, borderRadius: Layout.radii.card }}>
-                  <Text style={{ ...Typography.caption, color: Colors.gray600 }}>
+                <Card style={styles.stripEmptyCard}>
+                  <Text style={styles.stripEmptyText}>
                     {externalStatus === "unavailable"
                       ? "We couldn't reach our event providers right now. Showing Winkly events — pull to refresh to try again."
                       : "No nearby events from our event providers for this period. Browse Winkly events above."}
                   </Text>
-                </View>
+                </Card>
               )}
             </View>
 
@@ -348,9 +316,9 @@ export default function EventsHome() {
               const winklyInCat = eventsByCategory[cat.id] ?? [];
               if (winklyInCat.length === 0) return null;
               return (
-                <View key={cat.id} style={{ marginBottom: 24 }}>
-                  <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 12 }}>{cat.label}</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }}>
+                <View key={cat.id} style={styles.strip}>
+                  <Text style={styles.stripTitle}>{cat.label}</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: theme.spacing.xl }}>
                     {winklyInCat.map((item) => (
                       <EventCard key={item.id} item={item} onAddToPlanner={handleAddToPlanner} onPress={(e) => e.winklyEventId && router.push(`/(modes)/events/event-details?event_id=${e.winklyEventId}`)} />
                     ))}
@@ -361,9 +329,9 @@ export default function EventsHome() {
 
             {/* Show "All categories" strip if we have events and category filter is set */}
             {category && filteredWinkly.length > 0 && (
-              <View style={{ marginBottom: 24 }}>
-                <Text style={{ ...Typography.h3, color: Colors.textPrimary, marginBottom: 12 }}>In this period</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }}>
+              <View style={styles.strip}>
+                <Text style={styles.stripTitle}>In this period</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: theme.spacing.xl }}>
                   {filteredWinkly.map((item) => (
                     <EventCard key={item.id} item={item} onAddToPlanner={handleAddToPlanner} onPress={(e) => e.winklyEventId && router.push(`/(modes)/events/event-details?event_id=${e.winklyEventId}`)} />
                   ))}
@@ -374,21 +342,60 @@ export default function EventsHome() {
         )}
 
         {/* Create event CTA */}
-        <View style={{ backgroundColor: Colors.primaryViolet, borderRadius: Layout.radii.card, padding: 20, marginTop: 20, alignItems: "center" }}>
-          <Text style={{ ...Typography.h3, color: Colors.accentYellow, marginBottom: 8 }}>Organize your own event</Text>
-          <Text style={{ ...Typography.caption, color: "#FFF", marginBottom: 16, textAlign: "center" }}>
+        <Card style={styles.ctaCard}>
+          <Text style={styles.ctaTitle}>Organize your own event</Text>
+          <Text style={styles.ctaBody}>
             Host something exciting — parties, networking dinners, workshops or masterminds.
           </Text>
-          <TouchableOpacity
+          <PrimaryButton
+            title="Create Event"
             onPress={() => router.push("/(modes)/events/create-event")}
-            style={{ backgroundColor: Colors.accentYellow, borderRadius: Layout.radii.control, paddingVertical: 12, paddingHorizontal: 24 }}
-          >
-            <Text style={{ ...Typography.button, color: Colors.primaryViolet }}>Create Event</Text>
-          </TouchableOpacity>
-        </View>
+            style={{ backgroundColor: theme.colors.onPrimary }}
+            textStyle={{ color: theme.colors.primary }}
+          />
+        </Card>
       </ScrollView>
 
       <EventsBottomNav />
     </View>
   );
+}
+
+function createStyles(theme: AppTheme) {
+  return {
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    scrollContent: { padding: theme.spacing.xl, paddingBottom: 120 },
+    pageTitle: { ...theme.type.h1, fontFamily: theme.type.h1.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.md },
+    pageSubtitle: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.md },
+    rangeRow: { flexDirection: "row" as const, flexWrap: "wrap" as const, alignItems: "center" as const, marginBottom: theme.spacing.md, gap: theme.spacing.sm },
+    dateBtn: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      backgroundColor: theme.colors.backgroundMuted,
+      borderRadius: theme.radii.pill,
+      gap: theme.spacing.xs,
+    },
+    dateBtnText: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textPrimary },
+    categoryRow: { gap: theme.spacing.sm, paddingRight: theme.spacing.xl },
+    searchBox: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.md,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      marginBottom: theme.spacing.xl,
+    },
+    searchInput: { flex: 1, ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textPrimary },
+    strip: { marginBottom: theme.spacing.xxl },
+    stripTitle: { ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.md },
+    stripEmptyCard: { width: 200, padding: theme.spacing.md },
+    stripEmptyText: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary },
+    ctaCard: { backgroundColor: theme.colors.primary, alignItems: "center" as const, marginTop: theme.spacing.md },
+    ctaTitle: { ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.onPrimary, marginBottom: theme.spacing.sm },
+    ctaBody: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.onPrimary, marginBottom: theme.spacing.lg, textAlign: "center" as const },
+  };
 }

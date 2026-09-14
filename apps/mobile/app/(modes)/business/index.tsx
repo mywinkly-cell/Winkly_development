@@ -7,8 +7,6 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
-  TouchableOpacity,
-  StyleSheet,
   Pressable,
   Dimensions,
 } from "react-native";
@@ -21,7 +19,8 @@ import { BusinessProfileCard } from "@/components/business/BusinessProfileCard";
 import { BusinessFilterSheet } from "@/components/business/BusinessFilterSheet";
 import { BusinessHomeEmptyState } from "@/components/business/BusinessHomeEmptyState";
 import { PendingInvitesSheet } from "@/components/business/PendingInvitesSheet";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { Card, SectionHeader, TextButton } from "@/components/ds";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { Routes } from "@/constants/routes";
 import { supabase } from "@/lib/supabase";
 import { getProfilesForMode, getOwnProfileCore, getOwnProfileMode } from "@/lib/access/profiles";
@@ -45,7 +44,9 @@ const COL_WIDTH = (Dimensions.get("window").width - 40 - 12) / 3;
 export default function BusinessHome() {
   const router = useRouter();
   const { accountType } = useAuth();
-  const primary = Colors.business.primary;
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
+  const primary = theme.modeAccent("business").primary;
   const isBusinessAccount = accountType === "business";
 
   const search = useBusinessSearch();
@@ -201,45 +202,44 @@ export default function BusinessHome() {
 
       {pendingCount > 0 ? (
         <Pressable
-          style={styles.pendingBanner}
           onPress={() => {
             Haptics.selectionAsync();
             setPendingSheetVisible(true);
           }}
         >
-          <Text style={styles.pendingText}>
-            {pendingCount} connection request{pendingCount === 1 ? "" : "s"}
-          </Text>
-          <Ionicons name="chevron-forward" size={20} color={primary} />
+          <Card padding="md" style={{ ...styles.pendingBanner, backgroundColor: theme.modeAccent("business").bg }}>
+            <Text style={{ ...styles.pendingText, color: primary }}>
+              {pendingCount} connection request{pendingCount === 1 ? "" : "s"}
+            </Text>
+            <Ionicons name="chevron-forward" size={20} color={primary} />
+          </Card>
         </Pressable>
       ) : null}
 
       {!showHomeEmptyState && !loading ? (
-        <View style={styles.newsletterCard}>
+        <Card padding="md" style={styles.newsletterCard}>
           <Text style={styles.newsletterTitle}>Network brief</Text>
           <Text style={styles.newsletterBody}>
             Send thoughtful invites (20+ chars), respond on Home, then plan a meet-up or co-host an event from chat.
           </Text>
           <View style={styles.newsletterActions}>
-            <TouchableOpacity
+            <Pressable
               onPress={() => router.push("/(modes)/business/discover")}
-              style={styles.newsletterCta}
-              activeOpacity={0.85}
+              style={{ ...styles.newsletterCta, backgroundColor: primary }}
             >
               <Text style={styles.newsletterCtaText}>Explore Discover</Text>
-            </TouchableOpacity>
+            </Pressable>
             {isBusinessAccount ? (
-              <TouchableOpacity
+              <Pressable
                 onPress={() => router.push(Routes.businessAnalytics)}
-                style={styles.insightsCta}
-                activeOpacity={0.85}
+                style={{ ...styles.insightsCta, borderColor: primary + "55", backgroundColor: theme.modeAccent("business").bg }}
               >
                 <Ionicons name="stats-chart-outline" size={16} color={primary} />
-                <Text style={styles.insightsCtaText}>Insights</Text>
-              </TouchableOpacity>
+                <Text style={{ ...styles.insightsCtaText, color: primary }}>Insights</Text>
+              </Pressable>
             ) : null}
           </View>
-        </View>
+        </Card>
       ) : null}
 
       {loading ? (
@@ -260,9 +260,10 @@ export default function BusinessHome() {
           <Section
             title="Suggested for you"
             hint={search.hasActiveFilter ? "Filtered results" : "Ranked for your goals and skills"}
+            theme={theme}
           >
             {suggested.length === 0 ? (
-              <EmptyHint text="Complete your Business profile to see better matches." />
+              <EmptyHint text="Complete your Business profile to see better matches." theme={theme} />
             ) : (
               <View style={styles.grid3}>
                 {suggested.map((person) => (
@@ -275,23 +276,22 @@ export default function BusinessHome() {
                 ))}
               </View>
             )}
-            <TouchableOpacity
-              style={styles.seeMore}
+            <TextButton
+              title="See more in Discover"
               onPress={() => router.replace("/(modes)/business/discover")}
-            >
-              <Text style={styles.seeMoreText}>See more in Discover</Text>
-            </TouchableOpacity>
+              style={styles.seeMore}
+            />
           </Section>
 
           {!search.hasActiveFilter && lastSearchPeople.length > 0 ? (
-            <Section title="Based on your search" hint="From your last Discover search">
-              <HorizontalRow people={lastSearchPeople} onPress={openProfile} />
+            <Section title="Based on your search" hint="From your last Discover search" theme={theme}>
+              <HorizontalRow people={lastSearchPeople} onPress={openProfile} styles={styles} />
             </Section>
           ) : null}
 
           {!search.hasActiveFilter && hasLocation && nearby.length > 0 ? (
-            <Section title="In your area" hint="Near you">
-              <HorizontalRow people={nearby} onPress={openProfile} />
+            <Section title="In your area" hint="Near you" theme={theme}>
+              <HorizontalRow people={nearby} onPress={openProfile} styles={styles} />
             </Section>
           ) : null}
         </ScrollView>
@@ -316,15 +316,16 @@ function Section({
   title,
   hint,
   children,
+  theme,
 }: {
   title: string;
   hint?: string;
   children: React.ReactNode;
+  theme: AppTheme;
 }) {
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {hint ? <Text style={styles.sectionHint}>{hint}</Text> : null}
+    <View style={{ marginBottom: theme.spacing.xxl }}>
+      <SectionHeader title={title} subtitle={hint} style={{ paddingHorizontal: theme.spacing.xl, marginBottom: theme.spacing.xs }} />
       {children}
     </View>
   );
@@ -333,9 +334,11 @@ function Section({
 function HorizontalRow({
   people,
   onPress,
+  styles,
 }: {
   people: BusinessPersonItem[];
   onPress: (p: BusinessPersonItem) => void;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hRow}>
@@ -351,91 +354,59 @@ function HorizontalRow({
   );
 }
 
-function EmptyHint({ text }: { text: string }) {
+function EmptyHint({ text, theme }: { text: string; theme: AppTheme }) {
   return (
-    <View style={styles.emptyBox}>
-      <Text style={styles.emptyText}>{text}</Text>
-    </View>
+    <Card style={{ marginHorizontal: theme.spacing.xl }}>
+      <Text style={{ ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, textAlign: "center" }}>{text}</Text>
+    </Card>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.backgroundLight },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
-  scrollContent: { paddingBottom: 120 },
-  pendingBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginHorizontal: 20,
-    marginTop: 8,
-    padding: 14,
-    borderRadius: Layout.radii.card,
-    backgroundColor: Colors.business.secondary,
-  },
-  pendingText: { ...Typography.body, fontWeight: "600", color: Colors.business.primary },
-  newsletterCard: {
-    marginHorizontal: 20,
-    marginTop: 10,
-    marginBottom: 4,
-    padding: 14,
-    borderRadius: Layout.radii.card,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  newsletterTitle: { ...Typography.body, fontWeight: "700", color: Colors.textPrimary, marginBottom: 6 },
-  newsletterBody: { ...Typography.caption, color: Colors.gray600, lineHeight: 18, marginBottom: 10 },
-  newsletterActions: { flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
-  newsletterCta: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: Colors.business.primary,
-  },
-  newsletterCtaText: { ...Typography.caption, fontWeight: "700", color: Colors.white },
-  insightsCta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.business.primary + "55",
-    backgroundColor: Colors.business.secondary,
-  },
-  insightsCtaText: { ...Typography.caption, fontWeight: "700", color: Colors.business.primary },
-  section: { marginBottom: 24 },
-  sectionTitle: {
-    ...Typography.h3,
-    color: Colors.textPrimary,
-    paddingHorizontal: 20,
-    marginBottom: 4,
-  },
-  sectionHint: {
-    ...Typography.caption,
-    color: Colors.gray500,
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
-  grid3: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    paddingHorizontal: 20,
-    gap: 12,
-    justifyContent: "flex-start",
-  },
-  hRow: { paddingHorizontal: 20, paddingBottom: 4, gap: 12 },
-  emptyBox: {
-    marginHorizontal: 20,
-    padding: 16,
-    borderRadius: Layout.radii.card,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-  },
-  emptyText: { ...Typography.body, color: Colors.gray700, textAlign: "center" },
-  seeMore: { paddingHorizontal: 20, marginTop: 8 },
-  seeMoreText: { ...Typography.caption, color: Colors.business.primary, fontWeight: "600" },
-});
+function createStyles(theme: AppTheme) {
+  return {
+    screen: { flex: 1, backgroundColor: theme.colors.background },
+    centered: { flex: 1, alignItems: "center" as const, justifyContent: "center" as const },
+    scrollContent: { paddingBottom: 120 },
+    pendingBanner: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      marginHorizontal: theme.spacing.xl,
+      marginTop: theme.spacing.sm,
+    },
+    pendingText: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily },
+    newsletterCard: {
+      marginHorizontal: theme.spacing.xl,
+      marginTop: theme.spacing.sm,
+      marginBottom: theme.spacing.xxs,
+    },
+    newsletterTitle: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily, fontWeight: "700" as const, color: theme.colors.textPrimary, marginBottom: theme.spacing.xs },
+    newsletterBody: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.sm },
+    newsletterActions: { flexDirection: "row" as const, alignItems: "center" as const, gap: theme.spacing.sm, flexWrap: "wrap" as const },
+    newsletterCta: {
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      borderRadius: theme.radii.pill,
+    },
+    newsletterCtaText: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, fontWeight: "700" as const, color: theme.colors.onPrimary },
+    insightsCta: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: theme.spacing.xs,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      borderRadius: theme.radii.pill,
+      borderWidth: 1,
+    },
+    insightsCtaText: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, fontWeight: "700" as const },
+    grid3: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      paddingHorizontal: theme.spacing.xl,
+      gap: theme.spacing.md,
+      justifyContent: "flex-start" as const,
+    },
+    hRow: { paddingHorizontal: theme.spacing.xl, paddingBottom: theme.spacing.xxs, gap: theme.spacing.md },
+    seeMore: { paddingHorizontal: theme.spacing.xl, marginTop: theme.spacing.sm, alignSelf: "flex-start" as const },
+  };
+}

@@ -3,16 +3,17 @@
 import React from "react";
 import { Tabs } from "expo-router";
 import { MainTabBar } from "@/components/layout/MainTabBar";
-import { Colors } from "@/constants/tokens";
+import { useAppTheme } from "@/constants/design-system";
 
 export default function TabsLayout() {
+  const theme = useAppTheme();
   return (
     <Tabs
       tabBar={(props) => <MainTabBar {...props} />}
       screenOptions={{
         headerShown: false,
         lazy: true,
-        sceneStyle: { backgroundColor: Colors.backgroundLight },
+        sceneStyle: { backgroundColor: theme.colors.background },
       }}
     >
       <Tabs.Screen name="mode-selection" options={{ title: "Modes" }} />

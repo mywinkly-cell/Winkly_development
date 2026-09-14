@@ -8,12 +8,14 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/providers";
-import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 export default function WelcomeBackSetup() {
   const router = useRouter();
   const { t } = useTranslation();
   const { accountType } = useAuth();
+  const theme = useAppTheme();
+  const styles = createStyles(theme);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideY = useRef(new Animated.Value(16)).current;
 
@@ -49,7 +51,7 @@ export default function WelcomeBackSetup() {
 
         <TouchableOpacity
           onPress={handleContinue}
-          style={[styles.cta, { ...Shadow.button }]}
+          style={styles.cta}
           activeOpacity={0.9}
         >
           <Text style={styles.ctaText}>{t("auth.welcomeBack.continue")}</Text>
@@ -59,40 +61,43 @@ export default function WelcomeBackSetup() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.backgroundMuted },
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 32,
-    paddingTop: 16,
-  },
-  title: {
-    ...Typography.h1,
-    fontFamily: FontFamily.headingBold,
-    color: Colors.primaryViolet,
-    textAlign: "center",
-    marginBottom: 12,
-  },
-  subtitle: {
-    ...Typography.body,
-    color: Colors.gray700,
-    textAlign: "center",
-    marginBottom: 40,
-    lineHeight: 24,
-  },
-  cta: {
-    backgroundColor: Colors.primaryViolet,
-    borderRadius: Layout.radii.control,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    minWidth: 200,
-    alignItems: "center",
-  },
-  ctaText: {
-    ...Typography.button,
-    fontFamily: FontFamily.headingBold,
-    color: Colors.accentYellow,
-  },
-});
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    safe: { flex: 1, backgroundColor: theme.colors.backgroundMuted },
+    container: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 32,
+      paddingTop: 16,
+    },
+    title: {
+      ...theme.type.h1,
+      fontFamily: theme.type.h1.fontFamily,
+      color: theme.colors.primary,
+      textAlign: "center",
+      marginBottom: 12,
+    },
+    subtitle: {
+      ...theme.type.body,
+      color: theme.colors.textSecondary,
+      textAlign: "center",
+      marginBottom: 40,
+      lineHeight: 24,
+    },
+    cta: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.radii.md,
+      paddingVertical: 16,
+      paddingHorizontal: 32,
+      minWidth: 200,
+      alignItems: "center",
+      ...theme.elevation(2),
+    },
+    ctaText: {
+      ...theme.type.button,
+      fontFamily: theme.type.button.fontFamily,
+      color: theme.colors.onPrimary,
+    },
+  });
+}

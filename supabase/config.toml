@@ -354,6 +354,12 @@ verify_jwt = false
 [functions.notify-fanout]
 verify_jwt = false
 
+# report-notify is invoked by Postgres AFTER INSERT triggers on user_reports /
+# message_reports (pg_net), not by users. Protected by the same shared
+# `x-webhook-secret` header (WEBHOOK_SECRET) as notify-fanout.
+[functions.report-notify]
+verify_jwt = false
+
 # weather-pivot-cron is invoked by a pg_cron schedule (pg_net), not by users. It has no
 # Bearer JWT; it is protected by the `x-cron-secret` header (CRON_SECRET env var) instead.
 [functions.weather-pivot-cron]
