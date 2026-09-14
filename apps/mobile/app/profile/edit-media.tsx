@@ -1,13 +1,16 @@
 // apps/mobile/app/profile/edit-media.tsx
 // Winkly – Profile: Edit Media. Persists core_photos (profiles_core). Real upload: expo-image-picker + Supabase Storage later.
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, Alert, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/providers";
 import { getOwnProfileCore, upsertOwnProfileCore } from "@/lib/access/profiles";
 import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAutosave } from "@/lib/profile/useAutosave";
+import type { AutosaveStatus } from "@/lib/profile/autosaveEngine";
+import { SaveStatusIndicator } from "@/components/profile/SaveStatusIndicator";
 
 const SLOT_LABELS = ["Main photo", "Photo 2", "Photo 3", "Photo 4"];
 
@@ -31,15 +34,32 @@ export default function EditMedia() {
     return () => { cancelled = true; };
   }, [user?.id]);
 
-  const save = async () => {
-    if (!user?.id) return;
+  // ─────────────── AUTO-SAVE (debounced, diff-only, retries on failure) ───────────────
+  const autosaveValues = useMemo(() => ({ corePhotos }), [corePhotos]);
+  type EditMediaValues = typeof autosaveValues;
+
+  const handleAutosave = useCallback(
+    async (changed: Partial<EditMediaValues>, all: EditMediaValues) => {
+      if (!user?.id) return;
+      if (!("corePhotos" in changed)) return;
+      const { error } = await upsertOwnProfileCore(user.id, { core_photos: all.corePhotos.length ? all.corePhotos : null });
+      if (error) throw error;
+    },
+    [user?.id]
+  );
+
+  const { status: autosaveStatus, flush: flushAutosave } = useAutosave({
+    values: autosaveValues,
+    onSave: handleAutosave,
+    enabled: !loading,
+    debounceMs: 1200,
+    draftStorageKey: "winkly_edit_media_autosave_pending",
+  });
+
+  const handleDone = async () => {
     setSaving(true);
-    const { error } = await upsertOwnProfileCore(user.id, { core_photos: corePhotos.length ? corePhotos : null });
+    await flushAutosave();
     setSaving(false);
-    if (error) {
-      Alert.alert("Error", "Could not save photos. Please try again.");
-      return;
-    }
     router.back();
   };
 
@@ -62,7 +82,7 @@ export default function EditMedia() {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Header title="Edit media" onBack={() => router.back()} onSave={save} saving={saving} />
+        <Header title="Edit media" onBack={() => router.back()} onSave={handleDone} saving={saving} status={autosaveStatus} />
 
         <View style={styles.card}>
           <Text style={styles.title}>Photos</Text>
@@ -106,15 +126,23 @@ function Header({
   onBack,
   onSave,
   saving,
-}: { title: string; onBack: () => void; onSave: () => void; saving?: boolean }) {
+  status,
+}: { title: string; onBack: () => void; onSave: () => void; saving?: boolean; status?: AutosaveStatus }) {
   return (
     <View style={styles.headerRow}>
       <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back" disabled={saving}>
         <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
       </TouchableOpacity>
-      <Text style={styles.headerTitle}>{title}</Text>
+      <View style={{ flex: 1, alignItems: "center" }}>
+        <Text style={styles.headerTitle}>{title}</Text>
+        {status ? (
+          <View style={{ height: 16, justifyContent: "center" }}>
+            <SaveStatusIndicator status={status} />
+          </View>
+        ) : null}
+      </View>
       <TouchableOpacity onPress={onSave} style={[styles.saveBtn, saving && styles.saveBtnDisabled]} activeOpacity={0.9} disabled={saving}>
-        <Text style={styles.saveText}>{saving ? "Saving…" : "Save"}</Text>
+        <Text style={styles.saveText}>{saving ? "Saving…" : "Done"}</Text>
       </TouchableOpacity>
     </View>
   );

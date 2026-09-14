@@ -56,7 +56,6 @@ export function useAutosave<T extends Record<string, unknown>>({
 
   useEffect(() => {
     const engine = engineRef.current;
-    void engine?.hydrate();
     return () => engine?.dispose();
     // Engine is created once and owns its own lifecycle.
   }, []);
@@ -71,7 +70,11 @@ export function useAutosave<T extends Record<string, unknown>>({
     }
     if (!wasEnabledRef.current) {
       wasEnabledRef.current = true;
+      // Establish the baseline from real, freshly-loaded data first, then
+      // recover any offline diff on top of it — never the other way round,
+      // or a retry could fire using the placeholder values from before load.
       engine.resetBaseline(values);
+      void engine.hydrate();
       return;
     }
     engine.update(values);

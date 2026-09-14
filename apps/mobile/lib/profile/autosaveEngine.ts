@@ -96,7 +96,14 @@ export class AutosaveEngine<T extends Record<string, unknown>> {
     this.latestValues = values;
   }
 
-  /** Restore a diff persisted before an app restart/crash and try saving it. */
+  /**
+   * Restore a diff persisted before an app restart/crash and try saving it.
+   * Callers must call this only once `lastSaved`/`latestValues` reflect the
+   * screen's real, freshly-loaded data (e.g. after `resetBaseline`) — the
+   * recovered diff is layered on top of `latestValues` so sibling fields a
+   * "resend the whole record" save reads stay accurate instead of falling
+   * back to whatever placeholder values were on screen before data loaded.
+   */
   async hydrate(): Promise<void> {
     if (!this.draftStorageKey || this.disposed) return;
     try {
@@ -105,6 +112,7 @@ export class AutosaveEngine<T extends Record<string, unknown>> {
       const parsed = JSON.parse(raw) as Partial<T>;
       if (parsed && typeof parsed === "object" && Object.keys(parsed).length > 0) {
         this.pending = { ...parsed, ...this.pending };
+        this.latestValues = { ...this.latestValues, ...this.pending };
         this.scheduleRetry(0);
       }
     } catch {

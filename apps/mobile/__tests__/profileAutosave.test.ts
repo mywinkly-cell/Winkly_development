@@ -91,6 +91,32 @@ describe("AutosaveEngine", () => {
     engine.dispose();
   });
 
+  it("uses accurate sibling values, not stale placeholders, when retrying a hydrated diff", async () => {
+    // Regression: hydrate() must never retry using values from before the
+    // screen's real data finished loading — a "resend the whole record"
+    // save would otherwise push placeholder/empty sibling fields to the DB.
+    const draftKey = "test:profile-autosave-hydrate-siblings";
+    await AsyncStorage.setItem(draftKey, JSON.stringify({ bio: "Hello offline" }));
+
+    const onSave = jest.fn().mockResolvedValue(undefined);
+    const engine = new AutosaveEngine<{ bio: string; height: string }>({
+      initialValues: { bio: "", height: "" }, // placeholder values before real data loads
+      onSave,
+      draftStorageKey: draftKey,
+    });
+
+    // The screen's real data finishes loading and establishes the baseline
+    // before the persisted offline diff is recovered — as useAutosave does.
+    engine.resetBaseline({ bio: "", height: "180cm" });
+    await engine.hydrate();
+    await jest.advanceTimersByTimeAsync(0);
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith({ bio: "Hello offline" }, { bio: "Hello offline", height: "180cm" });
+
+    engine.dispose();
+  });
+
   it("hydrates a diff persisted before a restart and retries it", async () => {
     const draftKey = "test:profile-autosave-hydrate";
     await AsyncStorage.setItem(draftKey, JSON.stringify({ occupation: "Engineer" }));
@@ -106,7 +132,9 @@ describe("AutosaveEngine", () => {
     await jest.advanceTimersByTimeAsync(0);
 
     expect(onSave).toHaveBeenCalledTimes(1);
-    expect(onSave).toHaveBeenCalledWith({ occupation: "Engineer" }, { occupation: "" });
+    // hydrate() layers the recovered diff onto latestValues, so "all" carries
+    // the recovered value too — never the stale pre-hydrate placeholder.
+    expect(onSave).toHaveBeenCalledWith({ occupation: "Engineer" }, { occupation: "Engineer" });
     expect(engine.hasPendingChanges()).toBe(false);
 
     engine.dispose();
