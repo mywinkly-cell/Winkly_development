@@ -19,7 +19,7 @@ import {
   Share,
   Image,
 } from "react-native";
-import * as Contacts from "expo-contacts";
+import * as Contacts from "expo-contacts/legacy";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";

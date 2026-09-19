@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   burstLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
   },

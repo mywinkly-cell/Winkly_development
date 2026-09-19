@@ -1,4 +1,4 @@
-// app.config.js – Winkly (SDK 54)
+// app.config.js – Winkly (SDK 57)
 
 const fs = require("fs");
 const path = require("path");
@@ -50,6 +50,11 @@ module.exports = {
       "expo-localization",
       "expo-web-browser",
       "expo-apple-authentication",
+      "@react-native-community/datetimepicker",
+      "expo-font",
+      "expo-secure-store",
+      "expo-splash-screen",
+      "expo-status-bar",
       // Crash reporting + source map upload. Sourcemap upload only runs when
       // SENTRY_AUTH_TOKEN/org/project are set in the EAS build env; otherwise
       // the plugin is a safe no-op. Runtime init is gated on EXPO_PUBLIC_SENTRY_DSN.

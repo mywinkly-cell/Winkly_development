@@ -1,7 +1,7 @@
 // lib/account/accountTypeSwitch.ts
 // Switch or create the other account type under the same email (same auth user).
 
-import type { Router } from "expo-router";
+import type { ImperativeRouter } from "expo-router";
 import type { AccountType } from "@/types";
 import { Routes } from "@/constants/routes";
 import { supabase } from "@/lib/supabase";
@@ -66,7 +66,7 @@ export function accountTypeActionVerb(
 }
 
 export async function routeAfterAccountTypeChange(
-  router: Router,
+  router: ImperativeRouter,
   targetType: AccountType,
   status: AccountProfileStatus
 ): Promise<void> {

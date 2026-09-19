@@ -147,7 +147,7 @@ function RootLayout() {
                 {posthogEnabled ? <PostHogScreenTracker /> : null}
                 <NotificationDeepLinkHandler />
                 <PostPlanReviewHost />
-                <StatusBar style="dark" backgroundColor={theme.colors.backgroundMuted} />
+                <StatusBar style="dark" />
                 {isSplash ? null : <ScreenTopSpacer />}
                 <Stack
                   screenOptions={() => ({

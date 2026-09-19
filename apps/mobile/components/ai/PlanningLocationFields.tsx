@@ -6,18 +6,18 @@
  * Used by Quick plan, activity details, and Concierge request form.
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Layout } from "@/constants/tokens";
+import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { Chip, TextButton } from "@/components/ds";
 import {
   searchLocationAutocomplete,
   type LocationSuggestion,
@@ -68,6 +68,8 @@ export function PlanningLocationFields({
   showTitle = true,
   cityRequired = true,
 }: PlanningLocationFieldsProps) {
+  const theme = useAppTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
@@ -129,11 +131,12 @@ export function PlanningLocationFields({
           <Text style={styles.title}>
             Location{cityRequired ? <Text style={styles.required}> *</Text> : null}
           </Text>
-          <TouchableOpacity
-            style={styles.locatePill}
+          <TextButton
+            title="Use current"
+            loading={gpsLoading}
+            icon={<Ionicons name="locate" size={16} color={theme.colors.primary} />}
             onPress={() => {
               if (gpsLoading) return;
-              Haptics.selectionAsync();
               setGpsLoading(true);
               Promise.all([getDeviceLocationDisplay(language), getDeviceCoordsIfPermitted()])
                 .then(([displayRes, coords]) => {
@@ -149,18 +152,8 @@ export function PlanningLocationFields({
                 })
                 .finally(() => setGpsLoading(false));
             }}
-            disabled={gpsLoading}
-            activeOpacity={0.85}
-          >
-            {gpsLoading ? (
-              <ActivityIndicator size="small" color={Colors.primaryViolet} />
-            ) : (
-              <>
-                <Ionicons name="locate" size={16} color={Colors.primaryViolet} />
-                <Text style={styles.locatePillText}>Use current</Text>
-              </>
-            )}
-          </TouchableOpacity>
+            style={styles.locatePill}
+          />
         </View>
       ) : null}
 
@@ -168,7 +161,7 @@ export function PlanningLocationFields({
         <TextInput
           style={styles.input}
           placeholder="City, Country"
-          placeholderTextColor={Colors.gray500}
+          placeholderTextColor={theme.colors.textMuted}
           value={location}
           onChangeText={(text) => {
             const p = parseLocation(text, language);
@@ -209,7 +202,7 @@ export function PlanningLocationFields({
                 }}
                 activeOpacity={0.85}
               >
-                <Ionicons name="location-outline" size={18} color={Colors.gray500} />
+                <Ionicons name="location-outline" size={18} color={theme.colors.textMuted} />
                 <Text style={styles.suggestionText} numberOfLines={1}>
                   {s.display}
                 </Text>
@@ -220,32 +213,19 @@ export function PlanningLocationFields({
 
         <Text style={styles.optionalLabel}>Search radius (optional)</Text>
         <View style={styles.radiusRow}>
-          <TouchableOpacity
-            style={[styles.radiusChip, radiusKm == null && styles.radiusChipOn]}
-            onPress={() => {
-              Haptics.selectionAsync();
-              patch({ searchRadiusKm: null });
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={[styles.radiusText, radiusKm == null && styles.radiusTextOn]}>Any</Text>
-          </TouchableOpacity>
-          {PLANNING_RADIUS_KM_OPTIONS.map((km) => {
-            const on = radiusKm === km;
-            return (
-              <TouchableOpacity
-                key={km}
-                style={[styles.radiusChip, on && styles.radiusChipOn]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  patch({ searchRadiusKm: km });
-                }}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.radiusText, on && styles.radiusTextOn]}>{km} km</Text>
-              </TouchableOpacity>
-            );
-          })}
+          <Chip
+            label="Any"
+            selected={radiusKm == null}
+            onPress={() => patch({ searchRadiusKm: null })}
+          />
+          {PLANNING_RADIUS_KM_OPTIONS.map((km) => (
+            <Chip
+              key={km}
+              label={`${km} km`}
+              selected={radiusKm === km}
+              onPress={() => patch({ searchRadiusKm: km })}
+            />
+          ))}
         </View>
 
         <TouchableOpacity
@@ -258,7 +238,7 @@ export function PlanningLocationFields({
           accessibilityRole="button"
           accessibilityLabel="Set precise spot on map"
         >
-          <Ionicons name="map-outline" size={18} color={Colors.primaryViolet} />
+          <Ionicons name="map-outline" size={18} color={theme.colors.primary} />
           <View style={styles.mapBtnCopy}>
             <Text style={styles.mapBtnTitle}>
               {hasPin ? "Precise spot set" : "Set precise spot on map"}
@@ -270,7 +250,7 @@ export function PlanningLocationFields({
                 : "Optional — open the map and drop a pin"}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.gray400} />
+          <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
         </TouchableOpacity>
       </View>
 
@@ -305,94 +285,78 @@ export function PlanningLocationFields({
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: { marginBottom: 12 },
-  wrapCompact: { marginBottom: 8 },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  title: { ...Typography.h3, color: Colors.textPrimary, fontSize: 17 },
-  required: { color: Colors.errorRed },
-  locatePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: Colors.secondaryViolet,
-  },
-  locatePillText: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "700" },
-  surface: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    padding: 12,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    ...Typography.body,
-    color: Colors.textPrimary,
-    backgroundColor: Colors.gray100,
-  },
-  suggestions: {
-    marginTop: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    overflow: "hidden",
-  },
-  suggestionItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.gray100,
-  },
-  suggestionText: { ...Typography.caption, color: Colors.textPrimary, flex: 1 },
-  optionalLabel: {
-    ...Typography.caption,
-    color: Colors.gray600,
-    fontWeight: "600",
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  radiusRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  radiusChip: {
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.gray200,
-    backgroundColor: Colors.white,
-  },
-  radiusChipOn: {
-    borderColor: Colors.primaryViolet,
-    backgroundColor: Colors.primaryViolet + "14",
-  },
-  radiusText: { ...Typography.caption, color: Colors.gray700, fontWeight: "600" },
-  radiusTextOn: { color: Colors.primaryViolet, fontWeight: "800" },
-  mapBtn: {
-    marginTop: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: Colors.gray100,
-  },
-  mapBtnCopy: { flex: 1 },
-  mapBtnTitle: { ...Typography.caption, color: Colors.primaryViolet, fontWeight: "800" },
-  mapBtnSub: { ...Typography.caption, color: Colors.gray600, marginTop: 2 },
-});
+function makeStyles(theme: AppTheme) {
+  return StyleSheet.create({
+    wrap: { marginBottom: theme.spacing.md },
+    wrapCompact: { marginBottom: theme.spacing.sm },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: theme.spacing.sm,
+    },
+    title: { ...theme.type.h3, color: theme.colors.textPrimary, fontSize: 17 },
+    required: { color: theme.colors.error },
+    locatePill: {
+      alignSelf: "flex-start",
+      backgroundColor: theme.colors.backgroundMuted,
+      borderRadius: theme.radii.pill,
+      paddingHorizontal: theme.spacing.sm,
+    },
+    surface: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: theme.spacing.md,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.md,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: 11,
+      ...theme.type.body,
+      color: theme.colors.textPrimary,
+      backgroundColor: theme.colors.backgroundMuted,
+    },
+    suggestions: {
+      marginTop: theme.spacing.xs,
+      borderRadius: theme.radii.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      overflow: "hidden",
+    },
+    suggestionItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.border,
+    },
+    suggestionText: { ...theme.type.caption, color: theme.colors.textPrimary, flex: 1 },
+    optionalLabel: {
+      ...theme.type.caption,
+      color: theme.colors.textSecondary,
+      fontWeight: "600",
+      marginTop: theme.spacing.md,
+      marginBottom: theme.spacing.sm,
+    },
+    radiusRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
+    mapBtn: {
+      marginTop: theme.spacing.md,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.sm,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.backgroundMuted,
+    },
+    mapBtnCopy: { flex: 1 },
+    mapBtnTitle: { ...theme.type.caption, color: theme.colors.primary, fontWeight: "800" },
+    mapBtnSub: { ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 2 },
+  });
+}
