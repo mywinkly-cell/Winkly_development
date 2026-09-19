@@ -13,6 +13,7 @@ import {
   Share,
   Linking,
   Platform,
+  Alert,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
@@ -103,6 +104,32 @@ function findNearbyItems(
   return out.sort((a, b) => a.gapMinutes - b.gapMinutes);
 }
 
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * `buildStartsEnds()` below already guards single-day plans against landing in the past (rolls
+ * forward whole days until the resolved start clears "now"). A multi-day trip doesn't go through
+ * that helper — each day's start is built directly from its own `date` string — so it needs the
+ * same guard applied separately, anchored on day 1's 09:00 start and carried uniformly across
+ * every day so the itinerary's day-to-day spacing isn't compressed.
+ */
+function daysUntilFutureFromIso(iso: string): number {
+  let shift = 0;
+  let t = new Date(iso).getTime();
+  while (t <= Date.now()) {
+    shift += 1;
+    t += ONE_DAY_MS;
+  }
+  return shift;
+}
+
+function shiftDateStr(dateStr: string, days: number): string {
+  if (days === 0) return dateStr;
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 /** Fields of the plan-details card the user can adjust one at a time (pencil → confirm). */
 type EditableField = "title" | "date" | "time" | "venue" | "address";
 
@@ -180,7 +207,10 @@ export type ConciergeConfirmStepProps = {
   mode: Mode;
   /** When inviting someone, pass the last planning context so the pending plan has location/budget/weather. */
   contextForPendingPlan?: ConciergeContext | null;
-  onDone: () => void;
+  /** Called once the planner_items insert (or invite) actually succeeds. Receives the created
+   * planner_item id when one exists yet (not for the "pending_plan" invite branch, which only
+   * creates the item once the invite is accepted) so the caller can navigate straight to it. */
+  onDone: (plannerItemId?: string) => void;
   onBack: () => void;
   /** When set, show "Correct Details" to refine (e.g. "Make it cheaper", "Earlier time"). Calls with refinement hint. */
   onCorrectDetails?: (refinementHint: string) => void;
@@ -452,11 +482,38 @@ export function ConciergeConfirmStep({
 
       let starts_at: string;
       let ends_at: string;
+      /** Set once a planner_items row actually exists, so the success confirmation + onDone can
+       * point at it. Stays undefined for the "pending_plan" invite branch, which only creates a
+       * chat CTA and defers the planner_items insert until the invite is accepted. */
+      let createdItemId: string | undefined;
+      /** Clear success confirmation before leaving the flow — and a heads-up when the plan's
+       * original time had already passed and was rolled forward (see buildStartsEnds/movedForward above). */
+      const finishWithConfirmation = (
+        itemId?: string,
+        opts?: { movedForward?: boolean; kind?: "added" | "invited" }
+      ) => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        const invited = opts?.kind === "invited";
+        const body = invited
+          ? "Your invite is on its way — it'll show in your planner once they respond."
+          : opts?.movedForward
+            ? "That time had already passed today, so we scheduled it for the next matching day instead."
+            : "Your plan is on the calendar.";
+        Alert.alert(invited ? "Invite sent" : "Added to your planner", body, [
+          { text: "View planner", onPress: () => onDone(itemId) },
+        ]);
+      };
+      // Days to shift a trip's first day forward so it isn't past-dated (see daysUntilFutureFromIso).
+      // 0 for every other branch — buildStartsEnds() already guards those itself.
+      let tripShiftDays = 0;
       if (structuredPlan?.trip_days?.length) {
         const first = structuredPlan.trip_days[0];
         const last = structuredPlan.trip_days[structuredPlan.trip_days.length - 1];
-        const start = new Date(`${first.date}T09:00:00`);
-        const end = new Date(`${last.date}T21:00:00`);
+        tripShiftDays = daysUntilFutureFromIso(new Date(`${first.date}T09:00:00`).toISOString());
+        const firstDate = shiftDateStr(first.date, tripShiftDays);
+        const lastDate = shiftDateStr(last.date, tripShiftDays);
+        const start = new Date(`${firstDate}T09:00:00`);
+        const end = new Date(`${lastDate}T21:00:00`);
         starts_at = start.toISOString();
         ends_at = end.toISOString();
       } else if (structuredPlan) {
@@ -472,6 +529,12 @@ export function ConciergeConfirmStep({
         starts_at = se.starts_at;
         ends_at = se.ends_at;
       }
+
+      // buildStartsEnds() already rolled starts_at/ends_at forward if the resolved time had
+      // passed; detect that here (by calendar-day drift from the requested date) purely to tell
+      // the user, not to re-shift anything.
+      const movedForward =
+        !structuredPlan?.trip_days?.length && new Date(starts_at).toDateString() !== effectiveDate.toDateString();
 
       const activity = title;
       const place = allowEditDetails
@@ -518,9 +581,13 @@ export function ConciergeConfirmStep({
 
       if (structuredPlan?.trip_days?.length) {
         const baseTitle = structuredPlan.title || title;
+        let firstTripItemId: string | null = null;
         for (const d of structuredPlan.trip_days) {
-          const dayStart = new Date(`${d.date}T09:00:00`);
-          const dayEnd = new Date(`${d.date}T21:00:00`);
+          // Shift every day by the same amount so a trip starting "today" but generated after
+          // 09:00 still lands on future dates without compressing the itinerary.
+          const dayDate = shiftDateStr(d.date, tripShiftDays);
+          const dayStart = new Date(`${dayDate}T09:00:00`);
+          const dayEnd = new Date(`${dayDate}T21:00:00`);
           const description = [
             `Morning: ${d.morning.summary}`,
             `Afternoon: ${d.afternoon.summary}`,
@@ -528,7 +595,7 @@ export function ConciergeConfirmStep({
           ]
             .filter(Boolean)
             .join("\n");
-          await createPlannerItemForSelf(meId, {
+          const dayItemId = await createPlannerItemForSelf(meId, {
             title: `${baseTitle} · Day ${d.day}`,
             description,
             source_mode: mode,
@@ -542,7 +609,7 @@ export function ConciergeConfirmStep({
               ...(aiRequestId ? { ai_request_id: aiRequestId } : {}),
               concierge_trip: true,
               trip_day: d.day,
-              trip_date: d.date,
+              trip_date: dayDate,
               morning: d.morning,
               afternoon: d.afternoon,
               evening: d.evening ?? null,
@@ -551,8 +618,9 @@ export function ConciergeConfirmStep({
               place,
             },
           });
+          if (firstTripItemId === null) firstTripItemId = dayItemId;
         }
-        onDone();
+        finishWithConfirmation(firstTripItemId ?? undefined, { movedForward: tripShiftDays > 0 });
         return;
       }
 
@@ -582,6 +650,7 @@ export function ConciergeConfirmStep({
           });
           await sendMessage(conversationId, meId, ctaPayload, [], { messageType: "cta" });
           if (sparkPlanId) onAddedToPlanner?.(planner_item_id);
+          createdItemId = planner_item_id;
         } else {
           const baseCtx = contextForPendingPlan ?? { mode };
           const planRes = await callWinklyPlan({
@@ -648,6 +717,8 @@ export function ConciergeConfirmStep({
         for (const weekOffset of weeks) {
           const startDate = new Date(effectiveDate);
           startDate.setDate(startDate.getDate() + weekOffset * 7);
+          // buildStartsEnds() itself guards each occurrence against landing in the past (only
+          // week 0 could ever need it — the rest are always days out).
           const { starts_at: s, ends_at: e } = buildStartsEnds(startDate, recurrenceSeed);
           const weekItemId = await createPlannerItemForSelf(meId, {
             ...payload,
@@ -657,8 +728,10 @@ export function ConciergeConfirmStep({
           if (firstItemId === null) firstItemId = weekItemId;
         }
         if (sparkPlanId && firstItemId) onAddedToPlanner?.(firstItemId);
+        createdItemId = firstItemId ?? undefined;
       } else {
         const itemId = await createPlannerItemForSelf(meId, payload);
+        createdItemId = itemId;
         if (sparkPlanId) onAddedToPlanner?.(itemId);
         if (aiRequestId) {
           void reportConciergeOutcome(aiRequestId, "added_to_planner");
@@ -685,9 +758,18 @@ export function ConciergeConfirmStep({
           });
         }
       }
-      onDone();
+      finishWithConfirmation(createdItemId, {
+        movedForward,
+        kind: inviteToo && partner ? "invited" : "added",
+      });
     } catch (e) {
-      setError((e as Error).message ?? "Something went wrong.");
+      // Surface the real Postgres/Supabase message (e.g. the future-plan-time or RLS check that
+      // rejected the insert) rather than a generic failure — both to the console for debugging
+      // and to the UI so the user isn't left guessing why "Add to planner" didn't work.
+      const message = e instanceof Error && e.message ? e.message : "Something went wrong.";
+      console.error("[ConciergeConfirmStep] Add to planner failed:", e);
+      setError(message);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setSaving(false);
     }
