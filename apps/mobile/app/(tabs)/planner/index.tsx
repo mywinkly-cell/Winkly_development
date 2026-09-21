@@ -29,6 +29,7 @@ import { useAppTheme, type AppTheme, type ModeName } from "@/constants/design-sy
 import { supabase } from "@/lib/supabase";
 import { getPlannerItems } from "@/lib/access/planner";
 import { getSavedIdeas } from "@/lib/ai/conciergeStorage";
+import { selectPlanHintCopy, type PlanHintMode } from "@/lib/ai/planHint";
 import {
   getPlannerPreferences,
   DEFAULT_PLANNER_PREFERENCES,
@@ -659,11 +660,18 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     setFilterModalVisible(true);
   }, []);
 
+  const conciergeMode: PlanHintMode =
+    activeTab === "all" || activeTab === "archive" ? "all" : activeTab === "dates" ? "romance" : activeTab === "meetups" ? "friends" : activeTab === "business" ? "business" : "events";
+
   const openConcierge = useCallback(() => {
-    const modeParam = activeTab === "all" || activeTab === "archive" ? "all" : activeTab === "dates" ? "romance" : activeTab === "meetups" ? "friends" : activeTab === "business" ? "business" : "events";
     const tabParam = activeTab === "archive" ? "all" : activeTab;
-    router.push({ pathname: "/concierge", params: { source_screen: "planner", mode: modeParam, source_planner_tab: tabParam } });
-  }, [activeTab, router]);
+    router.push({ pathname: "/concierge", params: { source_screen: "planner", mode: conciergeMode, source_planner_tab: tabParam } });
+  }, [activeTab, conciergeMode, router]);
+
+  const conciergePromoCopy = useMemo(
+    () => selectPlanHintCopy({ mode: conciergeMode }, (key, options) => t(key, options)),
+    [conciergeMode, t]
+  );
 
   const handleWeeklyDismiss = useCallback(async () => {
     sparkRevealGenRef.current += 1;
@@ -1201,15 +1209,15 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
       onPress={() => { Haptics.selectionAsync(); openConcierge(); }}
       activeOpacity={0.9}
       accessibilityRole="button"
-      accessibilityLabel={t("planner.conciergePromo.title")}
+      accessibilityLabel={conciergePromoCopy.title}
     >
       <View style={styles.conciergePromoRow}>
         <View style={styles.conciergePromoAvatar}>
           <SparklesIcon size={22} color={theme.colors.onPrimary} />
         </View>
         <View style={styles.conciergePromoTextWrap}>
-          <Text style={styles.conciergePromoText}>{t("planner.conciergePromo.title")}</Text>
-          <Text style={styles.conciergePromoSub}>{t("planner.conciergePromo.body")}</Text>
+          <Text style={styles.conciergePromoText}>{conciergePromoCopy.title}</Text>
+          <Text style={styles.conciergePromoSub}>{conciergePromoCopy.subtitle}</Text>
         </View>
       </View>
       <View style={styles.conciergePromoCta}>

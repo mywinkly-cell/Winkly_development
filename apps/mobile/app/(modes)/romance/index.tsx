@@ -30,6 +30,9 @@ import { useModeContext } from "@/providers/ModeContextProvider";
 import { romanceLikeProfile } from "@/lib/chats";
 import { computeCompatibilityScore, buildMatchTags, type RomanceProfile } from "@/lib/ai/romanceInsights";
 import { hasAnyAIAccess } from "@/lib/ai/aiFeatureGate";
+import { buildPlanHintRoute, selectPlanHintCopy } from "@/lib/ai/planHint";
+import { PlanHintBanner } from "@/components/ai/PlanHintBanner";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { SuperLikeInviteModal } from "@/components/romance/SuperLikeInviteModal";
 import { blockUser, recordSwipe, reportUser } from "@/lib/matching/actions";
@@ -96,6 +99,7 @@ export default function RomanceHome() {
   const styles = createStyles(theme);
   const CARD_RADIUS = theme.radii.lg;
   const romanceAccent = theme.modeAccent("romance").primary;
+  const { t } = useTranslation();
   const { context } = useModeContext();
   const hasIntentSubscription = context.subscription_tier === "premium";
   const showAiHints = hasAnyAIAccess(context.subscription_tier ?? "free");
@@ -317,6 +321,34 @@ export default function RomanceHome() {
     const tags = buildMatchTags({ self: selfProfile, other });
     return { score, tags };
   }, [showAiHints, selfProfile, currentProfile]);
+
+  const planHint = React.useMemo(
+    () =>
+      currentProfile
+        ? selectPlanHintCopy(
+            {
+              mode: "romance",
+              person: { name: currentProfile.name, interests: currentProfile.chipItems },
+              selfInterests: selfProfile?.interests,
+            },
+            (key, options) => t(key, options)
+          )
+        : null,
+    [currentProfile, selfProfile, t]
+  );
+
+  const handlePlanHintPress = () => {
+    if (!currentProfile || !planHint?.request) return;
+    Haptics.selectionAsync();
+    router.push(
+      buildPlanHintRoute({
+        mode: "romance",
+        request: planHint.request,
+        partnerUserId: currentProfile.id,
+        partnerDisplayName: currentProfile.name,
+      })
+    );
+  };
 
   const advanceToNext = () => {
     setCurrentIndex((i) => i + 1);
@@ -676,6 +708,9 @@ export default function RomanceHome() {
         />
       ) : (
         <>
+          {planHint ? (
+            <PlanHintBanner copy={planHint} mode="romance" onPress={handlePlanHintPress} style={styles.planBanner} />
+          ) : null}
           <View style={styles.cardContainer}>
             <View style={[styles.cardStackWrap, { width: CARD_WIDTH, height: CARD_HEIGHT + STACK_OFFSET + 4 }]}>
               {/* Stacked "next" card peek for depth */}
@@ -1010,6 +1045,10 @@ function createStyles(theme: AppTheme) {
       alignItems: "center",
       justifyContent: "center",
       padding: theme.spacing.xxl,
+    },
+    planBanner: {
+      marginHorizontal: theme.spacing.lg,
+      marginVertical: theme.spacing.sm,
     },
     cardContainer: {
       flex: 1,

@@ -82,6 +82,10 @@ export default function ConciergeScreen() {
     prefill_prompt?: string;
     /** "decisive" = primary + backup; "menu" or omit = three options. */
     presentation?: string;
+    /** With initial_step "quick": "1" generates plan options right away (person/event plan hint). */
+    auto_generate?: string;
+    /** YYYY-MM-DD to plan for (e.g. the event's day). */
+    prefill_date?: string;
   }>();
   const insets = useSafeAreaInsets();
   const { context: modeContext } = useModeContext();
@@ -344,10 +348,15 @@ export default function ConciergeScreen() {
           defaultCity={defaultCity ?? undefined}
           defaultCountry={defaultCountry ?? undefined}
           initialStep={
-            params.initial_step === "activity" || params.initial_step === "social"
-              ? (params.initial_step as "activity" | "social")
+            params.initial_step === "activity" || params.initial_step === "social" || params.initial_step === "quick"
+              ? (params.initial_step as "activity" | "social" | "quick")
               : undefined
           }
+          prefillRequest={
+            params.initial_step === "quick" && typeof params.prefill_prompt === "string" ? params.prefill_prompt : undefined
+          }
+          autoGenerate={params.auto_generate === "1"}
+          prefillDate={typeof params.prefill_date === "string" ? params.prefill_date : undefined}
           proactiveActivityLabel={params.proactive_activity_label ?? undefined}
           proactiveDatePreset={
             params.proactive_date_preset === "today" ||

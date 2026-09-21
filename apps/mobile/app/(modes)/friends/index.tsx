@@ -29,6 +29,9 @@ import { HIT_SLOP } from "@/constants/a11y";
 import { supabase } from "@/lib/supabase";
 import { buildFriendsMatchTags, computeFriendsCompatibility, type FriendsProfile } from "@/lib/ai/friendsInsights";
 import { hasAnyAIAccess } from "@/lib/ai/aiFeatureGate";
+import { buildPlanHintRoute, selectPlanHintCopy } from "@/lib/ai/planHint";
+import { PlanHintBanner } from "@/components/ai/PlanHintBanner";
+import { useTranslation } from "react-i18next";
 import { useModeContext } from "@/providers/ModeContextProvider";
 import {
   blockUser,
@@ -72,6 +75,7 @@ export default function FriendsHome() {
   const styles = createStyles(theme);
   const CARD_RADIUS = theme.radii.lg;
   const friendsAccent = theme.modeAccent("friends").primary;
+  const { t } = useTranslation();
   const { context } = useModeContext();
   const showAiHints = hasAnyAIAccess(context.subscription_tier ?? "free");
 
@@ -438,6 +442,36 @@ export default function FriendsHome() {
     return { score, tags };
   }, [showAiHints, selfProfile, currentProfile]);
 
+  const planHint = React.useMemo(
+    () =>
+      selectPlanHintCopy(
+        {
+          mode: "friends",
+          person: currentProfile ? { name: currentProfile.display_name, interests: currentProfile.chipItems } : null,
+          selfInterests: selfProfile?.interests,
+        },
+        (key, options) => t(key, options)
+      ),
+    [currentProfile, selfProfile, t]
+  );
+
+  const handlePlanHintPress = () => {
+    Haptics.selectionAsync();
+    if (currentProfile && planHint.request) {
+      router.push(
+        buildPlanHintRoute({
+          mode: "friends",
+          request: planHint.request,
+          partnerUserId: currentProfile.user_id ?? currentProfile.id,
+          partnerDisplayName: currentProfile.display_name,
+        })
+      );
+      return;
+    }
+    // No one on the deck: fall back to group planning.
+    router.push({ pathname: "/groups/plan-together", params: { mode: "friends" } });
+  };
+
   return (
     <View style={styles.container}>
       <ModeHeader
@@ -450,21 +484,7 @@ export default function FriendsHome() {
         onFilterPress={() => router.push("/(modes)/friends/filters")}
       />
 
-      <Pressable
-        onPress={() => {
-          Haptics.selectionAsync();
-          router.push({ pathname: "/groups/plan-together", params: { mode: "friends" } });
-        }}
-        style={styles.planBanner}
-        accessibilityLabel="Plan something for a group of friends"
-      >
-        <Ionicons name="sparkles" size={20} color={friendsAccent} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.planBannerTitle}>Plan something for us</Text>
-          <Text style={styles.planBannerSubtitle}>Pick a few friends — get group plan options.</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color={friendsAccent} />
-      </Pressable>
+      <PlanHintBanner copy={planHint} mode="friends" onPress={handlePlanHintPress} style={styles.planBanner} />
 
       {incomingRequestCount > 0 ? (
         <Pressable
@@ -658,30 +678,8 @@ function createStyles(theme: AppTheme) {
       borderColor: friendsAccent,
     },
     planBanner: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: theme.spacing.sm,
       marginHorizontal: theme.spacing.lg,
-      marginTop: theme.spacing.sm,
-      marginBottom: theme.spacing.sm,
-      paddingVertical: theme.spacing.md,
-      paddingHorizontal: theme.spacing.md,
-      borderRadius: theme.radii.md,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: friendsAccent + "55",
-    },
-    planBannerTitle: {
-      ...theme.type.button,
-      fontFamily: theme.type.button.fontFamily,
-      color: theme.colors.textPrimary,
-    },
-    planBannerSubtitle: {
-      ...theme.type.caption,
-      fontFamily: theme.type.caption.fontFamily,
-      fontSize: 11,
-      color: theme.colors.textSecondary,
-      marginTop: 1,
+      marginVertical: theme.spacing.sm,
     },
     requestsBannerText: {
       flex: 1,

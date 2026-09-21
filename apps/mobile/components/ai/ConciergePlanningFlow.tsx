@@ -93,6 +93,15 @@ function dayKey(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/** "YYYY-MM-DD" → local Date; undefined when missing, malformed or in the past. */
+function parsePrefillDate(s: string | undefined): Date | undefined {
+  const m = s ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(s) : null;
+  if (!m) return undefined;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (Number.isNaN(d.getTime()) || dayKey(d) !== s) return undefined;
+  return dayKey(d) >= dayKey(new Date()) ? d : undefined;
+}
+
 /** When `details.city` is missing, derive from "City, Country" — normalize ISO country segment first. */
 function cityCountryFromLocation(loc: string | undefined, language: string): { city?: string; country?: string } {
   const s = loc?.trim() ?? "";
@@ -119,8 +128,17 @@ export type ConciergePlanningFlowProps = {
   /** Optional match / connection for profile-aware ranking + gateway partner context. */
   partnerUserId?: string;
   partnerDisplayNameHint?: string;
-  /** When opening from proactive "View plan" / "Invite someone": start at this step with pre-fill */
-  initialStep?: "activity" | "social";
+  /**
+   * When opening from proactive "View plan" / "Invite someone": start at this step with pre-fill.
+   * "quick": person/event hint — land on the free-text quick step (skips intent + who's joining).
+   */
+  initialStep?: "activity" | "social" | "quick";
+  /** With initialStep "quick": text pre-filled into the quick request. */
+  prefillRequest?: string;
+  /** With initialStep "quick" + prefillRequest: generate plan options immediately. */
+  autoGenerate?: boolean;
+  /** YYYY-MM-DD to plan for instead of today (e.g. the event's day). */
+  prefillDate?: string;
   proactiveActivityLabel?: string;
   proactiveDatePreset?: DatePreset;
   proactiveTimeOfDay?: TimeOfDay;
@@ -140,12 +158,17 @@ export function ConciergePlanningFlow({
   partnerUserId,
   partnerDisplayNameHint,
   initialStep,
+  prefillRequest,
+  autoGenerate,
+  prefillDate,
   proactiveActivityLabel,
   proactiveDatePreset,
   proactiveTimeOfDay,
   onClose,
   onBack,
 }: ConciergePlanningFlowProps) {
+  const startQuick = initialStep === "quick";
+  const quickPrefill = startQuick ? prefillRequest?.trim() || undefined : undefined;
   const theme = useAppTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const { i18n } = useTranslation();
@@ -165,13 +188,14 @@ export function ConciergePlanningFlow({
   const [subActivityKey, setSubActivityKey] = useState<string | null>(null);
   const [subActivityLabel, setSubActivityLabel] = useState<string | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<{ topic: string; subtopic: string } | null>(null);
-  const [flowStep, setFlowStep] = useState<ConciergeFlowStep>("intent");
-  const [activityKey, setActivityKey] = useState<string | null>(null);
-  const [activityLabel, setActivityLabel] = useState<string | null>(null);
+  const [flowStep, setFlowStep] = useState<ConciergeFlowStep>(startQuick ? "quick_request" : "intent");
+  const [activityKey, setActivityKey] = useState<string | null>(startQuick ? "quick" : null);
+  const [activityLabel, setActivityLabel] = useState<string | null>(startQuick ? "Quick plan" : null);
   const [details, setDetails] = useState<Partial<ActivityDetails>>({
     location: formatDefaultLocationDisplay(defaultCity, defaultCountry, appLanguage),
     datePreset: "today",
-    date: new Date(),
+    date: parsePrefillDate(prefillDate) ?? new Date(),
+    ...(quickPrefill ? { intentNotes: quickPrefill } : {}),
     singleDay: true,
     timeOfDay: "any",
     budgetAmount: "",
@@ -343,7 +367,8 @@ export function ConciergePlanningFlow({
 
   const proactiveInitDone = useRef(false);
   useEffect(() => {
-    if (proactiveInitDone.current || !initialStep || !proactiveActivityLabel) return;
+    // "quick" is set up in the initial state above.
+    if (proactiveInitDone.current || !initialStep || initialStep === "quick" || !proactiveActivityLabel) return;
     proactiveInitDone.current = true;
     setActivityKey("proactive");
     setActivityLabel(proactiveActivityLabel);
@@ -716,6 +741,25 @@ export function ConciergePlanningFlow({
       setError(msg);
     }
   }, [trace, effectiveMode, buildContext, source_screen, source_planner_tab, activityKey, activityLabel, partnerId, details, appLanguage, structuredPlans]);
+
+  /** Person/event hint: generate as soon as the default location is known (or after a short wait). */
+  const autoQuickRef = useRef(!!(autoGenerate && quickPrefill));
+  const [autoQuickWaitOver, setAutoQuickWaitOver] = useState(false);
+  useEffect(() => {
+    if (!autoQuickRef.current) return;
+    const timer = setTimeout(() => setAutoQuickWaitOver(true), 2500);
+    return () => clearTimeout(timer);
+  }, []);
+  useEffect(() => {
+    if (!autoQuickRef.current || !quickPrefill) return;
+    if (flowStep !== "quick_request") {
+      autoQuickRef.current = false;
+      return;
+    }
+    if (!details.location?.trim() && !autoQuickWaitOver) return;
+    autoQuickRef.current = false;
+    void handleGenerate({ requestOverride: quickPrefill });
+  }, [flowStep, details.location, autoQuickWaitOver, quickPrefill, handleGenerate]);
 
   const handleQuickGenerate = useCallback(
     (query: string) => {
