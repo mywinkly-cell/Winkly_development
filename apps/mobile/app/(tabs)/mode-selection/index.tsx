@@ -18,6 +18,7 @@ import {
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useModeContext } from "@/providers";
@@ -41,6 +42,9 @@ import {
   type ModeDiscoverCounts,
 } from "@/lib/discover/modeDiscoverCounts";
 import { WeeklySparkNudge } from "@/components/mode/WeeklySparkNudge";
+import { BusinessWaitlistSheet } from "@/components/mode/BusinessWaitlistSheet";
+import { ComingSoonBadge } from "@/components/mode/ComingSoonBadge";
+import { isModeAvailable } from "@/lib/modes/availability";
 import {
   hasUnseenWeeklySpark,
   WEEKLY_SPARK_FOCUS_PARAM,
@@ -100,6 +104,7 @@ export default function ModeSelectionIndex() {
   const [discoverCounts, setDiscoverCounts] = useState<ModeDiscoverCounts>({});
   const [skippedMode, setSkippedMode] = useState<SkippedOnboardingMode | null>(null);
   const [showSparkNudge, setShowSparkNudge] = useState(false);
+  const [waitlistVisible, setWaitlistVisible] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -171,6 +176,12 @@ export default function ModeSelectionIndex() {
 
   const handleModePress = async (mode: ModeKey) => {
     if (loading || enteringMode) return;
+
+    if (!isModeAvailable(mode)) {
+      Haptics.selectionAsync();
+      setWaitlistVisible(true);
+      return;
+    }
 
     if (mode === "events") {
       Haptics.selectionAsync();
@@ -261,7 +272,7 @@ export default function ModeSelectionIndex() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {skippedMode && progress[skippedMode] < 100 ? (
+        {skippedMode && isModeAvailable(skippedMode) && progress[skippedMode] < 100 ? (
           <Pressable
             onPress={() => {
               Haptics.selectionAsync();
@@ -323,6 +334,7 @@ export default function ModeSelectionIndex() {
         <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", marginHorizontal: -CARD_GAP / 2 }}>
           {(["romance", "friends", "business", "events"] as ModeKey[]).map((mode) => {
             const cfg = MODE_CONFIG[mode];
+            const comingSoon = !isModeAvailable(mode);
             const ready =
               mode === "events" ||
               getModeEntryBlockReason(mode, progress, context.permissions) === null;
@@ -332,12 +344,13 @@ export default function ModeSelectionIndex() {
                 testID={`mode-card-${mode}`}
                 label={cfg.label}
                 description={cfg.description}
-                discoverLine={formatModeDiscoverCount(mode, discoverCounts[mode])}
+                discoverLine={comingSoon ? null : formatModeDiscoverCount(mode, discoverCounts[mode])}
                 color={modeCardColors[mode]}
                 icon={cfg.icon}
                 iconImage={cfg.iconImage}
                 active={activeMode === mode}
                 ready={ready}
+                comingSoon={comingSoon}
                 busy={enteringMode === mode}
                 onPress={() => void handleModePress(mode)}
               />
@@ -346,6 +359,7 @@ export default function ModeSelectionIndex() {
         </View>
       </ScrollView>
 
+      <BusinessWaitlistSheet visible={waitlistVisible} onClose={() => setWaitlistVisible(false)} />
     </SafeScreenView>
   );
 }
@@ -360,6 +374,8 @@ type ModeCardProps = {
   iconImage?: number;
   active: boolean;
   ready: boolean;
+  /** Visible but not live yet: muted tile + "Coming soon" badge; press opens the waitlist. */
+  comingSoon?: boolean;
   busy: boolean;
   onPress: () => void;
 };
@@ -372,7 +388,8 @@ const CARD_RADIUS = radii.lg + 8;
 const CARD_PADDING = 24;
 const ACTIVE_SCALE = 1.08;
 
-function ModeCard({ testID, label, description, discoverLine, color, icon, iconImage, active, ready, busy, onPress }: ModeCardProps) {
+function ModeCard({ testID, label, description, discoverLine, color, icon, iconImage, active, ready, comingSoon, busy, onPress }: ModeCardProps) {
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -395,7 +412,7 @@ function ModeCard({ testID, label, description, discoverLine, color, icon, iconI
   return (
     <View
       style={{
-        opacity: ready && !busy ? 1 : 0.72,
+        opacity: comingSoon || (ready && !busy) ? 1 : 0.72,
         transform: [{ scale: active ? ACTIVE_SCALE : 1 }],
         margin: CARD_GAP / 2,
       }}
@@ -409,7 +426,9 @@ function ModeCard({ testID, label, description, discoverLine, color, icon, iconI
         android_ripple={{ color: "transparent" }}
         accessibilityRole="button"
         accessibilityLabel={
-          ready
+          comingSoon
+            ? t("modes.comingSoonA11y", { mode: label })
+            : ready
             ? `Enter ${label} mode. ${description}${discoverLine ? `. ${discoverLine}` : ""}`
             : `${label} mode locked. ${description}. Set up your profile to unlock.`
         }
@@ -421,12 +440,12 @@ function ModeCard({ testID, label, description, discoverLine, color, icon, iconI
               width: CARD_SIZE,
               height: CARD_SIZE,
               borderRadius: CARD_RADIUS,
-              backgroundColor: color,
+              backgroundColor: comingSoon ? theme.colors.backgroundMuted : color,
               transform: [{ scale: scaleAnim }],
               borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.14)",
+              borderColor: comingSoon ? theme.colors.border : "rgba(255,255,255,0.14)",
             },
-            depthShadow,
+            comingSoon ? null : depthShadow,
           ]}
         >
           <View
@@ -442,18 +461,20 @@ function ModeCard({ testID, label, description, discoverLine, color, icon, iconI
             }}
           >
             <View style={{ alignItems: "center", flex: 1, justifyContent: "center" }}>
-              {!ready ? (
+              {comingSoon ? (
+                <ComingSoonBadge style={{ position: "absolute", top: -theme.spacing.sm }} />
+              ) : !ready ? (
                 <Ionicons name="lock-closed" size={18} color="rgba(255,255,255,0.9)" style={{ position: "absolute", top: 0, right: 0 }} />
               ) : null}
               {iconImage ? (
-                <Image source={iconImage} style={{ width: CARD_ICON_SIZE, height: CARD_ICON_SIZE, marginBottom: 12, tintColor: "#FFFFFF" }} resizeMode="contain" />
+                <Image source={iconImage} style={{ width: CARD_ICON_SIZE, height: CARD_ICON_SIZE, marginBottom: 12, tintColor: comingSoon ? theme.colors.textMuted : "#FFFFFF" }} resizeMode="contain" />
               ) : (
-                <Ionicons name={icon} size={CARD_ICON_SIZE} color="#FFFFFF" style={{ marginBottom: 12 }} />
+                <Ionicons name={icon} size={CARD_ICON_SIZE} color={comingSoon ? theme.colors.textMuted : "#FFFFFF"} style={{ marginBottom: 12 }} />
               )}
-              <Text selectable={false} style={{ ...theme.type.h3, color: "#FFFFFF", marginBottom: 4, textAlign: "center", fontFamily: theme.type.h1.fontFamily }}>
+              <Text selectable={false} style={{ ...theme.type.h3, color: comingSoon ? theme.colors.textSecondary : "#FFFFFF", marginBottom: 4, textAlign: "center", fontFamily: theme.type.h1.fontFamily }}>
                 {label}
               </Text>
-              <Text selectable={false} style={{ ...theme.type.caption, color: "#FFFFFF", textAlign: "center", lineHeight: 18 }}>
+              <Text selectable={false} style={{ ...theme.type.caption, color: comingSoon ? theme.colors.textMuted : "#FFFFFF", textAlign: "center", lineHeight: 18 }}>
                 {description}
               </Text>
               {discoverLine ? (

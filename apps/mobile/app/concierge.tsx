@@ -48,12 +48,13 @@ import {
   type ConciergeFeedbackType,
 } from "@/lib/ai/conciergeStorage";
 import { useDefaultLocation } from "@/lib/ai/useDefaultCity";
+import { isModeAvailable } from "@/lib/modes/availability";
 
 function isWinklyOption(opt: ExperienceOption): boolean {
   return (opt as { source?: string }).source === "winkly_event";
 }
 
-const VALID_MODES: Mode[] = ["romance", "friends", "business", "events"];
+const VALID_MODES: Mode[] = (["romance", "friends", "business", "events"] as Mode[]).filter((m) => isModeAvailable(m));
 
 type ConciergeStep = "form" | "options" | "message_only" | "confirm";
 

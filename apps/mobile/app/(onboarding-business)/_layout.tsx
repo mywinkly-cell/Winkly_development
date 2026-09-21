@@ -1,13 +1,12 @@
 import { Stack } from "expo-router";
 import { premiumPushStackScreenOptions } from "@/lib/navigation/screenOptions";
 import { FeatureRouteGate } from "@/components/routing/FeatureRouteGate";
-import { useAuth } from "@/providers/AuthProvider";
-import { canAccessBusinessRoutes } from "@/lib/modes/availability";
+import { isAccountTypeAvailable } from "@/lib/modes/availability";
 
-export default function BusinessLayout() {
-  const { accountType } = useAuth();
+/** Business-account onboarding. Unreachable while business accounts are parked for the beta. */
+export default function BusinessOnboardingLayout() {
   return (
-    <FeatureRouteGate allowed={canAccessBusinessRoutes(accountType)}>
+    <FeatureRouteGate allowed={isAccountTypeAvailable("business")}>
       <Stack screenOptions={premiumPushStackScreenOptions({ headerShown: false })} />
     </FeatureRouteGate>
   );

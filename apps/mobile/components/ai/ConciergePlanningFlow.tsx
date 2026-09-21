@@ -82,6 +82,9 @@ import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { Header } from "@/components/ds";
 import { PlanCard, PlanCardBadge, PlanCardMeta, PlanCardMapLink, PlanCardIconAction } from "@/components/plans/PlanCard";
 import type { Mode } from "@/types";
+import { isModeAvailable } from "@/lib/modes/availability";
+
+const INVITE_MODE_OPTIONS = (["romance", "friends", "business"] as const).filter((m) => isModeAvailable(m));
 
 function dayKey(d: Date): string {
   const y = d.getFullYear();
@@ -1569,7 +1572,7 @@ export function ConciergePlanningFlow({
                 }
               : undefined
           }
-          inviteModeOptions={partnerId ? ["romance", "friends", "business"] : undefined}
+          inviteModeOptions={partnerId ? INVITE_MODE_OPTIONS : undefined}
           inviteMode={partnerInviteMode ?? undefined}
           onInviteModeChange={
             partnerId

@@ -7,6 +7,7 @@ import { View, Text, ScrollView, StyleSheet, Image, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { Card, Header, ListRow, PrimaryButton, TextButton } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { isModeAvailable } from "@/lib/modes/availability";
 import { supabase } from "@/lib/supabase";
 
 export default function ProfileIndex() {
@@ -68,12 +69,14 @@ export default function ProfileIndex() {
             onPress={() => router.push("/profile/edit-friends")}
             style={styles.row}
           />
-          <ListRow
-            title="Business"
-            subtitle="Role, company, networking focus"
-            onPress={() => router.push("/profile/edit-business")}
-            style={styles.row}
-          />
+          {isModeAvailable("business") ? (
+            <ListRow
+              title="Business"
+              subtitle="Role, company, networking focus"
+              onPress={() => router.push("/profile/edit-business")}
+              style={styles.row}
+            />
+          ) : null}
           <ListRow
             title="Media"
             subtitle="Photos and profile visuals"

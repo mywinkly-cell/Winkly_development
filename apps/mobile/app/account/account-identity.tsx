@@ -20,6 +20,7 @@ import { useAuth } from "@/providers";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { Card, Header, ListRow, PrimaryButton } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { isAccountTypeAvailable } from "@/lib/modes/availability";
 import type { AccountType } from "@/types";
 import {
   accountTypeActionVerb,
@@ -139,15 +140,19 @@ export default function AccountIdentity() {
               ) : null}
             </View>
           ) : null}
-          <PrimaryButton
-            title={actionLabel}
-            onPress={handleSwitchAccountType}
-            loading={switching}
-            disabled={switching}
-            icon={<Ionicons name="arrow-forward" size={18} color={theme.colors.onPrimary} />}
-            style={styles.primaryBtn}
-          />
-          <Text style={styles.hint}>{t("auth.accountTypeSwitchHint")}</Text>
+          {isAccountTypeAvailable(targetType) ? (
+            <>
+              <PrimaryButton
+                title={actionLabel}
+                onPress={handleSwitchAccountType}
+                loading={switching}
+                disabled={switching}
+                icon={<Ionicons name="arrow-forward" size={18} color={theme.colors.onPrimary} />}
+                style={styles.primaryBtn}
+              />
+              <Text style={styles.hint}>{t("auth.accountTypeSwitchHint")}</Text>
+            </>
+          ) : null}
         </Card>
 
         <Card style={styles.card}>

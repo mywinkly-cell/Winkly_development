@@ -8,6 +8,8 @@ import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { useAppTheme } from "@/constants/design-system";
+import { isAccountTypeParked } from "@/lib/modes/availability";
+import { BUSINESS_COMING_SOON_ROUTE } from "@/lib/routing/guards";
 
 export default function EmailVerified() {
   const router = useRouter();
@@ -19,7 +21,9 @@ export default function EmailVerified() {
       const { data } = await supabase.auth.getUser();
       const accountType = data?.user?.user_metadata?.account_type as string | undefined;
 
-      if (accountType === "business") {
+      if (isAccountTypeParked(accountType)) {
+        router.replace(BUSINESS_COMING_SOON_ROUTE as never);
+      } else if (accountType === "business") {
         router.replace("/(onboarding-business)/get-started-business");
       } else {
         router.replace("/(onboarding-personal)/profile-core");

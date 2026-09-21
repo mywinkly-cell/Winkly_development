@@ -10,7 +10,7 @@ import { useModeContext } from "@/providers/ModeContextProvider";
 import { resolveRouteAction } from "@/lib/routing/guards";
 
 export function RouteGuard({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth();
+  const { session, loading, accountType } = useAuth();
   const { context, loading: modeLoading } = useModeContext();
   const segments = useSegments();
   const router = useRouter();
@@ -23,6 +23,7 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
       path: segments.join("/"),
       activeMode: context.active_mode,
       permissions: context.permissions,
+      accountType,
     });
     if (action.type === "redirect") {
       const path = (segments as string[]).join("/");
@@ -36,7 +37,7 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
         router.replace(action.to as never);
       }
     }
-  }, [loading, modeLoading, session, context.active_mode, context.permissions, segments, router]);
+  }, [loading, modeLoading, session, context.active_mode, context.permissions, accountType, segments, router]);
 
   return <>{children}</>;
 }

@@ -66,6 +66,7 @@ import {
 import { WizardShell } from "@/components/onboarding/wizard/WizardShell";
 import { NameStep, PhotosStep, LocationStep, AboutStep, LanguageModal } from "@/components/onboarding/wizard/GeneralSteps";
 import { ModeSelectStep } from "@/components/onboarding/wizard/ModeSelectStep";
+import { isModeAvailable } from "@/lib/modes/availability";
 import { ReviewStep } from "@/components/onboarding/wizard/ReviewStep";
 import { PhotoConfirmModal } from "@/components/media/PhotoConfirmModal";
 import { uploadLocalPhotos, uploadLocalVideos } from "@/lib/uploadMedia";
@@ -270,14 +271,16 @@ export default function ProfileCore() {
   /** Modes enabled for the onboarding wizard — derived straight from the same booleans the edit flow's Switches use. */
   const enabledModes = useMemo(
     () =>
-      ALL_ONBOARDING_MODES.filter((m) =>
-        m === "romance" ? romanceEnabled : m === "friends" ? friendsEnabled : businessEnabled
+      ALL_ONBOARDING_MODES.filter(
+        (m) =>
+          isModeAvailable(m) && (m === "romance" ? romanceEnabled : m === "friends" ? friendsEnabled : businessEnabled)
       ),
     [romanceEnabled, friendsEnabled, businessEnabled]
   );
 
   const toggleMode = useCallback(
     (mode: PrimaryOnboardingMode) => {
+      if (!isModeAvailable(mode)) return;
       Haptics.selectionAsync();
       if (mode === "romance") setRomanceEnabled((v) => !v);
       else if (mode === "friends") setFriendsEnabled((v) => !v);
@@ -2103,6 +2106,7 @@ export default function ProfileCore() {
           onFoodChange={setFoodFriends}
           toggleMulti={toggleMulti}
         />
+        {isModeAvailable("business") ? (
         <BusinessSubProfile
           enabled={businessEnabled}
           toggle={() => setBusinessEnabled(!businessEnabled)}
@@ -2128,6 +2132,7 @@ export default function ProfileCore() {
           onInstagramChange={setInstagramBusiness}
           toggleMulti={toggleMulti}
         />
+        ) : null}
           </View>
 
         {saveError ? (

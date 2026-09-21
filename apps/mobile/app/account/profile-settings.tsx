@@ -8,6 +8,7 @@ import { useAuth } from "@/providers";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { Card, Header, ListRow, PrimaryButton, SecondaryButton } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { isAccountTypeAvailable } from "@/lib/modes/availability";
 import type { AccountType } from "@/types";
 import {
   accountTypeActionVerb,
@@ -102,12 +103,14 @@ export default function ProfileSettingsScreen() {
         <Card padding="none" style={styles.card}>
           <Text style={{ ...styles.cardTitle, padding: theme.spacing.lg, paddingBottom: 0 }}>Account</Text>
           <ListRow title="Open Account Hub" onPress={() => router.push("/account")} style={styles.row} />
-          <ListRow
-            title={switchLabel}
-            onPress={handleSwitchAccountType}
-            disabled={switching}
-            style={styles.row}
-          />
+          {isAccountTypeAvailable(target) ? (
+            <ListRow
+              title={switchLabel}
+              onPress={handleSwitchAccountType}
+              disabled={switching}
+              style={styles.row}
+            />
+          ) : null}
           <ListRow
             title="Delete / Deactivate"
             destructive

@@ -12,3 +12,21 @@
  * Mirror of the server-side `SPARK_SPONSORED_ENABLED` env read by weekly-spark-cron.
  */
 export const SPARK_SPONSORED_ENABLED = false;
+
+/**
+ * Business MODE — private users' professional-networking mode (the 4th mode tile).
+ *
+ * OFF for the closed beta: Romance, Friends and Events are live; Business shows a "Coming soon"
+ * tile that captures waitlist interest (app_feedback, screen = "business_waitlist") and cannot be
+ * enabled or entered. All Business mode code/routes stay in place, guarded — never read this
+ * directly in UI; go through `isModeAvailable()` in lib/modes/availability.
+ */
+export const BUSINESS_MODE_ENABLED = false;
+
+/**
+ * Business ACCOUNT type — venues/companies with offers, analytics and ticketing.
+ *
+ * OFF for the closed beta: sign-up can't create one and existing business accounts land on a
+ * "coming soon" screen (their data is untouched). Read via `isAccountTypeAvailable()`.
+ */
+export const BUSINESS_ACCOUNTS_ENABLED = false;

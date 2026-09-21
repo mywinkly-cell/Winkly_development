@@ -24,6 +24,8 @@ import {
   type SplashDestination,
 } from "@/lib/routing/splash";
 import { supabase } from "@/lib/supabase";
+import { isAccountTypeParked } from "@/lib/modes/availability";
+import { BUSINESS_COMING_SOON_ROUTE } from "@/lib/routing/guards";
 
 const WINK_DURATION_MS = 1300;
 const HOLD_AFTER_WINK_MS = 2000;
@@ -129,6 +131,11 @@ export default function Splash() {
 
         const accountType = session.user.user_metadata?.account_type as string | undefined;
         const userId = session.user.id;
+
+        if (isAccountTypeParked(accountType)) {
+          router.replace(BUSINESS_COMING_SOON_ROUTE as never);
+          return;
+        }
         let profileComplete = false;
 
         if (accountType === "business") {

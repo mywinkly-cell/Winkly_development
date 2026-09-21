@@ -23,6 +23,7 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { isAccountTypeAvailable } from "@/lib/modes/availability";
 import { getEmailRedirectTo } from "@/lib/authRedirectUrl";
 import {
   isExistingUserError,
@@ -46,8 +47,10 @@ export default function Signup() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // A stale `?accountType=business` link can't create a business account while they're parked.
+  const businessAccountsAvailable = isAccountTypeAvailable("business");
   const [accountType, setAccountType] = useState<"personal" | "business">(
-    params.accountType === "business" ? "business" : "personal"
+    params.accountType === "business" && businessAccountsAvailable ? "business" : "personal"
   );
   const [isAdult, setIsAdult] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -60,9 +63,9 @@ export default function Signup() {
   }, [fadeAnim]);
 
   React.useEffect(() => {
-    if (params.accountType === "business") setAccountType("business");
+    if (params.accountType === "business" && businessAccountsAvailable) setAccountType("business");
     else if (params.accountType === "personal") setAccountType("personal");
-  }, [params.accountType]);
+  }, [params.accountType, businessAccountsAvailable]);
 
   React.useEffect(() => {
     getTermsAndCookiesAccepted().then((accepted) => {
@@ -236,6 +239,7 @@ export default function Signup() {
               </Text>
             </TouchableOpacity>
 
+            {isAccountTypeAvailable(alternateType) ? (
             <TouchableOpacity
               onPress={() => {
                 Haptics.selectionAsync();
@@ -249,6 +253,7 @@ export default function Signup() {
                 {alternateType === "business" ? t("auth.createBusinessInstead") : t("auth.createPersonalInstead")}
               </Text>
             </TouchableOpacity>
+            ) : null}
           </View>
         </Animated.View>
       </KeyboardAvoidingView>

@@ -14,6 +14,7 @@ import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Card, TextButton } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { isAccountTypeAvailable } from "@/lib/modes/availability";
 import { getTermsAndCookiesAccepted } from "@/lib/legalFlags";
 
 export default function GetStarted() {
@@ -64,15 +65,17 @@ export default function GetStarted() {
             </Card>
           </Pressable>
 
-          <Pressable
-            onPress={() => { Haptics.selectionAsync(); router.push("/(auth)/signup?accountType=business"); }}
-          >
-            <Card style={styles.cardButton}>
-              <Text style={styles.cardTitle}>{t("onboarding.getStarted.businessTitle")}</Text>
-              <Text style={styles.cardText}>{t("onboarding.getStarted.businessLine1")}</Text>
-              <Text style={styles.cardText}>{t("onboarding.getStarted.businessLine2")}</Text>
-            </Card>
-          </Pressable>
+          {isAccountTypeAvailable("business") ? (
+            <Pressable
+              onPress={() => { Haptics.selectionAsync(); router.push("/(auth)/signup?accountType=business"); }}
+            >
+              <Card style={styles.cardButton}>
+                <Text style={styles.cardTitle}>{t("onboarding.getStarted.businessTitle")}</Text>
+                <Text style={styles.cardText}>{t("onboarding.getStarted.businessLine1")}</Text>
+                <Text style={styles.cardText}>{t("onboarding.getStarted.businessLine2")}</Text>
+              </Card>
+            </Pressable>
+          ) : null}
 
           <TextButton
             title={`${t("auth.hasAccount")} ${t("auth.signin")}`}

@@ -5,6 +5,8 @@ import type { ImperativeRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { Routes } from "@/constants/routes";
 import { isBusinessProfileComplete, isPersonalProfileComplete } from "@/lib/routing/splash";
+import { BUSINESS_COMING_SOON_ROUTE } from "@/lib/routing/guards";
+import { isAccountTypeParked } from "@/lib/modes/availability";
 
 export async function routeAfterAuthentication(router: ImperativeRouter): Promise<void> {
   const { data: userData, error: userErr } = await supabase.auth.getUser();
@@ -20,6 +22,13 @@ export async function routeAfterAuthentication(router: ImperativeRouter): Promis
 
   if (!user.email_confirmed_at) {
     router.replace("/(auth)/verify");
+    return;
+  }
+
+  // Business accounts are parked for the beta: show "coming soon" instead of half-hidden
+  // business screens. Their data is left as-is so they resume normally once the flag flips.
+  if (isAccountTypeParked(accountType)) {
+    router.replace(BUSINESS_COMING_SOON_ROUTE as never);
     return;
   }
 

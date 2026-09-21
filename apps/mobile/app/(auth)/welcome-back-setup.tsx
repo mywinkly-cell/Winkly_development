@@ -9,6 +9,8 @@ import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/providers";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { isAccountTypeParked } from "@/lib/modes/availability";
+import { BUSINESS_COMING_SOON_ROUTE } from "@/lib/routing/guards";
 
 export default function WelcomeBackSetup() {
   const router = useRouter();
@@ -28,7 +30,9 @@ export default function WelcomeBackSetup() {
 
   const handleContinue = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (accountType === "business") {
+    if (isAccountTypeParked(accountType)) {
+      router.replace(BUSINESS_COMING_SOON_ROUTE as never);
+    } else if (accountType === "business") {
       router.replace("/(onboarding-business)/get-started-business");
     } else {
       router.replace("/(onboarding-personal)/profile-core");

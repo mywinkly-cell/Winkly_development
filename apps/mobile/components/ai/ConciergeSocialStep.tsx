@@ -12,6 +12,7 @@ import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { Card, ListRow, TextButton } from "@/components/ds";
 import type { Mode } from "@/types";
 import type { WhoJoining } from "@/lib/ai/conciergePlanningFlow";
+import { isWhoJoiningAvailable } from "@/lib/modes/availability";
 import { Avatar } from "@/components/ui/Avatar";
 
 export type SuggestedPerson = {
@@ -97,7 +98,7 @@ export function ConciergeSocialStep({
       ) : null}
 
       <Card elevation={0} padding="none">
-        {OPTIONS.map((opt, i) => (
+        {OPTIONS.filter((opt) => isWhoJoiningAvailable(opt.key)).map((opt, i) => (
           <ListRow
             key={opt.key}
             title={opt.label}

@@ -13,6 +13,8 @@ import {
 } from "@/lib/access/profiles";
 import { Card, Chip, Header, Input, TextButton } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { FeatureRouteGate } from "@/components/routing/FeatureRouteGate";
+import { canAccessBusinessRoutes } from "@/lib/modes/availability";
 import type { BusinessProfileType } from "@/types";
 import { BUSINESS_ORG_SUBTYPE_OPTIONS, normalizeBusinessType } from "@/lib/business/businessTypes";
 
@@ -40,7 +42,17 @@ function fromMetaTags(value: unknown): string {
   return "";
 }
 
-export default function EditBusiness() {
+/** Business sub-profile / business-account editor; parked while neither side is live. */
+export default function EditBusinessRoute() {
+  const { accountType } = useAuth();
+  return (
+    <FeatureRouteGate allowed={canAccessBusinessRoutes(accountType)}>
+      <EditBusiness />
+    </FeatureRouteGate>
+  );
+}
+
+function EditBusiness() {
   const router = useRouter();
   const { user, accountType } = useAuth();
   const isBusinessAccount = accountType === "business";
