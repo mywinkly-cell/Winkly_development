@@ -6,6 +6,8 @@ import { View, Text } from "react-native";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { Button } from "@/components/ui/Button";
 import { OnboardingStepIndicator } from "@/components/onboarding/OnboardingStepIndicator";
+import { AutosaveStatusLabel } from "@/components/onboarding/wizard/AutosaveStatusLabel";
+import type { AutosaveStatus } from "@/lib/profile/autosaveController";
 
 export function WizardShell(props: {
   currentStep: number; // 1-based
@@ -20,17 +22,20 @@ export function WizardShell(props: {
   saving?: boolean;
   saveError?: string | null;
   onRetry?: () => void;
+  /** Background autosave state, shown as a tiny label above the step indicator. */
+  autosaveStatus?: AutosaveStatus;
   showSkip?: boolean;
   onSkip?: () => void;
 }) {
   const {
     currentStep, totalSteps, stepLabel, subProgress, children,
     onBack, backDisabled, onNext, nextLabel, saving, saveError, onRetry,
-    showSkip, onSkip,
+    autosaveStatus, showSkip, onSkip,
   } = props;
 
   return (
     <View>
+      {autosaveStatus ? <AutosaveStatusLabel status={autosaveStatus} /> : null}
       <OnboardingStepIndicator currentStep={currentStep} totalSteps={totalSteps} label={stepLabel} subProgress={subProgress} />
 
       {children}

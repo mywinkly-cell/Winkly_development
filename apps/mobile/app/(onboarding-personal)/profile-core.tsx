@@ -78,6 +78,15 @@ import {
   validateProfileCoreSubmit,
 } from "@/lib/profile/validation";
 import { keyboardAvoidingProps, PROFILE_HEADER_KEYBOARD_OFFSET } from "@/lib/ui/keyboardAvoiding";
+import {
+  buildProfileDraft,
+  parseDateOnly,
+  seedSavedDraft,
+  toISODateOnly,
+  type AutosaveMode,
+  type ProfileDraft,
+} from "@/lib/profile/profileAutosave";
+import { useProfileAutosave } from "@/lib/profile/useProfileAutosave";
 
 const EDUCATION_OPTIONS = [
   "High school graduate",
@@ -93,14 +102,6 @@ function sortedProfileLanguages(selected: string[]): string[] {
   const set = new Set(selected);
   const rest = PROFILE_LANGS.filter((l) => !set.has(l)).sort((a, b) => a.localeCompare(b));
   return [...selected.filter((l) => PROFILE_LANGS.includes(l)), ...rest];
-}
-
-function toISODateOnly(d: Date) {
-  // yyyy-mm-dd
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function ensureLength<T>(arr: T[], len: number): T[] {
@@ -264,6 +265,9 @@ export default function ProfileCore() {
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Autosave stays off until the initial load has applied to state (and while it re-runs).
+  const [hydrated, setHydrated] = useState(false);
+  const hydrationRef = useRef<{ profileRow: boolean; modeRows: AutosaveMode[] }>({ profileRow: false, modeRows: [] });
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [cropModalVisible, setCropModalVisible] = useState(false);
   const [pendingCrop, setPendingCrop] = useState<{ uri: string; type: "core" | "romance" | "friends" | "business"; index: number } | null>(null);
@@ -307,8 +311,13 @@ export default function ProfileCore() {
   // ─────────────── LOAD FROM SUPABASE + DRAFT + GPS ───────────────
   useEffect(() => {
     (async () => {
+      setHydrated(false);
+      hydrationRef.current = { profileRow: false, modeRows: [] };
+      // A failed read must not enable autosave: it could overwrite real server data with empty/stale state.
+      let hydrationFailed = false;
       try {
         const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError || !userData?.user) hydrationFailed = true;
         let loadedFromSupabase = false;
         let resumeFromDb: Parameters<typeof inferWizardResumeStep>[0] | null = null;
         let dbEnabledModes: PrimaryOnboardingMode[] = [];
@@ -325,14 +334,16 @@ export default function ProfileCore() {
           // birthday is intentionally NOT selected from user_profiles: the raw
           // DOB column is locked down at the API layer. The owner reads their own
           // date of birth only via the get_my_birthday() RPC (keyed on auth.uid()).
-          const { data: up } = await supabase
+          const { data: up, error: upErr } = await supabase
             .from("user_profiles")
             .select("first_name, last_name, gender, city, education, occupation, languages, instagram, core_photos, main_photo_url, night_owl, interests, show_full_name")
             .eq("id", userId)
             .maybeSingle();
+          if (upErr) hydrationFailed = true;
 
           const { data: myBirthdayIso } = await supabase.rpc("get_my_birthday");
-          const myBirthdayDate = myBirthdayIso ? new Date(myBirthdayIso as string) : null;
+          // Parsed as a local date: new Date("yyyy-mm-dd") is UTC midnight and shifts a day west of UTC.
+          const myBirthdayDate = myBirthdayIso ? parseDateOnly(myBirthdayIso as string) : null;
 
           const upRow = up as {
             first_name?: string; last_name?: string; gender?: string; birthday?: string;
@@ -348,6 +359,7 @@ export default function ProfileCore() {
 
           if (upRow?.first_name || upRow?.last_name) {
             loadedFromSupabase = true;
+            hydrationRef.current.profileRow = true;
             setFirstName(upRow.first_name ?? "");
             setLastName(upRow.last_name ?? "");
             setGender(upRow.gender ?? "");
@@ -373,10 +385,11 @@ export default function ProfileCore() {
             dbCorePhotoCount = photos.length;
           }
 
-          const { data: subs } = await supabase
+          const { data: subs, error: subsErr } = await supabase
             .from("sub_profiles")
             .select("mode, bio, photos, interests, meta")
             .eq("user_id", userId);
+          if (subsErr) hydrationFailed = true;
 
           (subs ?? []).forEach((row: { mode: string; bio?: string | null; photos?: string[] | null; interests?: string[] | null; meta?: Record<string, unknown> | null }) => {
             const meta = row.meta ?? {};
@@ -452,6 +465,7 @@ export default function ProfileCore() {
           });
 
           setInterests(generalInterests);
+          hydrationRef.current.modeRows = [...dbEnabledModes];
 
           if (loadedFromSupabase) {
             resumeFromDb = {
@@ -556,8 +570,10 @@ export default function ProfileCore() {
           setCurrentStepIndex(inferWizardResumeStep({ ...resumeFromDb, savedStepIndex: savedStepIndex ?? null }));
         }
       } catch (e) {
+        hydrationFailed = true;
         console.warn("Profile draft/location init warning:", e);
       }
+      setHydrated(!hydrationFailed);
     })();
   }, [appLanguage, isEditFlow]);
 
@@ -685,44 +701,49 @@ export default function ProfileCore() {
     return () => clearTimeout(timeout);
   }, [autoSave]);
 
-  const saveToSupabase = useCallback(async () => {
-    const { data } = await supabase.auth.getUser();
-    if (!data?.user?.id || !firstName || !lastName) return;
-    const cityNorm = city.trim() ? normalizeLocationDisplayString(city.trim(), appLanguage) : null;
-    try {
-      await supabase.from("user_profiles").upsert({
-        id: data.user.id,
-        first_name: firstName,
-        last_name: lastName,
-        gender: gender || null,
-        birthday: birthday ? toISODateOnly(birthday) : null,
-        city: cityNorm,
-        education: education || null,
-        occupation: occupation || null,
-        languages: languages.length ? languages : null,
-        instagram: instagram.trim() || null,
-        interests: interests.length ? interests : null,
-        show_full_name: showFullName,
-        core_photos: corePhotos.filter(Boolean) as string[],
-        main_photo_url: corePhotos[0] || null,
-      }, { onConflict: "id" });
-      await upsertOwnProfileCore(data.user.id, {
-        first_name: firstName.trim() || null,
-        last_name: lastName.trim() || null,
-        city: cityNorm,
-        interests: interests.length ? interests : null,
-        show_full_name: showFullName,
-      });
-    } catch (e) {
-      console.warn("Auto-save to Supabase:", e);
-    }
-  }, [firstName, lastName, gender, birthday, city, education, occupation, languages, instagram, interests, showFullName, corePhotos, appLanguage]);
+  // ─────────────── AUTOSAVE TO SUPABASE ───────────────
+  // One memoized draft of every editable field. Photos/videos are left out on purpose:
+  // they only reach Storage (and the DB) through the explicit Save's upload step.
+  const profileDraft = useMemo(
+    () =>
+      buildProfileDraft({
+        firstName, lastName, gender, birthday,
+        city: city.trim() ? normalizeLocationDisplayString(city.trim(), appLanguage) : "",
+        education, occupation, languages, instagram, interests, showFullName,
+        romanceEnabled, friendsEnabled, businessEnabled,
+        bioRomance, heightRomance, weightRomance, lifestyleRomance, smokingRomance, alcoholRomance,
+        kidsRomance, sexualViewsRomance, relationshipGoalsRomance, religionRomance, politicalViewsRomance,
+        valuesRomance, petsRomance, foodRomance,
+        bioFriends, lifestyleFriends, alcoholFriends, smokingFriends, meetupGoalsFriends, statusFriends,
+        kidsFriends, petsFriends, foodFriends,
+        bioBusiness, roleBusiness, companyBusiness, areaBusiness, networkingGoalsBusiness, skillsBusiness,
+        interestsBusiness, instagramBusiness,
+      }),
+    [
+      firstName, lastName, gender, birthday, city, appLanguage, education, occupation, languages, instagram,
+      interests, showFullName, romanceEnabled, friendsEnabled, businessEnabled,
+      bioRomance, heightRomance, weightRomance, lifestyleRomance, smokingRomance, alcoholRomance,
+      kidsRomance, sexualViewsRomance, relationshipGoalsRomance, religionRomance, politicalViewsRomance,
+      valuesRomance, petsRomance, foodRomance,
+      bioFriends, lifestyleFriends, alcoholFriends, smokingFriends, meetupGoalsFriends, statusFriends,
+      kidsFriends, petsFriends, foodFriends,
+      bioBusiness, roleBusiness, companyBusiness, areaBusiness, networkingGoalsBusiness, skillsBusiness,
+      interestsBusiness, instagramBusiness,
+    ]
+  );
 
-  useEffect(() => {
-    if (!firstName && !lastName) return;
-    const t = setTimeout(saveToSupabase, 2000);
-    return () => clearTimeout(t);
-  }, [saveToSupabase, firstName, lastName]);
+  const seedSaved = useCallback(
+    (hydratedDraft: ProfileDraft) => seedSavedDraft(hydratedDraft, hydrationRef.current),
+    []
+  );
+
+  // Debounced (~1.5 s) diff-only save; flushes on step change, blur/unmount and app background.
+  const { status: autosaveStatus, flush: flushAutosave } = useProfileAutosave({
+    draft: profileDraft,
+    ready: hydrated,
+    seedSaved,
+    flushKey: currentStepIndex,
+  });
 
   // ─────────────── CITY AUTOCOMPLETE (Nominatim) ───────────────
   const onCityChange = useCallback((text: string) => {
@@ -1054,6 +1075,9 @@ export default function ProfileCore() {
     setSaveError(null);
     try {
       setSaving(true);
+      // Land any pending autosave first; the full write below then supersedes it. A failed flush
+      // is fine here: the full write reports its own error.
+      await flushAutosave();
 
       const { data, error: userErr } = await supabase.auth.getUser();
       if (userErr) {
@@ -1299,8 +1323,8 @@ export default function ProfileCore() {
       return;
     }
     await autoSave();
-    await saveToSupabase();
     Haptics.selectionAsync();
+    // The step change below flushes the server autosave; Next never waits on the network.
     setCurrentStepIndex((i) => Math.min(i + 1, wizardSteps.length - 1));
   };
 
@@ -1611,6 +1635,8 @@ export default function ProfileCore() {
             onPress={async () => {
               Haptics.selectionAsync();
               await autoSave();
+              // Bounded wait: the preview should see fresh data, but a bad connection must not freeze the button.
+              await Promise.race([flushAutosave(), new Promise((resolve) => setTimeout(resolve, 3000))]);
               router.push("/profile/view-profile");
             }}
             style={styles.headerBtn}
@@ -2195,6 +2221,7 @@ export default function ProfileCore() {
                 saving={saving}
                 saveError={saveError}
                 onRetry={() => { void handleStepContinue(); }}
+                autosaveStatus={autosaveStatus}
               >
                 {renderWizardStepBody()}
               </WizardShell>
