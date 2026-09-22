@@ -32,7 +32,8 @@ const AI_GATEWAY_TASKS = [
 export type ConciergeTask = (typeof AI_GATEWAY_TASKS)[number];
 
 export type WinklyPlanOption = {
-  option_id: "A" | "B";
+  /** "C" only for the one-line Plan-it entry (three options). */
+  option_id: "A" | "B" | "C";
   character_label: string;
   title: string;
   why_this_fits: string;
@@ -53,13 +54,45 @@ export type WinklyPlanOption = {
 };
 
 export type WinklyPlanResponse = {
-  options: [WinklyPlanOption, WinklyPlanOption];
+  /** Always A + B; Plan-it (`plan_it: true`) may add C. */
+  options: [WinklyPlanOption, WinklyPlanOption, ...WinklyPlanOption[]];
   pending_plan_id: string | null;
-  provider: "gemini" | "fallback";
+  provider: "gemini" | "anthropic" | "openai" | "fallback";
+  /** Inferred when/budget/setting/area (raw — validate with parsePlanAssumptions). Present when user_prompt was sent. */
+  assumptions?: unknown;
+  request_id?: string | null;
 };
 
+/** Plan-it extras for winkly_plan (see lib/ai/planAssumptions.ts `PinnedPlanContext`). */
+export type WinklyPlanItContext = {
+  /** One-line entry: three options + assumptions, and no pending_plans draft. */
+  plan_it?: boolean;
+  pinned_fields?: string[];
+  indoor_outdoor?: "indoor" | "outdoor";
+  area_hint?: string;
+};
+
+/** winkly_plan failure that keeps the gateway's limit metadata (rate limit / quota / tier). */
+export class WinklyPlanError extends Error {
+  readonly status: number;
+  readonly error_code: ConciergeErrorCode;
+  readonly limit_type?: ConciergeLimitType;
+  readonly retry_after?: number;
+  readonly upgrade_to?: "super" | "premium";
+
+  constructor(message: string, status: number, mapped: ReturnType<typeof mapGatewayErrorResponse>) {
+    super(message);
+    this.name = "WinklyPlanError";
+    this.status = status;
+    this.error_code = mapped.error_code ?? "unknown";
+    this.limit_type = mapped.limit_type;
+    this.retry_after = mapped.retry_after;
+    this.upgrade_to = mapped.upgrade_to;
+  }
+}
+
 export async function callWinklyPlan(params: {
-  context: ConciergeContext & { participant_user_ids?: string[] };
+  context: ConciergeContext & { participant_user_ids?: string[] } & WinklyPlanItContext;
 }): Promise<WinklyPlanResponse> {
   const { context } = params;
   if (!SUPABASE_URL) throw new Error("Missing Supabase URL");
@@ -91,15 +124,29 @@ export async function callWinklyPlan(params: {
         conversation_id: context.conversation_id,
         group_vibe: context.group_vibe,
         app_language: context.app_language ?? getAppLanguageCode(),
+        date_to: context.date_to,
+        time_preference: context.time_preference,
+        timezone: context.timezone,
+        current_datetime_local: context.current_datetime_local,
+        latitude: context.latitude,
+        longitude: context.longitude,
+        search_radius_km: context.search_radius_km,
+        refinement_feedback: context.refinement_feedback,
+        plan_it: context.plan_it,
+        pinned_fields: context.pinned_fields,
+        indoor_outdoor: context.indoor_outdoor,
+        area_hint: context.area_hint,
       },
     }),
   });
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((typeof data?.error === "string" ? data.error : undefined) ?? `Request failed: ${res.status}`);
+    const message =
+      (typeof data?.error === "string" ? data.error : undefined) ?? `Request failed: ${res.status}`;
+    throw new WinklyPlanError(message, res.status, mapGatewayErrorResponse(data ?? {}, res.status));
   }
-  if (!data?.options || !Array.isArray(data.options) || data.options.length !== 2) throw new Error("No plan options returned");
+  if (!data?.options || !Array.isArray(data.options) || data.options.length < 2) throw new Error("No plan options returned");
   return data as WinklyPlanResponse;
 }
 

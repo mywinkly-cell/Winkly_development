@@ -42,6 +42,8 @@ import { showReportReceivedNotice } from "@/lib/safety/reportNotice";
 import { fetchFriendsSwipeDeckProfiles } from "@/lib/discover/friendsSwipeDeck";
 import { fetchFriendsWantToConnectCount } from "@/lib/discover/likesReceivedCount";
 import { friendsFollowProfile } from "@/lib/access/connections";
+import { PlanItBar } from "@/components/ai/PlanItBar";
+import { PLAN_IT_ENTRY_ENABLED } from "@/config/flags";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const CARD_WIDTH = SCREEN_WIDTH * 0.9;
@@ -450,6 +452,8 @@ export default function FriendsHome() {
         onFilterPress={() => router.push("/(modes)/friends/filters")}
       />
 
+      {PLAN_IT_ENTRY_ENABLED ? <PlanItBar mode="friends" compact style={styles.planItBar} /> : null}
+
       <Pressable
         onPress={() => {
           Haptics.selectionAsync();
@@ -656,6 +660,10 @@ function createStyles(theme: AppTheme) {
       backgroundColor: theme.colors.surface,
       borderWidth: 1,
       borderColor: friendsAccent,
+    },
+    planItBar: {
+      marginHorizontal: theme.spacing.lg,
+      marginTop: theme.spacing.sm,
     },
     planBanner: {
       flexDirection: "row",

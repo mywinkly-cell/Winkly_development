@@ -1,6 +1,9 @@
 /**
  * Winkly AI Concierge — planning flow container.
  * Step 1 Intent → 2 Activity Details (incl. who’s joining) → 3 Summary → 4 Suggestions/Invite → 5 Add to Planner
+ *
+ * Plan-it entry (`planItRequest`, from PlanItBar): skips straight to Suggestions — winkly_plan infers
+ * when/budget/setting/area, shows them as editable chips, and "Fine-tune" drops into Step 2 prefilled.
  */
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
@@ -26,8 +29,11 @@ import { useModeContext } from "@/providers/ModeContextProvider";
 import { canUseAIFeature } from "@/lib/ai/aiFeatureGate";
 import {
   buildOriginContext,
+  callWinklyPlan,
+  WinklyPlanError,
   type ConciergeContext,
   type ExperienceOption,
+  type WinklyPlanItContext,
 } from "@/lib/ai/conciergeClient";
 import {
   getWeatherForCityAndDate,
@@ -50,6 +56,20 @@ import type { ConciergeErrorCode, ConciergeLimitType } from "@/lib/ai/conciergeC
 import { TripPlanningFlow } from "@/components/ai/TripPlanningFlow";
 import { getPlannerThemePlans, type PlannerThemePlanOption } from "@/lib/ai/strategicHost";
 import {
+  ASSUMPTION_DETAILS_SECTION,
+  assumptionFromDetails,
+  assumptionToDetailsPatch,
+  mergePinnedAssumptions,
+  parseBudgetValue,
+  parsePlanAssumptions,
+  parseWhenValue,
+  pinnedContextFromDetails,
+  planDayFromAssumptions,
+  type AssumptionField,
+  type PlanAssumption,
+} from "@/lib/ai/planAssumptions";
+import { normalizePlanItRequest } from "@/lib/ai/planIt";
+import {
   type ConciergeFlowStep,
   type WhoJoining,
   type ActivityDetails,
@@ -59,6 +79,7 @@ import {
   getSmartDefaultsForActivity,
   getActivityCategoryByKey,
   getIntentCards,
+  getCurrencySymbol,
   type IntentSection,
   type RankInput,
   FOOD_AND_DRINKS_FORMAT_PROMPTS,
@@ -85,6 +106,16 @@ import type { Mode } from "@/types";
 import { isModeAvailable } from "@/lib/modes/availability";
 
 const INVITE_MODE_OPTIONS = (["romance", "friends", "business"] as const).filter((m) => isModeAvailable(m));
+
+const ASSUMPTION_ICON: Record<AssumptionField, React.ComponentProps<typeof Ionicons>["name"]> = {
+  when: "calendar-outline",
+  budget: "wallet-outline",
+  setting: "partly-sunny-outline",
+  area: "location-outline",
+};
+
+/** Plan-it waits this long for the profile default city before generating without it. */
+const PLAN_IT_CITY_WAIT_MS = 2500;
 
 function dayKey(d: Date): string {
   const y = d.getFullYear();
@@ -124,6 +155,11 @@ export type ConciergePlanningFlowProps = {
   proactiveActivityLabel?: string;
   proactiveDatePreset?: DatePreset;
   proactiveTimeOfDay?: TimeOfDay;
+  /**
+   * One-line "Plan it" request (PlanItBar): generate immediately via winkly_plan, show the inferred
+   * assumptions as editable chips, and offer "Fine-tune" into the full wizard.
+   */
+  planItRequest?: string;
   /** Called when the flow is done, including right after a successful "Add to planner" — passes
    * the created planner_item id (when one exists yet) so the caller can jump straight to it. */
   onClose: (plannerItemId?: string) => void;
@@ -143,12 +179,14 @@ export function ConciergePlanningFlow({
   proactiveActivityLabel,
   proactiveDatePreset,
   proactiveTimeOfDay,
+  planItRequest,
   onClose,
   onBack,
 }: ConciergePlanningFlowProps) {
+  const planItInitial = useMemo(() => normalizePlanItRequest(planItRequest), [planItRequest]);
   const theme = useAppTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
   const router = useRouter();
   const modeContext = useModeContext();
@@ -165,7 +203,7 @@ export function ConciergePlanningFlow({
   const [subActivityKey, setSubActivityKey] = useState<string | null>(null);
   const [subActivityLabel, setSubActivityLabel] = useState<string | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<{ topic: string; subtopic: string } | null>(null);
-  const [flowStep, setFlowStep] = useState<ConciergeFlowStep>("intent");
+  const [flowStep, setFlowStep] = useState<ConciergeFlowStep>(planItInitial ? "suggestions" : "intent");
   const [activityKey, setActivityKey] = useState<string | null>(null);
   const [activityLabel, setActivityLabel] = useState<string | null>(null);
   const [details, setDetails] = useState<Partial<ActivityDetails>>({
@@ -187,7 +225,7 @@ export function ConciergePlanningFlow({
   const [chosenIndex, setChosenIndex] = useState<number | null>(null);
   const [chosenStructuredIndex, setChosenStructuredIndex] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!!planItInitial);
   const [error, setError] = useState<string | null>(null);
   const [limitError, setLimitError] = useState<{
     error_code: ConciergeErrorCode;
@@ -212,6 +250,15 @@ export function ConciergePlanningFlow({
   const swipeStartX = useRef(0);
   /** Free-text Quick plan path — skips activity form + summary. */
   const isQuickPlan = activityKey === "quick";
+  /** Plan-it (one-line) results are on screen; cleared by "Fine-tune" (hands over to the wizard). */
+  const [planItActive, setPlanItActive] = useState(!!planItInitial);
+  const [planItText, setPlanItText] = useState(planItInitial ?? "");
+  const [assumptions, setAssumptions] = useState<PlanAssumption[]>([]);
+  /** Assumption fields the user corrected — sent as fixed values, never re-inferred. */
+  const [pinnedFields, setPinnedFields] = useState<AssumptionField[]>([]);
+  const [editingAssumption, setEditingAssumption] = useState<AssumptionField | null>(null);
+  /** Where "Edit request" / "Change details" leads back to. */
+  const editRequestStep: ConciergeFlowStep = planItActive || isQuickPlan ? "quick_request" : "summary";
 
   const [loadingPhaseIdx, setLoadingPhaseIdx] = useState(0);
   const loadingFade = useRef(new Animated.Value(0)).current;
@@ -717,6 +764,230 @@ export function ConciergePlanningFlow({
     }
   }, [trace, effectiveMode, buildContext, source_screen, source_planner_tab, activityKey, activityLabel, partnerId, details, appLanguage, structuredPlans]);
 
+  /**
+   * Plan-it: one winkly_plan call from the one-line request (+ default city, partner, mode,
+   * any pinned fields). Infers the rest server-side and returns up to three options.
+   */
+  const runPlanIt = useCallback(async (opts?: {
+    request?: string;
+    details?: Partial<ActivityDetails>;
+    pinned?: AssumptionField[];
+    refinement?: string;
+  }): Promise<void> => {
+    const request = normalizePlanItRequest(opts?.request ?? planItText);
+    if (!request) return;
+    const d = opts?.details ?? details;
+    const pins = opts?.pinned ?? pinnedFields;
+    const genId = ++genAttemptRef.current;
+    setPlanItText(request);
+    setError(null);
+    setLimitError(null);
+    setNoOptionsReason(null);
+    setMessage("");
+    setSuggestions(null);
+    setStructuredPlans(null);
+    setChosenIndex(null);
+    setChosenStructuredIndex(null);
+    setLoading(true);
+    setFlowStep("suggestions");
+    trace("plan_it:start", { genId, mode: effectiveMode, pinned: pins, hasPartner: !!partnerId });
+    try {
+      let city = d.city;
+      let country = d.country;
+      if (d.location?.trim()) {
+        const parsed = cityCountryFromLocation(d.location, appLanguage);
+        city = parsed.city ?? city;
+        country = parsed.country ?? country;
+      }
+      const pinnedCtx = pinnedContextFromDetails(pins, d);
+      // Weather for the pinned day, else the coming week — the model picks the day and indoor/outdoor.
+      let weather_snapshot;
+      if (city) {
+        const today = new Date();
+        const from = pinnedCtx.date_from?.slice(0, 10);
+        const weekOut = new Date(today);
+        weekOut.setDate(weekOut.getDate() + 6);
+        const w =
+          from && !pinnedCtx.date_to
+            ? await getWeatherForCityAndDate(
+                city,
+                from,
+                country,
+                buildWeatherTimeOptions({ timeOfDay: d.exactTimeHm ? undefined : d.timeOfDay, exactTimeHm: d.exactTimeHm })
+              )
+            : await getWeatherForCityAndDateRange(city, from ?? dayKey(today), pinnedCtx.date_to ?? dayKey(weekOut), country);
+        weather_snapshot = w ? weatherSnapshotToConciergePayload(w) : undefined;
+      }
+
+      let refinement = opts?.refinement;
+      // Attempt 2 only happens when every option came back in the past (same guard as the wizard).
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        const now = new Date();
+        const context: ConciergeContext & WinklyPlanItContext = {
+          mode: effectiveMode,
+          source_screen,
+          source_planner_tab,
+          user_prompt: request,
+          activity_hint: request,
+          city,
+          country,
+          partner_user_id: partnerId ?? undefined,
+          weather_snapshot,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          current_datetime_local: formatLocalIsoDateTime(now),
+          planning_entry_surface: "planner",
+          plan_it: true,
+          ...pinnedCtx,
+          ...(refinement ? { refinement_feedback: refinement } : {}),
+        };
+        lastContextRef.current = context;
+        const res = await callWinklyPlan({ context });
+        if (genId !== genAttemptRef.current) return;
+        if (res.request_id) setLastRequestId(res.request_id);
+
+        // The gateway already enforces pinned values; fall back to our own only if it dropped one.
+        const inferred = parsePlanAssumptions(res.assumptions, now);
+        const pinnedFallback: Partial<Record<AssumptionField, PlanAssumption>> = {};
+        for (const f of pins) {
+          if (!inferred.some((a) => a.field === f)) pinnedFallback[f] = assumptionFromDetails(f, d);
+        }
+        const merged = mergePinnedAssumptions(inferred, pinnedFallback);
+        // Prefill the date/budget/setting inputs with what was inferred (sheets, Fine-tune, Add to planner).
+        const patch = merged
+          .filter((a) => !pins.includes(a.field))
+          .reduce<Partial<ActivityDetails>>((acc, a) => ({ ...acc, ...assumptionToDetailsPatch(a, now) }), {});
+        const nextDetails: Partial<ActivityDetails> = { ...d, ...patch };
+
+        // Authoritative future-only guard — judged on the inferred/pinned day, not "today".
+        const baseDay = planDayFromAssumptions(merged, now) ?? nextDetails.date ?? now;
+        const exactTimeHmForFilter =
+          pins.includes("when") && nextDetails.singleDay !== false ? nextDetails.exactTimeHm : undefined;
+        const plans = res.options as PlannerThemePlanOption[];
+        const { kept, droppedCount } = filterFuturePlanOptions(
+          plans,
+          (p) => {
+            const clock = resolveOptionClockTime({ itineraryTime: p?.itinerary?.[0]?.time, exactTimeHm: exactTimeHmForFilter });
+            return clock ? combineDateAndClockTime(baseDay, clock.hour, clock.minute) : null;
+          },
+          new Date()
+        );
+        if (droppedCount > 0) trace("plan_it:dropped_past_options", { droppedCount, kept: kept.length, attempt });
+        if (plans.length > 0 && kept.length === 0 && attempt === 1) {
+          refinement = [
+            refinement,
+            `All previously suggested start times were already in the past (current local time: ${formatLocalIsoDateTime(new Date())}). Every new option must start strictly after this time.`,
+          ]
+            .filter(Boolean)
+            .join(" ");
+          continue;
+        }
+        setDetails(nextDetails);
+        setAssumptions(merged);
+        setLoading(false);
+        setStructuredPlans(kept.slice(0, 3));
+        setMessage(kept.length ? null : t("planIt.results.empty"));
+        return;
+      }
+    } catch (e) {
+      if (genId !== genAttemptRef.current) return;
+      setLoading(false);
+      if (
+        e instanceof WinklyPlanError &&
+        (e.error_code === "rate_limit" || e.error_code === "daily_quota" || e.error_code === "tier_required")
+      ) {
+        setLimitError({
+          error_code: e.error_code,
+          limit_type: e.limit_type,
+          retry_after: e.retry_after,
+          upgrade_to: e.upgrade_to,
+        });
+        return;
+      }
+      trace("plan_it:error", { message: (e as Error).message });
+      setError((e as Error).message || t("planIt.results.error"));
+    }
+  }, [planItText, details, pinnedFields, trace, effectiveMode, partnerId, appLanguage, source_screen, source_planner_tab, t]);
+
+  /**
+   * Plan-it: generate as soon as the profile default city is known, or after a short wait without
+   * it (the gateway then falls back to the profile city). Runs once.
+   */
+  const planItStartedRef = useRef(false);
+  const hasLocation = !!details.location?.trim();
+  useEffect(() => {
+    if (!planItInitial || planItStartedRef.current) return;
+    const timer = setTimeout(
+      () => {
+        if (planItStartedRef.current) return;
+        planItStartedRef.current = true;
+        void runPlanIt({ request: planItInitial });
+      },
+      hasLocation ? 0 : PLAN_IT_CITY_WAIT_MS
+    );
+    return () => clearTimeout(timer);
+  }, [planItInitial, hasLocation, runPlanIt]);
+
+  /** Assumption chip sheet → merge the one corrected field, pin it, regenerate. */
+  const handleAssumptionEdit = (field: AssumptionField, patch: Partial<ActivityDetails>) => {
+    const nextDetails = { ...details, ...patch };
+    const nextPinned = pinnedFields.includes(field) ? pinnedFields : [...pinnedFields, field];
+    setDetails(nextDetails);
+    setPinnedFields(nextPinned);
+    setEditingAssumption(null);
+    void runPlanIt({ details: nextDetails, pinned: nextPinned });
+  };
+
+  /** "Fine-tune": hand the inferred plan over to the full wizard (Step 2, prefilled). */
+  const handleFineTune = useCallback(() => {
+    Haptics.selectionAsync();
+    genAttemptRef.current += 1;
+    setLoading(false);
+    setPlanItActive(false);
+    setActivityKey("custom");
+    setActivityLabel(planItText);
+    setSelectedCategory(getActivityCategoryByKey("custom") ?? null);
+    setSelectedTopic(null);
+    setSubActivityKey(null);
+    setSubActivityLabel(null);
+    const area = assumptions.find((a) => a.field === "area")?.value;
+    if (area) {
+      setDetails((prev) =>
+        prev.additionalInfo?.trim() ? prev : { ...prev, additionalInfo: t("planIt.fineTune.areaNote", { area }) }
+      );
+    }
+    setFlowStep("activity");
+  }, [planItText, assumptions, t]);
+
+  const formatAssumptionLabel = useCallback(
+    (a: PlanAssumption): string => {
+      if (a.label) return a.label;
+      if (a.field === "when") {
+        const w = parseWhenValue(a.value);
+        if (w) {
+          const day = w.date.toLocaleDateString(appLanguage, { weekday: "short", day: "numeric", month: "short" });
+          return w.hasTime
+            ? `${day} ${w.date.toLocaleTimeString(appLanguage, { hour: "2-digit", minute: "2-digit" })}`
+            : day;
+        }
+      } else if (a.field === "budget") {
+        const b = parseBudgetValue(a.value);
+        if (b) return t("planIt.assumptions.budgetValue", { amount: `${getCurrencySymbol(b.currency)}${b.amount}` });
+      } else if (a.field === "setting" && a.value) {
+        return t(`planIt.assumptions.setting.${a.value}`);
+      } else if (a.field === "area" && a.value) {
+        return a.value;
+      }
+      return t(`planIt.assumptions.field.${a.field}`);
+    },
+    [appLanguage, t]
+  );
+
+  /** Retry whichever generator produced the current results. */
+  const retryGenerate = useCallback(() => {
+    if (planItActive) void runPlanIt();
+    else void handleGenerate();
+  }, [planItActive, runPlanIt, handleGenerate]);
+
   const handleQuickGenerate = useCallback(
     (query: string) => {
       const q = query.trim();
@@ -761,6 +1032,13 @@ export function ConciergePlanningFlow({
   const handleFlowBack = useCallback(() => {
     Haptics.selectionAsync();
     if (flowStep === "intent") {
+      onBack();
+      return;
+    }
+    if (planItActive && (flowStep === "suggestions" || flowStep === "quick_request")) {
+      // Plan-it has no wizard behind it — back returns to where the bar was.
+      genAttemptRef.current += 1;
+      setLoading(false);
       onBack();
       return;
     }
@@ -810,7 +1088,7 @@ export function ConciergePlanningFlow({
       setChosenIndex(null);
       setFlowStep(showInviteStepBeforePlanner ? "invite" : "suggestions");
     }
-  }, [flowStep, onBack, showInviteStepBeforePlanner, activityKey, selectedCategory]);
+  }, [flowStep, onBack, showInviteStepBeforePlanner, activityKey, selectedCategory, planItActive]);
 
   /** Swipe-back on the header only — avoids fighting vertical ScrollViews in step content. */
   const headerBackSwipe = useMemo(
@@ -998,7 +1276,11 @@ export function ConciergePlanningFlow({
 
       {flowStep === "quick_request" && (
         <ConciergeQuickRequestStep
-          initialQuery={details.intentNotes ?? (activityLabel && activityLabel !== "Quick plan" ? activityLabel : "")}
+          initialQuery={
+            planItActive
+              ? planItText
+              : details.intentNotes ?? (activityLabel && activityLabel !== "Quick plan" ? activityLabel : "")
+          }
           location={{
             location: details.location ?? "",
             city: details.city,
@@ -1024,8 +1306,8 @@ export function ConciergePlanningFlow({
             }));
           }}
           language={appLanguage}
-          onGenerate={handleQuickGenerate}
-          onBack={() => setFlowStep("intent")}
+          onGenerate={planItActive ? (q) => void runPlanIt({ request: q }) : handleQuickGenerate}
+          onBack={() => (planItActive ? onBack() : setFlowStep("intent"))}
           showInlineBack={false}
           generating={loading}
         />
@@ -1135,20 +1417,20 @@ export function ConciergePlanningFlow({
                         setSavingRequest(true);
                         try {
                           await addRecentRequest(lastContextRef.current!);
-                          setFlowStep(isQuickPlan ? "quick_request" : "summary");
+                          setFlowStep(editRequestStep);
                         } finally {
                           setSavingRequest(false);
                         }
                       }
                     : undefined
                 }
-                onRetry={() => handleGenerate()}
+                onRetry={retryGenerate}
               />
             </GestureScrollView>
           ) : error ? (
             <GestureScrollView contentContainerStyle={styles.errorContent}>
               <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity style={styles.retryBtn} onPress={() => handleGenerate()} activeOpacity={0.9}>
+              <TouchableOpacity style={styles.retryBtn} onPress={retryGenerate} activeOpacity={0.9}>
                 <Text style={styles.retryBtnText}>Retry</Text>
               </TouchableOpacity>
             </GestureScrollView>
@@ -1156,8 +1438,8 @@ export function ConciergePlanningFlow({
             <GestureScrollView contentContainerStyle={styles.emptyContent}>
               <Text style={styles.messageText}>{message}</Text>
               {noOptionsReason && <Text style={styles.noOptionsReason}>{noOptionsReason}</Text>}
-              <TouchableOpacity style={styles.tryAgainBtn} onPress={() => setFlowStep(isQuickPlan ? "quick_request" : "summary")} activeOpacity={0.9}>
-                <Text style={styles.tryAgainBtnText}>{isQuickPlan ? "Edit request" : "Change details"}</Text>
+              <TouchableOpacity style={styles.tryAgainBtn} onPress={() => setFlowStep(editRequestStep)} activeOpacity={0.9}>
+                <Text style={styles.tryAgainBtnText}>{editRequestStep === "quick_request" ? "Edit request" : "Change details"}</Text>
               </TouchableOpacity>
             </GestureScrollView>
           ) : !suggestions?.length && !structuredPlans?.length ? (
@@ -1166,24 +1448,63 @@ export function ConciergePlanningFlow({
                 {noOptionsReason || "No plans generated. Check your details or try again."}
               </Text>
               <View style={styles.emptyActionsRow}>
-                <TouchableOpacity style={styles.tryAgainBtn} onPress={() => setFlowStep(isQuickPlan ? "quick_request" : "summary")} activeOpacity={0.9}>
-                  <Text style={styles.tryAgainBtnText}>{isQuickPlan ? "Edit request" : "Change details"}</Text>
+                <TouchableOpacity style={styles.tryAgainBtn} onPress={() => setFlowStep(editRequestStep)} activeOpacity={0.9}>
+                  <Text style={styles.tryAgainBtnText}>{editRequestStep === "quick_request" ? "Edit request" : "Change details"}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.retryBtn} onPress={() => handleGenerate()} activeOpacity={0.9}>
+                <TouchableOpacity style={styles.retryBtn} onPress={retryGenerate} activeOpacity={0.9}>
                   <Text style={styles.retryBtnText}>Retry</Text>
                 </TouchableOpacity>
               </View>
             </GestureScrollView>
           ) : structuredPlans && structuredPlans.length > 0 ? (
             <GestureScrollView style={styles.optionsScroll} contentContainerStyle={styles.optionsContent}>
+              {planItActive && assumptions.length > 0 ? (
+                <View style={styles.assumptionsWrap}>
+                  <Text style={styles.assumptionsHint}>{t("planIt.assumptions.hint")}</Text>
+                  <View style={styles.assumptionsRow}>
+                    {assumptions.map((a) => {
+                      const label = formatAssumptionLabel(a);
+                      return (
+                        <Pressable
+                          key={a.field}
+                          style={({ pressed }) => [styles.assumptionChip, pressed && styles.assumptionChipPressed]}
+                          onPress={() => {
+                            Haptics.selectionAsync();
+                            setEditingAssumption(a.field);
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel={t("planIt.assumptions.a11yEdit", {
+                            field: t(`planIt.assumptions.field.${a.field}`),
+                            value: label,
+                          })}
+                        >
+                          <Ionicons name={ASSUMPTION_ICON[a.field]} size={theme.spacing.lg} color={theme.colors.primary} />
+                          <Text style={styles.assumptionChipText} numberOfLines={1}>
+                            {label}
+                          </Text>
+                          <Ionicons name="create-outline" size={theme.spacing.md} color={theme.colors.textMuted} />
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
               <View style={styles.optionsHeaderRow}>
-                <Text style={styles.optionsIntro}>{isQuickPlan ? "Nearby options" : "Two options"}</Text>
+                <Text style={styles.optionsIntro}>
+                  {planItActive ? t("planIt.results.title") : isQuickPlan ? "Nearby options" : "Two options"}
+                </Text>
                 <TouchableOpacity
                   style={styles.tryDifferentBtn}
-                  onPress={() => handleGenerate({ refinementFeedback: isQuickPlan ? "Load more nearby options with different venues" : "Different vibe" })}
+                  onPress={() =>
+                    planItActive
+                      ? void runPlanIt({ refinement: "Show different options, with different venues than before." })
+                      : handleGenerate({ refinementFeedback: isQuickPlan ? "Load more nearby options with different venues" : "Different vibe" })
+                  }
                   activeOpacity={0.9}
                 >
-                  <Text style={styles.tryDifferentBtnText}>{isQuickPlan ? "Load more" : "Try different options"}</Text>
+                  <Text style={styles.tryDifferentBtnText}>
+                    {planItActive ? t("planIt.results.tryDifferent") : isQuickPlan ? "Load more" : "Try different options"}
+                  </Text>
                 </TouchableOpacity>
               </View>
               {structuredPlans
@@ -1213,9 +1534,10 @@ export function ConciergePlanningFlow({
                   return null;
                 })
                 .filter(Boolean)
-                .slice(0, 2)
+                .slice(0, planItActive ? 3 : 2)
                 .map((p: any, idx) => {
                 const isOptionA = p.option_id === "A" || idx === 0;
+                const optionLetter = p.option_id === "B" || p.option_id === "C" ? p.option_id : (["A", "B", "C"][idx] ?? "A");
                 const modeAccent = theme.modeAccent(effectiveMode).primary;
                 const characterLabel = p.character_label || (isOptionA ? "Bolder pick" : "Classic choice");
                 const venueLine = [p.venue?.name, p.venue?.address, p.venue?.estimated_cost].filter(Boolean).join(" • ");
@@ -1227,7 +1549,7 @@ export function ConciergePlanningFlow({
                     title={p.title}
                     badges={
                       <>
-                        <PlanCardBadge label={isOptionA ? "Option A" : "Option B"} variant={isOptionA ? "solid" : "outlined"} color={modeAccent} />
+                        <PlanCardBadge label={t("concierge.optionLabel", { letter: optionLetter })} variant={isOptionA ? "solid" : "outlined"} color={modeAccent} />
                         <PlanCardBadge label={characterLabel} />
                       </>
                     }
@@ -1283,6 +1605,18 @@ export function ConciergePlanningFlow({
                   </PlanCard>
                 );
               })}
+              {planItActive ? (
+                <TouchableOpacity
+                  style={styles.fineTuneRow}
+                  onPress={handleFineTune}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityHint={t("planIt.results.fineTuneHint")}
+                >
+                  <Ionicons name="options-outline" size={theme.spacing.lg} color={theme.colors.primary} />
+                  <Text style={styles.fineTuneText}>{t("planIt.results.fineTune")}</Text>
+                </TouchableOpacity>
+              ) : null}
               <View style={styles.conciergeUpsell}>
                 <View style={styles.conciergeUpsellHeader}>
                   <Ionicons name="sparkles-outline" size={16} color={theme.colors.primary} />
@@ -1403,13 +1737,17 @@ export function ConciergePlanningFlow({
             <Animated.View style={[styles.loadingOverlay, { opacity: loadingFade }]}>
               <View style={styles.loadingOverlayCard}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text style={styles.loadingOverlayTitle}>Winkly is thinking</Text>
+                <Text style={styles.loadingOverlayTitle}>
+                  {planItActive ? t("planIt.loading.title") : "Winkly is thinking"}
+                </Text>
                 <Text style={styles.loadingOverlaySub}>
-                  {loadingPhaseIdx === 0
-                    ? "Choosing the vibe…"
-                    : loadingPhaseIdx === 1
-                      ? "Finding the best spots…"
-                      : "Finalizing two options…"}
+                  {planItActive
+                    ? t(`planIt.loading.phase${loadingPhaseIdx + 1}`)
+                    : loadingPhaseIdx === 0
+                      ? "Choosing the vibe…"
+                      : loadingPhaseIdx === 1
+                        ? "Finding the best spots…"
+                        : "Finalizing two options…"}
                 </Text>
               </View>
             </Animated.View>
@@ -1438,6 +1776,45 @@ export function ConciergePlanningFlow({
           showInlineBack={false}
         />
       )}
+
+      <Modal
+        visible={editingAssumption != null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditingAssumption(null)}
+      >
+        <Pressable style={styles.pickerBackdrop} onPress={() => setEditingAssumption(null)}>
+          <Pressable style={[styles.pickerSheet, styles.assumptionSheet]} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>
+                {editingAssumption ? t(`planIt.assumptions.sheetTitle.${editingAssumption}`) : ""}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setEditingAssumption(null)}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={t("common.close")}
+              >
+                <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            {editingAssumption ? (
+              <ConciergeActivityDetailsStep
+                key={editingAssumption}
+                onlyField={ASSUMPTION_DETAILS_SECTION[editingAssumption]}
+                activityLabel={planItText}
+                initialDetails={details}
+                mode={effectiveMode}
+                submitLabel={t("planIt.assumptions.apply")}
+                scrollStyle={styles.assumptionSheetScroll}
+                showInlineBack={false}
+                onBack={() => setEditingAssumption(null)}
+                onNext={(d) => handleAssumptionEdit(editingAssumption, d)}
+              />
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal visible={invitePickerChoice != null} transparent animationType="slide">
         <Pressable style={styles.pickerBackdrop} onPress={() => setInvitePickerChoice(null)}>
@@ -1537,7 +1914,10 @@ export function ConciergePlanningFlow({
           chosenOption={chosenOption ?? undefined}
           structuredPlan={structuredPlans && chosenStructuredIndex != null ? structuredPlans[chosenStructuredIndex] : undefined}
           partner={partnerId && partnerDisplayName ? { id: partnerId, displayName: partnerDisplayName } : null}
-          dateForPlan={details.date ?? new Date(lastDateRef.current)}
+          dateForPlan={
+            // Plan-it: the day the options were generated for (may sit inside a pinned weekend range).
+            (planItActive ? planDayFromAssumptions(assumptions) : null) ?? details.date ?? new Date(lastDateRef.current)
+          }
           locationLineDisplay={locationLineDisplay || undefined}
           exactTimeHm={details.singleDay !== false ? details.exactTimeHm : undefined}
           mode={
@@ -1653,6 +2033,34 @@ function makeStyles(theme: AppTheme) {
     borderColor: theme.colors.border,
   },
   tryDifferentBtnText: { ...theme.type.caption, color: theme.colors.primary, fontWeight: "700" },
+  assumptionsWrap: { marginBottom: theme.spacing.lg, gap: theme.spacing.sm },
+  assumptionsHint: { ...theme.type.caption, color: theme.colors.textSecondary },
+  assumptionsRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
+  assumptionChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.xs,
+    maxWidth: "100%",
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.radii.pill,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  assumptionChipPressed: { borderColor: theme.colors.primary },
+  assumptionChipText: { ...theme.type.caption, color: theme.colors.textPrimary, fontWeight: "600", flexShrink: 1 },
+  assumptionSheet: { maxHeight: "80%" },
+  assumptionSheetScroll: { flexGrow: 0 },
+  fineTuneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing.xs,
+    paddingVertical: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+  },
+  fineTuneText: { ...theme.type.bodyMedium, color: theme.colors.primary },
   conciergeUpsell: {
     backgroundColor: theme.colors.primary + "12",
     borderRadius: 16,

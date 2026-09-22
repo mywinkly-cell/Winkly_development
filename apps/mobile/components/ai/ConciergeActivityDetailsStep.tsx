@@ -14,6 +14,8 @@ import {
   Modal,
   Pressable,
   Platform,
+  type StyleProp,
+  type ViewStyle,
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -50,6 +52,7 @@ import {
   loadProfileAwareSuggestionChips,
 } from "@/lib/ai/customPlanPresets";
 import { clampTimeOfDayToFutureIfToday, getMinimumPlanDateTime, isSameCalendarDay } from "@/lib/ai/planTimeValidation";
+import type { AssumptionDetailsSection } from "@/lib/ai/planAssumptions";
 
 function dayKey(d: Date): string {
   const y = d.getFullYear();
@@ -127,6 +130,15 @@ export type ConciergeActivityDetailsStepProps = {
   /** Inline social context (moved into Step 2 to remove a full step). */
   whoJoining?: WhoJoining;
   onWhoJoiningChange?: (who: WhoJoining) => void;
+  /**
+   * Plan-it assumption sheet: render only this one section (plus its pickers) and the submit
+   * button — same inputs as the full step, nothing else.
+   */
+  onlyField?: AssumptionDetailsSection;
+  /** Submit button label (default "Continue"). */
+  submitLabel?: string;
+  /** Extra style for the outer scroll view (e.g. `flexGrow: 0` inside a bottom sheet). */
+  scrollStyle?: StyleProp<ViewStyle>;
 };
 
 export function ConciergeActivityDetailsStep({
@@ -147,7 +159,15 @@ export function ConciergeActivityDetailsStep({
   subTopicLabel = null,
   whoJoining = "decide_later",
   onWhoJoiningChange,
+  onlyField,
+  submitLabel,
+  scrollStyle,
 }: ConciergeActivityDetailsStepProps) {
+  /** Full step vs. a single-section sheet (Plan-it assumption chip). */
+  const full = !onlyField;
+  const show = (section: AssumptionDetailsSection) => full || onlyField === section;
+  /** Only the full step and the location sheet can change the city, so only they require it. */
+  const requireCity = show("location");
   const theme = useAppTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const { i18n } = useTranslation();
@@ -446,7 +466,7 @@ export function ConciergeActivityDetailsStep({
   }, []);
 
   const handleNext = () => {
-    if (!cityPart.trim()) {
+    if (requireCity && !cityPart.trim()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
@@ -571,15 +591,15 @@ export function ConciergeActivityDetailsStep({
   );
 
   return (
-    <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      {showInlineBack ? (
+    <GestureScrollView style={[styles.scroll, scrollStyle]} contentContainerStyle={styles.content}>
+      {full && showInlineBack ? (
         <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
       ) : null}
 
-      {showProfilePrompt ? (
+      {!full ? null : showProfilePrompt ? (
         <View style={styles.customPromptBlock}>
           <Text style={styles.customPromptLabel}>
             Is there any specific idea or request on your mind? Please add for a better planning.
@@ -624,7 +644,7 @@ export function ConciergeActivityDetailsStep({
         </View>
       )}
 
-      {subTopicLabel?.trim() ? (
+      {full && subTopicLabel?.trim() ? (
         <View style={styles.topicHero}>
           <Text style={styles.topicHeroLabel}>Topic</Text>
           <Text style={styles.topicHeroTitle} numberOfLines={1}>
@@ -634,6 +654,7 @@ export function ConciergeActivityDetailsStep({
         </View>
       ) : null}
 
+      {full ? (
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Who’s joining?</Text>
@@ -669,9 +690,10 @@ export function ConciergeActivityDetailsStep({
           </View>
         </View>
       </View>
+      ) : null}
 
       {/* Key question (dominant choice) */}
-      {keyQuestion ? (
+      {full && keyQuestion ? (
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>{keyQuestion.title}</Text>
@@ -699,6 +721,7 @@ export function ConciergeActivityDetailsStep({
         </View>
       ) : null}
 
+      {show("location") ? (
       <View style={styles.sectionCard}>
         <PlanningLocationFields
           value={{
@@ -725,8 +748,9 @@ export function ConciergeActivityDetailsStep({
           language={appLanguage}
         />
       </View>
+      ) : null}
 
-      {cityPart ? (
+      {full && cityPart ? (
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Weather</Text>
@@ -778,6 +802,7 @@ export function ConciergeActivityDetailsStep({
         </View>
       ) : null}
 
+      {show("dateTime") ? (
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Date</Text>
@@ -815,8 +840,9 @@ export function ConciergeActivityDetailsStep({
           ) : null}
         </View>
       </View>
+      ) : null}
 
-      {activityKey === "trip" && (
+      {full && activityKey === "trip" && (
         <>
           <Text style={styles.label}>Trip length</Text>
           <Text style={styles.inlineHint}>Choose how many days — we’ll shape an itinerary for each day.</Text>
@@ -936,7 +962,7 @@ export function ConciergeActivityDetailsStep({
           />
         ))}
 
-      {singleDay ? (
+      {show("dateTime") && singleDay ? (
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Time</Text>
@@ -987,6 +1013,7 @@ export function ConciergeActivityDetailsStep({
         </View>
       ) : null}
 
+      {show("budget") ? (
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Budget</Text>
@@ -1049,6 +1076,7 @@ export function ConciergeActivityDetailsStep({
       </View>
       </View>
       </View>
+      ) : null}
       <Modal visible={showCurrencyPicker} transparent animationType="fade">
         <Pressable style={styles.pickerOverlay} onPress={() => setShowCurrencyPicker(false)}>
           <View style={styles.pickerSheet}>
@@ -1066,7 +1094,7 @@ export function ConciergeActivityDetailsStep({
         </Pressable>
       </Modal>
 
-      {showFoodFields ? (
+      {full && showFoodFields ? (
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Cuisine</Text>
@@ -1114,7 +1142,7 @@ export function ConciergeActivityDetailsStep({
         </View>
       ) : null}
 
-      {showFoodFields ? (
+      {(full && showFoodFields) || onlyField === "indoorOutdoor" ? (
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Indoor / outdoor</Text>
@@ -1142,6 +1170,7 @@ export function ConciergeActivityDetailsStep({
         </View>
       ) : null}
 
+      {full ? (
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Notes</Text>
@@ -1158,18 +1187,19 @@ export function ConciergeActivityDetailsStep({
           />
         </View>
       </View>
+      ) : null}
 
       {/* Category extras — keep minimal for now (food fields already collected above). */}
       {detailsVariant === "food_drink" ? (
         <View style={{ marginTop: 4 }} />
       ) : null}
 
-      {!cityPart.trim() ? (
+      {requireCity && !cityPart.trim() ? (
         <Text style={[theme.type.caption, { color: theme.colors.error, marginBottom: theme.spacing.sm, fontWeight: "600" }]}>
           City is required to continue.
         </Text>
       ) : null}
-      <PrimaryButton title="Continue" onPress={handleNext} disabled={!cityPart.trim()} />
+      <PrimaryButton title={submitLabel ?? "Continue"} onPress={handleNext} disabled={requireCity && !cityPart.trim()} />
     </GestureScrollView>
   );
 }

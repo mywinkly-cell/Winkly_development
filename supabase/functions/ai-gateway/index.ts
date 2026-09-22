@@ -616,7 +616,127 @@ const ALLOWLISTED_CONTEXT_KEYS = [
   "self_profile", "other_profile",
   /** App UI language code (e.g. "de") — AI responds in this language; default English. */
   "app_language",
+  /** Requester's local wall clock ("YYYY-MM-DDTHH:mm") — plans must start after it. */
+  "current_datetime_local",
+  /** winkly_plan one-line "Plan it" entry: 3 options + assumptions, no pending_plans draft. */
+  "plan_it",
+  /** Plan it: assumption fields the user corrected (the model must not re-infer them) + their values. */
+  "pinned_fields", "indoor_outdoor", "area_hint",
 ];
+
+const PLAN_ASSUMPTION_FIELDS = ["when", "budget", "setting", "area"] as const;
+type PlanAssumptionField = (typeof PLAN_ASSUMPTION_FIELDS)[number];
+type PlanAssumptionOut = { field: PlanAssumptionField; label: string; value?: string };
+
+const LOCAL_DATE_TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+const LOCAL_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Type-check the Plan-it context keys right after allowlisting — anything malformed is dropped. */
+function sanitizePlanItContext(ctx: Record<string, unknown>): void {
+  if (ctx.plan_it !== true) delete ctx.plan_it;
+  if (Array.isArray(ctx.pinned_fields)) {
+    const pinned = (ctx.pinned_fields as unknown[]).filter(
+      (f): f is PlanAssumptionField => typeof f === "string" && (PLAN_ASSUMPTION_FIELDS as readonly string[]).includes(f),
+    );
+    ctx.pinned_fields = [...new Set(pinned)];
+  } else {
+    delete ctx.pinned_fields;
+  }
+  if (ctx.indoor_outdoor !== "indoor" && ctx.indoor_outdoor !== "outdoor") delete ctx.indoor_outdoor;
+  if (typeof ctx.area_hint === "string" && ctx.area_hint.trim()) {
+    ctx.area_hint = ctx.area_hint.replace(/\s+/g, " ").trim().slice(0, 80);
+  } else {
+    delete ctx.area_hint;
+  }
+  if (typeof ctx.current_datetime_local !== "string" || !LOCAL_DATE_TIME_RE.test(ctx.current_datetime_local)) {
+    delete ctx.current_datetime_local;
+  }
+}
+
+/**
+ * The requester's "now" as a local wall-clock string ("YYYY-MM-DDTHH:mm"). Prefers the server
+ * clock projected into the client's IANA timezone; falls back to the client's own reading, then UTC.
+ */
+function localNowString(timezone: unknown, clientLocal: unknown): string {
+  if (typeof timezone === "string" && timezone.trim()) {
+    try {
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: timezone.trim(),
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }).formatToParts(new Date());
+      const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+      const s = `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
+      if (LOCAL_DATE_TIME_RE.test(s)) return s;
+    } catch {
+      // Invalid timezone — fall through.
+    }
+  }
+  if (typeof clientLocal === "string" && LOCAL_DATE_TIME_RE.test(clientLocal)) return clientLocal;
+  return new Date().toISOString().slice(0, 16);
+}
+
+/** A local "when" is usable only if strictly after now (timed) or today-or-later (date only). */
+function isFutureLocalWhen(value: string, nowLocal: string): boolean {
+  if (LOCAL_DATE_TIME_RE.test(value)) return value > nowLocal;
+  if (LOCAL_DATE_RE.test(value)) return value >= nowLocal.slice(0, 10);
+  return false;
+}
+
+/**
+ * Validate the model's `assumptions` (never trusted as-is): known fields only, one per field,
+ * short labels, well-formed values, and a "when" that is in the future — a past "when" is dropped.
+ */
+function sanitizePlanAssumptions(raw: unknown, nowLocal: string): PlanAssumptionOut[] {
+  if (!Array.isArray(raw)) return [];
+  const byField = new Map<PlanAssumptionField, PlanAssumptionOut>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    const field = rec.field;
+    if (typeof field !== "string" || !(PLAN_ASSUMPTION_FIELDS as readonly string[]).includes(field)) continue;
+    const f = field as PlanAssumptionField;
+    if (byField.has(f)) continue;
+    const label = typeof rec.label === "string" ? rec.label.replace(/\s+/g, " ").trim().slice(0, 40) : "";
+    let value = typeof rec.value === "string" ? rec.value.replace(/\s+/g, " ").trim().slice(0, 80) : "";
+    if (f === "when" && value) {
+      const v = value.replace(" ", "T").slice(0, 16);
+      if (!LOCAL_DATE_TIME_RE.test(v) && !LOCAL_DATE_RE.test(v)) value = "";
+      else if (!isFutureLocalWhen(v, nowLocal)) continue;
+      else value = v;
+    } else if (f === "budget" && value) {
+      const m = /(\d+(?:[.,]\d+)?)/.exec(value);
+      const cur = /\b([A-Za-z]{3})\b/.exec(value);
+      const amount = m ? Math.round(parseFloat(m[1].replace(",", "."))) : NaN;
+      value = Number.isFinite(amount) && amount > 0 ? `${amount} ${(cur?.[1] ?? "EUR").toUpperCase()}` : "";
+    } else if (f === "setting" && value) {
+      const v = value.toLowerCase();
+      value = v === "indoor" || v === "outdoor" || v === "either" ? v : "";
+    }
+    if (!label && !value) continue;
+    byField.set(f, { field: f, label, ...(value ? { value } : {}) });
+  }
+  return PLAN_ASSUMPTION_FIELDS.map((f) => byField.get(f)).filter((a): a is PlanAssumptionOut => !!a);
+}
+
+/** Plan-it inference settings for generateWinklyPlan (user_prompt present). */
+type PlanItInference = {
+  /** Return A/B/C instead of A/B (one-line Plan-it entry only). */
+  optionCount: 2 | 3;
+  nowLocal: string;
+  timezone?: string;
+  /** Values the user fixed; the model must use them verbatim and not re-infer. */
+  pinned: {
+    when?: { date_from: string; date_to?: string; time_preference?: string };
+    budget?: { amount: number; currency: string };
+    setting?: "indoor" | "outdoor" | "either";
+    area?: string;
+  };
+};
 
 type AiGatewayRequest = {
   mode: string;
@@ -641,7 +761,8 @@ type WinklyPlanInput = {
 };
 
 type WinklyPlanOptionOut = {
-  option_id: "A" | "B";
+  /** "C" only for Plan-it (three options). */
+  option_id: "A" | "B" | "C";
   character_label: string;
   title: string;
   /** Canonical "Why this fits you" line — one sentence citing a concrete personal signal. Rendered as the card subtitle. */
@@ -662,7 +783,10 @@ type WinklyPlanOptionOut = {
 };
 
 type WinklyPlanOutput = {
-  options: [WinklyPlanOptionOut, WinklyPlanOptionOut];
+  /** Always A + B; Plan-it may add C. */
+  options: [WinklyPlanOptionOut, WinklyPlanOptionOut, ...WinklyPlanOptionOut[]];
+  /** Raw model `assumptions` (Plan-it) — validated by sanitizePlanAssumptions before use. */
+  assumptions_raw?: unknown;
 };
 
 type StrategicHostTopic = { title: string; type: "Synergy" | "Lifestyle" | "General"; pitch: string };
@@ -681,7 +805,7 @@ type PlannerTripDayOut = {
 
 type PlannerThemePlansOutput = {
   plan_options: Array<{
-    option_id: "A" | "B";
+    option_id: "A" | "B" | "C";
     character_label: string;
     title: string;
     fit_reason: string;
@@ -708,6 +832,7 @@ function allowlistContext(ctx: Record<string, unknown>): Record<string, unknown>
   }
   const pres = out.presentation;
   if (pres !== "decisive" && pres !== "menu") delete out.presentation;
+  sanitizePlanItContext(out);
   return out;
 }
 
@@ -756,6 +881,7 @@ function scrubPiiInContext(ctx: Record<string, unknown>): Record<string, unknown
     "sanitized_requester_persona",
     "origin_context",
     "calendar_white_space",
+    "area_hint",
   ];
   for (const k of scrubKeys) {
     const v = out[k];
@@ -3154,7 +3280,7 @@ function extractPlanOptionsArray(obj: Record<string, unknown>): unknown[] | null
 
 function parseWinklyPlanOutput(
   text: string,
-  opts?: { city?: string; country?: string },
+  opts?: { city?: string; country?: string; maxOptions?: 2 | 3 },
 ): WinklyPlanOutput | null {
   let raw = text.trim();
   const codeBlock = raw.match(/^```(?:json)?\s*([\s\S]*?)```$/);
@@ -3181,11 +3307,12 @@ function parseWinklyPlanOutput(
   const optionsRaw = extractPlanOptionsArray(o);
   if (!optionsRaw?.length) return null;
 
-  const parseOpt = (v: unknown, id: "A" | "B"): WinklyPlanOptionOut | null => {
+  const parseOpt = (v: unknown, id: "A" | "B" | "C"): WinklyPlanOptionOut | null => {
     if (!v || typeof v !== "object") return null;
     const x = v as Record<string, unknown>;
 
-    const option_id = x.option_id === "A" || x.option_id === "B" ? (x.option_id as "A" | "B") : id;
+    // Position decides the id — the model occasionally repeats "A".
+    const option_id = id;
     const venueRaw = x.venue;
     if (!venueRaw || typeof venueRaw !== "object") return null;
     const venue = venueRaw as Record<string, unknown>;
@@ -3197,7 +3324,9 @@ function parseWinklyPlanOutput(
         ? x.character_label.trim()
         : id === "A"
           ? "Bolder pick"
-          : "Reliable pick";
+          : id === "B"
+            ? "Reliable pick"
+            : "Wildcard";
     const title =
       typeof x.title === "string" && x.title.trim()
         ? x.title.trim()
@@ -3271,11 +3400,15 @@ function parseWinklyPlanOutput(
     };
   };
 
+  const OPTION_IDS = ["A", "B", "C"] as const;
   const parsed = optionsRaw
-    .slice(0, 2)
-    .map((opt, idx) => parseOpt(opt, idx === 0 ? "A" : "B"))
-    .filter((opt): opt is WinklyPlanOptionOut => !!opt);
+    .slice(0, opts?.maxOptions ?? 2)
+    .map((opt, idx) => parseOpt(opt, OPTION_IDS[idx]))
+    .filter((opt): opt is WinklyPlanOptionOut => !!opt)
+    // Re-letter after dropping invalid entries so ids stay A, B, C in order.
+    .map((opt, idx) => ({ ...opt, option_id: OPTION_IDS[idx] }));
 
+  const assumptions_raw = Array.isArray(o.assumptions) ? o.assumptions : undefined;
   if (!parsed.length) return null;
   if (parsed.length === 1) {
     const twin: WinklyPlanOptionOut = {
@@ -3284,15 +3417,16 @@ function parseWinklyPlanOutput(
       character_label: "Reliable pick",
       title: parsed[0].title.length < 120 ? `${parsed[0].title} (alt)` : parsed[0].title,
     };
-    return { options: [parsed[0], twin] };
+    return { options: [parsed[0], twin], assumptions_raw };
   }
-  return { options: [parsed[0], parsed[1]] };
+  return { options: [parsed[0], parsed[1], ...parsed.slice(2)], assumptions_raw };
 }
 
 async function runOpenAIPlanJson(
   openaiKey: string,
   system: string,
   userContent: string,
+  maxTokens?: number,
 ): Promise<string | null> {
   const res = await fetchWithBackoff(
     "https://api.openai.com/v1/chat/completions",
@@ -3304,7 +3438,7 @@ async function runOpenAIPlanJson(
       },
       body: JSON.stringify({
         model: Deno.env.get("OPENAI_MODEL_PLAN") ?? "gpt-4o-mini",
-        max_tokens: resolveMaxTokens("winkly_plan"),
+        max_tokens: maxTokens ?? resolveMaxTokens("winkly_plan"),
         temperature: 0.5,
         response_format: { type: "json_object" },
         messages: [
@@ -3429,9 +3563,47 @@ function applyVerifiedVenueToOptions(
       ...(bookingUrl ? { booking_url: bookingUrl } : {}),
     },
   });
+  const [a, b, ...rest] = plan.options;
   return {
-    options: [mergeOpt(plan.options[0]), mergeOpt(plan.options[1])],
+    ...plan,
+    options: [mergeOpt(a), mergeOpt(b), ...rest.map(mergeOpt)],
   };
+}
+
+/** Plan-it: ground only option A on the verified venue; B/C keep their own (distinct) venues. */
+function applyVerifiedVenueToFirstOption(
+  plan: WinklyPlanOutput,
+  vv: { name: string; address: string; google_maps_link: string },
+  bookingUrl: string | null,
+): WinklyPlanOutput {
+  const [a, b, ...rest] = plan.options;
+  const grounded = applyVerifiedVenueToOptions({ options: [a, a] }, vv, bookingUrl).options[0];
+  return { ...plan, options: [grounded, b, ...rest] };
+}
+
+/** The user's pinned values always win over whatever the model echoed back. */
+function enforcePinnedAssumptions(assumptions: PlanAssumptionOut[], planIt: PlanItInference): PlanAssumptionOut[] {
+  const byField = new Map(assumptions.map((a) => [a.field, a] as const));
+  const pin = (field: PlanAssumptionField, value: string | undefined) => {
+    if (!value) return;
+    byField.set(field, { field, label: byField.get(field)?.label ?? "", value });
+  };
+  const w = planIt.pinned.when?.date_from;
+  if (w) {
+    // Keep a model "when" that sits inside the pinned window (it adds the start time); else use the pin.
+    const modelWhen = byField.get("when")?.value ?? "";
+    const firstDay = w.slice(0, 10);
+    const lastDay = planIt.pinned.when?.date_to ?? firstDay;
+    const inWindow = LOCAL_DATE_TIME_RE.test(w)
+      ? modelWhen === w
+      : modelWhen.slice(0, 10) >= firstDay && modelWhen.slice(0, 10) <= lastDay;
+    if (!inWindow) pin("when", w);
+  }
+  const b = planIt.pinned.budget;
+  if (b) pin("budget", `${Math.round(b.amount)} ${b.currency.toUpperCase()}`);
+  if (planIt.pinned.setting) pin("setting", planIt.pinned.setting);
+  if (planIt.pinned.area) pin("area", planIt.pinned.area);
+  return PLAN_ASSUMPTION_FIELDS.map((f) => byField.get(f)).filter((a): a is PlanAssumptionOut => !!a);
 }
 
 function inclusiveDayCountIso(dateFrom: string, dateTo: string): number {
@@ -3798,8 +3970,12 @@ async function generateWinklyPlan(params: {
   searchRadiusMeters?: number | null;
   /** Prefetched location middleware result — used for venue stubs when Maps verify misses. */
   locationInjection?: LocationContextInjection | null;
+  /** user_prompt present → infer + return assumptions (when/budget/setting/area); Plan-it adds option C. */
+  planIt?: PlanItInference | null;
 }): Promise<{
   plan: WinklyPlanOutput;
+  /** Validated assumptions (empty unless planIt). */
+  assumptions: PlanAssumptionOut[];
   trip_days?: PlannerTripDayOut[];
   pending_plan_id: string | null;
   provider: "gemini" | "anthropic" | "openai" | "fallback";
@@ -3945,6 +4121,7 @@ async function generateWinklyPlan(params: {
       }
       return {
         plan: mdOut.plan,
+        assumptions: [],
         trip_days: mdOut.trip_days.length ? mdOut.trip_days : undefined,
         pending_plan_id: pendingPlanId,
         provider: "gemini",
@@ -3979,7 +4156,9 @@ async function generateWinklyPlan(params: {
     cleanPlacesSearchIdea(userIdea, planSeedTitle) ||
     profiles.map((p) => (Array.isArray(p.interests) ? p.interests.slice(0, 2).join(", ") : "")).filter(Boolean).join(", ") ||
     "date night";
-  const query = `${ideaForSearch} in ${[city, country].filter(Boolean).join(", ")}`.slice(0, 220);
+  const planIt = params.planIt ?? null;
+  const optionCount = planIt?.optionCount ?? 2;
+  const query = `${ideaForSearch} in ${[planIt?.pinned.area, city, country].filter(Boolean).join(", ")}`.slice(0, 220);
   const placesLat =
     typeof params.latitude === "number" && Number.isFinite(params.latitude) ? params.latitude : null;
   const placesLng =
@@ -4020,27 +4199,55 @@ async function generateWinklyPlan(params: {
   }
 
   const planLangDirective = languageDirective(params.appLanguage);
+  const optionCountWord = optionCount === 3 ? "three" : "two";
+  const optionsRule = optionCount === 3
+    ? `- Return exactly three plan options as JSON: { "options": [ {...}, {...}, {...} ] }.`
+    : `- Return exactly two plan options as JSON: { "options": [ {...}, {...} ] }.`;
+  const optionCRule = optionCount === 3
+    ? `\n- Option C — a wildcard: a genuinely different kind of plan from A and B that still fits the request. character_label: pick from ["Wildcard","Something different","Off the beaten path"].`
+    : "";
+  const verifiedVenueRule = optionCount === 3
+    ? `- When VERIFIED_VENUE is non-null, option A MUST use that exact venue name, address, and google_maps_link; options B and C MUST be two other distinct real venues.`
+    : `- When VERIFIED_VENUE is non-null, BOTH options MUST use that exact venue name, address, and google_maps_link for their venue objects (still vary titles, itinerary tone, and why_this_fits).`;
+  const assumptionsRules = planIt
+    ? `
+
+ONE-LINE REQUEST — INFER AND STATE ASSUMPTIONS:
+The user described the plan in one line (USER_REQUEST). Infer everything they did not say from the request, the participant profiles, the weather and NOW_LOCAL (the requester's local time, TIMEZONE), then state it back in "assumptions":
+- "when": the day and start time. It MUST be strictly after NOW_LOCAL. "tonight" = today's evening, "this weekend" = the coming Saturday/Sunday, "after work" ≈ 18:00–19:00 on a weekday; with no hint pick the next sensible slot for the activity (never a slot that has already started). Every option's itinerary must happen on that day and start at or after that time.
+- "budget": a realistic per-person amount in the local currency, fitting the request and the profiles.
+- "setting": "indoor", "outdoor" or "either" — follow the weather: rain, snow, cold or strong wind → indoor.
+- "area": a real neighbourhood or district of the city that suits the request; choose venues in or near it.
+- Fields present in PINNED were set by the user: use those values exactly (do not reinterpret them) and still include them in assumptions.
+- Include all four assumptions. label: human-friendly, max 24 characters, in the response language (e.g. "Sat evening", "~€30 p.p.", "Indoors", "Maxvorstadt"). value: when "YYYY-MM-DDTHH:mm" (local), budget "<number> <ISO 4217 code>", setting "indoor"|"outdoor"|"either", area the plain name.`
+    : "";
+  const assumptionsSchema = planIt
+    ? `,
+  "assumptions": [
+    { "field": "when" | "budget" | "setting" | "area", "label": string, "value": string }
+  ]`
+    : "";
   const SYSTEM = `${planLangDirective ? `${planLangDirective}\n\n` : ""}${params.systemContextBlock ? `${params.systemContextBlock}\n\n` : ""}You are Winkly Concierge Agent.
 
 You will receive: multiple participant profiles (interests, dietary needs, lifestyle, location) and planning form data (idea/date_time/budget/weather).
 
 Rules:
 - Validate the user's idea against ALL participant constraints.
-- Return exactly two plan options as JSON: { "options": [ {...}, {...} ] }.
+${optionsRule}
 - Keep every string SHORT (title ≤80 chars, why_this_fits ≤120 chars, fit_reason ≤120 chars, itinerary descriptions ≤60 chars). JSON only — no prose.
 - ALWAYS include fit_reason for EVERY option: ONE short sentence, addressed to the participants, naming at least one CONCRETE personal signal from their data — a shared interest, their shared/neighbourhood city, the budget band, a language in common, or an open-hours/timing match. Never generic ("great spot!", "you'll love it"). This is the card's headline "why this fits you" reason, distinct from the longer why_this_fits.
 - Option A — the bolder, more memorable choice. character_label: pick from ["Bolder pick","Surprising choice","Hidden gem","Local favourite"].
-- Option B — the safer, reliable choice. character_label: pick from ["Classic choice","Safe & solid","Reliable pick","Crowd pleaser"].
+- Option B — the safer, reliable choice. character_label: pick from ["Classic choice","Safe & solid","Reliable pick","Crowd pleaser"].${optionCRule}
 - Use your world knowledge to suggest real, specific venues in the city and country provided (named restaurants, cafés, cultural venues, etc.). Do not invent fake URLs.
 - GROUP SYNTHESIS (when group_size > 2): (1) Apply hard constraints as a UNION — any one participant's dietary/accessibility need excludes that venue type for everyone (lowest common denominator). (2) Build Option A around the group's shared interest intersection ("the core thing everyone likes"); build Option B for variety/rotation so it isn't always the same person's pick. (3) Use GROUP_VIBE_TODAY only as a tiebreaker between otherwise-equal options, never as a hard filter. (4) Respect group_size when picking venues — avoid spots better suited to 2 people, and for groups of 5+ add a note to ask about a group table / reservation / private area.
 - If PARTICIPANTS_PLANNER_ITEMS is present, propose a start time that does not overlap any participant's busy blocks; if a perfect slot doesn't exist, pick the time with the fewest conflicts and say so explicitly in why_this_fits or weather_note (e.g. "this overlaps with one member's gym class until 18:00, so I've set the start at 18:30").
 - If GROUP_VIBE_TODAY is present, weight the group's stated mood/energy and honour any notes (e.g. "nothing too far from the S-Bahn") when choosing venues and pacing.
 - When group_size > 2, populate group_fit_notes with 2-4 short bullets explaining why the plan works for the group — reference concrete constraints (dietary needs, the rain forecast, a member's timing, group_size). This is the "why this works for everyone" a thoughtful organiser would say. Omit group_fit_notes (or leave empty) for 1:1 plans.
-- When VERIFIED_VENUE is non-null, BOTH options MUST use that exact venue name, address, and google_maps_link for their venue objects (still vary titles, itinerary tone, and why_this_fits).
-- When VERIFIED_VENUE is null, propose two distinct real venues. For google_maps_link use a Maps search URL: https://www.google.com/maps/search/?api=1&query=ENCODED_VENUE_NAME_AND_CITY (encode spaces as +).
+${verifiedVenueRule}
+- When VERIFIED_VENUE is null, propose ${optionCountWord} distinct real venues. For google_maps_link use a Maps search URL: https://www.google.com/maps/search/?api=1&query=ENCODED_VENUE_NAME_AND_CITY (encode spaces as +).
 - Put human-readable weather in weather_note — never paste raw JSON.
 - booking_url inside venue must be omitted unless BOOKING_URL is provided (non-null).
-- Output MUST be valid JSON and follow the required schema exactly.
+- Output MUST be valid JSON and follow the required schema exactly.${assumptionsRules}
 
 Required JSON schema:
 {
@@ -4064,7 +4271,7 @@ Required JSON schema:
       "duration_minutes": number
     },
     { ... }
-  ]
+  ]${assumptionsSchema}
 }`;
 
   const groupVibeText = (params.groupVibe ?? "").trim();
@@ -4072,7 +4279,8 @@ Required JSON schema:
     participant_profiles: profiles,
     planning_form: {
       user_idea: userIdea || null,
-      date_time: dt,
+      // Plan-it: only a user-pinned "when" is fixed — otherwise the model infers it.
+      date_time: planIt ? (planIt.pinned.when?.date_from ?? null) : dt,
       budget: { amount, currency },
       weather_summary: formatWeatherSnapshotProse(weather),
       city,
@@ -4083,8 +4291,17 @@ Required JSON schema:
     ...(participantsPlannerItems ? { PARTICIPANTS_PLANNER_ITEMS: participantsPlannerItems } : {}),
     ...(verifiedVenue ? { VERIFIED_VENUE: verifiedVenue } : {}),
     ...(verifiedBookingUrl ? { BOOKING_URL: verifiedBookingUrl } : {}),
+    ...(planIt
+      ? {
+          NOW_LOCAL: planIt.nowLocal,
+          ...(planIt.timezone ? { TIMEZONE: planIt.timezone } : {}),
+          PINNED: planIt.pinned,
+        }
+      : {}),
   };
 
+  // Three options + assumptions need ~1.5x the two-option budget (still capped by AI_MAX_OUTPUT_TOKENS).
+  const planMaxTokens = capOutputTokens(Math.round(resolveMaxTokens("winkly_plan") * (optionCount === 3 ? 1.5 : 1)));
   const planUserContent = planRequestText
     ? `USER_REQUEST (authoritative brief from the Planner form):\n\n${planRequestText}\n\n---\nStructured context:\n${JSON.stringify(payload)}`
     : JSON.stringify(payload);
@@ -4100,10 +4317,10 @@ Required JSON schema:
       SYSTEM,
       planUserContent,
       ANTHROPIC_MODEL_PLAN,
-      resolveMaxTokens("winkly_plan"),
+      planMaxTokens,
       0.5,
     );
-    parsed = anthropicText ? parseWinklyPlanOutput(anthropicText, { city, country }) : null;
+    parsed = anthropicText ? parseWinklyPlanOutput(anthropicText, { city, country, maxOptions: optionCount }) : null;
     if (parsed) planProvider = "anthropic";
   }
 
@@ -4112,7 +4329,7 @@ Required JSON schema:
       systemInstruction: { parts: [{ text: SYSTEM }] },
       contents: [{ role: "user", parts: [{ text: planUserContent }] }],
       generationConfig: {
-        maxOutputTokens: resolveMaxTokens("winkly_plan"),
+        maxOutputTokens: planMaxTokens,
         temperature: 0.5,
         responseMimeType: "application/json",
         thinkingConfig: GEMINI_THINKING_CONFIG,
@@ -4123,7 +4340,7 @@ Required JSON schema:
       const data = await res.json();
       const candidate = data.candidates?.[0];
       const text = candidate?.content?.parts?.[0]?.text;
-      parsed = typeof text === "string" ? parseWinklyPlanOutput(text, { city, country }) : null;
+      parsed = typeof text === "string" ? parseWinklyPlanOutput(text, { city, country, maxOptions: optionCount }) : null;
       if (parsed) {
         planProvider = "gemini";
       } else {
@@ -4139,8 +4356,8 @@ Required JSON schema:
   }
 
   if (!parsed && openaiKey) {
-    const openaiText = await runOpenAIPlanJson(openaiKey, SYSTEM, planUserContent);
-    parsed = openaiText ? parseWinklyPlanOutput(openaiText, { city, country }) : null;
+    const openaiText = await runOpenAIPlanJson(openaiKey, SYSTEM, planUserContent, planMaxTokens);
+    parsed = openaiText ? parseWinklyPlanOutput(openaiText, { city, country, maxOptions: optionCount }) : null;
     if (parsed) planProvider = "openai";
   }
 
@@ -4151,10 +4368,10 @@ Required JSON schema:
       SYSTEM,
       planUserContent,
       ANTHROPIC_MODEL_PLAN,
-      resolveMaxTokens("winkly_plan"),
+      planMaxTokens,
       0.5,
     );
-    parsed = anthropicText ? parseWinklyPlanOutput(anthropicText, { city, country }) : null;
+    parsed = anthropicText ? parseWinklyPlanOutput(anthropicText, { city, country, maxOptions: optionCount }) : null;
     if (parsed) planProvider = "anthropic";
   }
 
@@ -4235,8 +4452,16 @@ Required JSON schema:
   }
 
   if (verifiedVenue) {
-    finalPlan = applyVerifiedVenueToOptions(finalPlan, verifiedVenue, verifiedBookingUrl);
+    // Plan-it shows three options — grounding all three on one venue would make them the same
+    // plan, so only option A takes the verified venue (B/C stay distinct model venues).
+    finalPlan = optionCount === 3
+      ? applyVerifiedVenueToFirstOption(finalPlan, verifiedVenue, verifiedBookingUrl)
+      : applyVerifiedVenueToOptions(finalPlan, verifiedVenue, verifiedBookingUrl);
   }
+
+  const assumptions = planIt
+    ? enforcePinnedAssumptions(sanitizePlanAssumptions(parsed?.assumptions_raw, planIt.nowLocal), planIt)
+    : [];
 
   const planJsonEnvelope = {
     options: finalPlan.options,
@@ -4266,6 +4491,7 @@ Required JSON schema:
 
   return {
     plan: finalPlan,
+    assumptions,
     pending_plan_id: pendingPlanId,
     provider: planProvider,
     location_id: verifiedPlaceId,
@@ -4551,6 +4777,60 @@ async function handleAiGatewayRequest(req: Request): Promise<Response> {
         ? (scrubbedSafeContext.weather_snapshot as Record<string, unknown>)
         : null;
 
+      // One-line entry ("Plan it"): three options + no pending_plans draft (nothing is shared yet —
+      // "Add to planner" creates the item). Any caller with a user_prompt gets inferred assumptions.
+      const isPlanIt = scrubbedSafeContext.plan_it === true;
+      const userPromptText = typeof scrubbedSafeContext.user_prompt === "string" ? scrubbedSafeContext.user_prompt.trim() : "";
+      const nowLocal = localNowString(scrubbedSafeContext.timezone, scrubbedSafeContext.current_datetime_local);
+      let planItInference: PlanItInference | null = null;
+      if (userPromptText) {
+        const pinnedFields = new Set(
+          Array.isArray(scrubbedSafeContext.pinned_fields) ? scrubbedSafeContext.pinned_fields as PlanAssumptionField[] : [],
+        );
+        const pinned: PlanItInference["pinned"] = {};
+        const df = typeof scrubbedSafeContext.date_from === "string" ? scrubbedSafeContext.date_from.trim() : "";
+        if (isPlanIt) {
+          // Plan-it sends local wall-clock values; a pinned "when" in the past is ignored (re-inferred).
+          if (pinnedFields.has("when") && (LOCAL_DATE_TIME_RE.test(df) || LOCAL_DATE_RE.test(df)) && isFutureLocalWhen(df, nowLocal)) {
+            const dt = typeof scrubbedSafeContext.date_to === "string" && LOCAL_DATE_RE.test(scrubbedSafeContext.date_to)
+              ? scrubbedSafeContext.date_to
+              : undefined;
+            const tpRaw = scrubbedSafeContext.time_preference;
+            const tp = tpRaw === "morning" || tpRaw === "lunch" || tpRaw === "afternoon" || tpRaw === "evening" ? tpRaw : undefined;
+            pinned.when = { date_from: df, ...(dt && dt >= df.slice(0, 10) ? { date_to: dt } : {}), ...(tp ? { time_preference: tp } : {}) };
+          }
+          if (pinnedFields.has("setting")) {
+            const io = scrubbedSafeContext.indoor_outdoor;
+            pinned.setting = io === "indoor" || io === "outdoor" ? io : "either";
+          }
+          if (pinnedFields.has("area") && typeof scrubbedSafeContext.area_hint === "string") {
+            pinned.area = scrubbedSafeContext.area_hint;
+          }
+        } else if (df) {
+          // Existing callers (chat, invite) always fix the date — echo it rather than re-infer it.
+          const d = new Date(df);
+          if (!isNaN(d.getTime())) pinned.when = { date_from: df };
+        }
+        if (
+          (isPlanIt ? pinnedFields.has("budget") : true) &&
+          typeof scrubbedSafeContext.budget_amount === "number" && scrubbedSafeContext.budget_amount > 0
+        ) {
+          pinned.budget = {
+            amount: scrubbedSafeContext.budget_amount,
+            currency: typeof scrubbedSafeContext.budget_currency === "string" ? scrubbedSafeContext.budget_currency : "EUR",
+          };
+        }
+        planItInference = {
+          optionCount: isPlanIt ? 3 : 2,
+          nowLocal,
+          ...(typeof scrubbedSafeContext.timezone === "string" ? { timezone: scrubbedSafeContext.timezone } : {}),
+          pinned,
+        };
+      }
+      const refinement = typeof scrubbedSafeContext.refinement_feedback === "string"
+        ? scrubbedSafeContext.refinement_feedback.trim().slice(0, 400)
+        : "";
+
       const input: WinklyPlanInput = {
         mode,
         participant_user_ids: participantIds,
@@ -4589,9 +4869,13 @@ async function handleAiGatewayRequest(req: Request): Promise<Response> {
         requesterUserId: user.id,
         input,
         conversationId: convId,
-        persistDraft: true,
+        persistDraft: !isPlanIt,
         maps_grounding: "verify",
         tier,
+        planIt: planItInference,
+        ...(isPlanIt && refinement
+          ? { planRequestText: `${userPromptText}\n\nRefinement: ${refinement}` }
+          : {}),
         appLanguage: typeof scrubbedSafeContext.app_language === "string" ? scrubbedSafeContext.app_language : undefined,
         systemContextBlock: wpInjection ? formatSystemContextBlock(wpInjection) : undefined,
         locationInjection: wpInjection ?? null,
@@ -4630,6 +4914,7 @@ async function handleAiGatewayRequest(req: Request): Promise<Response> {
 
       return new Response(JSON.stringify({
         options: out.plan.options,
+        ...(planItInference ? { assumptions: out.assumptions } : {}),
         agentic_planning_output,
         pending_plan_id: out.pending_plan_id,
         provider: out.provider,

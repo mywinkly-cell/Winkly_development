@@ -82,6 +82,8 @@ export default function ConciergeScreen() {
     prefill_prompt?: string;
     /** "decisive" = primary + backup; "menu" or omit = three options. */
     presentation?: string;
+    /** One-line Plan-it request (PlanItBar): generate right away, assumptions as editable chips. */
+    plan_it?: string;
   }>();
   const insets = useSafeAreaInsets();
   const { context: modeContext } = useModeContext();
@@ -348,6 +350,7 @@ export default function ConciergeScreen() {
               ? (params.initial_step as "activity" | "social")
               : undefined
           }
+          planItRequest={typeof params.plan_it === "string" ? params.plan_it : undefined}
           proactiveActivityLabel={params.proactive_activity_label ?? undefined}
           proactiveDatePreset={
             params.proactive_date_preset === "today" ||

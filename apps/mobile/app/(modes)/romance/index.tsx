@@ -40,6 +40,8 @@ import { keyboardAvoidingProps } from "@/lib/ui/keyboardAvoiding";
 import { fetchRomanceLikesReceivedCount } from "@/lib/discover/likesReceivedCount";
 import { getRomanceFilters, hasSavedRomanceFilters } from "@/lib/filters/romanceFiltersStorage";
 import { updateMyLocationOnAppOpen } from "@/lib/location/updateLocation";
+import { PlanItBar } from "@/components/ai/PlanItBar";
+import { PLAN_IT_ENTRY_ENABLED } from "@/config/flags";
 import {
   acceptRomanceChatInvite,
   declineRomanceChatInvite,
@@ -661,6 +663,8 @@ export default function RomanceHome() {
         onFilterPress={() => router.push("/(modes)/romance/filters")}
       />
 
+      {PLAN_IT_ENTRY_ENABLED ? <PlanItBar mode="romance" compact style={styles.planItBar} /> : null}
+
       {deckLoading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={romanceAccent} />
@@ -1010,6 +1014,10 @@ function createStyles(theme: AppTheme) {
       alignItems: "center",
       justifyContent: "center",
       padding: theme.spacing.xxl,
+    },
+    planItBar: {
+      marginHorizontal: theme.spacing.lg,
+      marginTop: theme.spacing.sm,
     },
     cardContainer: {
       flex: 1,

@@ -83,6 +83,10 @@ import type { PlanRecommendationRating } from "@/lib/ai/planRecommendationFeedba
 import type { Mode } from "@/types";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 import { useAppLocaleTag } from "@/lib/i18n/appLocale";
+import { PlanItBar, type PlanItBarHandle } from "@/components/ai/PlanItBar";
+import { PLAN_IT_ENTRY_ENABLED } from "@/config/flags";
+import { useModeContext } from "@/providers/ModeContextProvider";
+import { isModeAvailable } from "@/lib/modes/availability";
 
 type TabKey = "all" | "dates" | "meetups" | "business" | "events" | "archive";
 type TimeRange =
@@ -659,11 +663,35 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     setFilterModalVisible(true);
   }, []);
 
-  const openConcierge = useCallback(() => {
+  /** Full step-by-step wizard (power users; "Step by step" / long-press on the Plan-it bar). */
+  const openConciergeWizard = useCallback(() => {
     const modeParam = activeTab === "all" || activeTab === "archive" ? "all" : activeTab === "dates" ? "romance" : activeTab === "meetups" ? "friends" : activeTab === "business" ? "business" : "events";
     const tabParam = activeTab === "archive" ? "all" : activeTab;
     router.push({ pathname: "/concierge", params: { source_screen: "planner", mode: modeParam, source_planner_tab: tabParam } });
   }, [activeTab, router]);
+
+  const planItRef = useRef<PlanItBarHandle>(null);
+  const showPlanItBar = PLAN_IT_ENTRY_ENABLED && activeTab !== "archive";
+  const { context: modeCtx } = useModeContext();
+  /** Plan-it needs one concrete mode: the tab's, or on "All" the active mode (friends as fallback). */
+  const planItMode = useMemo<Mode>(() => {
+    if (activeTab === "dates") return "romance";
+    if (activeTab === "meetups") return "friends";
+    if (activeTab === "business") return "business";
+    if (activeTab === "events") return "events";
+    const active = modeCtx.active_mode;
+    return active && isModeAvailable(active) ? active : "friends";
+  }, [activeTab, modeCtx.active_mode]);
+
+  /** Header AI button: with Plan-it on, jump to the bar instead of the 7-step wizard. */
+  const openConcierge = useCallback(() => {
+    if (!showPlanItBar) {
+      openConciergeWizard();
+      return;
+    }
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+    planItRef.current?.focus();
+  }, [showPlanItBar, openConciergeWizard]);
 
   const handleWeeklyDismiss = useCallback(async () => {
     sparkRevealGenRef.current += 1;
@@ -1190,6 +1218,8 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
 
   /** Whenever the user is looking at an empty planner, introduce the concierge instead of a dead end. */
   const showConciergePromoCard =
+    // The Plan-it bar already sits at the top — don't stack a second "plan with me" CTA.
+    !showPlanItBar &&
     activeTab !== "archive" &&
     plannerPrefs.aiSuggestions !== false &&
     !isPastContext &&
@@ -1328,6 +1358,15 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 40 + filterModalBottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
+        {showPlanItBar ? (
+          <PlanItBar
+            ref={planItRef}
+            mode={planItMode}
+            sourcePlannerTab={activeTab}
+            onOpenWizard={openConciergeWizard}
+            style={styles.planItBar}
+          />
+        ) : null}
         {activeTab !== "archive" && <WeatherPivotBanner />}
         {activeTab !== "archive" && <PlanRatingSection />}
         {showWeekendIdeas && (
@@ -1377,7 +1416,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         {savedIdeasCount > 0 && (
           <TouchableOpacity
             style={styles.savedIdeasRow}
-            onPress={() => { Haptics.selectionAsync(); openConcierge(); }}
+            onPress={() => { Haptics.selectionAsync(); openConciergeWizard(); }}
             activeOpacity={0.8}
           >
             <Ionicons name="bookmark" size={20} color={theme.colors.primary} />
@@ -2072,6 +2111,7 @@ function createStyles(theme: AppTheme) {
       color: theme.colors.textPrimary,
     },
     viewPromoWrap: { paddingTop: theme.spacing.lg },
+    planItBar: { marginBottom: theme.spacing.lg },
     conciergePromoCard: {
       marginBottom: theme.spacing.lg,
       padding: theme.spacing.lg,

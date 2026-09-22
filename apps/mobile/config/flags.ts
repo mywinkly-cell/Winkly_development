@@ -30,3 +30,12 @@ export const BUSINESS_MODE_ENABLED = false;
  * "coming soon" screen (their data is untouched). Read via `isAccountTypeAvailable()`.
  */
 export const BUSINESS_ACCOUNTS_ENABLED = false;
+
+/**
+ * Plan-it bar — one line of text (or one chip tap) → plan options, with the AI's assumptions
+ * shown as editable chips. The default planning entry on the Planner tab and the Romance /
+ * Friends / Events homes; the full step-by-step wizard stays reachable from the bar.
+ *
+ * Kill switch: false restores the previous entry points (Planner header / promo card → wizard).
+ */
+export const PLAN_IT_ENTRY_ENABLED = true;

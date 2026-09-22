@@ -31,6 +31,8 @@ import { addExternalEventToPlanner, fetchNearbyExternalEvents, type ExternalEven
 import { getDeviceCoordsIfPermitted } from "@/lib/location/deviceLocation";
 import { supabase } from "@/lib/supabase";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
+import { PlanItBar } from "@/components/ai/PlanItBar";
+import { PLAN_IT_ENTRY_ENABLED } from "@/config/flags";
 
 // Map DB event row to EventCardItem (canonical starts_at / ends_at)
 function winklyRowToCard(row: Record<string, unknown>): EventCardItem {
@@ -207,7 +209,9 @@ export default function EventsHome() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        keyboardShouldPersistTaps="handled"
       >
+        {PLAN_IT_ENTRY_ENABLED ? <PlanItBar mode="events" style={styles.planItBar} /> : null}
         <Text style={styles.pageTitle}>Discover Events</Text>
         <Text style={styles.pageSubtitle}>
           Explore what's happening — on Winkly and from Ticketmaster, Meetup and more. Add to your planner or open the link to get tickets.
@@ -365,6 +369,7 @@ function createStyles(theme: AppTheme) {
   return {
     screen: { flex: 1, backgroundColor: theme.colors.background },
     scrollContent: { padding: theme.spacing.xl, paddingBottom: 120 },
+    planItBar: { marginBottom: theme.spacing.xl },
     pageTitle: { ...theme.type.h1, fontFamily: theme.type.h1.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.md },
     pageSubtitle: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.md },
     rangeRow: { flexDirection: "row" as const, flexWrap: "wrap" as const, alignItems: "center" as const, marginBottom: theme.spacing.md, gap: theme.spacing.sm },

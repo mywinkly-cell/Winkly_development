@@ -48,7 +48,7 @@ export type PlannerTripDay = {
 };
 
 export type PlannerThemePlanOption = {
-  option_id: "A" | "B";
+  option_id: "A" | "B" | "C";
   character_label: string;
   title: string;
   why_this_fits: string;
