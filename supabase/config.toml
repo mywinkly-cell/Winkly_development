@@ -360,6 +360,12 @@ verify_jwt = false
 [functions.report-notify]
 verify_jwt = false
 
+# moderate-media has two callers: the app (user JWT, checked in-function with
+# auth.getUser()) and the media_moderation "resolve" trigger (pg_net, no JWT,
+# `x-webhook-secret` = WEBHOOK_SECRET). See docs/MODERATION.md.
+[functions.moderate-media]
+verify_jwt = false
+
 # weather-pivot-cron is invoked by a pg_cron schedule (pg_net), not by users. It has no
 # Bearer JWT; it is protected by the `x-cron-secret` header (CRON_SECRET env var) instead.
 [functions.weather-pivot-cron]

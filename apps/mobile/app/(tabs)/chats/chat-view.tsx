@@ -56,6 +56,7 @@ import {
 } from "@/lib/chats/hooks";
 import type { Message, MessageAttachment, MessageType, OwnMessageStatus, UserMini } from "@/lib/chats/types";
 import { pickAndUploadChatImages as pickImages, uploadChatVoiceFromUri } from "@/lib/uploadMedia";
+import { ModeratedChatImage } from "@/components/chats/ModeratedChatImage";
 import { VoiceMessageBubble } from "@/components/chats/VoiceMessageBubble";
 import { GifUrlSheet } from "@/components/chats/GifUrlSheet";
 import { InviteToPlanModal } from "@/components/chats/InviteToPlanModal";
@@ -2038,10 +2039,11 @@ export default function ChatView({
                 )
               ) : item.message_type !== "cta" && item.message_type !== "icebreaker" && (item.message_type === "image" || item.message_type === "gif") ? (
                 <View style={{ borderRadius: 14, overflow: "hidden" }}>
-                  <Image
-                    source={{ uri: (item.attachments?.[0]?.url ?? item.content) || "" }}
-                    style={{ width: 200, height: 200, borderRadius: 14 }}
-                    resizeMode="cover"
+                  <ModeratedChatImage
+                    uri={(item.attachments?.[0]?.url ?? item.content) || ""}
+                    attachment={item.attachments?.[0]}
+                    mine={!!mine}
+                    onReport={() => handleReportMessage(item.id)}
                   />
                   {item.content?.trim() ? (
                     <Text style={{ padding: 8, fontSize: 15 }}>{item.content}</Text>

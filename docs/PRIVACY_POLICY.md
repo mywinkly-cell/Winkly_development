@@ -104,6 +104,7 @@ We use a small number of processors to run Winkly. Each is bound by a data-proce
 | Anthropic (Claude API) | AI concierge — secondary model | Same allow-listed subset | US; EU Standard Contractual Clauses |
 | Google Places / Maps | Venue and place lookups | Coarse city/area and search terms; not your identity | US; SCCs |
 | Ticketmaster | Real event listings in Events mode | Coarse city/area and search terms | SCCs |
+| Sightengine *(DRAFT — pending lawyer review and signed DPA; alternative under evaluation: Google Cloud Vision SafeSearch, EU endpoint)* | Automated safety check of profile photos and chat images for explicit, violent or illegal content | The image itself and technical metadata; no name, profile text or messages | France (EU); processing in the EU |
 | Expo | Push notifications | Device push token | US; SCCs |
 | PostHog | Product analytics — only after consent | Pseudonymous usage events | EU or US, under EU Standard Contractual Clauses where applicable |
 | Sentry | Crash reporting | Diagnostic/crash data | SCCs |

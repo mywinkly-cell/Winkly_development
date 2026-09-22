@@ -108,6 +108,12 @@ export interface MessageAttachment {
   path?: string;
   name?: string;
   size?: number;
+  /**
+   * Image moderation verdict for `path` media (docs/MODERATION.md). Always resolved
+   * server-side on read (get_chat_media_moderation) — a value persisted on the
+   * message by the sender is never trusted. Undefined = unknown → treated as "review".
+   */
+  moderation?: "pass" | "review" | "block";
 }
 
 export interface MessageReaction {

@@ -547,5 +547,19 @@
   "planner.cloudNotConnected": "Not connected",
   "planner.cloudConnecting": "Connecting...",
   "planner.cloudConnectFailed": "Could not connect. Please try again.",
-  "planner.cloudNotConfigured": "Not available yet."
+  "planner.cloudNotConfigured": "Not available yet.",
+
+  "moderation.photoHeldTitle": "Photo in review",
+  "moderation.photoHeldBody": "Thanks! Our team takes a quick look at some photos before they appear on your profile. Until then, only you can see it. It'll be added automatically once approved.",
+  "moderation.photoBlockedTitle": "We can't use this photo",
+  "moderation.photoBlockedBody": "This photo doesn't meet our Community Guidelines, so it wasn't added. Please choose a different one.",
+  "moderation.chatBlockedTitle": "Photo not sent",
+  "moderation.chatBlockedBody": "This photo doesn't meet our Community Guidelines, so we didn't send it.",
+  "moderation.tapToView": "Tap to view",
+  "moderation.sensitiveHint": "This photo is still being checked and may be sensitive.",
+  "moderation.photoRemoved": "This photo was removed",
+  "moderation.report": "Report",
+  "moderation.inReviewBadge": "In review",
+  "moderation.inReviewTitle": "Photos in review",
+  "moderation.inReviewBody": "Only you can see these until our team approves them. They'll be added to your profile automatically."
 }
