@@ -2189,7 +2189,7 @@ export default function ProfileCore() {
             }}
           >
             <Text style={{ ...theme.type.body, color: theme.colors.error, fontWeight: "600" as const }}>
-              Couldn't save your profile
+              Couldn&apos;t save your profile
             </Text>
             <Text style={{ ...theme.type.caption, color: theme.colors.error, marginTop: 4 }}>
               {saveError}

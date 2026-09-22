@@ -42,7 +42,7 @@ export function WizardShell(props: {
 
       {saveError ? (
         <View style={{ backgroundColor: "#FDECEC", borderRadius: 14, padding: 14, marginTop: 20, borderWidth: 1, borderColor: "#F5B5B5" }}>
-          <Text style={{ ...Typography.body, color: "#B42318", fontWeight: "600" as const }}>Couldn't save your profile</Text>
+          <Text style={{ ...Typography.body, color: "#B42318", fontWeight: "600" as const }}>Couldn&apos;t save your profile</Text>
           <Text style={{ ...Typography.caption, color: "#B42318", marginTop: 4 }}>{saveError}</Text>
           {onRetry && (
             <Button title={saving ? "Retrying…" : "Tap to retry"} variant="ghost" onPress={onRetry} disabled={saving} style={{ alignSelf: "flex-start", marginTop: 10, paddingHorizontal: 0 }} />

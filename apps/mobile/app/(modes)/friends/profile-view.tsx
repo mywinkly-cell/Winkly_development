@@ -281,7 +281,7 @@ export default function FriendsProfileView() {
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Profile not found</Text>
             <Text style={styles.emptyBody}>
-              This usually means the Friends profile table isn't connected yet or the user_id is missing.
+              This usually means the Friends profile table isn&apos;t connected yet or the user_id is missing.
             </Text>
 
             <TextButton

@@ -80,7 +80,7 @@ export function NameStep(props: {
   return (
     <Card>
       <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 4, fontFamily: FontFamily.headingBold }}>
-        Let's start with the basics ✨
+        Let&apos;s start with the basics ✨
       </Text>
       <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 16 }}>
         Just the essentials — you can add more details later.

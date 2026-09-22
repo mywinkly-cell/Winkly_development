@@ -72,7 +72,7 @@ export default function SendFeedbackScreen() {
           </Card>
         ) : (
           <Card style={styles.card}>
-            <Text style={styles.intro}>How's Winkly working for you so far? Anything is helpful — a quick rating, a few words, or both.</Text>
+            <Text style={styles.intro}>How&apos;s Winkly working for you so far? Anything is helpful — a quick rating, a few words, or both.</Text>
 
             <View style={styles.starsRow}>
               <StarRating value={rating} onChange={setRating} size={34} />

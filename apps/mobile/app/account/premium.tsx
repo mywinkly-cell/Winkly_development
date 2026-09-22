@@ -24,7 +24,7 @@ export default function Premium() {
           </Text>
 
           <Card padding="md" elevation={0} style={styles.featureBox}>
-            <Text style={styles.featureTitle}>What you'll get</Text>
+            <Text style={styles.featureTitle}>What you&apos;ll get</Text>
             <Text style={styles.featureText}>• More daily recommendations</Text>
             <Text style={styles.featureText}>• Advanced filters in Friends & Business</Text>
             <Text style={styles.featureText}>• Priority AI matches</Text>

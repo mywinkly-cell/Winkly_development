@@ -214,7 +214,7 @@ export default function EventsHome() {
         {PLAN_IT_ENTRY_ENABLED ? <PlanItBar mode="events" style={styles.planItBar} /> : null}
         <Text style={styles.pageTitle}>Discover Events</Text>
         <Text style={styles.pageSubtitle}>
-          Explore what's happening — on Winkly and from Ticketmaster, Meetup and more. Add to your planner or open the link to get tickets.
+          Explore what&apos;s happening — on Winkly and from Ticketmaster, Meetup and more. Add to your planner or open the link to get tickets.
         </Text>
 
         {/* ─── Filter: Time range + Date ─── */}

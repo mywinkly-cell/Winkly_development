@@ -91,7 +91,7 @@ export default function FriendsMeetups() {
         ) : filtered.length === 0 ? (
           <Card style={styles.itemCard}>
             <Text style={styles.itemSub}>
-              No group meetups yet. Plan one from a group chat with "Plan with group", and it will show up here once
+              No group meetups yet. Plan one from a group chat with &quot;Plan with group&quot;, and it will show up here once
               confirmed.
             </Text>
           </Card>

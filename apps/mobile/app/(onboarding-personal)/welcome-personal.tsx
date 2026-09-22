@@ -73,7 +73,7 @@ export default function WelcomePersonal() {
           marginBottom: theme.spacing.xxxl,
         }}
       >
-        Your profile is set, and you're ready to start connecting.{"\n"}
+        Your profile is set, and you&apos;re ready to start connecting.{"\n"}
         Switch modes anytime — Romance, Friends, Business, or Events.
       </Text>
 
