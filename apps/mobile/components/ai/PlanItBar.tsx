@@ -22,6 +22,7 @@ import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Chip } from "@/components/ds";
+import { useOpenSurprise } from "@/components/ai/SurpriseMeButton";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import {
   PLAN_IT_EXAMPLE_COUNT,
@@ -64,6 +65,7 @@ export const PlanItBar = forwardRef<PlanItBarHandle, PlanItBarProps>(function Pl
   const [text, setText] = useState("");
   const [focused, setFocused] = useState(false);
   const [tick, setTick] = useState(0);
+  const openSurprise = useOpenSurprise(mode);
 
   useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus() }), []);
 
@@ -168,6 +170,18 @@ export const PlanItBar = forwardRef<PlanItBarHandle, PlanItBarProps>(function Pl
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.chipsRow}
       >
+        {/* Zero input: three plans from one tap. Solo only — hidden when planning with a person. */}
+        {person ? null : (
+          <Chip
+            label={t("surprise.cta")}
+            mode={mode}
+            selected
+            onPress={() => {
+              inputRef.current?.blur();
+              openSurprise();
+            }}
+          />
+        )}
         {chips.map((key) => (
           <Chip key={key} label={chipLabel(key)} mode={mode} onPress={() => openPlanIt(chipPrompt(key))} />
         ))}

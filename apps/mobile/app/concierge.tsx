@@ -27,6 +27,7 @@ import { ConciergeRequestForm } from "@/components/ai/ConciergeRequestForm";
 import { AIDisclosureNote } from "@/components/ai/AIDisclosureNote";
 import { FitReasonLine, resolveFitReason } from "@/components/ai/FitReasonLine";
 import { ConciergePlanningFlow } from "@/components/ai/ConciergePlanningFlow";
+import { ConciergeSurpriseFlow } from "@/components/ai/ConciergeSurpriseFlow";
 import { ConciergeRateLimitCard } from "@/components/ai/ConciergeRateLimitCard";
 import { CommunityPlansSection } from "@/components/ai/CommunityPlansSection";
 import { callConciergeStream, reportConciergeOutcome } from "@/lib/ai/conciergeClient";
@@ -84,6 +85,8 @@ export default function ConciergeScreen() {
     presentation?: string;
     /** One-line Plan-it request (PlanItBar): generate right away, assumptions as editable chips. */
     plan_it?: string;
+    /** "1" = Surprise me: three plans from one tap, no form. */
+    surprise?: string;
   }>();
   const insets = useSafeAreaInsets();
   const { context: modeContext } = useModeContext();
@@ -323,6 +326,22 @@ export default function ConciergeScreen() {
     }
     backOrFallback(source_screen === "planner" ? `/(modes)/${mode}/planner` : `/(modes)/${mode}/chats`);
   };
+
+  if (params.surprise === "1") {
+    return (
+      <View style={[styles.screen, { paddingTop: insets.top }]}>
+        <ConciergeSurpriseFlow
+          mode={mode}
+          defaultCity={defaultCity ?? undefined}
+          defaultCountry={defaultCountry ?? undefined}
+          onClose={handleClose}
+          onBack={() =>
+            backOrFallback(source_screen === "planner" ? `/(modes)/${mode}/planner` : `/(modes)/${mode}/chats`)
+          }
+        />
+      </View>
+    );
+  }
 
   if (usePlanningFlow) {
     return (

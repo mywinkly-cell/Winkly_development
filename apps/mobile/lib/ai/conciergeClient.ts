@@ -6,6 +6,7 @@
 import { supabase } from "@/lib/supabase";
 import { getConciergeDevLimitMockResponse } from "@/lib/ai/conciergeDevLimitMock";
 import { getAppLanguageCode } from "@/lib/i18n/appLocale";
+import { buildSurpriseContext, parseSurpriseOptions, type SurprisePlanOption } from "@/lib/ai/surprisePlan";
 import type { Mode } from "@/types";
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -148,6 +149,65 @@ export async function callWinklyPlan(params: {
   }
   if (!data?.options || !Array.isArray(data.options) || data.options.length < 2) throw new Error("No plan options returned");
   return data as WinklyPlanResponse;
+}
+
+export type WinklySurpriseResult =
+  | { ok: true; options: SurprisePlanOption[]; requestId?: string }
+  | {
+      ok: false;
+      limit?: Pick<ConciergeResponse, "error_code" | "limit_type" | "retry_after" | "upgrade_to">;
+      error?: string;
+    };
+
+/**
+ * "Surprise me": winkly_plan with surprise: true and no user_prompt. The server picks three
+ * different future plans (cosy / active / social) and bills them to the same daily plan quota.
+ */
+export async function callWinklySurprise(params: {
+  mode: Mode;
+  city?: string | null;
+  country?: string | null;
+}): Promise<WinklySurpriseResult> {
+  if (!SUPABASE_URL) return { ok: false, error: "Missing Supabase URL" };
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !session?.access_token) return { ok: false, error: "Not signed in" };
+
+  const devLimitMock = getConciergeDevLimitMockResponse();
+  if (devLimitMock?.error_code) return { ok: false, limit: devLimitMock };
+
+  const context = buildSurpriseContext({
+    mode: params.mode,
+    city: params.city,
+    country: params.country,
+    now: new Date(),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    appLanguage: getAppLanguageCode(),
+  });
+  let res: Response;
+  try {
+    res = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/ai-gateway`, {
+      method: "POST",
+      headers: aiGatewayHeaders(session.access_token),
+      body: JSON.stringify({ mode: params.mode, task: "winkly_plan", context }),
+    });
+  } catch {
+    return { ok: false, error: "Check connection and try again." };
+  }
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    const mapped = mapGatewayErrorResponse(data, res.status);
+    if (mapped.error_code === "rate_limit" || mapped.error_code === "daily_quota" || mapped.error_code === "tier_required") {
+      return { ok: false, limit: mapped };
+    }
+    return { ok: false, error: mapped.error };
+  }
+  const options = parseSurpriseOptions(data.options);
+  if (!options.length) return { ok: false, error: "No plan options returned" };
+  return {
+    ok: true,
+    options,
+    requestId: typeof data.request_id === "string" ? data.request_id : undefined,
+  };
 }
 
 export type PendingPlanConfirmResponse = {

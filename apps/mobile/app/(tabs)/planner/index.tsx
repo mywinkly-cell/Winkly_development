@@ -73,6 +73,7 @@ import {
   type WeeklySparkTimingPrefs,
 } from "@/lib/ai/weeklySparkSettings";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
+import { SurpriseMeButton, useOpenSurprise } from "@/components/ai/SurpriseMeButton";
 import { WeatherPivotBanner } from "@/components/planner/WeatherPivotBanner";
 import { PlanRatingSection } from "@/components/planner/PlanRatingSection";
 import { EventParticipantCard } from "@/components/ui/EventParticipantCard";
@@ -692,6 +693,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     scrollRef.current?.scrollTo({ y: 0, animated: true });
     planItRef.current?.focus();
   }, [showPlanItBar, openConciergeWizard]);
+  const openSurprise = useOpenSurprise(planItMode);
 
   const handleWeeklyDismiss = useCallback(async () => {
     sparkRevealGenRef.current += 1;
@@ -1249,6 +1251,13 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     </TouchableOpacity>
   ) : null;
 
+  /** Empty (upcoming) planner: one tap, zero input, three plans. */
+  const showSurpriseEmptyCta =
+    activeTab !== "archive" && plannerPrefs.aiSuggestions !== false && !isPastContext && visibleItemCount === 0;
+  const surpriseEmptyCta = showSurpriseEmptyCta ? (
+    <SurpriseMeButton onPress={openSurprise} style={styles.surpriseMeButton} />
+  ) : null;
+
   const renderItemCard = useCallback((it: PlannerItem) => {
     const past = isItemPast(it.dateStr);
     // Color by item's mode (source) so the All tab shows dates/meetups/business/events each with their own accent.
@@ -1432,6 +1441,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                 <Ionicons name={activeTab === "archive" ? "archive-outline" : "calendar-outline"} size={48} color={theme.colors.textMuted} style={{ marginBottom: 12 }} />
                 <Text style={styles.emptyTitle}>{activeTab === "archive" ? t("planner.noArchivedPlans") : t("planner.noPlansYet")}</Text>
                 <Text style={styles.emptySub}>{activeTab === "archive" ? t("planner.archivedEmptySub") : t("planner.upcomingEmptySub")}</Text>
+                {surpriseEmptyCta}
               </View>
             ) : items.map((it) => renderItemCard(it))}
           </>
@@ -1482,6 +1492,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
               <Ionicons name="calendar-outline" size={48} color={theme.colors.textMuted} style={{ marginBottom: 12 }} />
               <Text style={styles.emptyTitle}>{t("planner.noPlansThisWeek")}</Text>
               <Text style={styles.emptySub}>{t("planner.upcomingEmptySub")}</Text>
+              {surpriseEmptyCta}
             </View>
           ) : weekDays.map((d) => {
               const key = dayKey(d);
@@ -1565,6 +1576,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                   <Ionicons name="calendar-outline" size={48} color={theme.colors.textMuted} style={{ marginBottom: 12 }} />
                   <Text style={styles.emptyTitle}>{t("planner.noPlansThisMonth")}</Text>
                   <Text style={styles.emptySub}>{t("planner.upcomingEmptySub")}</Text>
+                  {surpriseEmptyCta}
                 </View>
               </View>
             ) : (
@@ -2112,6 +2124,7 @@ function createStyles(theme: AppTheme) {
     },
     viewPromoWrap: { paddingTop: theme.spacing.lg },
     planItBar: { marginBottom: theme.spacing.lg },
+    surpriseMeButton: { marginTop: theme.spacing.lg, alignSelf: "stretch" },
     conciergePromoCard: {
       marginBottom: theme.spacing.lg,
       padding: theme.spacing.lg,

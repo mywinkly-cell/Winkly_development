@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "@/constants/design-system";
 import { Card, PrimaryButton, SecondaryButton } from "@/components/ds";
@@ -16,6 +17,8 @@ export type ConciergeRateLimitCardProps = {
   onSaveForLater?: () => void;
   onRetry?: () => void;
   saving?: boolean;
+  /** "surprise" = Surprise me: friendlier, localized copy (no request to save). */
+  variant?: "default" | "surprise";
 };
 
 function formatRetryHint(seconds?: number): string | null {
@@ -39,11 +42,20 @@ export function ConciergeRateLimitCard({
   onSaveForLater,
   onRetry,
   saving,
+  variant = "default",
 }: ConciergeRateLimitCardProps) {
   const theme = useAppTheme();
   const router = useRouter();
+  const { t } = useTranslation();
+  const isSurprise = variant === "surprise";
 
   const copy = useMemo(() => {
+    if (isSurprise && (errorCode === "daily_quota" || errorCode === "tier_required")) {
+      return { title: t("surprise.limit.dailyTitle"), body: t("surprise.limit.dailyBody"), showUpgrade: true };
+    }
+    if (isSurprise) {
+      return { title: t("surprise.limit.burstTitle"), body: t("surprise.limit.burstBody"), showUpgrade: false };
+    }
     if (errorCode === "daily_quota") {
       return {
         title: "Daily plan limit reached",
@@ -66,9 +78,10 @@ export function ConciergeRateLimitCard({
       body: "You're sending requests quickly. Wait a bit, then try again — or save this request for later.",
       showUpgrade: false,
     };
-  }, [errorCode, upgradeTo]);
+  }, [errorCode, upgradeTo, isSurprise, t]);
 
-  const retryHint = formatRetryHint(retryAfter);
+  // The surprise copy already says when to come back; the generic hint isn't localized.
+  const retryHint = isSurprise ? null : formatRetryHint(retryAfter);
   const showSave = !!onSaveForLater && (errorCode === "rate_limit" || errorCode === "daily_quota");
   const showRetry =
     !!onRetry &&
@@ -105,9 +118,14 @@ export function ConciergeRateLimitCard({
             icon={<Ionicons name="bookmark-outline" size={18} color={theme.colors.primary} />}
           />
         ) : null}
-        {showRetry ? <PrimaryButton title="Try again" onPress={() => onRetry?.()} /> : null}
+        {showRetry ? (
+          <PrimaryButton title={isSurprise ? t("surprise.retry") : "Try again"} onPress={() => onRetry?.()} />
+        ) : null}
         {copy.showUpgrade ? (
-          <PrimaryButton title="See plans" onPress={() => router.push("/account/subscription")} />
+          <PrimaryButton
+            title={isSurprise ? t("surprise.limit.seePlans") : "See plans"}
+            onPress={() => router.push("/account/subscription")}
+          />
         ) : null}
       </View>
     </Card>

@@ -577,5 +577,24 @@
   "planIt.loading.title": "Planning it for you",
   "planIt.loading.phase1": "Reading between the lines…",
   "planIt.loading.phase2": "Checking the weather and real places…",
-  "planIt.loading.phase3": "Picking your three best options…"
+  "planIt.loading.phase3": "Picking your three best options…",
+
+  "surprise.cta": "Surprise me ✨",
+  "surprise.ctaA11y": "Surprise me: get three plan ideas without typing anything",
+  "surprise.title": "Surprise me ✨",
+  "surprise.loading": "Picking three surprises for you…",
+  "surprise.intro": "Three different ideas, picked for you",
+  "surprise.again": "Surprise me again",
+  "surprise.vibe.cosy": "Cosy",
+  "surprise.vibe.active": "Active",
+  "surprise.vibe.social": "Social",
+  "surprise.addToPlanner": "Add to planner",
+  "surprise.openInMaps": "Open in Maps",
+  "surprise.error": "We couldn't put your surprises together. Try again in a moment.",
+  "surprise.retry": "Try again",
+  "surprise.limit.dailyTitle": "That's all the surprises for today",
+  "surprise.limit.dailyBody": "You've used today's free plans. New surprises arrive tomorrow — or upgrade to plan as much as you like.",
+  "surprise.limit.burstTitle": "Just a moment",
+  "surprise.limit.burstBody": "We're still wrapping your last surprise. Try again in a few seconds.",
+  "surprise.limit.seePlans": "See plans"
 }

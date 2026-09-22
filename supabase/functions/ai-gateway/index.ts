@@ -24,6 +24,20 @@ import {
   withUsageLedger,
 } from "./usage.ts";
 import { microsToEur } from "./pricing.ts";
+import {
+  fallbackSearchPhrase,
+  isColdStart,
+  isWetWeather,
+  normalizeSurpriseOptions,
+  pickSurpriseSlots,
+  resolveLocalNow,
+  summarizeSurpriseSignals,
+  weatherLineForDate,
+  type OpenMeteoDaily,
+  type SurpriseNormalized,
+  type SurpriseReviewSignal,
+  type SurpriseVibe,
+} from "../_shared/surprise/surprise.ts";
 
 /**
  * Gemini model routing — defaults use real Generative Language API model IDs.
@@ -622,6 +636,8 @@ const ALLOWLISTED_CONTEXT_KEYS = [
   "plan_it",
   /** Plan it: assumption fields the user corrected (the model must not re-infer them) + their values. */
   "pinned_fields", "indoor_outdoor", "area_hint",
+  /** winkly_plan "Surprise me": zero-input plan — the server picks what, when and where. */
+  "surprise",
 ];
 
 const PLAN_ASSUMPTION_FIELDS = ["when", "budget", "setting", "area"] as const;
@@ -3278,6 +3294,104 @@ function extractPlanOptionsArray(obj: Record<string, unknown>): unknown[] | null
   return null;
 }
 
+/** Parse one plan option object from model JSON; null when it has no usable venue. */
+function parseWinklyPlanOptionObject(
+  v: unknown,
+  id: "A" | "B" | "C",
+  opts?: { city?: string; country?: string },
+): WinklyPlanOptionOut | null {
+  if (!v || typeof v !== "object") return null;
+  const x = v as Record<string, unknown>;
+
+  // Position decides the id — the model occasionally repeats "A".
+  const option_id = id;
+  const venueRaw = x.venue;
+  if (!venueRaw || typeof venueRaw !== "object") return null;
+  const venue = venueRaw as Record<string, unknown>;
+  const vname = typeof venue.name === "string" ? venue.name.trim() : "";
+  if (!vname || vname === "No suitable venue found") return null;
+
+  const character_label =
+    typeof x.character_label === "string" && x.character_label.trim()
+      ? x.character_label.trim()
+      : id === "A"
+        ? "Bolder pick"
+        : id === "B"
+          ? "Reliable pick"
+          : "Wildcard";
+  const title =
+    typeof x.title === "string" && x.title.trim()
+      ? x.title.trim()
+      : vname;
+  const why_this_fits =
+    typeof x.why_this_fits === "string" && x.why_this_fits.trim()
+      ? x.why_this_fits.trim()
+      : `A strong fit for ${opts?.city ?? "your area"}.`;
+  // Canonical "why this fits you" subtitle — guarantee presence (graceful fallback to why_this_fits).
+  const fit_reason =
+    typeof x.fit_reason === "string" && x.fit_reason.trim()
+      ? x.fit_reason.trim()
+      : why_this_fits;
+  let weather_note = typeof x.weather_note === "string" ? x.weather_note.trim() : "";
+  if (!weather_note) weather_note = "Check the forecast closer to your date.";
+  const duration_minutes = coerceDurationMinutes(x.duration_minutes);
+
+  const vaddr = ensureAddressIncludesCity(
+    typeof venue.address === "string" ? venue.address.trim() : "",
+    opts?.city,
+  );
+  let vmap = typeof venue.google_maps_link === "string" ? venue.google_maps_link.trim() : "";
+  let estimated_cost = typeof venue.estimated_cost === "string" ? venue.estimated_cost.trim() : "";
+  if (!vmap) vmap = mapsSearchUrlForVenue(vname, opts?.city, opts?.country);
+  if (!estimated_cost) estimated_cost = "Varies";
+  const booking_url =
+    typeof venue.booking_url === "string" && /^https?:\/\//i.test(venue.booking_url)
+      ? String(venue.booking_url).slice(0, 600)
+      : undefined;
+
+  const itinRaw = x.itinerary;
+  const itinerary =
+    Array.isArray(itinRaw)
+      ? itinRaw
+          .filter((r) => r && typeof r === "object")
+          .map((r) => {
+            const rr = r as Record<string, unknown>;
+            return {
+              time: typeof rr.time === "string" ? rr.time.trim().slice(0, 12) : "",
+              description: typeof rr.description === "string" ? rr.description.trim().slice(0, 220) : "",
+            };
+          })
+          .filter((r) => r.time && r.description)
+          .slice(0, 10)
+      : [];
+
+  const group_fit_notes = Array.isArray(x.group_fit_notes)
+    ? (x.group_fit_notes as unknown[])
+        .filter((n): n is string => typeof n === "string" && n.trim().length > 0)
+        .map((n) => n.trim().slice(0, 120))
+        .slice(0, 4)
+    : [];
+
+  return {
+    option_id,
+    character_label: character_label.slice(0, 40),
+    title: title.slice(0, 140),
+    fit_reason: fit_reason.slice(0, 160),
+    why_this_fits: why_this_fits.slice(0, 340),
+    ...(group_fit_notes.length ? { group_fit_notes } : {}),
+    itinerary,
+    venue: {
+      name: vname.slice(0, 120),
+      address: vaddr.slice(0, 180),
+      google_maps_link: vmap.slice(0, 600),
+      estimated_cost: estimated_cost.slice(0, 60),
+      ...(booking_url ? { booking_url } : {}),
+    },
+    weather_note: weather_note.slice(0, 220),
+    duration_minutes: Math.min(24 * 60, Math.max(30, duration_minutes)),
+  };
+}
+
 function parseWinklyPlanOutput(
   text: string,
   opts?: { city?: string; country?: string; maxOptions?: 2 | 3 },
@@ -3307,103 +3421,10 @@ function parseWinklyPlanOutput(
   const optionsRaw = extractPlanOptionsArray(o);
   if (!optionsRaw?.length) return null;
 
-  const parseOpt = (v: unknown, id: "A" | "B" | "C"): WinklyPlanOptionOut | null => {
-    if (!v || typeof v !== "object") return null;
-    const x = v as Record<string, unknown>;
-
-    // Position decides the id — the model occasionally repeats "A".
-    const option_id = id;
-    const venueRaw = x.venue;
-    if (!venueRaw || typeof venueRaw !== "object") return null;
-    const venue = venueRaw as Record<string, unknown>;
-    const vname = typeof venue.name === "string" ? venue.name.trim() : "";
-    if (!vname || vname === "No suitable venue found") return null;
-
-    const character_label =
-      typeof x.character_label === "string" && x.character_label.trim()
-        ? x.character_label.trim()
-        : id === "A"
-          ? "Bolder pick"
-          : id === "B"
-            ? "Reliable pick"
-            : "Wildcard";
-    const title =
-      typeof x.title === "string" && x.title.trim()
-        ? x.title.trim()
-        : vname;
-    const why_this_fits =
-      typeof x.why_this_fits === "string" && x.why_this_fits.trim()
-        ? x.why_this_fits.trim()
-        : `A strong fit for ${opts?.city ?? "your area"}.`;
-    // Canonical "why this fits you" subtitle — guarantee presence (graceful fallback to why_this_fits).
-    const fit_reason =
-      typeof x.fit_reason === "string" && x.fit_reason.trim()
-        ? x.fit_reason.trim()
-        : why_this_fits;
-    let weather_note = typeof x.weather_note === "string" ? x.weather_note.trim() : "";
-    if (!weather_note) weather_note = "Check the forecast closer to your date.";
-    const duration_minutes = coerceDurationMinutes(x.duration_minutes);
-
-    const vaddr = ensureAddressIncludesCity(
-      typeof venue.address === "string" ? venue.address.trim() : "",
-      opts?.city,
-    );
-    let vmap = typeof venue.google_maps_link === "string" ? venue.google_maps_link.trim() : "";
-    let estimated_cost = typeof venue.estimated_cost === "string" ? venue.estimated_cost.trim() : "";
-    if (!vmap) vmap = mapsSearchUrlForVenue(vname, opts?.city, opts?.country);
-    if (!estimated_cost) estimated_cost = "Varies";
-    const booking_url =
-      typeof venue.booking_url === "string" && /^https?:\/\//i.test(venue.booking_url)
-        ? String(venue.booking_url).slice(0, 600)
-        : undefined;
-
-    const itinRaw = x.itinerary;
-    const itinerary =
-      Array.isArray(itinRaw)
-        ? itinRaw
-            .filter((r) => r && typeof r === "object")
-            .map((r) => {
-              const rr = r as Record<string, unknown>;
-              return {
-                time: typeof rr.time === "string" ? rr.time.trim().slice(0, 12) : "",
-                description: typeof rr.description === "string" ? rr.description.trim().slice(0, 220) : "",
-              };
-            })
-            .filter((r) => r.time && r.description)
-            .slice(0, 10)
-        : [];
-
-    const group_fit_notes = Array.isArray(x.group_fit_notes)
-      ? (x.group_fit_notes as unknown[])
-          .filter((n): n is string => typeof n === "string" && n.trim().length > 0)
-          .map((n) => n.trim().slice(0, 120))
-          .slice(0, 4)
-      : [];
-
-    return {
-      option_id,
-      character_label: character_label.slice(0, 40),
-      title: title.slice(0, 140),
-      fit_reason: fit_reason.slice(0, 160),
-      why_this_fits: why_this_fits.slice(0, 340),
-      ...(group_fit_notes.length ? { group_fit_notes } : {}),
-      itinerary,
-      venue: {
-        name: vname.slice(0, 120),
-        address: vaddr.slice(0, 180),
-        google_maps_link: vmap.slice(0, 600),
-        estimated_cost: estimated_cost.slice(0, 60),
-        ...(booking_url ? { booking_url } : {}),
-      },
-      weather_note: weather_note.slice(0, 220),
-      duration_minutes: Math.min(24 * 60, Math.max(30, duration_minutes)),
-    };
-  };
-
   const OPTION_IDS = ["A", "B", "C"] as const;
   const parsed = optionsRaw
     .slice(0, opts?.maxOptions ?? 2)
-    .map((opt, idx) => parseOpt(opt, OPTION_IDS[idx]))
+    .map((opt, idx) => parseWinklyPlanOptionObject(opt, OPTION_IDS[idx], opts))
     .filter((opt): opt is WinklyPlanOptionOut => !!opt)
     // Re-letter after dropping invalid entries so ids stay A, B, C in order.
     .map((opt, idx) => ({ ...opt, option_id: OPTION_IDS[idx] }));
@@ -4500,6 +4521,347 @@ Required JSON schema:
   };
 }
 
+// ── "Surprise me" (winkly_plan with surprise: true) ──────────────────────────
+// Zero input: the server picks WHAT from the user's own signals (interests, wishlist, recent
+// plan reviews), WHEN from their local clock (three future slots), and adapts to the weather.
+// Returns three clearly different options — cosy / active / social — one per slot.
+// Stretch level (prompt 4.1) isn't merged yet; add it to SIGNALS when it is.
+
+type SurprisePlanOptionOut = SurpriseNormalized<WinklyPlanOptionOut>;
+
+/** Three option cards need ~1.5× the two-option output budget (still capped per request). */
+const SURPRISE_MAX_TOKENS = capOutputTokens(Math.round(PLAN_OPTIONS_MAX_TOKENS * 1.5));
+
+function toStringList(v: unknown): string[] {
+  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
+  if (typeof v === "string" && v.trim()) return [v];
+  return [];
+}
+
+async function loadSurpriseSignals(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  mode: string,
+): Promise<{ summary: Record<string, unknown>; interests: string[]; profileCity: string | null }> {
+  const [rows, core, wishlist, reviews] = await Promise.all([
+    getPlanningProfileRows(supabase, [userId], mode).catch(() => []),
+    getCoreProfile(supabase, userId).catch(() => null),
+    supabase
+      .from("wishlist_items")
+      .select("title")
+      .eq("user_id", userId)
+      .is("visited_at", null)
+      .is("archived_at", null)
+      .order("created_at", { ascending: false })
+      .limit(8),
+    supabase
+      .from("plan_reviews")
+      .select("rating, activity_type, venue, time_of_day, would_repeat")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(8),
+  ]);
+  const row = rows[0];
+  const { lifestyle, hobbies } = pickPlanningFieldsFromMeta((row?.meta ?? {}) as Record<string, unknown>);
+  const interests = [...toStringList(row?.interests), ...toStringList(core?.activity_preferences)];
+  const summary = summarizeSurpriseSignals({
+    interests,
+    hobbies: toStringList(hobbies),
+    lifestyle: toStringList(lifestyle).join(", ") || null,
+    // Wishlist titles are user-written — scrub before they reach a provider.
+    wishlist: ((wishlist.data ?? []) as Array<{ title?: unknown }>)
+      .map((w) => (typeof w.title === "string" ? scrubPiiText(w.title) : ""))
+      .filter(Boolean),
+    reviews: reviews.error ? [] : ((reviews.data ?? []) as SurpriseReviewSignal[]),
+  });
+  const profileCity =
+    (typeof row?.city === "string" && row.city.trim()) || (typeof core?.city === "string" && core.city.trim()) || null;
+  return { summary, interests, profileCity };
+}
+
+/** Open-Meteo daily forecast for the plan area; null on any failure (never blocks the plan). */
+async function loadSurpriseForecast(
+  city: string,
+  lat: number | null,
+  lng: number | null,
+): Promise<OpenMeteoDaily | null> {
+  const run = async (): Promise<OpenMeteoDaily | null> => {
+    const coords = lat != null && lng != null ? { lat, lng } : await geocodeCity(city);
+    if (!coords) return null;
+    const parsed = JSON.parse(await getWeather(coords.lat, coords.lng)) as OpenMeteoDaily & { error?: string };
+    return parsed && !parsed.error ? parsed : null;
+  };
+  try {
+    return await Promise.race([
+      run(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
+    ]);
+  } catch {
+    return null;
+  }
+}
+
+function parseLooseJsonObject(text: string): Record<string, unknown> | null {
+  let raw = text.trim();
+  const codeBlock = raw.match(/^```(?:json)?\s*([\s\S]*?)```$/);
+  if (codeBlock) raw = codeBlock[1].trim();
+  for (const candidate of [raw, raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)]) {
+    try {
+      const obj = JSON.parse(candidate);
+      if (obj && typeof obj === "object") return obj as Record<string, unknown>;
+    } catch {
+      // try the next candidate
+    }
+  }
+  return null;
+}
+
+/** Model text → per-option { vibe, option } pairs (unusable options dropped). */
+function parseSurpriseModelOutput(
+  text: string,
+  opts: { city?: string; country?: string },
+): Array<{ vibe: unknown; option: WinklyPlanOptionOut }> {
+  const obj = parseLooseJsonObject(text);
+  const list = obj ? extractPlanOptionsArray(obj) : null;
+  if (!list) return [];
+  return list.slice(0, 5).flatMap((raw) => {
+    const option = parseWinklyPlanOptionObject(raw, "A", opts);
+    const vibe = raw && typeof raw === "object" ? (raw as Record<string, unknown>).vibe : undefined;
+    return option ? [{ vibe, option }] : [];
+  });
+}
+
+/** Last-resort card for a vibe the model didn't fill: a Maps search the user can act on. */
+function surpriseFallbackOption(
+  vibe: SurpriseVibe,
+  city: string,
+  country: string | undefined,
+  interests: string[],
+  weatherLine: string | null,
+): WinklyPlanOptionOut {
+  const phrase = fallbackSearchPhrase(vibe, interests, isWetWeather(weatherLine));
+  return {
+    option_id: "A",
+    character_label: vibe === "cosy" ? "Cosy" : vibe === "active" ? "Active" : "Social",
+    title: `${phrase.charAt(0).toUpperCase()}${phrase.slice(1)} in ${city}`.slice(0, 140),
+    fit_reason: `A ${vibe} idea near you in ${city}.`,
+    why_this_fits: `Open Maps to pick a spot for “${phrase}” near ${city}.`,
+    itinerary: [],
+    venue: {
+      name: `${phrase} · ${city}`.slice(0, 120),
+      address: [city, country].filter(Boolean).join(", "),
+      google_maps_link: mapsSearchUrlForVenue(phrase, city, country),
+      estimated_cost: "Varies",
+    },
+    weather_note: weatherLine ?? "Check the forecast closer to the day.",
+    duration_minutes: 120,
+  };
+}
+
+async function generateSurprisePlan(params: {
+  supabase: ReturnType<typeof createClient>;
+  requesterUserId: string;
+  mode: string;
+  city: string | null;
+  country: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  currentDateTimeLocal: unknown;
+  timezone: unknown;
+  tier: SubscriptionTier;
+  appLanguage?: string;
+}): Promise<{
+  options: SurprisePlanOptionOut[];
+  provider: "gemini" | "anthropic" | "openai" | "fallback";
+  cold_start: boolean;
+} | null> {
+  const { supabase, requesterUserId, mode } = params;
+
+  const localNow = resolveLocalNow({
+    currentDateTimeLocal: params.currentDateTimeLocal,
+    timezone: params.timezone,
+    nowMs: Date.now(),
+  });
+  const slots = pickSurpriseSlots(localNow);
+
+  const signals = await loadSurpriseSignals(supabase, requesterUserId, mode);
+  const city = (params.city ?? "").trim() || signals.profileCity || "Berlin";
+  const country = (params.country ?? "").trim() || undefined;
+
+  const [forecast, busyRaw] = await Promise.all([
+    loadSurpriseForecast(city, params.latitude, params.longitude),
+    getPlannerItemsForUser(supabase, requesterUserId, undefined).catch(() => "[]"),
+  ]);
+  const weatherByDate = new Map(slots.map((s) => [s.date, weatherLineForDate(forecast, s.date)]));
+  const windowEnd = slots.reduce((max, s) => (s.date > max ? s.date : max), localNow.date);
+  let busy: unknown[] = [];
+  try {
+    const parsed = JSON.parse(busyRaw);
+    busy = Array.isArray(parsed)
+      ? parsed.filter((b: { starts_at?: unknown }) => {
+          const day = typeof b?.starts_at === "string" ? b.starts_at.slice(0, 10) : "";
+          return day >= localNow.date && day <= windowEnd;
+        })
+      : [];
+  } catch {
+    busy = [];
+  }
+
+  const coldStart = isColdStart(signals.summary);
+  const langDirective = languageDirective(params.appLanguage);
+  const SYSTEM = `${langDirective ? `${langDirective}\n\n` : ""}You are Winkly's planner. The user tapped "Surprise me" and typed nothing. Build three clearly different real-life plans in the given city — one per SLOT.
+
+Rules:
+- Return exactly 3 options in SLOT order. Each option MUST include "vibe" equal to its slot's vibe ("cosy", "active", "social").
+- cosy = calm and warm (café, wine bar, cinema, bookshop, cooking class, spa). active = moving, ideally daylight (walk, hike, bouldering, bike tour, kayak, sports class). social = out among people (market, live music, quiz night, food hall, festival, community event).
+- Use three DIFFERENT real, specific venues that exist in the city/country. No two options may share a venue or an activity type.
+- Start each itinerary inside its slot window (earliest–latest, local time) on the slot date. Never earlier than "earliest".
+- Ground every choice in SIGNALS: interests and hobbies first; use a wishlist item when it fits a vibe; lean towards what they recently loved (similar, not the identical venue) and away from what they disliked.
+- If SIGNALS is empty (new user), pick broadly loved, easy, low-risk classics for the city — nothing niche, nothing expensive.
+- MODE shapes the company: romance → a plan for two; friends → something to do with friends; events → lean on public events and happenings; business → a relaxed professional meet-up.
+- If a slot's weather mentions rain, snow or thunderstorms, keep that option indoors (active → an indoor sport) and say so in weather_note.
+- If BUSY is present, never overlap those blocks.
+- fit_reason: ONE short sentence naming a concrete signal — an interest, a wishlist item, a past plan they loved, the weather, or the day. Never generic. For a new user cite the day, the weather or the neighbourhood.
+- character_label: one or two words naming the vibe (e.g. "Cosy", "Active", "Social").
+- Keep strings short: title ≤60 chars, fit_reason ≤110, why_this_fits ≤120, itinerary descriptions ≤50, at most 3 itinerary steps.
+- estimated_cost in the local currency of the country, as a short range.
+- google_maps_link: https://www.google.com/maps/search/?api=1&query=ENCODED_VENUE_NAME_AND_CITY (spaces as +). Never invent booking URLs.
+- JSON only — no prose.
+
+Required JSON schema:
+{"options":[{"vibe":"cosy"|"active"|"social","character_label":string,"title":string,"fit_reason":string,"why_this_fits":string,"itinerary":[{"time":"HH:mm","description":string}],"venue":{"name":string,"address":string,"google_maps_link":string,"estimated_cost":string},"weather_note":string,"duration_minutes":number}]}`;
+
+  const userContent = JSON.stringify({
+    MODE: mode,
+    CITY: city,
+    ...(country ? { COUNTRY: country } : {}),
+    LOCAL_NOW: `${localNow.date}T${String(localNow.hour).padStart(2, "0")}:${String(localNow.minute).padStart(2, "0")}`,
+    SLOTS: slots.map((s) => ({
+      vibe: s.vibe,
+      date: s.date,
+      when: s.label,
+      earliest: s.earliest,
+      latest: s.latest,
+      weather: weatherByDate.get(s.date) ?? "unknown",
+    })),
+    SIGNALS: signals.summary,
+    ...(busy.length ? { BUSY: busy } : {}),
+  });
+
+  const geminiKey = getGeminiKey();
+  const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+  const openaiKey = Deno.env.get("OPENAI_API_KEY");
+  const parseOpts = { city, country };
+
+  let raw: Array<{ vibe: unknown; option: WinklyPlanOptionOut }> = [];
+  let provider: "gemini" | "anthropic" | "openai" | "fallback" = "fallback";
+  let triedAnthropic = false;
+  const keepBest = (got: typeof raw, from: typeof provider) => {
+    if (got.length > raw.length) {
+      raw = got;
+      provider = from;
+    }
+  };
+
+  // Same provider order as generateWinklyPlan: Claude first for Premium, then Gemini → OpenAI → Claude.
+  if (isPremiumTier(params.tier) && anthropicKey) {
+    triedAnthropic = true;
+    const text = await runAnthropicJson(anthropicKey, SYSTEM, userContent, ANTHROPIC_MODEL_PLAN, SURPRISE_MAX_TOKENS, 0.8);
+    keepBest(text ? parseSurpriseModelOutput(text, parseOpts) : [], "anthropic");
+  }
+  if (raw.length < 3 && geminiKey) {
+    const res = await geminiGenerateContent(
+      GEMINI_MODEL_PLAN,
+      {
+        systemInstruction: { parts: [{ text: SYSTEM }] },
+        contents: [{ role: "user", parts: [{ text: userContent }] }],
+        generationConfig: {
+          maxOutputTokens: SURPRISE_MAX_TOKENS,
+          // Warmer than the brief-driven planner: there is no brief, variety is the point.
+          temperature: 0.8,
+          responseMimeType: "application/json",
+          thinkingConfig: GEMINI_THINKING_CONFIG,
+        },
+      },
+      { retries: 2, baseMs: 700 },
+    );
+    if (res?.ok) {
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      keepBest(typeof text === "string" ? parseSurpriseModelOutput(text, parseOpts) : [], "gemini");
+    } else {
+      console.error("[ai-gateway] surprise Gemini !ok status=" + (res?.status ?? 0));
+    }
+  }
+  if (raw.length < 3 && openaiKey) {
+    const text = await runOpenAIPlanJson(openaiKey, SYSTEM, userContent, SURPRISE_MAX_TOKENS);
+    keepBest(text ? parseSurpriseModelOutput(text, parseOpts) : [], "openai");
+  }
+  if (raw.length < 3 && anthropicKey && !triedAnthropic) {
+    const text = await runAnthropicJson(anthropicKey, SYSTEM, userContent, ANTHROPIC_MODEL_PLAN, SURPRISE_MAX_TOKENS, 0.8);
+    keepBest(text ? parseSurpriseModelOutput(text, parseOpts) : [], "anthropic");
+  }
+
+  // Nothing usable from any provider: the caller returns 503 and no quota is spent.
+  if (!raw.length) {
+    console.error("[ai-gateway] surprise: all providers failed", {
+      city,
+      hasGemini: !!geminiKey,
+      hasAnthropic: !!anthropicKey,
+      hasOpenAI: !!openaiKey,
+    });
+    return null;
+  }
+
+  const first = normalizeSurpriseOptions(raw, slots);
+  if (!first.missing.length) return { options: first.options, provider, cold_start: coldStart };
+
+  // Fill any vibe the model skipped (or duplicated) with an actionable Maps-search card.
+  const filled = normalizeSurpriseOptions(
+    [
+      ...first.options.map((o) => ({ vibe: o.vibe, option: o as WinklyPlanOptionOut })),
+      ...first.missing.map((vibe) => ({
+        vibe,
+        option: surpriseFallbackOption(
+          vibe,
+          city,
+          country,
+          signals.interests,
+          weatherByDate.get(slots.find((s) => s.vibe === vibe)?.date ?? "") ?? null,
+        ),
+      })),
+    ],
+    slots,
+  );
+  return { options: filled.options, provider, cold_start: coldStart };
+}
+
+/**
+ * Insert the ai_requests ledger row (the daily plan quota counts these rows). `meta` needs
+ * 20260922130000_ai_requests_meta.sql; if that column isn't there yet the row is written
+ * without it, so a missing migration can never turn into free, uncounted plans.
+ */
+async function insertAiRequestRow(
+  supabase: ReturnType<typeof createClient>,
+  row: Record<string, unknown>,
+  meta?: Record<string, unknown>,
+): Promise<string | null> {
+  const first = await supabase
+    .from("ai_requests")
+    .insert(meta ? { ...row, meta } : row)
+    .select("id")
+    .single();
+  if (!first.error) return (first.data as { id?: string } | null)?.id ?? null;
+  console.error("ai_requests insert failed:", first.error.message);
+  if (!meta) return null;
+  const retry = await supabase.from("ai_requests").insert(row).select("id").single();
+  if (retry.error) {
+    console.error("ai_requests insert (without meta) failed:", retry.error.message);
+    return null;
+  }
+  return (retry.data as { id?: string } | null)?.id ?? null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return withCorsEmpty(req, { status: 204 });
@@ -4764,6 +5126,45 @@ async function handleAiGatewayRequest(req: Request): Promise<Response> {
       return new Response(JSON.stringify(out), {
         headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });
+    }
+
+    if (task === "winkly_plan" && scrubbedSafeContext.surprise === true) {
+      // "Surprise me": zero input — any user_prompt is ignored; solo plan. Same daily plan quota:
+      // the task is still winkly_plan, so the ledger row below counts towards it.
+      const out = await generateSurprisePlan({
+        supabase,
+        requesterUserId: user.id,
+        mode,
+        city: typeof scrubbedSafeContext.city === "string" ? scrubbedSafeContext.city : null,
+        country: typeof scrubbedSafeContext.country === "string" ? scrubbedSafeContext.country : null,
+        latitude: typeof scrubbedSafeContext.latitude === "number" ? scrubbedSafeContext.latitude : null,
+        longitude: typeof scrubbedSafeContext.longitude === "number" ? scrubbedSafeContext.longitude : null,
+        currentDateTimeLocal: scrubbedSafeContext.current_datetime_local,
+        timezone: scrubbedSafeContext.timezone,
+        tier,
+        appLanguage: typeof scrubbedSafeContext.app_language === "string" ? scrubbedSafeContext.app_language : undefined,
+      });
+      if (!out) {
+        return new Response(
+          JSON.stringify({
+            error: "Could not generate plan options right now. Please wait a moment and try again.",
+            code: "plan_generation_failed",
+          }),
+          { status: 503, headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } },
+        );
+      }
+      const requestIdSurprise = await insertAiRequestRow(
+        supabase,
+        { user_id: user.id, mode, task, ...usageColumns() },
+        { surprise: true, cold_start: out.cold_start },
+      );
+      return new Response(JSON.stringify({
+        options: out.options,
+        surprise: true,
+        pending_plan_id: null,
+        provider: out.provider,
+        request_id: requestIdSurprise,
+      }), { headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } });
     }
 
     if (task === "winkly_plan") {
