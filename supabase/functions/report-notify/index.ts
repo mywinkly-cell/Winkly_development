@@ -61,8 +61,7 @@ function summarize(type: string, r: ReportRecord): string {
       `• reasons: ${reasons || "—"}`,
       `• at: ${when}`,
       "Review in Supabase Studio → media_moderation (see docs/MODERATION.md).",
-    ].join("
-");
+    ].join("\n");
   }
   const lines =
     type === "message_report"
