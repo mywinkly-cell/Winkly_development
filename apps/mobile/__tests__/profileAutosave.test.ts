@@ -137,6 +137,12 @@ describe("diffProfileDraft", () => {
     expect(patch.modes.romance?.meta).toMatchObject({ height: "170", lifestyle: null });
   });
 
+  it("sends only the mode that changed when several mode rows exist", () => {
+    const both = { romanceEnabled: true, friendsEnabled: true, bioRomance: "Hi", bioFriends: "Board games", interests: ["Hiking"] };
+    const patch = diffProfileDraft(draftOf(both), draftOf({ ...both, bioFriends: "Board games & climbing" }));
+    expect(patch).toEqual({ profile: {}, modes: { friends: { bio: "Board games & climbing" } } });
+  });
+
   it("treats a changed list order as a change and an identical list as none", () => {
     const a = draftOf({ interests: ["A", "B"] });
     expect(isPatchEmpty(diffProfileDraft(a, draftOf({ interests: ["A", "B"] })))).toBe(true);
