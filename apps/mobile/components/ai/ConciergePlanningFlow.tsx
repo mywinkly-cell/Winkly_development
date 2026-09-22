@@ -12,10 +12,8 @@ import {
   StyleSheet,
   Linking,
   Share,
-  ActivityIndicator,
   Modal,
   Pressable,
-  Animated,
 } from "react-native";
 import { GestureDetector, Gesture } from "react-native-gesture-handler";
 import { useRouter } from "expo-router";
@@ -79,7 +77,13 @@ import { buildBookingContextForAi } from "@/lib/integrations/bookingLinks";
 import { Avatar } from "@/components/ui/Avatar";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
-import { Header } from "@/components/ds";
+import { Header, RevealCards } from "@/components/ds";
+import { PlanLoadingSteps } from "@/components/ai/PlanLoadingSteps";
+import {
+  IDLE_PLAN_LOADING_PROGRESS,
+  visiblePlanLoadingSteps,
+  type PlanLoadingProgress,
+} from "@/lib/ai/planLoadingSteps";
 import { PlanCard, PlanCardBadge, PlanCardMeta, PlanCardMapLink, PlanCardIconAction } from "@/components/plans/PlanCard";
 import type { Mode } from "@/types";
 import { isModeAvailable } from "@/lib/modes/availability";
@@ -171,7 +175,7 @@ export function ConciergePlanningFlow({
   const quickPrefill = startQuick ? prefillRequest?.trim() || undefined : undefined;
   const theme = useAppTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
   const router = useRouter();
   const modeContext = useModeContext();
@@ -237,8 +241,12 @@ export function ConciergePlanningFlow({
   /** Free-text Quick plan path — skips activity form + summary. */
   const isQuickPlan = activityKey === "quick";
 
-  const [loadingPhaseIdx, setLoadingPhaseIdx] = useState(0);
-  const loadingFade = useRef(new Animated.Value(0)).current;
+  /** Real progress of the current generation — drives the honest loading steps. */
+  const [loadingProgress, setLoadingProgress] = useState<PlanLoadingProgress>(IDLE_PLAN_LOADING_PROGRESS);
+  const [loadingCity, setLoadingCity] = useState<string | null>(null);
+  /** Bumped per result set so RevealCards replays only for new results, not when navigating back. */
+  const [planRevealKey, setPlanRevealKey] = useState(0);
+  const [revealedPlanKey, setRevealedPlanKey] = useState<number | null>(null);
 
   /** Single line for UI (cards, share, maps) — always expand ISO in "City, XX". */
   const locationLineDisplay = useMemo(
@@ -386,6 +394,8 @@ export function ConciergePlanningFlow({
   const buildContext = useCallback(async (overrides?: {
     activityLabel?: string;
     intentNotes?: string;
+    /** Reports the real weather fetch (only happens when a city is known). */
+    onWeather?: (status: "active" | "done") => void;
   }): Promise<ConciergeContext> => {
     let city = details.city;
     let country = details.country;
@@ -414,10 +424,12 @@ export function ConciergePlanningFlow({
               exactTimeHm: details.exactTimeHm,
             })
           : undefined;
+      overrides?.onWeather?.("active");
       const w =
         details.singleDay === false && dateEndStr && dateEndStr !== dateStr
           ? await getWeatherForCityAndDateRange(city, dateStr, dateEndStr, country)
           : await getWeatherForCityAndDate(city, dateStr, country, weatherTimeOptions);
+      overrides?.onWeather?.("done");
       weather_snapshot = w ? weatherSnapshotToConciergePayload(w) : undefined;
     }
     const effectiveLabel = (overrides?.activityLabel ?? activityLabel)?.trim() || "Plan";
@@ -588,6 +600,7 @@ export function ConciergePlanningFlow({
     setStructuredPlans(null);
     setChosenIndex(null);
     setChosenStructuredIndex(null);
+    setLoadingProgress(IDLE_PLAN_LOADING_PROGRESS);
     setLoading(true);
     setFlowStep("suggestions");
     // refinement feedback is passed directly into the request; we don't currently display it.
@@ -603,11 +616,12 @@ export function ConciergePlanningFlow({
     });
     try {
       // Structured output (plan_options[]) per template. Theme = current intent/activity.
-      const fullCtx = await buildContext(
-        requestOverride
-          ? { activityLabel: requestOverride, intentNotes: requestOverride }
-          : undefined
-      );
+      const fullCtx = await buildContext({
+        ...(requestOverride ? { activityLabel: requestOverride, intentNotes: requestOverride } : {}),
+        onWeather: (status) => {
+          if (genId === genAttemptRef.current) setLoadingProgress((p) => ({ ...p, weather: status }));
+        },
+      });
       const refinement_feedback = opts?.refinementFeedback?.trim() || undefined;
       lastContextRef.current = fullCtx;
       let city = details.city;
@@ -641,6 +655,9 @@ export function ConciergePlanningFlow({
         dateTimeIso: dt.toISOString(),
         refinement_feedback: combinedRefinement || null,
       });
+      if (genId !== genAttemptRef.current) return;
+      setLoadingCity(city ?? null);
+      setLoadingProgress((p) => ({ ...p, gatewayInFlight: true }));
       const { plans, requestId, limitError: gatewayLimit } = await getPlannerThemePlans({
         mode: effectiveMode,
         theme,
@@ -716,6 +733,7 @@ export function ConciergePlanningFlow({
       }
 
       setLoading(false);
+      setPlanRevealKey(genId);
       setStructuredPlans(futurePlans.slice(0, 2));
       if (!futurePlans.length) {
         setMessage(
@@ -777,19 +795,6 @@ export function ConciergePlanningFlow({
     },
     [handleGenerate, suggestions]
   );
-
-  useEffect(() => {
-    if (!loading || flowStep !== "suggestions") return;
-    setLoadingPhaseIdx(0);
-    loadingFade.setValue(0);
-    Animated.timing(loadingFade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
-    let idx = 0;
-    const t = setInterval(() => {
-      idx = (idx + 1) % 3;
-      setLoadingPhaseIdx(idx);
-    }, 1150);
-    return () => clearInterval(t);
-  }, [loading, flowStep, loadingFade]);
 
   useEffect(() => {
     if (flowStep === "summary" && autoGenerateRef.current) {
@@ -1230,55 +1235,81 @@ export function ConciergePlanningFlow({
                   <Text style={styles.tryDifferentBtnText}>{isQuickPlan ? "Load more" : "Try different options"}</Text>
                 </TouchableOpacity>
               </View>
-              {structuredPlans
-                .map((raw) => {
-                  // Backward-compatible guard: old cached schema had { topic, location, weather_guard, details }.
-                  const anyP = raw as any;
-                  if (anyP?.venue?.name && anyP?.title) return raw;
-                  if (anyP?.location?.name && anyP?.topic) {
-                    const mapped = {
-                      option_id: "A",
-                      character_label: "",
-                      title: String(anyP.topic),
-                      why_this_fits: typeof anyP.details === "string" ? anyP.details : "",
-                      itinerary: [],
-                      venue: {
-                        name: String(anyP.location.name ?? ""),
-                        address: String(anyP.location.address ?? ""),
-                        google_maps_link: String(anyP.location.maps_link ?? ""),
-                        estimated_cost: "",
-                      },
-                      weather_note: typeof anyP.weather_guard === "string" ? anyP.weather_guard : "",
-                      duration_minutes: 120,
-                      ...(Array.isArray(anyP.trip_days) ? { trip_days: anyP.trip_days } : {}),
-                    };
-                    return mapped as any;
-                  }
-                  return null;
-                })
-                .filter(Boolean)
-                .slice(0, 2)
-                .map((p: any, idx) => {
+              <RevealCards
+                revealKey={planRevealKey}
+                animate={revealedPlanKey !== planRevealKey}
+                onRevealed={(k) => setRevealedPlanKey(typeof k === "number" ? k : null)}
+                style={{ marginBottom: theme.spacing.lg }}
+                items={structuredPlans
+                  .map((raw) => {
+                    // Backward-compatible guard: old cached schema had { topic, location, weather_guard, details }.
+                    const anyP = raw as any;
+                    if (anyP?.venue?.name && anyP?.title) return raw;
+                    if (anyP?.location?.name && anyP?.topic) {
+                      const mapped = {
+                        option_id: "A",
+                        character_label: "",
+                        title: String(anyP.topic),
+                        why_this_fits: typeof anyP.details === "string" ? anyP.details : "",
+                        itinerary: [],
+                        venue: {
+                          name: String(anyP.location.name ?? ""),
+                          address: String(anyP.location.address ?? ""),
+                          google_maps_link: String(anyP.location.maps_link ?? ""),
+                          estimated_cost: "",
+                        },
+                        weather_note: typeof anyP.weather_guard === "string" ? anyP.weather_guard : "",
+                        duration_minutes: 120,
+                        ...(Array.isArray(anyP.trip_days) ? { trip_days: anyP.trip_days } : {}),
+                      };
+                      return mapped as any;
+                    }
+                    return null;
+                  })
+                  .filter(Boolean)
+                  .slice(0, 2)}
+                keyExtractor={(_p, idx) => String(idx)}
+                renderItem={(p: any, idx) => {
                 const isOptionA = p.option_id === "A" || idx === 0;
                 const modeAccent = theme.modeAccent(effectiveMode).primary;
-                const characterLabel = p.character_label || (isOptionA ? "Bolder pick" : "Classic choice");
-                const venueLine = [p.venue?.name, p.venue?.address, p.venue?.estimated_cost].filter(Boolean).join(" • ");
+                const characterLabel =
+                  p.character_label || (isOptionA ? t("planReveal.bolderPick") : t("planReveal.classicChoice"));
+                const whereLine = [p.venue?.name, p.venue?.address].filter(Boolean).join(" • ");
+                const firstTime = typeof p.itinerary?.[0]?.time === "string" ? p.itinerary[0].time.trim() : "";
+                const dayLabel = !p.trip_days?.length && details.date
+                  ? details.date.toLocaleDateString(appLanguage, { weekday: "short", day: "numeric", month: "short" })
+                  : "";
+                const whenLine = dayLabel && firstTime
+                  ? t("planReveal.whenDayTime", { day: dayLabel, time: firstTime })
+                  : dayLabel || firstTime;
+                const priceHint = typeof p.venue?.estimated_cost === "string" ? p.venue.estimated_cost.trim() : "";
+                const fitReason = String(p.fit_reason || p.why_this_fits || "").trim();
                 return (
                   <PlanCard
-                    key={idx}
                     accentColor={modeAccent}
                     onPress={() => { setChosenStructuredIndex(idx); }}
                     title={p.title}
                     badges={
                       <>
-                        <PlanCardBadge label={isOptionA ? "Option A" : "Option B"} variant={isOptionA ? "solid" : "outlined"} color={modeAccent} />
+                        <PlanCardBadge
+                          label={isOptionA ? t("planReveal.optionA") : t("planReveal.optionB")}
+                          variant={isOptionA ? "solid" : "outlined"}
+                          color={modeAccent}
+                        />
                         <PlanCardBadge label={characterLabel} />
                       </>
                     }
-                    meta={venueLine ? <PlanCardMeta icon="location-outline" numberOfLines={2}>{venueLine}</PlanCardMeta> : undefined}
+                    meta={
+                      <>
+                        {whenLine ? <PlanCardMeta icon="time-outline">{whenLine}</PlanCardMeta> : null}
+                        {whereLine ? <PlanCardMeta icon="location-outline" numberOfLines={2}>{whereLine}</PlanCardMeta> : null}
+                        {priceHint ? <PlanCardMeta icon="cash-outline">{priceHint}</PlanCardMeta> : null}
+                        {fitReason ? <PlanCardMeta icon="sparkles-outline" numberOfLines={3}>{fitReason}</PlanCardMeta> : null}
+                      </>
+                    }
                     mapAction={p.venue?.google_maps_link ? <PlanCardMapLink onPress={() => Linking.openURL(p.venue.google_maps_link)} /> : undefined}
                     primaryAction={{
-                      label: "Add to planner",
+                      label: t("planReveal.addToPlanner"),
                       tone: modeAccent,
                       onPress: () => {
                         setChosenStructuredIndex(idx);
@@ -1288,7 +1319,7 @@ export function ConciergePlanningFlow({
                     secondaryActions={
                       <PlanCardIconAction
                         icon="person-add-outline"
-                        accessibilityLabel="Invite someone"
+                        accessibilityLabel={t("planReveal.inviteSomeone")}
                         onPress={() => {
                           setChosenStructuredIndex(idx);
                           setFlowStep("invite");
@@ -1326,7 +1357,8 @@ export function ConciergePlanningFlow({
                     ) : null}
                   </PlanCard>
                 );
-              })}
+              }}
+              />
               <View style={styles.conciergeUpsell}>
                 <View style={styles.conciergeUpsellHeader}>
                   <Ionicons name="sparkles-outline" size={16} color={theme.colors.primary} />
@@ -1444,19 +1476,13 @@ export function ConciergePlanningFlow({
             </GestureScrollView>
           ) : null}
           {loading ? (
-            <Animated.View style={[styles.loadingOverlay, { opacity: loadingFade }]}>
-              <View style={styles.loadingOverlayCard}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text style={styles.loadingOverlayTitle}>Winkly is thinking</Text>
-                <Text style={styles.loadingOverlaySub}>
-                  {loadingPhaseIdx === 0
-                    ? "Choosing the vibe…"
-                    : loadingPhaseIdx === 1
-                      ? "Finding the best spots…"
-                      : "Finalizing two options…"}
-                </Text>
-              </View>
-            </Animated.View>
+            <PlanLoadingSteps
+              steps={visiblePlanLoadingSteps(loadingProgress, {
+                city: loadingCity,
+                // Only named when that person's profile is actually sent to the gateway.
+                partnerName: partnerId ? partnerDisplayName : null,
+              })}
+            />
           ) : null}
         </View>
       )}
@@ -1639,30 +1665,6 @@ function makeStyles(theme: AppTheme) {
   container: { flex: 1 },
   stepBody: { flex: 1, minHeight: 0 },
   suggestionsWrap: { flex: 1 },
-  loadingWrap: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
-  loadingText: { ...theme.type.caption, color: theme.colors.textSecondary },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: theme.colors.overlay,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  loadingOverlayCard: {
-    width: "100%",
-    maxWidth: 320,
-    backgroundColor: theme.colors.surface,
-    borderRadius: 20,
-    paddingVertical: 20,
-    paddingHorizontal: 18,
-    alignItems: "center",
-    gap: 10,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    ...theme.elevation(3),
-  },
-  loadingOverlayTitle: { ...theme.type.h3, color: theme.colors.textPrimary },
-  loadingOverlaySub: { ...theme.type.caption, color: theme.colors.textSecondary, textAlign: "center" },
   errorContent: { padding: 24 },
   errorText: { ...theme.type.body, color: theme.colors.error, marginBottom: 12 },
   retryBtn: {

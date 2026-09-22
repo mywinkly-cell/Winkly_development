@@ -561,5 +561,19 @@
   "moderation.report": "Report",
   "moderation.inReviewBadge": "In review",
   "moderation.inReviewTitle": "Photos in review",
-  "moderation.inReviewBody": "Only you can see these until our team approves them. They'll be added to your profile automatically."
+  "moderation.inReviewBody": "Only you can see these until our team approves them. They'll be added to your profile automatically.",
+  "planLoading.title": "Winkly is planning",
+  "planLoading.weather": "Checking the weather…",
+  "planLoading.weatherDone": "Weather checked",
+  "planLoading.places": "Finding places for your plan…",
+  "planLoading.placesIn": "Finding places in {{city}}…",
+  "planLoading.match": "Matching it to you…",
+  "planLoading.matchWith": "Matching it to you and {{name}}…",
+  "planReveal.optionA": "Option A",
+  "planReveal.optionB": "Option B",
+  "planReveal.bolderPick": "Bolder pick",
+  "planReveal.classicChoice": "Classic choice",
+  "planReveal.whenDayTime": "{{day}} · {{time}}",
+  "planReveal.addToPlanner": "Add to planner",
+  "planReveal.inviteSomeone": "Invite someone"
 }
