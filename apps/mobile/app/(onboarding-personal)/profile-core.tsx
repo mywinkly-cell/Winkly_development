@@ -69,7 +69,8 @@ import { ModeSelectStep } from "@/components/onboarding/wizard/ModeSelectStep";
 import { isModeAvailable } from "@/lib/modes/availability";
 import { ReviewStep } from "@/components/onboarding/wizard/ReviewStep";
 import { PhotoConfirmModal } from "@/components/media/PhotoConfirmModal";
-import { uploadLocalPhotos, uploadLocalVideos } from "@/lib/uploadMedia";
+import { uploadLocalPhotos, uploadLocalPhotosModerated, uploadLocalVideos } from "@/lib/uploadMedia";
+import { PhotosInReview } from "@/components/profile/PhotosInReview";
 import { validatePickerAsset } from "@/lib/mediaValidation";
 import {
   MAX_CORE_PHOTOS,
@@ -265,6 +266,9 @@ export default function ProfileCore() {
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Own user id + a bump counter so the "Photos in review" strip refetches after a save.
+  const [meId, setMeId] = useState<string | null>(null);
+  const [photoReviewTick, setPhotoReviewTick] = useState(0);
   // Autosave stays off until the initial load has applied to state (and while it re-runs).
   const [hydrated, setHydrated] = useState(false);
   const hydrationRef = useRef<{ profileRow: boolean; modeRows: AutosaveMode[] }>({ profileRow: false, modeRows: [] });
@@ -330,6 +334,7 @@ export default function ProfileCore() {
 
         if (!userError && userData?.user) {
           const userId = userData.user.id;
+          setMeId(userId);
 
           // birthday is intentionally NOT selected from user_profiles: the raw
           // DOB column is locked down at the API layer. The owner reads their own
@@ -1109,14 +1114,21 @@ export default function ProfileCore() {
       // already tolerates individual photo failures (it alerts and skips them) —
       // we only hard-fail the save here if too few photos survive to still meet
       // the product minimum the user already satisfied on-device.
+      // Photos are moderated server-side (docs/MODERATION.md): ones held for review
+      // aren't on the profile yet but count toward the minimum — the server adds
+      // them once approved. Blocked ones don't count (the user was told why).
       let uploadedCorePhotos: string[];
+      let heldCorePhotos = 0;
       try {
-        uploadedCorePhotos = await uploadLocalPhotos(authUser.id, "core", corePhotos);
+        const coreUpload = await uploadLocalPhotosModerated(authUser.id, "core", corePhotos);
+        uploadedCorePhotos = coreUpload.urls;
+        heldCorePhotos = coreUpload.held;
       } catch (uploadErr) {
         console.error("[profile-core] core photo upload threw:", uploadErr);
         throw uploadErr;
       }
-      if (uploadedCorePhotos.length < MIN_CORE_PHOTOS) {
+      setPhotoReviewTick((n) => n + 1);
+      if (uploadedCorePhotos.length + heldCorePhotos < MIN_CORE_PHOTOS) {
         throw new Error(
           `Only ${uploadedCorePhotos.length} of ${corePhotos.length} photo(s) uploaded successfully. Please check your connection and try again.`
         );
@@ -1431,12 +1443,15 @@ export default function ProfileCore() {
           );
         case "photos":
           return (
-            <PhotosStep
-              corePhotos={corePhotos}
-              onOpenPhotoOptions={openCorePhotoOptions}
-              onAddPhoto={() => pickImage("core", corePhotos.length)}
-              onRemovePhoto={removeCorePhoto}
-            />
+            <>
+              <PhotosStep
+                corePhotos={corePhotos}
+                onOpenPhotoOptions={openCorePhotoOptions}
+                onAddPhoto={() => pickImage("core", corePhotos.length)}
+                onRemovePhoto={removeCorePhoto}
+              />
+              <PhotosInReview userId={meId} mode="core" refreshKey={photoReviewTick} />
+            </>
           );
         case "location":
           return (
@@ -1713,6 +1728,7 @@ export default function ProfileCore() {
                   </View>
                 )}
               </View>
+              <PhotosInReview userId={meId} mode="core" refreshKey={photoReviewTick} />
               {corePhotos.length < MIN_CORE_PHOTOS ? (
                 <Text style={{ ...theme.type.caption, color: theme.colors.error, marginTop: 6, marginBottom: 18 }}>
                   Add at least {MIN_CORE_PHOTOS} photos to start matching.

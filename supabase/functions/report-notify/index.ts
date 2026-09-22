@@ -30,7 +30,9 @@
  *                         posts { type, record, summary }.
  *
  * Body (from the DB triggers):
- *   { type: "user_report" | "message_report", record: { ... } }
+ *   { type: "user_report" | "message_report" | "media_review", record: { ... } }
+ *   media_review = an image held in the moderation queue (media_moderation, see
+ *   docs/MODERATION.md) — sent by the trg_media_moderation_queued trigger.
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -47,6 +49,21 @@ type ReportRecord = Record<string, unknown>;
 
 function summarize(type: string, r: ReportRecord): string {
   const when = String(r.created_at ?? new Date().toISOString());
+  if (type === "media_review") {
+    const reasons = Array.isArray(r.reasons) ? (r.reasons as unknown[]).join(", ") : "?";
+    return [
+      r.failed_closed
+        ? "🕒 Image held for review on Winkly (moderation vendor unavailable)"
+        : "🕒 Image flagged for manual review on Winkly",
+      `• media_moderation.id: ${r.id ?? "?"}`,
+      `• kind: ${r.kind ?? "?"}`,
+      `• uploader: ${r.user_id ?? "?"}`,
+      `• reasons: ${reasons || "—"}`,
+      `• at: ${when}`,
+      "Review in Supabase Studio → media_moderation (see docs/MODERATION.md).",
+    ].join("
+");
+  }
   const lines =
     type === "message_report"
       ? [
@@ -88,7 +105,12 @@ async function sendEmail(type: string, summary: string): Promise<{ attempted: bo
     await client.send({
       from,
       to,
-      subject: type === "message_report" ? "🚩 New message report — Winkly" : "🚩 New profile report — Winkly",
+      subject:
+        type === "message_report"
+          ? "🚩 New message report — Winkly"
+          : type === "media_review"
+            ? "🕒 Image awaiting moderation review — Winkly"
+            : "🚩 New profile report — Winkly",
       content: summary,
     });
     return { attempted: true, ok: true };
@@ -139,7 +161,8 @@ serve(async (req) => {
     return json({ error: "Invalid JSON" }, 400);
   }
 
-  const type = payload.type === "message_report" ? "message_report" : "user_report";
+  const type =
+    payload.type === "message_report" || payload.type === "media_review" ? payload.type : "user_report";
   const record = payload.record ?? {};
   const summary = summarize(type, record);
 

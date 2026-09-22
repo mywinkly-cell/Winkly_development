@@ -83,6 +83,10 @@ export default function ConciergeScreen() {
     prefill_prompt?: string;
     /** "decisive" = primary + backup; "menu" or omit = three options. */
     presentation?: string;
+    /** With initial_step "quick": "1" generates plan options right away (person/event plan hint). */
+    auto_generate?: string;
+    /** YYYY-MM-DD to plan for (e.g. the event's day). */
+    prefill_date?: string;
     /** One-line Plan-it request (PlanItBar): generate right away, assumptions as editable chips. */
     plan_it?: string;
     /** "1" = Surprise me: three plans from one tap, no form. */
@@ -365,10 +369,15 @@ export default function ConciergeScreen() {
           defaultCity={defaultCity ?? undefined}
           defaultCountry={defaultCountry ?? undefined}
           initialStep={
-            params.initial_step === "activity" || params.initial_step === "social"
-              ? (params.initial_step as "activity" | "social")
+            params.initial_step === "activity" || params.initial_step === "social" || params.initial_step === "quick"
+              ? (params.initial_step as "activity" | "social" | "quick")
               : undefined
           }
+          prefillRequest={
+            params.initial_step === "quick" && typeof params.prefill_prompt === "string" ? params.prefill_prompt : undefined
+          }
+          autoGenerate={params.auto_generate === "1"}
+          prefillDate={typeof params.prefill_date === "string" ? params.prefill_date : undefined}
           planItRequest={typeof params.plan_it === "string" ? params.plan_it : undefined}
           proactiveActivityLabel={params.proactive_activity_label ?? undefined}
           proactiveDatePreset={

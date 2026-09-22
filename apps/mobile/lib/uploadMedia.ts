@@ -4,6 +4,7 @@
 // © Winkly Technologies UG (haftungsbeschränkt)
 // Purpose: Unified upload logic for personal profiles
 // (core + sub-profiles: romance / friends / business)
+// Profile photos and chat images are moderated server-side (docs/MODERATION.md).
 // ────────────────────────────────────────────────
 
 import * as ImagePicker from "expo-image-picker";
@@ -14,6 +15,45 @@ import { decode } from "base64-arraybuffer";
 import { validatePickerAsset, validateMediaForUpload } from "@/lib/mediaValidation";
 import { CACHE_CONTROL_IMMUTABLE } from "@/lib/images/cdnImage";
 import { CHAT_MEDIA_BUCKET, signChatMediaPath } from "@/lib/chats/chatMedia";
+import { t } from "i18next";
+import {
+  MEDIA_QUARANTINE_BUCKET,
+  requestModeration,
+  summarizeProfileUploads,
+  type ModerationResponse,
+  type ModerationStatus,
+  type UploadModerationSummary,
+} from "@/lib/moderation/mediaModeration";
+
+/**
+ * Profile photos never go straight to the public user-photos bucket (clients can't
+ * write there). They are uploaded to the PRIVATE media-quarantine bucket and the
+ * moderate-media Edge Function promotes them on "pass". See docs/MODERATION.md.
+ */
+async function uploadProfilePhotoForModeration(
+  userId: string,
+  mode: string,
+  bytes: ArrayBuffer,
+  contentType: string,
+  ext: string
+): Promise<ModerationResponse> {
+  const filename = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+  const filePath = `${userId}/${mode}/${filename}`;
+  const { error } = await supabase.storage
+    .from(MEDIA_QUARANTINE_BUCKET)
+    .upload(filePath, bytes, { contentType, upsert: false });
+  if (error) throw error;
+  return requestModeration("profile_photo", filePath);
+}
+
+/** One kind, non-alarming notice for photos that were held or rejected. */
+function alertProfileModeration(summary: Pick<UploadModerationSummary, "held" | "blocked">) {
+  if (summary.blocked > 0) {
+    Alert.alert(t("moderation.photoBlockedTitle"), t("moderation.photoBlockedBody"));
+  } else if (summary.held > 0) {
+    Alert.alert(t("moderation.photoHeldTitle"), t("moderation.photoHeldBody"));
+  }
+}
 
 /**
  * pickAndUploadPhoto
@@ -49,24 +89,11 @@ export async function pickAndUploadPhoto(userId: string, mode: string = "core") 
       return null;
     }
 
-    // ───── Prepare upload path
-    const filename = `${Date.now()}_${Math.floor(Math.random() * 9999)}.jpg`;
-    const filePath = `${userId}/${mode}/${filename}`;
-
-    // ───── Upload to Supabase
-    const { error } = await supabase.storage
-      .from("user-photos")
-      .upload(filePath, decode(asset.base64!), {
-        contentType: "image/jpeg",
-        cacheControl: CACHE_CONTROL_IMMUTABLE,
-        upsert: true,
-      });
-
-    if (error) throw error;
-
-    // ───── Get public URL
-    const { data } = supabase.storage.from("user-photos").getPublicUrl(filePath);
-    return data.publicUrl;
+    // ───── Upload to quarantine + server-side moderation
+    const res = await uploadProfilePhotoForModeration(userId, mode, decode(asset.base64!), "image/jpeg", "jpg");
+    if (res.status === "pass" && res.url) return res.url;
+    alertProfileModeration({ held: res.status === "block" ? 0 : 1, blocked: res.status === "block" ? 1 : 0 });
+    return null;
   } catch (err: any) {
     Alert.alert("Upload failed", err.message ?? "Could not upload photo.");
     return null;
@@ -137,7 +164,7 @@ export async function pickAndUploadVideo(userId: string, mode: string) {
 export async function pickAndUploadChatImages(
   conversationId: string,
   userId: string
-): Promise<{ type: "image"; url: string; path: string }[]> {
+): Promise<{ type: "image"; url: string; path: string; moderation: ModerationStatus }[]> {
   try {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
@@ -154,7 +181,8 @@ export async function pickAndUploadChatImages(
 
     if (result.canceled || !result.assets?.length) return [];
 
-    const attachments: { type: "image"; url: string; path: string }[] = [];
+    const attachments: { type: "image"; url: string; path: string; moderation: ModerationStatus }[] = [];
+    let blocked = 0;
 
     for (const asset of result.assets) {
       if (!asset.base64) continue;
@@ -184,7 +212,24 @@ export async function pickAndUploadChatImages(
         continue;
       }
 
-      attachments.push({ type: "image", path: filePath, url: await signChatMediaPath(filePath) });
+      // Server-side moderation before the image is sent. "block" deletes the object;
+      // "review" is sent but recipients see it blurred behind "Tap to view".
+      const verdict = await requestModeration("chat_image", filePath);
+      if (verdict.status === "block") {
+        blocked += 1;
+        continue;
+      }
+
+      attachments.push({
+        type: "image",
+        path: filePath,
+        url: await signChatMediaPath(filePath),
+        moderation: verdict.status,
+      });
+    }
+
+    if (blocked > 0) {
+      Alert.alert(t("moderation.chatBlockedTitle"), t("moderation.chatBlockedBody"));
     }
 
     return attachments;
@@ -195,21 +240,23 @@ export async function pickAndUploadChatImages(
 }
 
 /**
- * Upload an array of (possibly local) photo URIs to the user-photos bucket.
+ * Upload an array of (possibly local) photo URIs through moderation.
  * Already-remote URLs (http/https) are passed through untouched, so this is
  * safe to call on every save. Each local file is validated (size) before upload.
- * Returns the list of public URLs in the same order, dropping any that fail.
+ * Returns the passed public URLs in the same order, plus how many photos were
+ * held for review or blocked (those are NOT in `urls`; a held photo is added to
+ * the profile by the server once a moderator approves it).
  */
-export async function uploadLocalPhotos(
+export async function uploadLocalPhotosModerated(
   userId: string,
   mode: string,
   uris: (string | null | undefined)[]
-): Promise<string[]> {
-  const out: string[] = [];
+): Promise<UploadModerationSummary> {
+  const results: Parameters<typeof summarizeProfileUploads>[0] = [];
   for (const uri of uris) {
     if (!uri) continue;
     if (uri.startsWith("http")) {
-      out.push(uri);
+      results.push({ kind: "existing", url: uri });
       continue;
     }
     try {
@@ -223,19 +270,31 @@ export async function uploadLocalPhotos(
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      const filename = `${Date.now()}_${Math.floor(Math.random() * 9999)}.${isPng ? "png" : "jpg"}`;
-      const filePath = `${userId}/${mode}/${filename}`;
-      const { error } = await supabase.storage
-        .from("user-photos")
-        .upload(filePath, decode(base64), { contentType, cacheControl: CACHE_CONTROL_IMMUTABLE, upsert: true });
-      if (error) throw error;
-      const { data } = supabase.storage.from("user-photos").getPublicUrl(filePath);
-      out.push(data.publicUrl);
+      const res = await uploadProfilePhotoForModeration(
+        userId,
+        mode,
+        decode(base64),
+        contentType,
+        isPng ? "png" : "jpg"
+      );
+      results.push({ kind: "moderated", res });
     } catch (err: any) {
+      results.push({ kind: "failed" });
       Alert.alert("Upload failed", err?.message ?? "Could not upload a photo.");
     }
   }
-  return out;
+  const summary = summarizeProfileUploads(results);
+  alertProfileModeration(summary);
+  return summary;
+}
+
+/** Same as uploadLocalPhotosModerated, returning only the passed public URLs. */
+export async function uploadLocalPhotos(
+  userId: string,
+  mode: string,
+  uris: (string | null | undefined)[]
+): Promise<string[]> {
+  return (await uploadLocalPhotosModerated(userId, mode, uris)).urls;
 }
 
 /**

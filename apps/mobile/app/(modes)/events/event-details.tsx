@@ -17,6 +17,9 @@ import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { EventParticipantCard, type ParticipantInfo } from "@/components/ui/EventParticipantCard";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 import { EventReminderModal } from "@/components/planner/EventReminderModal";
+import { PlanHintBanner } from "@/components/ai/PlanHintBanner";
+import { buildPlanHintRoute, planDateForEvent, selectPlanHintCopy } from "@/lib/ai/planHint";
+import { useTranslation } from "react-i18next";
 
 type EventRow = {
   id: string;
@@ -53,6 +56,7 @@ export default function EventDetails() {
   const fmtLoc = useFormatLocationDisplay();
   const theme = useAppTheme();
   const styles = createStyles(theme);
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ event_id?: string }>();
 
   const eventId = useMemo(
@@ -344,6 +348,18 @@ export default function EventDetails() {
     return "";
   }, [event, isHost]);
 
+  /** "Plan your evening around this event" — only for signed-in users and events that haven't passed. */
+  const planHint = useMemo(() => {
+    if (!event || !userId) return null;
+    const date = planDateForEvent(event.starts_at);
+    if (!date) return null;
+    const copy = selectPlanHintCopy(
+      { mode: "events", event: { title: event.title, venueName: event.venue_name } },
+      (key, options) => t(key, options)
+    );
+    return copy.request ? { copy, request: copy.request, date } : null;
+  }, [event, userId, t]);
+
   return (
     <View style={styles.screen}>
       {/* Header */}
@@ -459,6 +475,20 @@ export default function EventDetails() {
                   {event.description}
                 </Text>
               )}
+
+              {planHint ? (
+                <PlanHintBanner
+                  copy={planHint.copy}
+                  mode="events"
+                  style={{ marginTop: theme.spacing.lg }}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    router.push(
+                      buildPlanHintRoute({ mode: "events", request: planHint.request, date: planHint.date })
+                    );
+                  }}
+                />
+              ) : null}
 
               {/* Who&apos;s joining — Participants & Organizer */}
               {participants.length > 0 && (

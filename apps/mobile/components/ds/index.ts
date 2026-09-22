@@ -9,3 +9,4 @@ export * from "./Chip";
 export * from "./ListRow";
 export * from "./Input";
 export * from "./Header";
+export * from "./RevealCards";
