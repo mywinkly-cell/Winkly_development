@@ -24,6 +24,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          # Full history so the i18n step can diff against the PR base / previous push.
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v5
@@ -37,6 +40,16 @@ jobs:
 
       - name: Lint
         run: npm run mobile:lint
+
+      # winkly/no-literal-string is a warning repo-wide but an error in files this change
+      # touches, so no new hard-coded text lands (docs/I18N.md).
+      - name: No hard-coded text in changed files
+        env:
+          I18N_LINT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: npm run -w apps/mobile lint:i18n-changed
+
+      - name: i18n key parity + tier-1 coverage
+        run: npm run -w apps/mobile audit-i18n -- --no-lint
 
   typecheck:
     name: Typecheck

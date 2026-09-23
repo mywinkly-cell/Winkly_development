@@ -1,0 +1,38 @@
+{
+  "_readme": "Used by scripts/audit-i18n.mjs and sync-i18n-keys.mjs. See docs/I18N.md. Raise minCoverage as translations land; never lower it.",
+  "tier1": [
+    "de",
+    "fr",
+    "es",
+    "it",
+    "pl",
+    "uk",
+    "nl",
+    "pt"
+  ],
+  "minCoverage": {
+    "de": 49,
+    "fr": 43,
+    "es": 43,
+    "it": 43,
+    "pl": 45,
+    "uk": 74,
+    "nl": 10,
+    "pt": 10
+  },
+  "allowlist": {
+    "values": [
+      "OK",
+      "Winkly",
+      "Winkly AI",
+      "Instagram",
+      "TikTok",
+      "WhatsApp",
+      "Google",
+      "Apple",
+      "Spotify"
+    ],
+    "keys": [],
+    "locales": {}
+  }
+}

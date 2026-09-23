@@ -20,6 +20,16 @@ module.exports = [
       "react-hooks/use-memo": "warn",
     },
   },
+  // i18n: no hard-coded user-facing text (docs/I18N.md). "warn" repo-wide so the existing
+  // backlog doesn't block CI; scripts/lint-i18n-changed.mjs sets WINKLY_I18N_STRICT=1 and
+  // lints only the files a PR touches, where it's an error.
+  {
+    files: ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "hooks/**/*.{ts,tsx}", "providers/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}"],
+    plugins: { winkly: { rules: { "no-literal-string": require("./eslint-rules/no-literal-string") } } },
+    rules: {
+      "winkly/no-literal-string": process.env.WINKLY_I18N_STRICT === "1" ? "error" : "warn",
+    },
+  },
   // Touchable a11y: run `npm run audit-a11y` (scripts/lint-a11y-touchables.mjs) — flags unlabeled Pressable/TouchableOpacity on P0 surfaces.
   // Design tokens: run `npm run audit-design-tokens` (or `-- --changed`) for a repo-wide/changed-files checklist.
   // The design-system primitives themselves are the one place raw values are allowed to live everywhere
