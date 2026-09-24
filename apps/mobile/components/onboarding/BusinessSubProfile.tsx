@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TextInput, TouchableOpacity, Switch, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import {
   INTEREST_POPULAR_BUSINESS,
@@ -78,6 +79,7 @@ export function BusinessSubProfile(props: {
   /** When rendering a single section for the wizard, hide the repeated "💼 Business" header row. */
   hideHeader?: boolean;
 }) {
+  const { t } = useTranslation();
   const { enabled, toggle, photos, onPickPhoto, video, onPickVideo, bio, onBioChange, hideToggle, section, hideHeader } = props;
   const { role, onRoleChange, company, onCompanyChange, area, onAreaChange } = props;
   const { networkingGoals, onNetworkingGoalsChange, skills, onSkillsChange } = props;
@@ -90,7 +92,7 @@ export function BusinessSubProfile(props: {
     return (
       <View style={{ marginBottom: 28 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>💼 Business</Text>
+          <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>💼 {t("modes.business")}</Text>
           {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />}
         </View>
       </View>
@@ -101,14 +103,14 @@ export function BusinessSubProfile(props: {
     <View style={{ marginBottom: 28 }}>
       {!hideHeader && (
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>💼 Business</Text>
+          <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>💼 {t("modes.business")}</Text>
           {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />}
         </View>
       )}
 
       {showPhotosBio && (
       <>
-      <Text style={label}>Photos <Text style={requiredMark}>*</Text></Text>
+      <Text style={label}>{t("profile.photos")} <Text style={requiredMark}>*</Text></Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 16 }}>
         {photos.map((p, i) => {
           const isFirst = i === 0;
@@ -139,32 +141,32 @@ export function BusinessSubProfile(props: {
           style={{ width: 100, height: 100, borderRadius: 12, backgroundColor: Colors.gray100, justifyContent: "center", alignItems: "center", marginRight: 8, marginBottom: 8 }}
         >
           {video ? <Ionicons name="videocam" size={32} color={Colors.primaryViolet} /> : <Ionicons name="videocam-outline" size={28} color={Colors.gray400} />}
-          <Text style={{ ...Typography.caption, color: Colors.gray500, marginTop: 4 }}>Video</Text>
+          <Text style={{ ...Typography.caption, color: Colors.gray500, marginTop: 4 }}>{t("onboarding.subProfile.video")}</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={label}>Bio <Text style={requiredMark}>*</Text></Text>
-      <TextInput placeholder="Professional background and networking focus..." value={bio} onChangeText={onBioChange} multiline style={[inputStyle, { height: 100, textAlignVertical: "top" }]} placeholderTextColor={Colors.gray500} />
+      <Text style={label}>{t("profile.bio")} <Text style={requiredMark}>*</Text></Text>
+      <TextInput placeholder={t("onboarding.subProfile.business.bioPlaceholder")} value={bio} onChangeText={onBioChange} multiline style={[inputStyle, { height: 100, textAlignVertical: "top" }]} placeholderTextColor={Colors.gray500} />
       </>
       )}
 
       {showDetails && (
       <>
-      <Text style={label}>Role / Title</Text>
-      <TextInput placeholder="e.g. IT Project Manager" value={role} onChangeText={onRoleChange} style={inputStyle} placeholderTextColor={Colors.gray500} />
+      <Text style={label}>{t("onboarding.subProfile.business.role")}</Text>
+      <TextInput placeholder={t("onboarding.subProfile.business.rolePlaceholder")} value={role} onChangeText={onRoleChange} style={inputStyle} placeholderTextColor={Colors.gray500} />
 
-      <Text style={label}>Company</Text>
-      <TextInput placeholder="e.g. Winkly Technologies" value={company} onChangeText={onCompanyChange} style={inputStyle} placeholderTextColor={Colors.gray500} />
+      <Text style={label}>{t("onboarding.subProfile.business.company")}</Text>
+      <TextInput placeholder={t("onboarding.subProfile.business.companyPlaceholder")} value={company} onChangeText={onCompanyChange} style={inputStyle} placeholderTextColor={Colors.gray500} />
 
-      <Text style={label}>Area / Industry</Text>
-      <TextInput placeholder="e.g. Tech, Finance" value={area} onChangeText={onAreaChange} style={inputStyle} placeholderTextColor={Colors.gray500} />
+      <Text style={label}>{t("onboarding.subProfile.business.area")}</Text>
+      <TextInput placeholder={t("onboarding.subProfile.business.areaPlaceholder")} value={area} onChangeText={onAreaChange} style={inputStyle} placeholderTextColor={Colors.gray500} />
 
       <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
         <Image source={require("@/assets/icons/Instagram_icon.png")} style={{ width: 16, height: 16, marginRight: 8 }} resizeMode="contain" />
-        <Text style={[label, { marginBottom: 0 }]}>Instagram Business Profile</Text>
+        <Text style={[label, { marginBottom: 0 }]}>{t("onboarding.subProfile.business.instagram")}</Text>
       </View>
       <TextInput
-        placeholder="@username or instagram.com/username"
+        placeholder={t("onboarding.instagramPlaceholder")}
         placeholderTextColor={Colors.gray500}
         value={instagram}
         onChangeText={onInstagramChange}
@@ -177,7 +179,9 @@ export function BusinessSubProfile(props: {
 
       {showGoals && (
       <>
-      <Text style={label}>Networking goals (up to 3) <Text style={requiredMark}>*</Text></Text>
+      <Text style={label}>
+        {t("onboarding.subProfile.business.networkingGoals", { count: 3 })} <Text style={requiredMark}>*</Text>
+      </Text>
       <ChipSelect
         options={NETWORKING_GOALS_OPTIONS}
         selected={networkingGoals}
@@ -185,22 +189,22 @@ export function BusinessSubProfile(props: {
         max={3}
       />
 
-      <Text style={label}>Skills (up to 5)</Text>
+      <Text style={label}>{t("onboarding.subProfile.business.skills", { count: 5 })}</Text>
       <InterestSelect
         popularOptions={SKILLS_POPULAR_BUSINESS}
         selected={skills}
         onChange={onSkillsChange}
         max={5}
-        placeholder="Add your own skill…"
+        placeholder={t("onboarding.subProfile.business.skillPlaceholder")}
       />
 
-      <Text style={label}>Professional interests</Text>
+      <Text style={label}>{t("onboarding.subProfile.business.interests")}</Text>
       <InterestSelect
         popularOptions={INTEREST_POPULAR_BUSINESS}
         selected={interests}
         onChange={onInterestsChange}
         max={5}
-        placeholder="Add a professional interest…"
+        placeholder={t("onboarding.subProfile.business.interestPlaceholder")}
       />
       </>
       )}

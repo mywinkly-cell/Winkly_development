@@ -3,11 +3,13 @@ import { View, Text, ScrollView } from "react-native";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Card, PrimaryButton, SecondaryButton, TextButton } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 export default function GetStartedBusiness() {
   const router = useRouter();
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const styles = createStyles(theme);
 
@@ -15,91 +17,75 @@ export default function GetStartedBusiness() {
     <SafeScreenView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.title}>Business on Winkly</Text>
-          <Text style={styles.subtitle}>
-            Build meaningful professional connections — not noisy networking.
-          </Text>
+          <Text style={styles.title}>{t("onboarding.getStartedBusiness.title")}</Text>
+          <Text style={styles.subtitle}>{t("onboarding.getStartedBusiness.subtitle")}</Text>
         </View>
 
         <Card style={styles.card}>
-          <Text style={styles.sectionTitle}>What you can do</Text>
+          <Text style={styles.sectionTitle}>{t("onboarding.getStarted.whatYouCanDo")}</Text>
 
           <View style={styles.point}>
             <Text style={styles.bullet}>•</Text>
-            <Text style={styles.pointText}>
-              Discover professionals, founders, consultants, and investors
-            </Text>
+            <Text style={styles.pointText}>{t("onboarding.getStartedBusiness.can1")}</Text>
           </View>
 
           <View style={styles.point}>
             <Text style={styles.bullet}>•</Text>
-            <Text style={styles.pointText}>
-              Share your expertise, projects, and business interests
-            </Text>
+            <Text style={styles.pointText}>{t("onboarding.getStartedBusiness.can2")}</Text>
           </View>
 
           <View style={styles.point}>
             <Text style={styles.bullet}>•</Text>
-            <Text style={styles.pointText}>
-              Plan meetings, follow-ups, and collaborations in one place
-            </Text>
+            <Text style={styles.pointText}>{t("onboarding.getStartedBusiness.can3")}</Text>
           </View>
 
           <View style={styles.point}>
             <Text style={styles.bullet}>•</Text>
-            <Text style={styles.pointText}>
-              Connect with intention — no spam, no cold pitches
-            </Text>
+            <Text style={styles.pointText}>{t("onboarding.getStartedBusiness.can4")}</Text>
           </View>
         </Card>
 
         <Card style={styles.card}>
-          <Text style={styles.sectionTitle}>How it works</Text>
+          <Text style={styles.sectionTitle}>{t("onboarding.getStarted.howItWorks")}</Text>
 
-          <Text style={styles.step}>1. Create your business profile</Text>
-          <Text style={styles.step}>2. Discover relevant people & companies</Text>
-          <Text style={styles.step}>3. Connect & plan real conversations</Text>
+          <Text style={styles.step}>{t("onboarding.getStartedBusiness.step1")}</Text>
+          <Text style={styles.step}>{t("onboarding.getStartedBusiness.step2")}</Text>
+          <Text style={styles.step}>{t("onboarding.getStartedBusiness.step3")}</Text>
         </Card>
 
         <Card style={{ ...styles.card, ...styles.highlightCard }}>
-          <Text style={{ ...styles.sectionTitle, color: theme.colors.primary }}>Why Winkly is unique</Text>
+          <Text style={{ ...styles.sectionTitle, color: theme.colors.primary }}>{t("onboarding.getStarted.whyUnique")}</Text>
 
           <View style={styles.point}>
             <Text style={styles.bullet}>•</Text>
-            <Text style={styles.pointText}>
-              One platform for meaningful connections — no spam, no cold pitches
-            </Text>
+            <Text style={styles.pointText}>{t("onboarding.getStartedBusiness.unique1")}</Text>
           </View>
 
           <View style={styles.point}>
             <Text style={styles.bullet}>•</Text>
-            <Text style={styles.pointText}>
-              Unified Planner — meetings and events in one place
-            </Text>
+            <Text style={styles.pointText}>{t("onboarding.getStartedBusiness.unique2")}</Text>
           </View>
 
           <View style={styles.point}>
             <Text style={styles.bullet}>•</Text>
-            <Text style={styles.pointText}>
-              Connect with intention — quality over quantity
-            </Text>
+            <Text style={styles.pointText}>{t("onboarding.getStartedBusiness.unique3")}</Text>
           </View>
         </Card>
 
         <PrimaryButton
-          title="Create business profile"
+          title={t("onboarding.getStartedBusiness.cta")}
           onPress={() => { Haptics.selectionAsync(); router.push("/(onboarding-business)/profile-business"); }}
           style={styles.primaryBtn}
         />
 
         <TextButton
-          title="View plans & pricing"
+          title={t("onboarding.getStarted.viewPlans")}
           onPress={() => { Haptics.selectionAsync(); router.push("/account/subscription"); }}
           style={styles.subscriptionLink}
         />
 
         <SecondaryButton
-          title="Return to account selection"
+          title={t("onboarding.getStarted.returnToAccountSelection")}
           onPress={() => { Haptics.selectionAsync(); router.push("/(onboarding-personal)/get-started"); }}
           style={styles.secondaryBtn}
         />

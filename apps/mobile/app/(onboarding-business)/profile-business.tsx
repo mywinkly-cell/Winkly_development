@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Routes } from "@/constants/routes";
@@ -32,6 +33,7 @@ import {
 
 export default function ProfileBusiness() {
   const router = useRouter();
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const styles = createStyles(theme);
   const { edit } = useLocalSearchParams<{ edit?: string }>();
@@ -55,7 +57,7 @@ export default function ProfileBusiness() {
   const pickLogo = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission denied", "Media access is required to upload logo.");
+      Alert.alert(t("onboarding.businessProfile.permissionDenied"), t("onboarding.businessProfile.permissionDeniedMessage"));
       return;
     }
 
@@ -85,7 +87,7 @@ export default function ProfileBusiness() {
     setInputTag("");
   };
 
-  const removeTag = (tag: string) => setTags(tags.filter((t) => t !== tag));
+  const removeTag = (tag: string) => setTags(tags.filter((x) => x !== tag));
 
   const handlePrimaryType = (key: "professional" | "organisation") => {
     if (key === "professional") {
@@ -103,14 +105,17 @@ export default function ProfileBusiness() {
 
   const handleContinue = async () => {
     if (!businessName || !area || !bio) {
-      Alert.alert("Incomplete", "Please fill all required fields.");
+      Alert.alert(t("auth.incomplete"), t("onboarding.businessProfile.fillRequired"));
       return;
     }
 
     try {
       setLoading(true);
       const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) throw new Error("Session expired. Please log in again.");
+      if (!userData.user) {
+        Alert.alert(t("auth.sessionExpired"), t("onboarding.businessProfile.sessionExpired"));
+        return;
+      }
 
       const { error } = await supabase
         .from("business_profiles")
@@ -149,8 +154,8 @@ export default function ProfileBusiness() {
         router.replace("/(onboarding-personal)/winkly-world?variant=business");
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Something went wrong.";
-      Alert.alert("Error", msg);
+      console.warn("[profile-business] save failed", err);
+      Alert.alert(t("common.error"), t("onboarding.businessProfile.saveFailed"));
     } finally {
       setLoading(false);
     }
@@ -163,15 +168,13 @@ export default function ProfileBusiness() {
         showsVerticalScrollIndicator={false}
         style={styles.screen}
       >
-        <Text style={styles.title}>What best describes you?</Text>
-        <Text style={styles.subtitle}>
-          This shapes your Winkly experience — discovery, offers, and how others find you.
-        </Text>
+        <Text style={styles.title}>{t("onboarding.businessProfile.typeTitle")}</Text>
+        <Text style={styles.subtitle}>{t("onboarding.businessProfile.typeSubtitle")}</Text>
         {BUSINESS_TYPE_PRIMARY_OPTIONS.map((opt) => (
           <Pressable key={opt.key} onPress={() => handlePrimaryType(opt.key)}>
             <Card style={styles.optionCard}>
-              <Text style={styles.optionTitle}>{opt.label}</Text>
-              <Text style={styles.optionHint}>{opt.hint}</Text>
+              <Text style={styles.optionTitle}>{t(opt.labelKey)}</Text>
+              <Text style={styles.optionHint}>{t(opt.hintKey)}</Text>
             </Card>
           </Pressable>
         ))}
@@ -186,16 +189,14 @@ export default function ProfileBusiness() {
         showsVerticalScrollIndicator={false}
         style={styles.screen}
       >
-        <TextButton title="← Back" onPress={() => setStep("type")} style={styles.backLink} />
-        <Text style={styles.title}>What kind of organisation?</Text>
-        <Text style={styles.subtitle}>
-          Pick the option that fits best — you can update this later.
-        </Text>
+        <TextButton title={t("onboarding.businessProfile.back")} onPress={() => setStep("type")} style={styles.backLink} />
+        <Text style={styles.title}>{t("onboarding.businessProfile.subtypeTitle")}</Text>
+        <Text style={styles.subtitle}>{t("onboarding.businessProfile.subtypeSubtitle")}</Text>
         {BUSINESS_ORG_SUBTYPE_OPTIONS.map((opt) => (
           <Pressable key={opt.value} onPress={() => handleOrgSubtype(opt.value)}>
             <Card style={styles.optionCard}>
-              <Text style={styles.optionTitle}>{opt.label}</Text>
-              <Text style={styles.optionHint}>{opt.hint}</Text>
+              <Text style={styles.optionTitle}>{t(opt.labelKey)}</Text>
+              <Text style={styles.optionHint}>{t(opt.hintKey)}</Text>
             </Card>
           </Pressable>
         ))}
@@ -214,7 +215,7 @@ export default function ProfileBusiness() {
       >
         {!isEditFlow && (
           <TextButton
-            title="← Change profile type"
+            title={t("onboarding.businessProfile.changeType")}
             onPress={() =>
               setStep(businessType === "individual_professional" ? "type" : "org_subtype")
             }
@@ -222,9 +223,14 @@ export default function ProfileBusiness() {
           />
         )}
 
-        <Text style={styles.title}>Set up your Business Profile 💼</Text>
+        <Text style={styles.title}>{t("onboarding.businessProfile.title")}</Text>
 
-        <Pressable onPress={pickLogo} style={styles.logoPicker}>
+        <Pressable
+          onPress={pickLogo}
+          style={styles.logoPicker}
+          accessibilityRole="button"
+          accessibilityLabel={t("onboarding.businessProfile.logoA11y")}
+        >
           {logoUri ? (
             <Image source={{ uri: logoUri }} style={{ width: 120, height: 120, borderRadius: 60 }} />
           ) : (
@@ -232,45 +238,65 @@ export default function ProfileBusiness() {
           )}
         </Pressable>
 
-        <Input label="Business / Brand Name *" placeholder="Business / Brand Name" value={businessName} onChangeText={setBusinessName} />
-        <Input label="Location" placeholder="City, Country" value={location} onChangeText={setLocation} />
-        <Input label="Area of Business *" placeholder="e.g. Marketing, Tech, Wellness" value={area} onChangeText={setArea} />
         <Input
-          label="About your business *"
-          placeholder="Describe your business..."
+          label={t("onboarding.businessProfile.nameLabel")}
+          placeholder={t("onboarding.businessProfile.namePlaceholder")}
+          value={businessName}
+          onChangeText={setBusinessName}
+        />
+        <Input
+          label={t("onboarding.businessProfile.locationLabel")}
+          placeholder={t("onboarding.businessProfile.locationPlaceholder")}
+          value={location}
+          onChangeText={setLocation}
+        />
+        <Input
+          label={t("onboarding.businessProfile.areaLabel")}
+          placeholder={t("onboarding.businessProfile.areaPlaceholder")}
+          value={area}
+          onChangeText={setArea}
+        />
+        <Input
+          label={t("onboarding.businessProfile.aboutLabel")}
+          placeholder={t("onboarding.businessProfile.aboutPlaceholder")}
           value={bio}
           onChangeText={setBio}
           multiline
           style={{ height: 100, textAlignVertical: "top" }}
         />
 
-        <Text style={styles.label}>Tags (up to 10)</Text>
+        <Text style={styles.label}>{t("onboarding.businessProfile.tagsLabel", { count: 10 })}</Text>
         <View style={styles.tagInputRow}>
           <Input
-            placeholder="Add tag"
+            placeholder={t("onboarding.businessProfile.addTag")}
             value={inputTag}
             onChangeText={setInputTag}
             containerStyle={{ flex: 1, marginBottom: 0, marginRight: theme.spacing.sm }}
           />
-          <Pressable onPress={addTag} style={styles.addTagBtn}>
+          <Pressable
+            onPress={addTag}
+            style={styles.addTagBtn}
+            accessibilityRole="button"
+            accessibilityLabel={t("onboarding.businessProfile.addTag")}
+          >
             <Text style={{ color: theme.colors.onPrimary, fontSize: 20 }}>＋</Text>
           </Pressable>
         </View>
 
         <View style={styles.tagRow}>
-          {tags.map((t) => (
-            <Chip key={t} label={`${t} ✕`} selected onPress={() => removeTag(t)} style={styles.tagChip} />
+          {tags.map((tag) => (
+            <Chip key={tag} label={`${tag} ✕`} selected onPress={() => removeTag(tag)} style={styles.tagChip} />
           ))}
         </View>
 
-        <Text style={styles.label}>Website & Socials</Text>
-        <Input placeholder="Website" value={website} onChangeText={setWebsite} />
+        <Text style={styles.label}>{t("onboarding.businessProfile.socialsLabel")}</Text>
+        <Input placeholder={t("onboarding.businessProfile.website")} value={website} onChangeText={setWebsite} />
         <Input placeholder="Instagram" value={instagram} onChangeText={setInstagram} />
         <Input placeholder="Facebook" value={facebook} onChangeText={setFacebook} />
         <Input placeholder="LinkedIn" value={linkedin} onChangeText={setLinkedin} />
 
         <PrimaryButton
-          title={loading ? "Saving..." : "Continue"}
+          title={loading ? t("onboarding.autosave.saving") : t("common.continue")}
           onPress={handleContinue}
           disabled={loading}
           loading={loading}

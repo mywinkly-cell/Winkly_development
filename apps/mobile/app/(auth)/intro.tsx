@@ -6,10 +6,12 @@ import { View, Text, Image, TouchableOpacity, StyleSheet, Animated } from "react
 import { SafeScreenView } from "@/components/SafeScreenView";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
+import { Trans, useTranslation } from "react-i18next";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 export default function Intro() {
   const router = useRouter();
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const styles = createStyles(theme);
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -26,14 +28,12 @@ export default function Intro() {
             source={require("../../assets/icons/winkly-logo.png")}
             resizeMode="contain"
             style={styles.wordmark}
-            accessibilityLabel="Winkly logo"
+            accessibilityLabel={t("auth.intro.logoA11y")}
           />
 
-          <Text style={styles.title}>Because every story{"\n"}begins with a wink.</Text>
+          <Text style={styles.title}>{t("auth.intro.title")}</Text>
 
-          <Text style={styles.subtitle}>
-            Dating, friends, business & events — in one intelligent connection space.
-          </Text>
+          <Text style={styles.subtitle}>{t("auth.intro.subtitle")}</Text>
 
           <TouchableOpacity
             onPress={() => {
@@ -43,9 +43,9 @@ export default function Intro() {
             style={styles.primaryBtn}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel="Create account"
+            accessibilityLabel={t("auth.createAccount")}
           >
-            <Text style={styles.primaryText}>Create account</Text>
+            <Text style={styles.primaryText}>{t("auth.createAccount")}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -56,14 +56,17 @@ export default function Intro() {
             style={styles.secondaryBtn}
             activeOpacity={0.85}
             accessibilityRole="button"
-            accessibilityLabel="Sign in"
+            accessibilityLabel={t("auth.signin")}
           >
-            <Text style={styles.secondaryText}>Sign in</Text>
+            <Text style={styles.secondaryText}>{t("auth.signin")}</Text>
           </TouchableOpacity>
         </View>
 
         <Text style={styles.legal}>
-          By continuing, you agree to Winkly&apos;s <Text style={styles.link}>Terms</Text> & <Text style={styles.link}>Privacy Policy</Text>.
+          <Trans
+            i18nKey="auth.intro.legal"
+            components={{ terms: <Text style={styles.link} />, privacy: <Text style={styles.link} /> }}
+          />
         </Text>
       </Animated.View>
     </SafeScreenView>

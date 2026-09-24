@@ -27,7 +27,11 @@ module.exports = [
     files: ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "hooks/**/*.{ts,tsx}", "providers/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}"],
     plugins: { winkly: { rules: { "no-literal-string": require("./eslint-rules/no-literal-string") } } },
     rules: {
-      "winkly/no-literal-string": process.env.WINKLY_I18N_STRICT === "1" ? "error" : "warn",
+      "winkly/no-literal-string": [
+        process.env.WINKLY_I18N_STRICT === "1" ? "error" : "warn",
+        // Brand names are never translated (same list as coverage-config.json's allowlist).
+        { allow: ["Instagram", "Facebook", "LinkedIn", "TikTok", "WhatsApp", "Google", "Apple", "Spotify"] },
+      ],
     },
   },
   // Touchable a11y: run `npm run audit-a11y` (scripts/lint-a11y-touchables.mjs) — flags unlabeled Pressable/TouchableOpacity on P0 surfaces.

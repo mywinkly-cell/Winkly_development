@@ -19,24 +19,28 @@ export type WizardStep =
   | { kind: "mode"; mode: PrimaryOnboardingMode; id: ModeStepId }
   | { kind: "review" };
 
-const GENERAL_STEP_LABELS: Record<GeneralStepId, string> = {
-  name: "The basics",
-  photos: "Your photos",
-  location: "Location & gender",
-  about: "About you",
-  modes: "Choose your modes",
+/** Minimal i18next-compatible translate function, so this module stays free of React/i18n imports. */
+export type Translate = (key: string, options?: Record<string, unknown>) => string;
+
+const GENERAL_STEP_LABEL_KEYS: Record<GeneralStepId, string> = {
+  name: "onboarding.wizard.step.name",
+  photos: "onboarding.wizard.step.photos",
+  location: "onboarding.wizard.step.location",
+  about: "onboarding.wizard.step.about",
+  modes: "onboarding.wizard.step.modes",
 };
 
-const MODE_STEP_LABELS: Record<ModeStepId, string> = {
-  photosBio: "Photos & bio",
-  details: "About you",
-  goals: "Goals",
+const MODE_STEP_LABEL_KEYS: Record<ModeStepId, string> = {
+  photosBio: "onboarding.wizard.step.photosBio",
+  details: "onboarding.wizard.step.details",
+  goals: "onboarding.wizard.step.goals",
 };
 
-export const MODE_LABEL: Record<PrimaryOnboardingMode, string> = {
-  romance: "Romance",
-  friends: "Friends",
-  business: "Business",
+/** i18n keys for the mode names (shared with the rest of the app). */
+export const MODE_LABEL_KEY: Record<PrimaryOnboardingMode, string> = {
+  romance: "modes.romance",
+  friends: "modes.friends",
+  business: "modes.business",
 };
 
 export const MODE_EMOJI: Record<PrimaryOnboardingMode, string> = {
@@ -63,10 +67,13 @@ export function buildWizardSteps(enabledModes: PrimaryOnboardingMode[]): WizardS
   return steps;
 }
 
-export function wizardStepLabel(step: WizardStep): string {
-  if (step.kind === "general") return GENERAL_STEP_LABELS[step.id];
-  if (step.kind === "review") return "Review";
-  return `${MODE_LABEL[step.mode]} — ${MODE_STEP_LABELS[step.id]}`;
+export function wizardStepLabel(step: WizardStep, t: Translate): string {
+  if (step.kind === "general") return t(GENERAL_STEP_LABEL_KEYS[step.id]);
+  if (step.kind === "review") return t("onboarding.wizard.step.review");
+  return t("onboarding.wizard.step.modeStep", {
+    mode: t(MODE_LABEL_KEY[step.mode]),
+    step: t(MODE_STEP_LABEL_KEYS[step.id]),
+  });
 }
 
 export function wizardStepKey(step: WizardStep): string {
@@ -88,9 +95,10 @@ function hasBirthdayValue(birthday: string | Date | null): boolean {
   return !!String(birthday).trim();
 }
 
+/** Failure carries i18n keys (+ interpolation params) — the screen translates them. */
 export type StepValidationResult =
   | { ok: true }
-  | { ok: false; title: string; message: string };
+  | { ok: false; titleKey: string; messageKey: string; params?: Record<string, number> };
 
 export type WizardValidationInput = {
   firstName: string;
@@ -113,23 +121,19 @@ function requirePhotosAndBio(
   if (!hasPhoto || !hasBio) {
     return {
       ok: false,
-      title: `${MODE_LABEL[mode]} profile`,
-      message: `Add at least one photo and a short bio for your ${MODE_LABEL[mode]} profile.`,
+      titleKey: `onboarding.wizard.validation.${mode}ProfileTitle`,
+      messageKey: `onboarding.wizard.validation.${mode}PhotosBio`,
     };
   }
   return { ok: true };
 }
 
-function requireGoals(
-  mode: PrimaryOnboardingMode,
-  goals: string[],
-  goalNoun: string
-): StepValidationResult {
+function requireGoals(mode: PrimaryOnboardingMode, goals: string[]): StepValidationResult {
   if (goals.length === 0) {
     return {
       ok: false,
-      title: "Almost there",
-      message: `Pick at least one ${goalNoun} for your ${MODE_LABEL[mode]} profile.`,
+      titleKey: "onboarding.wizard.validation.almostThere",
+      messageKey: `onboarding.wizard.validation.${mode}Goals`,
     };
   }
   return { ok: true };
@@ -140,27 +144,28 @@ export function validateWizardStep(step: WizardStep, input: WizardValidationInpu
     switch (step.id) {
       case "name":
         if (!input.firstName.trim() || !input.lastName.trim()) {
-          return { ok: false, title: "Your name", message: "Please enter your first and last name." };
+          return { ok: false, titleKey: "onboarding.wizard.validation.nameTitle", messageKey: "onboarding.wizard.validation.name" };
         }
         if (!hasBirthdayValue(input.birthday)) {
-          return { ok: false, title: "Birthday", message: "Please select your birth date." };
+          return { ok: false, titleKey: "profile.birthday", messageKey: "onboarding.wizard.validation.birthday" };
         }
         return { ok: true };
       case "photos":
         if (input.corePhotoCount < MIN_CORE_PHOTOS) {
           return {
             ok: false,
-            title: "Add more photos",
-            message: `Add at least ${MIN_CORE_PHOTOS} photos to continue. You can add up to 5.`,
+            titleKey: "onboarding.wizard.validation.photosTitle",
+            messageKey: "onboarding.wizard.validation.photos",
+            params: { count: MIN_CORE_PHOTOS, max: 5 },
           };
         }
         return { ok: true };
       case "location":
         if (!input.city.trim()) {
-          return { ok: false, title: "City", message: "Please enter your city so we can suggest nearby matches." };
+          return { ok: false, titleKey: "profile.city", messageKey: "onboarding.wizard.validation.city" };
         }
         if (!input.gender.trim()) {
-          return { ok: false, title: "Gender", message: "Please select your gender." };
+          return { ok: false, titleKey: "profile.gender", messageKey: "onboarding.wizard.validation.gender" };
         }
         return { ok: true };
       case "about":
@@ -175,9 +180,9 @@ export function validateWizardStep(step: WizardStep, input: WizardValidationInpu
       return requirePhotosAndBio(step.mode, input[step.mode]);
     }
     // goals
-    if (step.mode === "romance") return requireGoals("romance", input.romance.relationshipGoals, "relationship goal");
-    if (step.mode === "friends") return requireGoals("friends", input.friends.meetupGoals, "meetup goal");
-    return requireGoals("business", input.business.networkingGoals, "networking goal");
+    if (step.mode === "romance") return requireGoals("romance", input.romance.relationshipGoals);
+    if (step.mode === "friends") return requireGoals("friends", input.friends.meetupGoals);
+    return requireGoals("business", input.business.networkingGoals);
   }
 
   return { ok: true };

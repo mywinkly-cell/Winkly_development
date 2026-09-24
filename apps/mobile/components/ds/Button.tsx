@@ -28,6 +28,9 @@ function useHapticPress(onPress: () => void, disabled?: boolean) {
   };
 }
 
+/** Long translations (de, fi) wrap inside the button instead of overflowing the row. */
+const labelWrap: TextStyle = { flexShrink: 1, textAlign: "center" };
+
 function buttonBaseStyle(theme: AppTheme): ViewStyle {
   return {
     minHeight: 48,
@@ -68,6 +71,7 @@ export function PrimaryButton({ title, onPress, loading, disabled, icon, style, 
           <Text
             style={[
               theme.type.button,
+              labelWrap,
               { color: disabled ? theme.colors.textMuted : theme.colors.onPrimary, fontFamily: theme.type.button.fontFamily },
               textStyle,
             ]}
@@ -109,6 +113,7 @@ export function SecondaryButton({ title, onPress, loading, disabled, icon, style
           <Text
             style={[
               theme.type.button,
+              labelWrap,
               { color: disabled ? theme.colors.textMuted : theme.colors.primary, fontFamily: theme.type.button.fontFamily },
               textStyle,
             ]}
@@ -146,6 +151,7 @@ export function TextButton({ title, onPress, loading, disabled, icon, style, tex
           <Text
             style={[
               theme.type.bodyMedium,
+              labelWrap,
               { color: disabled ? theme.colors.textMuted : theme.colors.primary, fontFamily: theme.type.bodyMedium.fontFamily },
               textStyle,
             ]}

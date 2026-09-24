@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import * as ImageManipulator from "expo-image-manipulator";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -32,6 +33,7 @@ export function PhotoConfirmModal({
   onClose,
 }: PhotoConfirmModalProps) {
   const [saving, setSaving] = useState(false);
+  const { t } = useTranslation();
 
   if (!photoUri) return null;
 
@@ -67,13 +69,13 @@ export function PhotoConfirmModal({
           />
           <View style={styles.buttons}>
             <TouchableOpacity style={styles.cancelBtn} onPress={onClose} activeOpacity={0.8}>
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text style={styles.cancelText}>{t("common.cancel")}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.8} disabled={saving}>
               {saving ? (
                 <ActivityIndicator color={Colors.accentYellow} size="small" />
               ) : (
-                <Text style={styles.saveText}>Save</Text>
+                <Text style={styles.saveText}>{t("common.save")}</Text>
               )}
             </TouchableOpacity>
           </View>

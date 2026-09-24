@@ -5,6 +5,7 @@ import React from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Switch, Image, Modal, Pressable, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 import { Card } from "@/components/ui/Card";
 import { InputField } from "@/components/ui/InputField";
@@ -13,6 +14,14 @@ import type { CityCountry } from "@/lib/location/citySearch";
 import { formatDefaultLocationDisplay } from "@/lib/location/countryDisplay";
 import { GENERAL_INTERESTS_MAX, interestEmoji } from "@/constants/interestCategories";
 import { MIN_CORE_PHOTOS, MAX_CORE_PHOTOS, MIN_PHOTO_DIMENSION } from "@/lib/profile/validation";
+import { useAppLocaleTag } from "@/lib/i18n/appLocale";
+import {
+  EDUCATION_OPTIONS,
+  GENDER_OPTIONS,
+  educationLabelKey,
+  genderLabelKey,
+  optionLabel,
+} from "@/lib/profile/coreOptionLabels";
 
 const sectionLabel = { ...Typography.body, color: Colors.gray700, marginBottom: 6 };
 const requiredMark = { color: Colors.errorRed, fontWeight: "700" as const };
@@ -77,19 +86,31 @@ export function NameStep(props: {
 }) {
   const { firstName, onFirstNameChange, lastName, onLastNameChange, birthday } = props;
   const { showDatePicker, onShowDatePicker, onDatePickerChange, onDatePickerDismiss, maxAdultDate } = props;
+  const { t } = useTranslation();
+  const localeTag = useAppLocaleTag();
   return (
     <Card>
       <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 4, fontFamily: FontFamily.headingBold }}>
-        Let&apos;s start with the basics ✨
+        {t("onboarding.general.basicsTitle")}
       </Text>
       <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 16 }}>
-        Just the essentials — you can add more details later.
+        {t("onboarding.general.basicsSubtitle")}
       </Text>
 
-      <InputField label="First name *" placeholder="First name" value={firstName} onChangeText={onFirstNameChange} />
-      <InputField label="Last name *" placeholder="Last name" value={lastName} onChangeText={onLastNameChange} />
+      <InputField
+        label={t("onboarding.general.firstNameRequired")}
+        placeholder={t("profile.firstName")}
+        value={firstName}
+        onChangeText={onFirstNameChange}
+      />
+      <InputField
+        label={t("onboarding.general.lastNameRequired")}
+        placeholder={t("profile.lastName")}
+        value={lastName}
+        onChangeText={onLastNameChange}
+      />
 
-      <Text style={sectionLabel}>Birth date <Text style={requiredMark}>*</Text></Text>
+      <Text style={sectionLabel}>{t("onboarding.general.birthDate")} <Text style={requiredMark}>*</Text></Text>
       <TouchableOpacity
         onPress={onShowDatePicker}
         style={{
@@ -106,8 +127,8 @@ export function NameStep(props: {
       >
         <Text style={{ ...Typography.body, color: birthday ? Colors.textPrimary : Colors.gray500 }}>
           {birthday
-            ? `${birthday.getDate()}.${birthday.getMonth() + 1}.${birthday.getFullYear()}`
-            : "Select your birth date"}
+            ? birthday.toLocaleDateString(localeTag, { day: "numeric", month: "numeric", year: "numeric" })
+            : t("onboarding.general.selectBirthDate")}
         </Text>
       </TouchableOpacity>
 
@@ -124,9 +145,7 @@ export function NameStep(props: {
         />
       )}
 
-      <Text style={{ ...Typography.caption, color: Colors.gray500 }}>
-        Your birthday will remain private — only your age will be visible.
-      </Text>
+      <Text style={{ ...Typography.caption, color: Colors.gray500 }}>{t("onboarding.general.birthdayPrivate")}</Text>
     </Card>
   );
 }
@@ -138,18 +157,22 @@ export function PhotosStep(props: {
   onRemovePhoto: (index: number) => void;
 }) {
   const { corePhotos, onOpenPhotoOptions, onAddPhoto, onRemovePhoto } = props;
+  const { t } = useTranslation();
+  const missing = MIN_CORE_PHOTOS - corePhotos.length;
   return (
     <Card>
       <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 4, fontFamily: FontFamily.headingBold }}>
-        Add your photos 📸
+        {t("onboarding.general.photosTitle")}
       </Text>
       <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 12 }}>
-        Add {MIN_CORE_PHOTOS}–{MAX_CORE_PHOTOS} clear photos. Minimum {MIN_PHOTO_DIMENSION}px on the short side — we&apos;ll let you know if one is too small.
+        {t("onboarding.general.photosHint", { min: MIN_CORE_PHOTOS, max: MAX_CORE_PHOTOS, px: MIN_PHOTO_DIMENSION })}
       </Text>
       <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
-        <Text style={{ ...Typography.body, color: Colors.gray700 }}>{corePhotos.length} of {MIN_CORE_PHOTOS} required</Text>
+        <Text style={{ ...Typography.body, color: Colors.gray700 }}>
+          {t("onboarding.general.photosRequired", { count: MIN_CORE_PHOTOS, current: corePhotos.length })}
+        </Text>
         <Text style={{ ...Typography.caption, color: corePhotos.length >= MIN_CORE_PHOTOS ? Colors.primaryViolet : Colors.errorRed }}>
-          {corePhotos.length >= MIN_CORE_PHOTOS ? "Ready to continue" : `${MIN_CORE_PHOTOS - corePhotos.length} more needed`}
+          {missing <= 0 ? t("onboarding.general.photosReady") : t("onboarding.general.photosMoreNeeded", { count: missing })}
         </Text>
       </View>
       <View style={{ height: 4, borderRadius: 2, backgroundColor: Colors.gray200, overflow: "hidden", marginBottom: 16 }}>
@@ -169,10 +192,15 @@ export function PhotosStep(props: {
               <Image source={{ uri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
               {i === 0 && (
                 <View style={mainBadge}>
-                  <Text style={mainBadgeText}>Main</Text>
+                  <Text style={mainBadgeText}>{t("onboarding.photos.main")}</Text>
                 </View>
               )}
-              <TouchableOpacity onPress={() => onRemovePhoto(i)} style={removeBadge} hitSlop={8} accessibilityLabel="Remove photo">
+              <TouchableOpacity
+                onPress={() => onRemovePhoto(i)}
+                style={removeBadge}
+                hitSlop={8}
+                accessibilityLabel={t("onboarding.photos.remove")}
+              >
                 <Ionicons name="close" size={14} color={Colors.white} />
               </TouchableOpacity>
             </TouchableOpacity>
@@ -180,9 +208,9 @@ export function PhotosStep(props: {
         ))}
         {corePhotos.length < MAX_CORE_PHOTOS && (
           <View style={{ width: "33.333%", padding: 6 }}>
-            <TouchableOpacity onPress={onAddPhoto} style={corePhotoAddTile} accessibilityLabel="Add photo">
+            <TouchableOpacity onPress={onAddPhoto} style={corePhotoAddTile} accessibilityLabel={t("onboarding.photos.add")}>
               <Ionicons name="add" size={30} color={Colors.primaryViolet} />
-              <Text style={{ ...Typography.caption, color: Colors.gray600, marginTop: 4 }}>Add</Text>
+              <Text style={{ ...Typography.caption, color: Colors.gray600, marginTop: 4 }}>{t("common.add")}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -211,14 +239,15 @@ export function LocationStep(props: {
     onRequestLocation, locationLoading, locationPermissionStatus,
     gender, onGenderChange, showFullName, onShowFullNameChange,
   } = props;
+  const { t } = useTranslation();
   return (
     <Card>
       <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 16, fontFamily: FontFamily.headingBold }}>
-        Where are you, and who are you? 📍
+        {t("onboarding.general.locationTitle")}
       </Text>
 
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <Text style={[sectionLabel, { marginBottom: 0 }]}>City <Text style={requiredMark}>*</Text></Text>
+        <Text style={[sectionLabel, { marginBottom: 0 }]}>{t("profile.city")} <Text style={requiredMark}>*</Text></Text>
         <TouchableOpacity
           onPress={onRequestLocation}
           disabled={locationLoading}
@@ -233,18 +262,18 @@ export function LocationStep(props: {
           }}
         >
           {locationLoading ? (
-            <Text style={{ ...Typography.caption, fontWeight: "600", color: Colors.gray600 }}>Getting location…</Text>
+            <Text style={{ ...Typography.caption, fontWeight: "600", color: Colors.gray600 }}>{t("onboarding.location.getting")}</Text>
           ) : (
             <>
               <Ionicons name="locate" size={16} color={locationPermissionStatus === "granted" ? Colors.primaryViolet : Colors.gray500} style={{ marginRight: 6 }} />
               <Text style={{ ...Typography.caption, fontWeight: "600", color: locationPermissionStatus === "granted" ? Colors.primaryViolet : Colors.gray600 }}>
-                {locationPermissionStatus === "denied" ? "Enable location" : "Use my location"}
+                {locationPermissionStatus === "denied" ? t("onboarding.location.enable") : t("onboarding.location.useMine")}
               </Text>
             </>
           )}
         </TouchableOpacity>
       </View>
-      <InputField placeholder="e.g. Berlin, London" value={city} onChangeText={onCityChange} />
+      <InputField placeholder={t("onboarding.location.cityPlaceholder")} value={city} onChangeText={onCityChange} />
 
       {suggestions.length > 0 && !cityConfirmed && (
         <View style={{ borderWidth: 1, borderColor: Colors.gray100, borderRadius: Layout.radii.control, maxHeight: 200, marginBottom: 12, backgroundColor: Colors.white, ...Shadow.card }}>
@@ -262,9 +291,9 @@ export function LocationStep(props: {
         </View>
       )}
 
-      <Text style={[sectionLabel, { marginBottom: 8, marginTop: 4 }]}>Gender <Text style={requiredMark}>*</Text></Text>
+      <Text style={[sectionLabel, { marginBottom: 8, marginTop: 4 }]}>{t("profile.gender")} <Text style={requiredMark}>*</Text></Text>
       <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 16 }}>
-        {["Female", "Male", "Other"].map((g) => (
+        {GENDER_OPTIONS.map((g) => (
           <TouchableOpacity
             key={g}
             onPress={() => onGenderChange(g)}
@@ -276,10 +305,20 @@ export function LocationStep(props: {
               borderColor: gender === g ? Colors.primaryViolet : Colors.gray200,
               borderRadius: Layout.radii.control,
               paddingVertical: 12,
+              paddingHorizontal: 4,
               alignItems: "center",
             }}
+            accessibilityRole="button"
+            accessibilityState={{ selected: gender === g }}
           >
-            <Text style={{ ...Typography.body, color: gender === g ? "#FFF" : Colors.textPrimary }}>{g}</Text>
+            <Text
+              style={{ ...Typography.body, color: gender === g ? "#FFF" : Colors.textPrimary, textAlign: "center" }}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+            >
+              {optionLabel(t, genderLabelKey, g)}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -298,10 +337,8 @@ export function LocationStep(props: {
         }}
       >
         <View style={{ flex: 1, paddingRight: 12 }}>
-          <Text style={[sectionLabel, { marginBottom: 2 }]}>Show my full name in Romance &amp; Friends</Text>
-          <Text style={{ ...Typography.caption, color: Colors.gray500 }}>
-            Off by default — others see only your first name on cards and your profile. Business networking always shows your full name.
-          </Text>
+          <Text style={[sectionLabel, { marginBottom: 2 }]}>{t("onboarding.fullName.title")}</Text>
+          <Text style={{ ...Typography.caption, color: Colors.gray500 }}>{t("onboarding.fullName.body")}</Text>
         </View>
         <Switch
           value={showFullName}
@@ -313,14 +350,6 @@ export function LocationStep(props: {
     </Card>
   );
 }
-
-const EDUCATION_OPTIONS = [
-  "High school graduate",
-  "Bachelor’s degree",
-  "Master’s degree",
-  "Doctorate / PhD",
-  "Other",
-];
 
 export function AboutStep(props: {
   education: string;
@@ -339,24 +368,30 @@ export function AboutStep(props: {
     education, onEducationChange, occupation, onOccupationChange, languages, onOpenLanguageModal,
     instagram, onInstagramChange, interests, onRemoveInterest, onOpenInterestsModal,
   } = props;
+  const { t } = useTranslation();
   return (
     <Card>
       <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 16, fontFamily: FontFamily.headingBold }}>
-        A bit more about you
+        {t("onboarding.general.aboutTitle")}
       </Text>
 
-      <Text style={sectionLabel}>Education</Text>
+      <Text style={sectionLabel}>{t("profile.education")}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ marginBottom: 16 }} keyboardShouldPersistTaps="handled">
         {EDUCATION_OPTIONS.map((e) => (
-          <Chip key={e} label={e} selected={education === e} onPress={() => onEducationChange(e)} style={{ marginRight: 8 }} />
+          <Chip key={e} label={optionLabel(t, educationLabelKey, e)} selected={education === e} onPress={() => onEducationChange(e)} style={{ marginRight: 8 }} />
         ))}
       </ScrollView>
 
-      <InputField label="Occupation" placeholder="What do you do?" value={occupation} onChangeText={onOccupationChange} />
+      <InputField
+        label={t("profile.occupation")}
+        placeholder={t("onboarding.about.occupationPlaceholder")}
+        value={occupation} onChangeText={onOccupationChange} />
 
-      <Text style={sectionLabel}>Languages</Text>
+      <Text style={sectionLabel}>{t("profile.languages")}</Text>
       <Pressable
         onPress={onOpenLanguageModal}
+        accessibilityRole="button"
+        accessibilityLabel={t("onboarding.languages.choose")}
         style={{
           flexDirection: "row",
           alignItems: "center",
@@ -372,17 +407,17 @@ export function AboutStep(props: {
         }}
       >
         <Text style={{ ...Typography.body, color: Colors.textPrimary, flex: 1 }} numberOfLines={1}>
-          {languages.length === 0 ? "Choose languages" : languages.join(", ")}
+          {languages.length === 0 ? t("onboarding.languages.choose") : languages.join(", ")}
         </Text>
         <Ionicons name="chevron-down" size={20} color={Colors.gray600} />
       </Pressable>
 
       <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
         <Image source={require("@/assets/icons/Instagram_icon.png")} style={{ width: 16, height: 16, marginRight: 8 }} resizeMode="contain" />
-        <Text style={[sectionLabel, { marginBottom: 0 }]}>Instagram</Text>
+        <Text style={[sectionLabel, { marginBottom: 0 }]}>{t("profile.instagram")}</Text>
       </View>
       <InputField
-        placeholder="@username or instagram.com/username"
+        placeholder={t("onboarding.instagramPlaceholder")}
         value={instagram}
         onChangeText={onInstagramChange}
         autoCapitalize="none"
@@ -390,11 +425,11 @@ export function AboutStep(props: {
       />
 
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <Text style={[sectionLabel, { marginBottom: 0 }]}>Interests</Text>
+        <Text style={[sectionLabel, { marginBottom: 0 }]}>{t("onboarding.interests.label")}</Text>
         <Text style={{ ...Typography.caption, color: Colors.gray500 }}>{interests.length}/{GENERAL_INTERESTS_MAX}</Text>
       </View>
       <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 10 }}>
-        Shared across Romance & Friends — pick what you love.
+        {t("onboarding.interests.sharedHint")}
       </Text>
       <TouchableOpacity
         onPress={onOpenInterestsModal}
@@ -410,11 +445,11 @@ export function AboutStep(props: {
           marginBottom: interests.length > 0 ? 12 : 0,
         }}
         accessibilityRole="button"
-        accessibilityLabel="Choose interests"
+        accessibilityLabel={t("onboarding.interests.choose")}
       >
         <Ionicons name="add-circle-outline" size={18} color={Colors.primaryViolet} style={{ marginRight: 6 }} />
         <Text style={{ ...Typography.button, color: Colors.primaryViolet }}>
-          {interests.length > 0 ? "Edit interests" : "Choose interests"}
+          {interests.length > 0 ? t("onboarding.interests.edit") : t("onboarding.interests.choose")}
         </Text>
       </TouchableOpacity>
       {interests.length > 0 && (
@@ -453,6 +488,7 @@ export function LanguageModal(props: {
   onClose: () => void;
 }) {
   const { visible, languages, sortedLanguages, onToggleLanguage, onClose } = props;
+  const { t } = useTranslation();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center", padding: 20 }} onPress={onClose}>
@@ -461,9 +497,15 @@ export function LanguageModal(props: {
           onPress={(e) => e.stopPropagation()}
         >
           <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.gray200 }}>
-            <Text style={{ ...Typography.h3, fontFamily: FontFamily.headingBold, color: Colors.textSecondary, marginBottom: 4 }}>Choose languages</Text>
-            <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 8 }}>Your selections appear first in the list.</Text>
-            <TouchableOpacity onPress={onClose} style={{ position: "absolute", top: 16, right: 16, padding: 4 }} hitSlop={12}>
+            <Text style={{ ...Typography.h3, fontFamily: FontFamily.headingBold, color: Colors.textSecondary, marginBottom: 4 }}>{t("onboarding.languages.choose")}</Text>
+            <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 8 }}>{t("onboarding.languages.hint")}</Text>
+            <TouchableOpacity
+              onPress={onClose}
+              style={{ position: "absolute", top: 16, right: 16, padding: 4 }}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={t("common.close")}
+            >
               <Ionicons name="close" size={24} color={Colors.gray600} />
             </TouchableOpacity>
           </View>
@@ -484,7 +526,7 @@ export function LanguageModal(props: {
           </ScrollView>
           <View style={{ padding: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.gray200 }}>
             <Pressable onPress={onClose} style={{ backgroundColor: Colors.primaryViolet, paddingVertical: 14, borderRadius: Layout.radii.control, alignItems: "center" }}>
-              <Text style={{ ...Typography.button, color: Colors.white, fontFamily: FontFamily.headingBold }}>Done</Text>
+              <Text style={{ ...Typography.button, color: Colors.white, fontFamily: FontFamily.headingBold }}>{t("common.done")}</Text>
             </Pressable>
           </View>
         </Pressable>
