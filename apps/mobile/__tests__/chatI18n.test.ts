@@ -13,6 +13,7 @@ import socialPl from "@/lib/i18n/patches/social-pl.json";
 import socialPt from "@/lib/i18n/patches/social-pt.json";
 import socialUk from "@/lib/i18n/patches/social-uk.json";
 import accountPaywallErrors from "@/lib/i18n/patches/account-paywall-errors.json";
+import plannerConcierge from "@/lib/i18n/patches/planner-concierge.json";
 
 type Patch = Record<string, Record<string, string>>;
 const PATCHES: Record<string, Patch> = {
@@ -27,6 +28,7 @@ const PATCHES: Record<string, Patch> = {
   "social-pt": socialPt,
   "social-uk": socialUk,
   "account-paywall-errors": accountPaywallErrors,
+  "planner-concierge": plannerConcierge,
 };
 
 const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();

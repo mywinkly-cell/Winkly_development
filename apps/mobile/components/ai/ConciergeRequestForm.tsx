@@ -44,62 +44,13 @@ import { loadPlanningProfileContext, formatSanitizedPersonaForConciergePrompt } 
 import { getDeviceLocationDisplay } from "@/lib/location/deviceLocation";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import { PlanningLocationFields } from "@/components/ai/PlanningLocationFields";
+import { parseDescribePhrase } from "@/lib/ai/describePhrase";
 
 function dayKey(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
-}
-
-/** Parse a short phrase like "Dinner for two this Saturday under 50 euros" into prefill fields. */
-function parseDescribePhrase(text: string): {
-  prompt?: string;
-  date?: Date;
-  budgetAmount?: string;
-  budgetCurrency?: string;
-} {
-  const t = text.trim();
-  if (!t) return {};
-  const out: { prompt?: string; date?: Date; budgetAmount?: string; budgetCurrency?: string } = {};
-  let rest = t;
-
-  const budgetMatch = rest.match(/(?:under|below|max)\s*(\d+)\s*(euros?|eur|€|usd|dollars?|gbp|chf|pln)/i)
-    ?? rest.match(/(\d+)\s*(euros?|eur|€|usd|dollars?|gbp|chf|pln)/i);
-  if (budgetMatch) {
-    out.budgetAmount = budgetMatch[1];
-    const c = (budgetMatch[2] || "").toLowerCase();
-    out.budgetCurrency = c.startsWith("eur") || c.startsWith("euro") ? "EUR" : c.startsWith("usd") || c.startsWith("dollar") ? "USD" : c.startsWith("gbp") ? "GBP" : c.startsWith("chf") ? "CHF" : c.startsWith("pln") ? "PLN" : "EUR";
-    rest = rest.replace(budgetMatch[0], "").replace(/\s+/g, " ").trim();
-  }
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (/\bthis\s+Saturday\b/i.test(rest)) {
-    out.date = getNextSaturday(today);
-    rest = rest.replace(/\bthis\s+Saturday\b/gi, "").trim();
-  } else if (/\bnext\s+Saturday\b/i.test(rest)) {
-    const d = getNextSaturday(today);
-    d.setDate(d.getDate() + 7);
-    out.date = d;
-    rest = rest.replace(/\bnext\s+Saturday\b/gi, "").trim();
-  } else if (/\bthis\s+weekend\b/i.test(rest)) {
-    out.date = getNextSaturday(today);
-    rest = rest.replace(/\bthis\s+weekend\b/gi, "").trim();
-  } else if (/\btomorrow\b/i.test(rest)) {
-    const d = new Date(today);
-    d.setDate(d.getDate() + 1);
-    out.date = d;
-    rest = rest.replace(/\btomorrow\b/gi, "").trim();
-  } else if (/\bnext\s+week\b/i.test(rest)) {
-    const d = getMonday(today);
-    d.setDate(d.getDate() + 7);
-    out.date = d;
-    rest = rest.replace(/\bnext\s+week\b/gi, "").trim();
-  }
-
-  if (rest.length > 0) out.prompt = rest.replace(/\s+/g, " ").trim();
-  return out;
 }
 
 /** Parse after normalizing ISO country segment (DE → Germany). */
