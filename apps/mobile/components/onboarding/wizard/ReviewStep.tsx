@@ -4,9 +4,10 @@
 import React from "react";
 import { View, Text, TouchableOpacity, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography, FontFamily, Layout } from "@/constants/tokens";
 import { Card } from "@/components/ui/Card";
-import { MODE_EMOJI, MODE_LABEL, type PrimaryOnboardingMode } from "@/lib/profile/onboardingWizard";
+import { MODE_EMOJI, MODE_LABEL_KEY, type PrimaryOnboardingMode } from "@/lib/profile/onboardingWizard";
 
 function ReviewRow({ label, value }: { label: string; value: string }) {
   if (!value) return null;
@@ -19,13 +20,19 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
 }
 
 function ReviewSection(props: { title: string; onEdit: () => void; children: React.ReactNode }) {
+  const { t } = useTranslation();
   return (
     <Card style={{ marginBottom: 16 }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <Text style={{ ...Typography.h3, color: Colors.textSecondary, fontFamily: FontFamily.headingBold }}>{props.title}</Text>
-        <TouchableOpacity onPress={props.onEdit} style={{ flexDirection: "row", alignItems: "center" }} accessibilityRole="button">
+        <TouchableOpacity
+          onPress={props.onEdit}
+          style={{ flexDirection: "row", alignItems: "center" }}
+          accessibilityRole="button"
+          accessibilityLabel={t("onboarding.review.editA11y", { section: props.title })}
+        >
           <Ionicons name="pencil" size={14} color={Colors.primaryViolet} style={{ marginRight: 4 }} />
-          <Text style={{ ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" }}>Edit</Text>
+          <Text style={{ ...Typography.caption, color: Colors.primaryViolet, fontWeight: "600" }}>{t("common.edit")}</Text>
         </TouchableOpacity>
       </View>
       {props.children}
@@ -48,17 +55,18 @@ export function ReviewStep(props: {
 }) {
   const { onEditGeneral, firstName, lastName, birthdayLabel, city, gender, corePhotos } = props;
   const { enabledModes, onEditMode, modeSummary } = props;
+  const { t } = useTranslation();
 
   return (
     <View>
       <Text style={{ ...Typography.h3, color: Colors.textSecondary, marginBottom: 4, fontFamily: FontFamily.headingBold }}>
-        Review your profile ✅
+        {t("onboarding.review.title")}
       </Text>
       <Text style={{ ...Typography.caption, color: Colors.gray600, marginBottom: 16 }}>
-        Take a look before you finish — you can always edit later.
+        {t("onboarding.review.subtitle")}
       </Text>
 
-      <ReviewSection title="General" onEdit={onEditGeneral}>
+      <ReviewSection title={t("onboarding.review.general")} onEdit={onEditGeneral}>
         {corePhotos.length > 0 && (
           <View style={{ flexDirection: "row", marginBottom: 10 }}>
             {corePhotos.slice(0, 5).map((uri, i) => (
@@ -66,16 +74,16 @@ export function ReviewStep(props: {
             ))}
           </View>
         )}
-        <ReviewRow label="Name" value={`${firstName} ${lastName}`.trim()} />
-        <ReviewRow label="Birthday" value={birthdayLabel} />
-        <ReviewRow label="City" value={city} />
-        <ReviewRow label="Gender" value={gender} />
+        <ReviewRow label={t("onboarding.review.name")} value={t("onboarding.review.fullName", { first: firstName, last: lastName }).trim()} />
+        <ReviewRow label={t("profile.birthday")} value={birthdayLabel} />
+        <ReviewRow label={t("profile.city")} value={city} />
+        <ReviewRow label={t("profile.gender")} value={gender} />
       </ReviewSection>
 
       {enabledModes.map((mode) => {
         const summary = modeSummary[mode];
         return (
-          <ReviewSection key={mode} title={`${MODE_EMOJI[mode]} ${MODE_LABEL[mode]}`} onEdit={() => onEditMode(mode)}>
+          <ReviewSection key={mode} title={`${MODE_EMOJI[mode]} ${t(MODE_LABEL_KEY[mode])}`} onEdit={() => onEditMode(mode)}>
             {summary.photos.some(Boolean) && (
               <View style={{ flexDirection: "row", marginBottom: 10 }}>
                 {summary.photos.filter(Boolean).map((uri, i) => (
@@ -83,7 +91,7 @@ export function ReviewStep(props: {
                 ))}
               </View>
             )}
-            <ReviewRow label="Bio" value={summary.bio} />
+            <ReviewRow label={t("profile.bio")} value={summary.bio} />
           </ReviewSection>
         );
       })}

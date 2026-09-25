@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, Image, ActivityIndicator } from "react-native";
 import { useRouter, type Href } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Routes } from "@/constants/routes";
 import { PrimaryButton, TextButton } from "@/components/ds";
 import { useAppTheme } from "@/constants/design-system";
@@ -15,6 +16,7 @@ import { supabase } from "@/lib/supabase";
 
 export default function WelcomePersonal() {
   const router = useRouter();
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const [firstName, setFirstName] = useState<string | null>(null);
 
@@ -61,7 +63,9 @@ export default function WelcomePersonal() {
           marginBottom: theme.spacing.sm,
         }}
       >
-        Welcome {firstName ? firstName : "to Winkly"}!
+        {firstName
+          ? t("onboarding.welcomePersonal.titleNamed", { name: firstName })
+          : t("onboarding.welcomePersonal.title")}
       </Text>
 
       <Text
@@ -73,8 +77,7 @@ export default function WelcomePersonal() {
           marginBottom: theme.spacing.xxxl,
         }}
       >
-        Your profile is set, and you&apos;re ready to start connecting.{"\n"}
-        Switch modes anytime — Romance, Friends, Business, or Events.
+        {t("onboarding.welcomePersonal.body")}
       </Text>
 
       {/* Animation / illustration */}
@@ -86,14 +89,14 @@ export default function WelcomePersonal() {
 
       {/* CTA */}
       <PrimaryButton
-        title="Start exploring"
+        title={t("onboarding.welcomePersonal.cta")}
         onPress={() => router.replace("/(modes)/romance" as Href)}
         style={{ width: "85%" }}
       />
 
       {/* Option: Go back to Mode Selection */}
       <TextButton
-        title="Change my mode"
+        title={t("onboarding.welcomePersonal.changeMode")}
         onPress={() => router.push(Routes.modeSelection)}
         style={{ marginTop: theme.spacing.md }}
         textStyle={{ textDecorationLine: "underline" }}

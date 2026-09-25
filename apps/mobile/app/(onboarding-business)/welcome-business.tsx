@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, Image, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useModeContext } from "@/providers";
 import { PrimaryButton, TextButton } from "@/components/ds";
 import { useAppTheme } from "@/constants/design-system";
@@ -16,6 +17,7 @@ import { supabase } from "@/lib/supabase";
 export default function WelcomeBusiness() {
   useRouter(); // router available for future nav
   const { setActiveMode } = useModeContext();
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const [businessName, setBusinessName] = useState<string | null>(null);
 
@@ -72,7 +74,9 @@ export default function WelcomeBusiness() {
           marginBottom: theme.spacing.md,
         }}
       >
-        Welcome {businessName ? businessName : "to Winkly Business"} 👋
+        {businessName
+          ? t("onboarding.welcomeBusiness.titleNamed", { name: businessName })
+          : t("onboarding.welcomeBusiness.title")}
       </Text>
 
       <Text
@@ -84,8 +88,7 @@ export default function WelcomeBusiness() {
           marginBottom: theme.spacing.xxxl,
         }}
       >
-        Your business profile is ready.{"\n"}
-        Start networking, connecting, and creating events that make an impact.
+        {t("onboarding.welcomeBusiness.body")}
       </Text>
 
       {/* Illustration */}
@@ -97,14 +100,14 @@ export default function WelcomeBusiness() {
 
       {/* CTA */}
       <PrimaryButton
-        title="Go to Business Mode"
+        title={t("onboarding.welcomeBusiness.cta")}
         onPress={() => setActiveMode("business")}
         style={{ width: "85%" }}
       />
 
       {/* Option: Switch to Events */}
       <TextButton
-        title="Explore Events"
+        title={t("onboarding.welcomeBusiness.exploreEvents")}
         onPress={() => setActiveMode("events")}
         style={{ marginTop: theme.spacing.md }}
         textStyle={{ textDecorationLine: "underline" }}

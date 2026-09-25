@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text } from "react-native";
+import { useTranslation } from "react-i18next";
 import { useAppTheme } from "@/constants/design-system";
 
 type Props = {
@@ -13,6 +14,7 @@ type Props = {
 
 export function OnboardingStepIndicator({ currentStep, totalSteps, label, subProgress }: Props) {
   const theme = useAppTheme();
+  const { t } = useTranslation();
   const baseProgress = (currentStep - 1) / totalSteps;
   const stepSlice = 1 / totalSteps;
   const withinStep = subProgress != null ? Math.min(1, Math.max(0, subProgress)) * stepSlice : stepSlice;
@@ -32,10 +34,10 @@ export function OnboardingStepIndicator({ currentStep, totalSteps, label, subPro
       </Text>
       <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: theme.spacing.sm }}>
         <Text style={{ ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary }}>
-          Step {currentStep} of {totalSteps}
+          {t("onboarding.stepIndicator.step", { current: currentStep, total: totalSteps })}
         </Text>
         <Text style={{ ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textMuted }}>
-          {Math.round((currentStep / totalSteps) * 100)}% complete
+          {t("onboarding.stepIndicator.complete", { percent: Math.round((currentStep / totalSteps) * 100) })}
         </Text>
       </View>
       <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.border, overflow: "hidden" }}>

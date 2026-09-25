@@ -55,26 +55,29 @@ export function meetsMinimumAge(birthday: string | Date | null): boolean {
   return age !== null && age >= MIN_AGE_YEARS;
 }
 
+/** Failure carries i18n keys (+ interpolation params) — the screen translates them. */
 export type ProfileValidationResult =
   | { ok: true }
-  | { ok: false; title: string; message: string };
+  | { ok: false; titleKey: string; messageKey: string; params?: Record<string, number> };
 
 export function validateProfileCoreSubmit(input: ProfileCoreSubmitInput): ProfileValidationResult {
   if (!input.firstName || !input.lastName || !input.gender || !hasBirthdayValue(input.birthday) || !input.city) {
-    return { ok: false, title: "Incomplete", message: "Please fill in all required fields." };
+    return { ok: false, titleKey: "auth.incomplete", messageKey: "onboarding.profile.fillRequired" };
   }
   if (!meetsMinimumAge(input.birthday)) {
     return {
       ok: false,
-      title: "You must be 18 or older",
-      message: `Winkly is only for people aged ${MIN_AGE_YEARS} and over. Please check the date of birth you entered.`,
+      titleKey: "onboarding.profile.minAgeTitle",
+      messageKey: "onboarding.profile.minAge",
+      params: { age: MIN_AGE_YEARS },
     };
   }
   if (input.corePhotoCount < MIN_CORE_PHOTOS) {
     return {
       ok: false,
-      title: "Add more photos",
-      message: `Please add at least ${MIN_CORE_PHOTOS} photos so you can start matching. You can add up to ${MAX_CORE_PHOTOS}.`,
+      titleKey: "onboarding.wizard.validation.photosTitle",
+      messageKey: "onboarding.profile.minPhotos",
+      params: { count: MIN_CORE_PHOTOS, max: MAX_CORE_PHOTOS },
     };
   }
   return { ok: true };

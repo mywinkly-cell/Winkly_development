@@ -39,6 +39,8 @@ export type MediaValidationResult = {
   ok: boolean;
   /** Human-readable reason when `ok` is false (safe to show in an Alert). */
   reason?: string;
+  /** Machine-readable failure, for screens that show their own localized message. */
+  code?: "unsupported_type" | "too_large";
   /** Resolved size in bytes when it could be determined. */
   bytes?: number;
 };
@@ -93,6 +95,7 @@ export async function validateMediaForUpload(params: {
   if (mimeType && !allowed.includes(mimeType.toLowerCase())) {
     return {
       ok: false,
+      code: "unsupported_type",
       reason: `Unsupported file type (${mimeType}). Allowed: ${allowed
         .map((m) => m.split("/")[1])
         .join(", ")}.`,
@@ -105,6 +108,7 @@ export async function validateMediaForUpload(params: {
     return {
       ok: false,
       bytes,
+      code: "too_large",
       reason: `File is too large (${prettyBytes(bytes)}). Maximum allowed is ${prettyBytes(
         MAX_UPLOAD_BYTES
       )}.`,

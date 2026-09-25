@@ -82,7 +82,12 @@ export function OAuthButtons({
           Alert.alert(t("auth.oauthNotConfigured"), t("auth.oauthNotConfiguredHint"));
           return;
         }
-        Alert.alert(t("common.error"), result.message ?? t("auth.oauthFailed"));
+        // result.message is an English diagnostic from lib/auth/oauth.ts — show localized text instead.
+        if (result.message) console.warn("[OAuth]", result.message);
+        Alert.alert(
+          t("common.error"),
+          result.reason === "unavailable" ? t("auth.appleUnavailable") : t("auth.oauthFailed")
+        );
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return;
       }
@@ -103,8 +108,8 @@ export function OAuthButtons({
       await routeAfterAuthentication(router);
     } catch (err: unknown) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      const message = err instanceof Error ? err.message : t("auth.oauthFailed");
-      Alert.alert(t("common.error"), message);
+      console.warn("[OAuth]", err);
+      Alert.alert(t("common.error"), t("auth.oauthFailed"));
     } finally {
       setLoadingProvider(null);
     }

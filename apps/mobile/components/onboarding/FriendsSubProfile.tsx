@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Switch, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import {
   LIFESTYLE_ROMANCE,
@@ -110,6 +111,7 @@ export function FriendsSubProfile(props: {
   /** When rendering a single section for the wizard, hide the repeated "👥 Friends" header row. */
   hideHeader?: boolean;
 }) {
+  const { t } = useTranslation();
   const { enabled, toggle, photos, onPickPhoto, video, onPickVideo, bio, onBioChange, hideToggle, section, hideHeader } = props;
   const { lifestyle, onLifestyleChange, alcohol, onAlcoholChange, smoking, onSmokingChange } = props;
   const { meetupGoals, onMeetupGoalsChange, status, onStatusChange, kids, onKidsChange, pets, onPetsChange, food, onFoodChange, toggleMulti, onPetsToggle } = props;
@@ -121,7 +123,7 @@ export function FriendsSubProfile(props: {
     return (
       <View style={{ marginBottom: 28 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>👥 Friends</Text>
+          <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>👥 {t("modes.friends")}</Text>
           {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />}
         </View>
       </View>
@@ -132,14 +134,14 @@ export function FriendsSubProfile(props: {
     <View style={{ marginBottom: 28 }}>
       {!hideHeader && (
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>👥 Friends</Text>
+          <Text style={{ ...Typography.h3, color: Colors.textPrimary }}>👥 {t("modes.friends")}</Text>
           {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: Colors.gray300, true: Colors.primaryViolet }} thumbColor={Colors.white} />}
         </View>
       )}
 
       {showPhotosBio && (
       <>
-      <Text style={label}>Photos <Text style={requiredMark}>*</Text></Text>
+      <Text style={label}>{t("profile.photos")} <Text style={requiredMark}>*</Text></Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 16 }}>
         {photos.map((p, i) => {
           const isFirst = i === 0;
@@ -170,22 +172,22 @@ export function FriendsSubProfile(props: {
           style={{ width: 100, height: 100, borderRadius: 12, backgroundColor: Colors.gray100, justifyContent: "center", alignItems: "center", marginRight: 8, marginBottom: 8 }}
         >
           {video ? <Ionicons name="videocam" size={32} color={Colors.primaryViolet} /> : <Ionicons name="videocam-outline" size={28} color={Colors.gray400} />}
-          <Text style={{ ...Typography.caption, color: Colors.gray500, marginTop: 4 }}>Video</Text>
+          <Text style={{ ...Typography.caption, color: Colors.gray500, marginTop: 4 }}>{t("onboarding.subProfile.video")}</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={label}>Bio <Text style={requiredMark}>*</Text></Text>
-      <TextInput placeholder="What kind of friendships do you enjoy?" value={bio} onChangeText={onBioChange} multiline style={[inputStyle, { height: 100, textAlignVertical: "top" }]} placeholderTextColor={Colors.gray500} />
+      <Text style={label}>{t("profile.bio")} <Text style={requiredMark}>*</Text></Text>
+      <TextInput placeholder={t("onboarding.subProfile.friends.bioPlaceholder")} value={bio} onChangeText={onBioChange} multiline style={[inputStyle, { height: 100, textAlignVertical: "top" }]} placeholderTextColor={Colors.gray500} />
       </>
       )}
 
       {showDetails && (
       <>
-      <SingleSelect options={LIFESTYLE_ROMANCE} selected={lifestyle} onSelect={onLifestyleChange} label="Lifestyle" />
-      <SingleSelect options={ALCOHOL_OPTIONS} selected={alcohol} onSelect={onAlcoholChange} label="Alcohol" />
-      <SingleSelect options={SMOKING_OPTIONS} selected={smoking} onSelect={onSmokingChange} label="Smoking" />
-      <SingleSelect options={KIDS_FRIENDS_OPTIONS} selected={kids} onSelect={onKidsChange} label="Kids" />
-      <Text style={label}>Pets (up to 2)</Text>
+      <SingleSelect options={LIFESTYLE_ROMANCE} selected={lifestyle} onSelect={onLifestyleChange} label={t("onboarding.subProfile.lifestyle")} />
+      <SingleSelect options={ALCOHOL_OPTIONS} selected={alcohol} onSelect={onAlcoholChange} label={t("onboarding.subProfile.alcohol")} />
+      <SingleSelect options={SMOKING_OPTIONS} selected={smoking} onSelect={onSmokingChange} label={t("onboarding.subProfile.smoking")} />
+      <SingleSelect options={KIDS_FRIENDS_OPTIONS} selected={kids} onSelect={onKidsChange} label={t("onboarding.subProfile.kids")} />
+      <Text style={label}>{t("onboarding.subProfile.pets", { count: 2 })}</Text>
       <ChipSelect
         options={PETS_OPTIONS}
         selected={pets}
@@ -193,15 +195,17 @@ export function FriendsSubProfile(props: {
         max={2}
         exclusiveOption="No pets"
       />
-      <SingleSelect options={FOOD_OPTIONS} selected={food} onSelect={onFoodChange} label="Food habits" />
+      <SingleSelect options={FOOD_OPTIONS} selected={food} onSelect={onFoodChange} label={t("onboarding.subProfile.food")} />
       </>
       )}
 
       {showGoals && (
       <>
-      <Text style={label}>Meetup goals (up to 3) <Text style={requiredMark}>*</Text></Text>
+      <Text style={label}>
+        {t("onboarding.subProfile.friends.meetupGoals", { count: 3 })} <Text style={requiredMark}>*</Text>
+      </Text>
       <ChipSelect options={MEETUP_GOALS_OPTIONS} selected={meetupGoals} onToggle={(v) => toggleMulti(meetupGoals, v, onMeetupGoalsChange, 3)} />
-      <SingleSelect options={STATUS_OPTIONS} selected={status} onSelect={onStatusChange} label="Status" />
+      <SingleSelect options={STATUS_OPTIONS} selected={status} onSelect={onStatusChange} label={t("onboarding.subProfile.friends.status")} />
       </>
       )}
     </View>
