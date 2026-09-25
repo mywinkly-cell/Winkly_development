@@ -1,6 +1,7 @@
 // apps/mobile/components/ui/Modal.tsx
 // Token-based modal wrapper (backdrop + centered card).
 
+import { useTranslation } from "react-i18next";
 import React from "react";
 import { Modal as RNModal, Pressable, View, StyleSheet, ViewStyle, KeyboardAvoidingView, Platform } from "react-native";
 import { Colors, Layout } from "@/constants/tokens";
@@ -27,13 +28,14 @@ export function Modal({
   backdropStyle,
   closeOnBackdropPress = true,
 }: ModalProps) {
+  const { t } = useTranslation();
   return (
     <RNModal visible={visible} transparent animationType={variant === "sheet" ? "slide" : "fade"} onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.root}>
         <Pressable
           style={[styles.backdrop, backdropStyle]}
           onPress={closeOnBackdropPress ? onClose : undefined}
-          accessibilityLabel="Close modal"
+          accessibilityLabel={t("common.closeModalA11y")}
         >
           <Pressable
             onPress={(e) => e.stopPropagation()}

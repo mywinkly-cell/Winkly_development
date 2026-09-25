@@ -4,18 +4,14 @@
 // condensed from docs/PRIVACY_AND_DSA_DRAFTS.md §3.
 
 import { Alert, Linking } from "react-native";
+import { t } from "i18next";
 
 /** Staffed inbox already configured in the app — see app/account/legal.tsx. */
 export const MODERATION_CONTACT_EMAIL = "customer-care@mywinkly.de";
 
-export const REPORT_NOTICE_TITLE = "Report received";
-
-/** Short notice-and-action text shown after a report is recorded. */
-export const REPORT_NOTICE_BODY =
-  "Thanks — this report has gone to Winkly's moderation team. We review every " +
-  "report and may remove content, limit or suspend an account, or decide no " +
-  "action is needed. Anyone we act against is told what we did, why, and how " +
-  "to appeal.\n\nFor an urgent safety issue you can also email us.";
+/** i18n keys for the notice-and-action text shown after a report is recorded. */
+export const REPORT_NOTICE_TITLE_KEY = "alerts.report.receivedTitle";
+export const REPORT_NOTICE_BODY_KEY = "alerts.report.receivedBody";
 
 export function openModerationEmail(subject = "Content report") {
   const url = `mailto:${MODERATION_CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}`;
@@ -27,8 +23,8 @@ export function openModerationEmail(subject = "Content report") {
  * notice-and-action process and offers the moderation inbox as a second channel.
  */
 export function showReportReceivedNotice(subject = "Content report") {
-  Alert.alert(REPORT_NOTICE_TITLE, REPORT_NOTICE_BODY, [
-    { text: `Email ${MODERATION_CONTACT_EMAIL}`, onPress: () => openModerationEmail(subject) },
-    { text: "Done", style: "cancel" },
+  Alert.alert(t(REPORT_NOTICE_TITLE_KEY), t(REPORT_NOTICE_BODY_KEY), [
+    { text: t("alerts.report.emailUs", { email: MODERATION_CONTACT_EMAIL }), onPress: () => openModerationEmail(subject) },
+    { text: t("common.done"), style: "cancel" },
   ]);
 }

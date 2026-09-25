@@ -9,7 +9,8 @@
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "@/lib/supabase";
 import { Alert } from "react-native";
-import { validatePickerAsset } from "@/lib/mediaValidation";
+import { t } from "i18next";
+import { mediaValidationMessage, validatePickerAsset } from "@/lib/mediaValidation";
 import { CACHE_CONTROL_IMMUTABLE } from "@/lib/images/cdnImage";
 
 /**
@@ -21,7 +22,7 @@ export async function pickAndUploadLogo(userId: string): Promise<string | null> 
     // 1️⃣ Request permissions
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission required", "Please allow access to your photo library.");
+      Alert.alert(t("errors.permission.requiredTitle"), t("errors.permission.photoLibrary"));
       return null;
     }
 
@@ -39,7 +40,7 @@ export async function pickAndUploadLogo(userId: string): Promise<string | null> 
     // 2️⃣.5 Validate before any network call (size + MIME)
     const check = await validatePickerAsset(asset, "image");
     if (!check.ok) {
-      Alert.alert("Logo not allowed", check.reason ?? "Please pick a different image.");
+      Alert.alert(t("errors.upload.logoNotAllowed"), mediaValidationMessage(check, t) ?? t("errors.upload.pickDifferentImage"));
       return null;
     }
 
@@ -72,11 +73,11 @@ export async function pickAndUploadLogo(userId: string): Promise<string | null> 
 
     if (dbError) throw dbError;
 
-    Alert.alert("Uploaded", "Logo uploaded successfully!");
+    Alert.alert(t("errors.upload.logoUploadedTitle"), t("errors.upload.logoUploaded"));
     return publicUrl;
   } catch (err: any) {
     console.error("Logo upload error:", err);
-    Alert.alert("Upload failed", err.message ?? "Please try again later.");
+    Alert.alert(t("errors.upload.failedTitle"), t("errors.upload.logo"));
     return null;
   }
 }

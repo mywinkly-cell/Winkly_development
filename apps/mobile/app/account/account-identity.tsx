@@ -110,22 +110,22 @@ export default function AccountIdentity() {
 
   return (
     <SafeScreenView style={styles.screen}>
-      <Header title="Account & Identity" onBack={() => router.back()} />
+      <Header title={t("account.identity.title")} onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Card style={styles.card}>
-          <Text style={styles.cardTitle}>Contact information</Text>
+          <Text style={styles.cardTitle}>{t("account.identity.contactInfo")}</Text>
           <View style={styles.row}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>{t("account.identity.email")}</Text>
             <Text style={styles.value}>{email || "—"}</Text>
           </View>
-          <Text style={styles.hint}>To change your email, sign out and create a new account.</Text>
+          <Text style={styles.hint}>{t("account.identity.changeEmailHint")}</Text>
         </Card>
 
         <Card style={styles.card}>
           <Text style={styles.cardTitle}>{t("auth.accountType")}</Text>
           <View style={styles.row}>
-            <Text style={styles.label}>Current</Text>
+            <Text style={styles.label}>{t("account.identity.current")}</Text>
             <Text style={{ ...styles.value, textTransform: "capitalize" }}>
               {currentType === "personal" ? t("auth.accountTypePersonal") : t("auth.accountTypeBusiness")}
             </Text>
@@ -156,9 +156,9 @@ export default function AccountIdentity() {
         </Card>
 
         <Card style={styles.card}>
-          <Text style={styles.cardTitle}>Security</Text>
+          <Text style={styles.cardTitle}>{t("account.identity.security")}</Text>
           <ListRow
-            title="Change password"
+            title={t("account.identity.changePassword")}
             onPress={() => {
               Haptics.selectionAsync();
               router.push("/(auth)/reset-password");
@@ -168,16 +168,16 @@ export default function AccountIdentity() {
         </Card>
 
         <Card style={{ ...styles.card, ...styles.dangerCard }}>
-          <Text style={styles.cardTitle}>Danger zone</Text>
+          <Text style={styles.cardTitle}>{t("account.identity.dangerZone")}</Text>
           <ListRow
-            title="Delete or deactivate account"
+            title={t("account.identity.deleteOrDeactivate")}
             destructive
             onPress={handleDeleteAccount}
             leading={<Ionicons name="trash-outline" size={20} color={theme.colors.error} />}
             style={styles.dangerBtn}
           />
           <Text style={styles.hint}>
-            Multi-step confirmation required. This action can be permanent.
+            {t("account.identity.deleteHint")}
           </Text>
         </Card>
       </ScrollView>

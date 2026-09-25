@@ -26,17 +26,17 @@ import {
 } from "@/lib/profile/publicModeProfile";
 import { ModeProfilePublicView } from "@/components/profile/ModeProfilePublicView";
 
-const MODES: { key: PublicProfileMode; label: string }[] = [
-  { key: "romance", label: "Romance" },
-  { key: "friends", label: "Friends" },
-  { key: "business", label: "Business" },
-  { key: "events", label: "Events" },
+const MODES: { key: PublicProfileMode }[] = [
+  { key: "romance" },
+  { key: "friends" },
+  { key: "business" },
+  { key: "events" },
 ];
 
 export default function ViewProfile() {
   const router = useRouter();
   const { user } = useAuth();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const theme = useAppTheme();
   const styles = createStyles(theme);
   const [loading, setLoading] = useState(true);
@@ -89,14 +89,14 @@ export default function ViewProfile() {
   return (
     <View style={styles.screen}>
       <Header
-        title="Profile preview"
+        title={t("profile.preview.title")}
         onBack={() => {
           Haptics.selectionAsync();
           router.back();
         }}
         trailing={
           <TextButton
-            title="Edit"
+            title={t("common.edit")}
             onPress={() => {
               Haptics.selectionAsync();
               router.push("/(onboarding-personal)/profile-core?edit=1");
@@ -106,7 +106,7 @@ export default function ViewProfile() {
         }
       />
 
-      <Text style={styles.hint}>How others see you in each mode</Text>
+      <Text style={styles.hint}>{t("profile.preview.hint")}</Text>
 
       <ScrollView
         horizontal
@@ -117,7 +117,7 @@ export default function ViewProfile() {
         {MODES.map((m) => (
           <Chip
             key={m.key}
-            label={m.label}
+            label={t(`modes.${m.key}`)}
             mode={m.key as ModeName}
             selected={activeMode === m.key}
             onPress={() => {
@@ -131,7 +131,7 @@ export default function ViewProfile() {
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={styles.loadingText}>Loading…</Text>
+          <Text style={styles.loadingText}>{t("common.loading")}</Text>
         </View>
       ) : (
         <ScrollView

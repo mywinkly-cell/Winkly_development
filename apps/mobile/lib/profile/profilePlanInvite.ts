@@ -3,6 +3,7 @@ import type { InviteFormValues } from "@/components/chats/InviteToPlanModal";
 import { createDirectChat, sendMessage } from "@/lib/chats";
 import { createPlannerInvite } from "@/lib/plannerInvitations";
 import type { Mode } from "@/types";
+import { t } from "i18next";
 
 export const PROFILE_INVITE_LABEL: Record<Mode, string> = {
   romance: "Invite on date",
@@ -11,15 +12,8 @@ export const PROFILE_INVITE_LABEL: Record<Mode, string> = {
   events: "Invite to meet",
 };
 
-const CONNECT_FIRST_MESSAGE: Record<Mode, string> = {
-  romance: "Match with them first to send a date invite.",
-  friends: "Connect as friends first to send a meet-up invite.",
-  business: "Connect first to suggest a meeting.",
-  events: "Connect first to send an invite.",
-};
-
 export function promptConnectBeforeInvite(mode: Mode) {
-  Alert.alert("Connect first", CONNECT_FIRST_MESSAGE[mode]);
+  Alert.alert(t("alerts.connectFirst.title"), t(`alerts.connectFirst.${mode}`));
 }
 
 type SubmitProfilePlannerInviteParams = {

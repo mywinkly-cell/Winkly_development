@@ -12,10 +12,12 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { getSubscriptionStatus, type SubscriptionStatus } from "@/lib/integrations/payments";
 
 export default function Payments() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -42,14 +44,14 @@ export default function Payments() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Payments</Text>
+          <Text style={styles.headerTitle}>{t("account.payments.title")}</Text>
           <View style={{ width: 60 }} />
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.title}>Payment methods</Text>
+          <Text style={styles.title}>{t("settings.paymentMethods")}</Text>
           <Text style={styles.subtitle}>
-            Add and manage your payment method for Premium and subscriptions.
+            {t("account.payments.subtitle")}
           </Text>
 
           {loading ? (
@@ -57,11 +59,9 @@ export default function Payments() {
           ) : (
             <>
               <View style={styles.box}>
-                <Text style={styles.boxTitle}>No payment method added</Text>
+                <Text style={styles.boxTitle}>{t("account.payments.noMethod")}</Text>
                 <Text style={styles.boxText}>
-                  {billingReady
-                    ? "Add a card or use in-app billing from your device store."
-                    : "Payment methods will be available when billing goes live."}
+                  {billingReady ? t("account.payments.addCardHint") : t("account.payments.notLiveHint")}
                 </Text>
               </View>
 
@@ -69,7 +69,7 @@ export default function Payments() {
                 <View style={styles.comingSoonBanner}>
                   <Ionicons name="information-circle-outline" size={18} color={theme.colors.textSecondary} />
                   <Text style={styles.comingSoonText}>
-                    Paid billing is coming soon. This screen is for preview — no charges yet.
+                    {t("account.payments.comingSoon")}
                   </Text>
                 </View>
               ) : null}
@@ -80,7 +80,7 @@ export default function Payments() {
                 activeOpacity={0.9}
                 disabled={!billingReady}
               >
-                <Text style={styles.primaryText}>Add payment method</Text>
+                <Text style={styles.primaryText}>{t("account.payments.addMethod")}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -88,7 +88,7 @@ export default function Payments() {
                 style={styles.secondaryBtn}
                 activeOpacity={0.9}
               >
-                <Text style={styles.secondaryText}>Manage subscription</Text>
+                <Text style={styles.secondaryText}>{t("account.payments.manageSubscription")}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -113,7 +113,7 @@ function createStyles(theme: AppTheme) {
       justifyContent: "center",
       ...theme.elevation(1),
     },
-    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary },
+    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary, flex: 1, textAlign: "center" },
 
     card: { backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.border, padding: 16 },
     title: { ...theme.type.h2, color: theme.colors.textPrimary, marginBottom: 6 },

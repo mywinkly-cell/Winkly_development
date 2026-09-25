@@ -4,6 +4,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { Card, Header, PrimaryButton, SecondaryButton, TextButton } from "@/components/ds";
@@ -15,29 +16,12 @@ import {
   type SubscriptionStatus,
 } from "@/lib/integrations/payments";
 import { trialDaysRemaining } from "@/lib/billing/subscriptionTier";
+import { formatAppDate } from "@/lib/i18n/appLocale";
 import type { SubscriptionTier } from "@/types";
 
-const PLAN_COPY: Record<
-  SubscriptionTier,
-  { label: string; description: string }
-> = {
-  free: {
-    label: "Free",
-    description: "Basic discovery & limited daily suggestions",
-  },
-  super: {
-    label: "Super",
-    description: "More Super Sparks per day, extra filters, limited AI",
-  },
-  premium: {
-    label: "Premium",
-    description: "AI-powered matching, concierge, and all features",
-  },
-  enterprise: {
-    label: "Enterprise",
-    description: "B2B features and team controls (coming soon)",
-  },
-};
+/** i18n keys: paywall.plans.<tier>.label / .description */
+const planLabelKey = (tier: SubscriptionTier) => `paywall.plans.${tier}.label`;
+const planDescriptionKey = (tier: SubscriptionTier) => `paywall.plans.${tier}.description`;
 
 const UPGRADE_TIERS: Array<Exclude<SubscriptionTier, "free" | "enterprise">> = [
   "super",
@@ -45,6 +29,7 @@ const UPGRADE_TIERS: Array<Exclude<SubscriptionTier, "free" | "enterprise">> = [
 ];
 
 export default function Subscription() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -66,7 +51,7 @@ export default function Subscription() {
 
   const onChoosePlan = async (tier: Exclude<SubscriptionTier, "free">) => {
     if (!status?.isBillingConfigured) {
-      setNotice("In-app billing is not live yet. Your current plan is shown above.");
+      setNotice(t("paywall.plans.notLive"));
       return;
     }
     setNotice(null);
@@ -75,36 +60,38 @@ export default function Subscription() {
     setPurchasing(null);
     if (result.ok) {
       await refresh();
-      setNotice(`You're now on ${PLAN_COPY[result.tier].label}.`);
+      setNotice(t("paywall.plans.nowOn", { plan: t(planLabelKey(result.tier)) }));
       return;
     }
     if (result.reason === "cancelled") return;
-    setNotice(result.message ?? "Purchase could not be completed. Try again later.");
+    if (__DEV__ && result.message) console.warn("[subscription] purchase failed:", result.message);
+    setNotice(result.reason === "not_configured" ? t("paywall.plans.notLive") : t("paywall.plans.purchaseFailed"));
   };
 
   const current = status?.tier ?? "free";
-  const currentCopy = PLAN_COPY[current];
 
   return (
     <SafeScreenView style={styles.screen}>
-      <Header title="Subscription plans" onBack={() => router.back()} />
+      <Header title={t("settings.subscriptionPlans")} onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Card style={styles.card}>
-          <Text style={styles.title}>Your plan</Text>
+          <Text style={styles.title}>{t("paywall.plans.yourPlan")}</Text>
           {loading ? (
             <ActivityIndicator color={theme.colors.primary} style={{ marginVertical: theme.spacing.md }} />
           ) : (
             <>
               <Card padding="md" elevation={0} style={styles.planBox}>
                 <Text style={styles.planName}>
-                  {currentCopy.label}
-                  {status?.isOnTrial ? " (Trial)" : ""}
+                  {status?.isOnTrial
+                    ? t("paywall.plans.trialName", { plan: t(planLabelKey(current)) })
+                    : t(planLabelKey(current))}
                 </Text>
-                <Text style={styles.planText}>{currentCopy.description}</Text>
+                <Text style={styles.planText}>{t(planDescriptionKey(current))}</Text>
                 {status?.activeUntil ? (
                   <Text style={styles.activeUntil}>
-                    {status.isOnTrial ? "Trial ends" : "Active until"}{" "}
-                    {new Date(status.activeUntil).toLocaleDateString()}
+                    {t(status.isOnTrial ? "paywall.plans.trialEnds" : "paywall.plans.activeUntil", {
+                      date: formatAppDate(new Date(status.activeUntil), { year: "numeric", month: "short", day: "numeric" }),
+                    })}
                   </Text>
                 ) : null}
               </Card>
@@ -113,9 +100,7 @@ export default function Subscription() {
                 <View style={styles.trialBanner}>
                   <Ionicons name="sparkles-outline" size={18} color={theme.colors.primary} />
                   <Text style={styles.trialText}>
-                    Your free Premium trial — {trialDaysRemaining(status.activeUntil)} day
-                    {trialDaysRemaining(status.activeUntil) === 1 ? "" : "s"} left. Subscribe to keep full
-                    AI and concierge, or continue on Free (limited AI) when it ends.
+                    {t("paywall.plans.trialBanner", { count: trialDaysRemaining(status.activeUntil) })}
                   </Text>
                 </View>
               ) : null}
@@ -124,27 +109,27 @@ export default function Subscription() {
                 <View style={styles.comingSoonBanner}>
                   <Ionicons name="information-circle-outline" size={18} color={theme.colors.textSecondary} />
                   <Text style={styles.comingSoonText}>
-                    Paid upgrades are coming soon. Plans below are for preview — no charges yet.
+                    {t("paywall.plans.comingSoon")}
                   </Text>
                 </View>
               ) : null}
 
               {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
-              <Text style={styles.sectionTitle}>Upgrade options</Text>
+              <Text style={styles.sectionTitle}>{t("paywall.plans.upgradeOptions")}</Text>
 
               {UPGRADE_TIERS.map((tier) => {
-                const copy = PLAN_COPY[tier];
+                const label = t(planLabelKey(tier));
                 // During the trial the user holds no paid plan yet, so keep both
                 // upgrade options actionable (promote them) rather than "Current".
                 const isCurrent = !status?.isOnTrial && current === tier;
                 const disabled = isCurrent || !status?.isBillingConfigured || purchasing !== null;
                 return (
                   <View key={tier} style={styles.planOption}>
-                    <Text style={styles.planOptionTitle}>{copy.label}</Text>
-                    <Text style={styles.planOptionSub}>{copy.description}</Text>
+                    <Text style={styles.planOptionTitle}>{label}</Text>
+                    <Text style={styles.planOptionSub}>{t(planDescriptionKey(tier))}</Text>
                     <PrimaryButton
-                      title={isCurrent ? "Current plan" : `Choose ${copy.label}`}
+                      title={isCurrent ? t("paywall.plans.currentPlan") : t("paywall.plans.choose", { plan: label })}
                       onPress={() => void onChoosePlan(tier)}
                       disabled={disabled}
                       loading={purchasing === tier}
@@ -153,11 +138,11 @@ export default function Subscription() {
                 );
               })}
 
-              <SecondaryButton title="Payment methods" onPress={() => router.push("/account/payments")} style={styles.secondaryBtn} />
+              <SecondaryButton title={t("settings.paymentMethods")} onPress={() => router.push("/account/payments")} style={styles.secondaryBtn} />
 
               {status?.isBillingConfigured ? (
                 <TextButton
-                  title="Manage subscription in store"
+                  title={t("paywall.plans.manageInStore")}
                   onPress={() => void openManageSubscriptions()}
                   style={styles.linkBtn}
                 />

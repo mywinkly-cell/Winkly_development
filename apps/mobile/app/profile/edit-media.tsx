@@ -4,14 +4,16 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/providers";
 import { getOwnProfileCore, upsertOwnProfileCore } from "@/lib/access/profiles";
 import { Card, Header, SecondaryButton, TextButton } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
-const SLOT_LABELS = ["Main photo", "Photo 2", "Photo 3", "Photo 4"];
+const SLOT_COUNT = 4;
 
 export default function EditMedia() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuth();
   const theme = useAppTheme();
@@ -39,17 +41,14 @@ export default function EditMedia() {
     const { error } = await upsertOwnProfileCore(user.id, { core_photos: corePhotos.length ? corePhotos : null });
     setSaving(false);
     if (error) {
-      Alert.alert("Error", "Could not save photos. Please try again.");
+      Alert.alert(t("common.error"), t("profile.edit.media.saveFailed"));
       return;
     }
     router.back();
   };
 
   const addReal = () => {
-    Alert.alert(
-      "Add photos (next)",
-      "To enable real uploads: install expo-image-picker, then upload to Supabase Storage and append URLs to core_photos."
-    );
+    Alert.alert(t("profile.edit.media.addPhotosTitle"), t("profile.edit.media.addPhotosMessage"));
   };
 
   if (!user) return null;
@@ -64,17 +63,18 @@ export default function EditMedia() {
   return (
     <View style={styles.screen}>
       <Header
-        title="Edit media"
+        title={t("profile.edit.media.title")}
         onBack={() => router.back()}
-        trailing={<TextButton title={saving ? "Saving…" : "Save"} onPress={save} disabled={saving} style={styles.saveBtn} />}
+        trailing={<TextButton title={saving ? t("profile.edit.saving") : t("common.save")} onPress={save} disabled={saving} style={styles.saveBtn} />}
       />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Card style={styles.card}>
-          <Text style={styles.title}>Photos</Text>
-          <Text style={styles.subtitle}>High-quality photos improve trust and match quality.</Text>
+          <Text style={styles.title}>{t("profile.photos")}</Text>
+          <Text style={styles.subtitle}>{t("profile.edit.media.subtitle")}</Text>
 
           <View style={styles.grid}>
-            {SLOT_LABELS.map((label, i) => {
+            {Array.from({ length: SLOT_COUNT }, (_, i) => {
+              const label = i === 0 ? t("profile.edit.media.mainPhoto") : t("profile.edit.media.photoN", { n: i + 1 });
               const filled = !!corePhotos[i];
               return (
                 <TouchableOpacity key={String(i)} style={styles.slot} activeOpacity={0.9}>
@@ -95,10 +95,10 @@ export default function EditMedia() {
             })}
           </View>
 
-          <SecondaryButton title="Enable real photo upload" onPress={addReal} style={styles.secondaryBtn} />
+          <SecondaryButton title={t("profile.edit.media.enableUpload")} onPress={addReal} style={styles.secondaryBtn} />
         </Card>
 
-        <Text style={styles.note}>Photo URLs are stored in your profile. Add image picker + Storage upload to add new photos.</Text>
+        <Text style={styles.note}>{t("profile.edit.media.note")}</Text>
       </ScrollView>
     </View>
   );

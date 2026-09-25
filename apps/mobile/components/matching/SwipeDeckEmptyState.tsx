@@ -7,7 +7,11 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
+import { formatApproxDistance } from "@/lib/distanceUnit";
+import { useAppLocaleTag } from "@/lib/i18n/appLocale";
 
 type SwipeDeckMode = "romance" | "friends";
 
@@ -23,32 +27,31 @@ type SwipeDeckEmptyStateProps = {
   onOpenDiscover: () => void;
 };
 
-const FALLBACK_TITLE =
-  "You've seen everyone nearby — try expanding your distance filter";
-
-function likesTeaserCopy(mode: SwipeDeckMode, count: number): string {
-  const noun = count === 1 ? "person" : "people";
-  if (mode === "romance") {
-    return `${count} ${noun} liked you`;
-  }
-  return `${count} ${noun} want to connect`;
+function likesTeaserCopy(t: TFunction, mode: SwipeDeckMode, count: number): string {
+  return mode === "romance"
+    ? t("emptyStates.swipeDeck.likedYou", { count })
+    : t("emptyStates.swipeDeck.wantToConnect", { count });
 }
 
 function getContextTitle(
+  t: TFunction,
+  localeTag: string,
   distanceKm: number | null | undefined,
   hasCustomFilters: boolean | undefined,
 ): string {
   if (distanceKm != null && distanceKm < 30) {
-    return `Your distance filter is set to ${distanceKm} km — try expanding it to see more people.`;
+    return t("emptyStates.swipeDeck.distanceFilter", {
+      distance: formatApproxDistance(distanceKm * 1000, undefined, localeTag),
+    });
   }
   if (hasCustomFilters === false) {
-    return "You've seen everyone nearby for now — new people join Winkly every day. Check back soon!";
+    return t("emptyStates.swipeDeck.seenEveryoneCheckBack");
   }
-  return FALLBACK_TITLE;
+  return t("emptyStates.swipeDeck.seenEveryone");
 }
 
-function seeWhoLikedLabel(mode: SwipeDeckMode): string {
-  return mode === "romance" ? "See who liked you" : "See who wants to connect";
+function seeWhoLikedLabel(t: TFunction, mode: SwipeDeckMode): string {
+  return mode === "romance" ? t("emptyStates.swipeDeck.seeWhoLiked") : t("emptyStates.swipeDeck.seeWhoConnect");
 }
 
 export function SwipeDeckEmptyState({
@@ -59,11 +62,13 @@ export function SwipeDeckEmptyState({
   onExpandRadius,
   onOpenDiscover,
 }: SwipeDeckEmptyStateProps) {
+  const { t } = useTranslation();
+  const localeTag = useAppLocaleTag();
   const theme = useAppTheme();
   const styles = createStyles(theme);
   const accent = theme.modeAccent(mode).primary;
   const softBg = theme.modeAccent(mode).bg;
-  const title = getContextTitle(distanceKm, hasCustomFilters);
+  const title = getContextTitle(t, localeTag, distanceKm, hasCustomFilters);
   const emphasizeDiscover = likesCount != null && likesCount > 0;
 
   return (
@@ -79,7 +84,7 @@ export function SwipeDeckEmptyState({
           <ActivityIndicator size="small" color={accent} />
         </View>
       ) : emphasizeDiscover ? (
-        <Text style={styles.likesSubtitle}>{likesTeaserCopy(mode, likesCount)}</Text>
+        <Text style={styles.likesSubtitle}>{likesTeaserCopy(t, mode, likesCount)}</Text>
       ) : null}
 
       {emphasizeDiscover ? (
@@ -90,10 +95,10 @@ export function SwipeDeckEmptyState({
             { backgroundColor: accent },
             pressed && styles.primaryBtnPressed,
           ]}
-          accessibilityLabel={seeWhoLikedLabel(mode)}
+          accessibilityLabel={seeWhoLikedLabel(t, mode)}
         >
           <Ionicons name="heart" size={20} color={theme.colors.onPrimary} />
-          <Text style={styles.primaryBtnText}>{seeWhoLikedLabel(mode)}</Text>
+          <Text style={styles.primaryBtnText}>{seeWhoLikedLabel(t, mode)}</Text>
         </Pressable>
       ) : (
         <Pressable
@@ -103,10 +108,10 @@ export function SwipeDeckEmptyState({
             { backgroundColor: accent },
             pressed && styles.primaryBtnPressed,
           ]}
-          accessibilityLabel="Expand search radius"
+          accessibilityLabel={t("emptyStates.swipeDeck.expandRadius")}
         >
           <Ionicons name="resize-outline" size={20} color={theme.colors.onPrimary} />
-          <Text style={styles.primaryBtnText}>Expand search radius</Text>
+          <Text style={styles.primaryBtnText}>{t("emptyStates.swipeDeck.expandRadius")}</Text>
         </Pressable>
       )}
 
@@ -114,19 +119,19 @@ export function SwipeDeckEmptyState({
         <Pressable
           onPress={onExpandRadius}
           style={({ pressed }) => [styles.secondaryLink, pressed && styles.secondaryLinkPressed]}
-          accessibilityLabel="Expand search radius"
+          accessibilityLabel={t("emptyStates.swipeDeck.expandRadius")}
         >
-          <Text style={[styles.secondaryLinkText, { color: accent }]}>Expand search radius</Text>
+          <Text style={[styles.secondaryLinkText, { color: accent }]}>{t("emptyStates.swipeDeck.expandRadius")}</Text>
           <Ionicons name="chevron-forward" size={18} color={accent} />
         </Pressable>
       ) : likesCount === null ? null : (
         <Pressable
           onPress={onOpenDiscover}
           style={({ pressed }) => [styles.discoverLink, pressed && styles.discoverLinkPressed]}
-          accessibilityLabel="Open Discover"
+          accessibilityLabel={t("emptyStates.swipeDeck.openDiscover")}
         >
           <Text style={[styles.discoverLinkText, { color: accent }]}>
-            Explore curated picks in Discover
+            {t("emptyStates.swipeDeck.explorePicks")}
           </Text>
           <Ionicons name="chevron-forward" size={18} color={accent} />
         </Pressable>
@@ -187,6 +192,8 @@ function createStyles(theme: AppTheme) {
       ...theme.type.button,
       fontFamily: theme.type.button.fontFamily,
       color: theme.colors.onPrimary,
+      flexShrink: 1,
+      textAlign: "center",
     },
     secondaryLink: {
       flexDirection: "row",

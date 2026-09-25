@@ -5,6 +5,7 @@
 import React from "react";
 import { View, Text, Modal, Pressable, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 
@@ -15,6 +16,7 @@ type Props = {
 };
 
 export function DiscoverUpgradeModal({ visible, primaryColor, onClose }: Props) {
+  const { t } = useTranslation();
   const router = useRouter();
 
   const goToPlans = () => {
@@ -24,33 +26,32 @@ export function DiscoverUpgradeModal({ visible, primaryColor, onClose }: Props) 
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close upgrade dialog" accessibilityRole="button">
+      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel={t("paywall.upgrade.closeA11y")} accessibilityRole="button">
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()} accessibilityRole="none">
           <View style={styles.iconWrap}>
             <Ionicons name="sparkles" size={32} color={primaryColor} />
           </View>
-          <Text style={styles.title}>See everyone who likes you</Text>
+          <Text style={styles.title}>{t("paywall.upgrade.title")}</Text>
           <Text style={styles.body}>
-            Upgrade to Super or Premium to unlock all profiles in this row, view full photos, and
-            match with more people every day.
+            {t("paywall.upgrade.body")}
           </Text>
 
           <Pressable
             style={[styles.primaryBtn, { backgroundColor: primaryColor }]}
             onPress={goToPlans}
             accessibilityRole="button"
-            accessibilityLabel="Choose Super or Premium subscription"
+            accessibilityLabel={t("paywall.upgrade.chooseA11y")}
           >
-            <Text style={styles.primaryBtnText}>Choose Super or Premium</Text>
+            <Text style={styles.primaryBtnText}>{t("paywall.upgrade.choose")}</Text>
           </Pressable>
 
           <Pressable
             style={styles.secondaryBtn}
             onPress={onClose}
             accessibilityRole="button"
-            accessibilityLabel="Maybe later"
+            accessibilityLabel={t("paywall.upgrade.later")}
           >
-            <Text style={styles.secondaryBtnText}>Maybe later</Text>
+            <Text style={styles.secondaryBtnText}>{t("paywall.upgrade.later")}</Text>
           </Pressable>
         </Pressable>
       </Pressable>
@@ -98,10 +99,11 @@ const styles = StyleSheet.create({
     width: "100%",
     borderRadius: Layout.radii.control,
     paddingVertical: 14,
+    paddingHorizontal: 16,
     alignItems: "center",
     marginBottom: 12,
   },
-  primaryBtnText: { ...Typography.button, color: Colors.white },
+  primaryBtnText: { ...Typography.button, color: Colors.white, textAlign: "center" },
   secondaryBtn: { paddingVertical: 10 },
   secondaryBtnText: { ...Typography.body, color: Colors.gray600 },
 });

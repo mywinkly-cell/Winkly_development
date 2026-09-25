@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Text, ScrollView, Alert, Linking, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { Card, Header, ListRow } from "@/components/ds";
@@ -19,6 +20,7 @@ const URL_IMPRINT = "https://mywinkly.de/imprint";
 const MAIL_SUPPORT = "mailto:customer-care@mywinkly.de";
 
 export default function Legal() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -30,7 +32,7 @@ export default function Legal() {
       if (!ok) throw new Error("Cannot open link");
       await Linking.openURL(url);
     } catch {
-      Alert.alert("Unavailable", "Link is not configured yet. Contact support for a copy.");
+      Alert.alert(t("account.legal.unavailableTitle"), t("account.legal.unavailableMessage"));
     }
   };
 
@@ -50,36 +52,36 @@ export default function Legal() {
 
   return (
     <SafeScreenView style={styles.screen}>
-      <Header title="Legal" onBack={() => router.back()} />
+      <Header title={t("settings.legal")} onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Card padding="none" style={styles.card}>
-          <Text style={styles.sectionTitle}>Terms & policies</Text>
+          <Text style={styles.sectionTitle}>{t("account.legal.termsPolicies")}</Text>
           <Text style={styles.sectionSubtitle}>
-            Terms of Service, Privacy Policy, Cookie notice, and Community Guidelines.
+            {t("account.legal.termsPoliciesSub")}
           </Text>
-          <Row title="Terms of Service" onPress={() => openUrl(URL_TERMS)} />
-          <Row title="Privacy Policy" onPress={() => openUrl(URL_PRIVACY)} />
-          <Row title="Cookies" onPress={() => openUrl(URL_COOKIES)} />
-          <Row title="Community Guidelines" onPress={() => openUrl(URL_COMMUNITY)} last />
+          <Row title={t("legal.termsOfService")} onPress={() => openUrl(URL_TERMS)} />
+          <Row title={t("legal.privacyPolicy")} onPress={() => openUrl(URL_PRIVACY)} />
+          <Row title={t("account.legal.cookies")} onPress={() => openUrl(URL_COOKIES)} />
+          <Row title={t("account.legal.communityGuidelines")} onPress={() => openUrl(URL_COMMUNITY)} last />
         </Card>
 
         <Card padding="none" style={styles.card}>
-          <Text style={styles.sectionTitle}>Data protection & Imprint</Text>
+          <Text style={styles.sectionTitle}>{t("account.legal.dataProtectionImprint")}</Text>
           <Text style={styles.sectionSubtitle}>
-            How we protect your data and legal information (Impressum).
+            {t("account.legal.dataProtectionImprintSub")}
           </Text>
-          <Row title="Data protection" onPress={() => openUrl(URL_PRIVACY)} />
-          <Row title="Imprint (Impressum)" onPress={() => openUrl(URL_IMPRINT)} last />
+          <Row title={t("account.legal.dataProtection")} onPress={() => openUrl(URL_PRIVACY)} />
+          <Row title={t("account.legal.imprint")} onPress={() => openUrl(URL_IMPRINT)} last />
         </Card>
 
         <Card padding="none" style={styles.card}>
-          <Text style={styles.sectionTitle}>Contact</Text>
-          <Row title="Contact Support" onPress={openMail} last />
+          <Text style={styles.sectionTitle}>{t("account.legal.contact")}</Text>
+          <Row title={t("account.legal.contactSupport")} onPress={openMail} last />
         </Card>
 
         <Text style={styles.note}>
-          If a link does not open, the page may not be published yet. Contact support for a copy of our policies.
+          {t("account.legal.note")}
         </Text>
       </ScrollView>
     </SafeScreenView>

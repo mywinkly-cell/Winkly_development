@@ -35,10 +35,16 @@ export const ALLOWED_AUDIO_MIME = [
 
 export type MediaKind = "image" | "video" | "audio";
 
+export type MediaValidationCode = "unsupported_type" | "too_large";
+
 export type MediaValidationResult = {
   ok: boolean;
-  /** Human-readable reason when `ok` is false (safe to show in an Alert). */
+  /** Why `ok` is false. Show the user `mediaValidationMessage(result, t)`, not `reason`. */
+  code?: MediaValidationCode;
+  /** English reason when `ok` is false — for logs; UI copy comes from `mediaValidationMessage`. */
   reason?: string;
+  /** Allowed file extensions, set when `code` is "unsupported_type". */
+  allowedTypes?: string[];
   /** Resolved size in bytes when it could be determined. */
   bytes?: number;
 };
@@ -91,11 +97,12 @@ export async function validateMediaForUpload(params: {
 
   // MIME check (only when the picker reported a type; some platforms omit it).
   if (mimeType && !allowed.includes(mimeType.toLowerCase())) {
+    const allowedTypes = allowed.map((m) => m.split("/")[1]);
     return {
       ok: false,
-      reason: `Unsupported file type (${mimeType}). Allowed: ${allowed
-        .map((m) => m.split("/")[1])
-        .join(", ")}.`,
+      code: "unsupported_type",
+      allowedTypes,
+      reason: `Unsupported file type (${mimeType}). Allowed: ${allowedTypes.join(", ")}.`,
     };
   }
 
@@ -104,6 +111,7 @@ export async function validateMediaForUpload(params: {
   if (typeof bytes === "number" && bytes > MAX_UPLOAD_BYTES) {
     return {
       ok: false,
+      code: "too_large",
       bytes,
       reason: `File is too large (${prettyBytes(bytes)}). Maximum allowed is ${prettyBytes(
         MAX_UPLOAD_BYTES
@@ -112,6 +120,27 @@ export async function validateMediaForUpload(params: {
   }
 
   return { ok: true, bytes: bytes ?? undefined };
+}
+
+/**
+ * Localized, user-facing message for a failed validation, or undefined when there's
+ * nothing specific to say (the caller then shows its own fallback).
+ */
+export function mediaValidationMessage(
+  result: MediaValidationResult,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string | undefined {
+  if (result.ok) return undefined;
+  if (result.code === "unsupported_type") {
+    return t("errors.media.unsupportedType", { types: (result.allowedTypes ?? []).join(", ") });
+  }
+  if (result.code === "too_large") {
+    return t("errors.media.tooLarge", {
+      size: result.bytes != null ? prettyBytes(result.bytes) : "",
+      max: prettyBytes(MAX_UPLOAD_BYTES),
+    });
+  }
+  return undefined;
 }
 
 /** Convenience wrapper for an expo-image-picker asset. */

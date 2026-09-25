@@ -14,11 +14,13 @@ import {
   StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/lib/supabase";
 import { requestAccountDeletion } from "@/lib/account/deleteAccount";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 export default function DeleteDeactivate() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -27,20 +29,20 @@ export default function DeleteDeactivate() {
 
   const onDeactivate = () => {
     Alert.alert(
-      "Deactivate account",
-      "Deactivation is not available yet. You can sign out below, or permanently delete your account.\n\n(Deactivation is not available yet. You can sign out below, or permanently delete your account. — we’ll ",
-      [{ text: "OK", style: "cancel" }]
+      t("account.delete.deactivateButton"),
+      t("account.delete.deactivateUnavailable"),
+      [{ text: t("common.ok"), style: "cancel" }]
     );
   };
 
   const onDelete = () => {
     Alert.alert(
-      "Permanently delete account",
-      "Your profile, messages, planner, events, and all data will be deleted. This cannot be undone.\n\n(Deactivation is not available yet. You can sign out below, or permanently delete your account. — in production we’ll Continue?",
+      t("account.delete.confirmTitle"),
+      t("account.delete.confirmMessage"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete my account",
+          text: t("account.delete.deleteButton"),
           style: "destructive",
           onPress: async () => {
             setDeleting(true);
@@ -51,9 +53,11 @@ export default function DeleteDeactivate() {
                 router.replace("/(auth)/splash");
                 return;
               }
-              Alert.alert("Deletion failed", (result as { error: string }).error ?? "Please try again or contact support.");
+              if (__DEV__) console.warn("[delete-account] failed:", (result as { error: string }).error);
+              Alert.alert(t("account.delete.failedTitle"), t("account.delete.failedMessage"));
             } catch (e) {
-              Alert.alert("Error", e instanceof Error ? e.message : "Something went wrong.");
+              if (__DEV__) console.warn("[delete-account] failed:", e);
+              Alert.alert(t("common.error"), t("account.delete.failedMessage"));
             } finally {
               setDeleting(false);
             }
@@ -70,7 +74,8 @@ export default function DeleteDeactivate() {
       if (error) throw error;
       router.replace("/(auth)/signin");
     } catch (err: any) {
-      Alert.alert("Sign out failed", err?.message ?? "Please try again.");
+      if (__DEV__) console.warn("[delete-deactivate] sign out failed:", err?.message);
+      Alert.alert(t("account.delete.signOutFailed"), t("common.tryAgain"));
     } finally {
       setLoading(false);
     }
@@ -83,32 +88,32 @@ export default function DeleteDeactivate() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Delete / Deactivate</Text>
+          <Text style={styles.headerTitle}>{t("account.delete.title")}</Text>
           <View style={{ width: 60 }} />
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.title}>Safety controls</Text>
+          <Text style={styles.title}>{t("account.delete.safetyControls")}</Text>
           <Text style={styles.subtitle}>
-            Manage account status. Deactivation is reversible. Deletion is permanent.
+            {t("account.delete.intro")}
           </Text>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Deactivate</Text>
+            <Text style={styles.sectionTitle}>{t("account.delete.deactivateSection")}</Text>
             <Text style={styles.sectionText}>
-              Hide your profile, stop recommendations, and pause chats. Reactivate by signing in.
+              {t("account.delete.deactivateBody")}
             </Text>
             <TouchableOpacity onPress={onDeactivate} style={styles.secondaryBtn} activeOpacity={0.9}>
-              <Text style={styles.secondaryText}>Deactivate account</Text>
+              <Text style={styles.secondaryText}>{t("account.delete.deactivateButton")}</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.hr} />
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Delete</Text>
+            <Text style={styles.sectionTitle}>{t("common.delete")}</Text>
             <Text style={styles.sectionText}>
-              Permanently delete your profile, messages, planner, and all data. This cannot be undone.
+              {t("account.delete.deleteBody")}
             </Text>
             <TouchableOpacity
               onPress={onDelete}
@@ -119,7 +124,7 @@ export default function DeleteDeactivate() {
               {deleting ? (
                 <ActivityIndicator size="small" color={theme.colors.error} />
               ) : (
-                <Text style={styles.dangerText}>Delete my account</Text>
+                <Text style={styles.dangerText}>{t("account.delete.deleteButton")}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -127,8 +132,8 @@ export default function DeleteDeactivate() {
           <View style={styles.hr} />
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Session</Text>
-            <Text style={styles.sectionText}>Sign out of this device.</Text>
+            <Text style={styles.sectionTitle}>{t("account.appInfo.session")}</Text>
+            <Text style={styles.sectionText}>{t("account.delete.signOutBody")}</Text>
             <TouchableOpacity
               onPress={onSignOut}
               style={[styles.primaryBtn, loading && { opacity: 0.7 }]}
@@ -138,14 +143,14 @@ export default function DeleteDeactivate() {
               {loading ? (
                 <ActivityIndicator color={theme.colors.onPrimary} />
               ) : (
-                <Text style={styles.primaryText}>Sign out</Text>
+                <Text style={styles.primaryText}>{t("auth.signOut")}</Text>
               )}
             </TouchableOpacity>
           </View>
         </View>
 
         <Text style={styles.note}>
-          Deletion removes your account and all data (including AI usage records). Third‑party services (e.g. analytics) may retain data per their policies.
+          {t("account.delete.note")}
         </Text>
       </ScrollView>
     </View>
@@ -171,7 +176,7 @@ function createStyles(theme: AppTheme) {
       justifyContent: "center",
       ...theme.elevation(1),
     },
-    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary },
+    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary, flex: 1, textAlign: "center" },
 
     card: {
       backgroundColor: theme.colors.surface,

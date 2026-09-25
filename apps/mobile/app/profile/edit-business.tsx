@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/providers";
 import {
   getOwnProfileMode,
@@ -18,9 +19,10 @@ import { canAccessBusinessRoutes } from "@/lib/modes/availability";
 import type { BusinessProfileType } from "@/types";
 import { BUSINESS_ORG_SUBTYPE_OPTIONS, normalizeBusinessType } from "@/lib/business/businessTypes";
 
-const BUSINESS_TYPE_OPTIONS: Array<{ value: BusinessProfileType; label: string }> = [
-  { value: "individual_professional", label: "Individual professional" },
-  ...BUSINESS_ORG_SUBTYPE_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+/** Chip labels: i18n keys profile.edit.business.type.<value>. */
+const BUSINESS_TYPE_OPTIONS: BusinessProfileType[] = [
+  "individual_professional",
+  ...BUSINESS_ORG_SUBTYPE_OPTIONS.map((o) => o.value),
 ];
 
 function toTagsArray(s: string): string[] {
@@ -53,6 +55,7 @@ export default function EditBusinessRoute() {
 }
 
 function EditBusiness() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user, accountType } = useAuth();
   const isBusinessAccount = accountType === "business";
@@ -105,7 +108,7 @@ function EditBusiness() {
       });
       setSaving(false);
       if (error) {
-        Alert.alert("Error", "Could not save profile. Please try again.");
+        Alert.alert(t("common.error"), t("profile.edit.saveFailed"));
         return;
       }
     } else {
@@ -119,7 +122,7 @@ function EditBusiness() {
       });
       setSaving(false);
       if (error) {
-        Alert.alert("Error", "Could not save profile. Please try again.");
+        Alert.alert(t("common.error"), t("profile.edit.saveFailed"));
         return;
       }
     }
@@ -138,35 +141,35 @@ function EditBusiness() {
   return (
     <View style={styles.screen}>
       <Header
-        title="Edit business"
+        title={t("profile.edit.business.title")}
         onBack={() => router.back()}
-        trailing={<TextButton title={saving ? "Saving…" : "Save"} onPress={save} disabled={saving} style={styles.saveBtn} />}
+        trailing={<TextButton title={saving ? t("profile.edit.saving") : t("common.save")} onPress={save} disabled={saving} style={styles.saveBtn} />}
       />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Card style={styles.card}>
-          <Text style={styles.title}>Business</Text>
-          <Text style={styles.subtitle}>Your professional identity for networking mode.</Text>
+          <Text style={styles.title}>{t("modes.business")}</Text>
+          <Text style={styles.subtitle}>{t("profile.edit.business.subtitle")}</Text>
 
           {!isBusinessAccount && (
             <Input
-              label="Role / Title"
+              label={t("profile.edit.business.role")}
               value={role}
               onChangeText={setRole}
-              placeholder="e.g. IT Project Manager"
+              placeholder={t("profile.edit.business.rolePlaceholder")}
               editable={!saving}
             />
           )}
 
           {isBusinessAccount ? (
             <>
-              <Text style={styles.label}>Profile type</Text>
+              <Text style={styles.label}>{t("profile.edit.business.profileType")}</Text>
               <View style={styles.typeRow}>
-                {BUSINESS_TYPE_OPTIONS.map((opt) => (
+                {BUSINESS_TYPE_OPTIONS.map((value) => (
                   <Chip
-                    key={opt.value}
-                    label={opt.label}
-                    selected={businessType === opt.value}
-                    onPress={() => setBusinessType(opt.value)}
+                    key={value}
+                    label={t(`profile.edit.business.type.${value}`)}
+                    selected={businessType === value}
+                    onPress={() => setBusinessType(value)}
                     disabled={saving}
                   />
                 ))}
@@ -175,26 +178,26 @@ function EditBusiness() {
           ) : null}
 
           <Input
-            label={isBusinessAccount ? "Business name" : "Company (optional)"}
+            label={isBusinessAccount ? t("profile.edit.business.businessName") : t("profile.edit.business.company")}
             value={company}
             onChangeText={setCompany}
-            placeholder="e.g. Winkly Technologies"
+            placeholder={t("profile.edit.business.companyPlaceholder")}
             editable={!saving}
           />
           <Input
-            label="Networking goal"
+            label={t("profile.edit.business.networkingGoal")}
             value={networkingGoal}
             onChangeText={setNetworkingGoal}
-            placeholder="e.g. partnerships, hiring, mentorship..."
+            placeholder={t("profile.edit.business.networkingGoalPlaceholder")}
             style={{ minHeight: 90, textAlignVertical: "top" }}
             multiline
             editable={!saving}
           />
           <Input
-            label="Skills / Focus (optional)"
+            label={t("profile.edit.business.skills")}
             value={skills}
             onChangeText={setSkills}
-            placeholder="e.g. PM, agile, analytics, automation..."
+            placeholder={t("profile.edit.business.skillsPlaceholder")}
             style={{ minHeight: 90, textAlignVertical: "top" }}
             multiline
             editable={!saving}

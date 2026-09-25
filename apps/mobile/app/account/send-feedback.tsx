@@ -6,6 +6,7 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, ScrollView, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeScreenView } from "@/components/SafeScreenView";
@@ -16,6 +17,7 @@ import { submitAppFeedback } from "@/lib/feedback/appFeedback";
 import { StarRating } from "@/components/planner/StarRating";
 
 export default function SendFeedbackScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -47,7 +49,7 @@ export default function SendFeedbackScreen() {
   return (
     <SafeScreenView style={styles.screen}>
       <Header
-        title="Send feedback"
+        title={t("account.feedback.title")}
         onBack={() => {
           Haptics.selectionAsync();
           if (router.canGoBack()) router.back();
@@ -58,10 +60,10 @@ export default function SendFeedbackScreen() {
         {submitted ? (
           <Card style={styles.card}>
             <Ionicons name="checkmark-circle" size={40} color={theme.colors.success} style={styles.thanksIcon} />
-            <Text style={styles.thanksTitle}>Thanks for the feedback!</Text>
-            <Text style={styles.thanksBody}>We read every note — it directly shapes what we build next.</Text>
+            <Text style={styles.thanksTitle}>{t("account.feedback.thanksTitle")}</Text>
+            <Text style={styles.thanksBody}>{t("account.feedback.thanksBody")}</Text>
             <TextButton
-              title="Send more feedback"
+              title={t("account.feedback.sendMore")}
               onPress={() => {
                 setSubmitted(false);
                 setRating(0);
@@ -72,7 +74,7 @@ export default function SendFeedbackScreen() {
           </Card>
         ) : (
           <Card style={styles.card}>
-            <Text style={styles.intro}>How&apos;s Winkly working for you so far? Anything is helpful — a quick rating, a few words, or both.</Text>
+            <Text style={styles.intro}>{t("account.feedback.intro")}</Text>
 
             <View style={styles.starsRow}>
               <StarRating value={rating} onChange={setRating} size={34} />
@@ -80,7 +82,7 @@ export default function SendFeedbackScreen() {
 
             <TextInput
               style={styles.noteInput}
-              placeholder="What's working, what's not, what should we add? (optional)"
+              placeholder={t("account.feedback.placeholder")}
               placeholderTextColor={theme.colors.textMuted}
               value={note}
               onChangeText={setNote}
@@ -88,7 +90,7 @@ export default function SendFeedbackScreen() {
               maxLength={1000}
             />
 
-            <PrimaryButton title="Send feedback" onPress={() => void handleSubmit()} disabled={!canSubmit} loading={submitting} />
+            <PrimaryButton title={t("account.feedback.title")} onPress={() => void handleSubmit()} disabled={!canSubmit} loading={submitting} />
           </Card>
         )}
       </ScrollView>

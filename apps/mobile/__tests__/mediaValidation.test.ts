@@ -1,6 +1,7 @@
 import * as FileSystem from "expo-file-system/legacy";
 import {
   MAX_UPLOAD_BYTES,
+  mediaValidationMessage,
   validateMediaForUpload,
   validatePickerAsset,
 } from "@/lib/mediaValidation";
@@ -52,5 +53,34 @@ describe("validateMediaForUpload", () => {
     const result = await validatePickerAsset({ uri: "file:///picked.jpg", mimeType: "image/png" }, "image");
     expect(result).toEqual({ ok: true, bytes: 4096 });
     expect(FileSystem.getInfoAsync).toHaveBeenCalledWith("file:///picked.jpg");
+  });
+});
+
+describe("mediaValidationMessage", () => {
+  const t = (key: string, options?: Record<string, unknown>) => `${key} ${JSON.stringify(options ?? {})}`;
+
+  it("returns nothing for a valid file", () => {
+    expect(mediaValidationMessage({ ok: true, bytes: 1 }, t)).toBeUndefined();
+  });
+
+  it("localizes an unsupported type with the allowed extensions", async () => {
+    const result = await validateMediaForUpload({ uri: "file:///a.gif", kind: "video", mimeType: "image/gif", size: 1 });
+    expect(result.code).toBe("unsupported_type");
+    expect(mediaValidationMessage(result, t)).toBe('errors.media.unsupportedType {"types":"mp4, quicktime"}');
+  });
+
+  it("localizes a too-large file with size and limit", async () => {
+    const result = await validateMediaForUpload({
+      uri: "file:///big.jpg",
+      kind: "image",
+      mimeType: "image/jpeg",
+      size: MAX_UPLOAD_BYTES + 1024 * 1024,
+    });
+    expect(result.code).toBe("too_large");
+    expect(mediaValidationMessage(result, t)).toBe('errors.media.tooLarge {"size":"51.0 MB","max":"50.0 MB"}');
+  });
+
+  it("falls back to undefined when there is no code", () => {
+    expect(mediaValidationMessage({ ok: false }, t)).toBeUndefined();
   });
 });

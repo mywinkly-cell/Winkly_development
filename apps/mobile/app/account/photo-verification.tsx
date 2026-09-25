@@ -13,6 +13,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { decode } from "base64-arraybuffer";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
@@ -22,6 +23,7 @@ import { submitPhotoVerification } from "@/lib/safety/photoVerification";
 import { getOwnProfileCore } from "@/lib/access/profiles";
 
 export default function PhotoVerificationScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuth();
   const theme = useAppTheme();
@@ -37,14 +39,14 @@ export default function PhotoVerificationScreen() {
       const core = await getOwnProfileCore(user.id);
       const photos = core?.core_photos ?? [];
       if (!photos.length) {
-        Alert.alert("Add a photo", "Add a main profile photo first, then verify.");
+        Alert.alert(t("account.photoVerification.addPhotoTitle"), t("account.photoVerification.addPhotoMessage"));
         setBusy(false);
         return;
       }
 
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert("Camera", "Camera access is needed for a quick selfie check.");
+        Alert.alert(t("account.photoVerification.cameraTitle"), t("account.photoVerification.cameraMessage"));
         setBusy(false);
         return;
       }
@@ -71,14 +73,15 @@ export default function PhotoVerificationScreen() {
       const row = await submitPhotoVerification(filePath, 0);
       setLastStatus(row.status);
       if (row.status === "verified") {
-        Alert.alert("Verified", "Your photo check completed.");
+        Alert.alert(t("account.photoVerification.status.verified"), t("account.photoVerification.verifiedMessage"));
       } else if (row.status === "pending") {
-        Alert.alert("Pending", "Verification is queued or awaiting provider configuration.");
+        Alert.alert(t("account.photoVerification.status.pending"), t("account.photoVerification.pendingMessage"));
       } else {
-        Alert.alert("Could not verify", "Try again in good lighting, facing the camera.");
+        Alert.alert(t("account.photoVerification.failedTitle"), t("account.photoVerification.failedMessage"));
       }
     } catch (e) {
-      Alert.alert("Error", e instanceof Error ? e.message : "Verification failed");
+      if (__DEV__) console.warn("[photo-verification] failed:", e);
+      Alert.alert(t("common.error"), t("account.photoVerification.error"));
     } finally {
       setBusy(false);
     }
@@ -87,17 +90,16 @@ export default function PhotoVerificationScreen() {
   return (
     <SafeScreenView style={styles.screen}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} accessibilityLabel="Back">
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} accessibilityLabel={t("common.back")}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Photo verification</Text>
+        <Text style={styles.headerTitle}>{t("settings.photoVerification")}</Text>
         <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.lead}>
-          Take a live selfie. We compare it to your profile photo using our verification service (AWS Rekognition when
-          configured on the backend).
+          {t("account.photoVerification.lead")}
         </Text>
 
         <TouchableOpacity
@@ -110,13 +112,17 @@ export default function PhotoVerificationScreen() {
           ) : (
             <>
               <Ionicons name="scan-outline" size={22} color={theme.colors.onPrimary} style={{ marginRight: 8 }} />
-              <Text style={styles.primaryBtnText}>Start verification</Text>
+              <Text style={styles.primaryBtnText}>{t("account.photoVerification.start")}</Text>
             </>
           )}
         </TouchableOpacity>
 
         {lastStatus ? (
-          <Text style={styles.status}>Last result: {lastStatus}</Text>
+          <Text style={styles.status}>
+            {t("account.photoVerification.lastResult", {
+              status: t(`account.photoVerification.status.${lastStatus}`, { defaultValue: lastStatus }),
+            })}
+          </Text>
         ) : null}
       </ScrollView>
     </SafeScreenView>
@@ -141,7 +147,7 @@ function createStyles(theme: AppTheme) {
       alignItems: "center",
       justifyContent: "center",
     },
-    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary },
+    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary, flex: 1, textAlign: "center" },
     scroll: { padding: 20, paddingBottom: 40 },
     lead: { ...theme.type.body, color: theme.colors.textSecondary, marginBottom: 20, lineHeight: 22 },
     primaryBtn: {
@@ -152,7 +158,7 @@ function createStyles(theme: AppTheme) {
       paddingVertical: 14,
       borderRadius: theme.radii.lg,
     },
-    primaryBtnText: { ...theme.type.body, color: theme.colors.onPrimary, fontWeight: "700" },
+    primaryBtnText: { ...theme.type.body, color: theme.colors.onPrimary, fontWeight: "700", flexShrink: 1, textAlign: "center" },
     disabled: { opacity: 0.7 },
     status: { ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 16 },
   });

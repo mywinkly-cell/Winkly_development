@@ -1,7 +1,8 @@
 import * as ImagePicker from "expo-image-picker";
 import { Alert } from "react-native";
 import { supabase } from "@/lib/supabase";
-import { validatePickerAsset } from "@/lib/mediaValidation";
+import { t } from "i18next";
+import { mediaValidationMessage, validatePickerAsset } from "@/lib/mediaValidation";
 import { CACHE_CONTROL_IMMUTABLE } from "@/lib/images/cdnImage";
 
 /** Pick and upload a business offer hero image. Returns public URL or null. */
@@ -9,7 +10,7 @@ export async function pickAndUploadOfferImage(userId: string): Promise<string | 
   try {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission required", "Please allow access to your photo library.");
+      Alert.alert(t("errors.permission.requiredTitle"), t("errors.permission.photoLibrary"));
       return null;
     }
 
@@ -24,7 +25,7 @@ export async function pickAndUploadOfferImage(userId: string): Promise<string | 
     const asset = result.assets[0];
     const check = await validatePickerAsset(asset, "image");
     if (!check.ok) {
-      Alert.alert("Image not allowed", check.reason ?? "Please pick a different image.");
+      Alert.alert(t("errors.upload.imageNotAllowed"), mediaValidationMessage(check, t) ?? t("errors.upload.pickDifferentImage"));
       return null;
     }
 
@@ -43,9 +44,8 @@ export async function pickAndUploadOfferImage(userId: string): Promise<string | 
     const { data: publicData } = supabase.storage.from("business-logos").getPublicUrl(filePath);
     return publicData.publicUrl;
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Please try again later.";
     console.error("Offer image upload error:", err);
-    Alert.alert("Upload failed", msg);
+    Alert.alert(t("errors.upload.failedTitle"), t("errors.upload.image"));
     return null;
   }
 }

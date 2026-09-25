@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/providers";
 import { getOwnProfileMode, upsertOwnProfileMode } from "@/lib/access/profiles";
 import { Card, Header, Input, TextButton } from "@/components/ds";
@@ -21,6 +22,7 @@ function fromInterestsArray(arr: string[] | null | undefined): string {
 }
 
 export default function EditFriends() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuth();
   const theme = useAppTheme();
@@ -59,7 +61,7 @@ export default function EditFriends() {
     });
     setSaving(false);
     if (error) {
-      Alert.alert("Error", "Could not save profile. Please try again.");
+      Alert.alert(t("common.error"), t("profile.edit.saveFailed"));
       return;
     }
     router.back();
@@ -77,38 +79,38 @@ export default function EditFriends() {
   return (
     <View style={styles.screen}>
       <Header
-        title="Edit friends"
+        title={t("profile.edit.friends.title")}
         onBack={() => router.back()}
-        trailing={<TextButton title={saving ? "Saving…" : "Save"} onPress={save} disabled={saving} style={styles.saveBtn} />}
+        trailing={<TextButton title={saving ? t("profile.edit.saving") : t("common.save")} onPress={save} disabled={saving} style={styles.saveBtn} />}
       />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Card style={styles.card}>
-          <Text style={styles.title}>Friends</Text>
-          <Text style={styles.subtitle}>Your interests and preferred meetup style.</Text>
+          <Text style={styles.title}>{t("modes.friends")}</Text>
+          <Text style={styles.subtitle}>{t("profile.edit.friends.subtitle")}</Text>
 
           <Input
-            label="Interests"
+            label={t("profile.edit.friends.interests")}
             value={interests}
             onChangeText={setInterests}
-            placeholder="e.g. gym, hiking, museums, latin dance…"
+            placeholder={t("profile.edit.friends.interestsPlaceholder")}
             style={{ minHeight: 90, textAlignVertical: "top" }}
             multiline
             editable={!saving}
           />
           <Input
-            label="Meetup style"
+            label={t("profile.edit.friends.meetupStyle")}
             value={meetupStyle}
             onChangeText={setMeetupStyle}
-            placeholder="e.g. small groups, active weekends, coffee chats…"
+            placeholder={t("profile.edit.friends.meetupStylePlaceholder")}
             style={{ minHeight: 90, textAlignVertical: "top" }}
             multiline
             editable={!saving}
           />
           <Input
-            label="Availability (optional)"
+            label={t("profile.edit.friends.availability")}
             value={availability}
             onChangeText={setAvailability}
-            placeholder="e.g. Tue/Thu evenings, weekends…"
+            placeholder={t("profile.edit.friends.availabilityPlaceholder")}
             editable={!saving}
           />
         </Card>

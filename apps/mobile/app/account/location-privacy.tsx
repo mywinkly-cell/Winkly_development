@@ -7,6 +7,7 @@
 import React from "react";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeScreenView } from "@/components/SafeScreenView";
@@ -16,32 +17,24 @@ import {
   setLocationPrecision,
   type LocationPrecision,
 } from "@/lib/location";
+import { formatApproxDistance } from "@/lib/distanceUnit";
+import { useAppLocaleTag } from "@/lib/i18n/appLocale";
 
 type Option = {
   value: LocationPrecision;
-  title: string;
-  subtitle: string;
   icon: keyof typeof Ionicons.glyphMap;
+  /** Grid size the server snaps coordinates to for this option, in meters. */
+  gridMeters: number;
 };
 
 const OPTIONS: Option[] = [
-  {
-    value: "approximate",
-    title: "Approximate",
-    subtitle:
-      "Recommended. Your location is rounded to roughly a 1 km area before it’s stored — enough for distance matching, but it never reveals where you actually are.",
-    icon: "shield-checkmark-outline",
-  },
-  {
-    value: "precise",
-    title: "Precise",
-    subtitle:
-      "More accurate distances. Your location is still rounded (to about 100 m) and your exact GPS position is never stored or shared with anyone.",
-    icon: "navigate-outline",
-  },
+  { value: "approximate", icon: "shield-checkmark-outline", gridMeters: 1000 },
+  { value: "precise", icon: "navigate-outline", gridMeters: 100 },
 ];
 
 export default function LocationPrivacy() {
+  const { t } = useTranslation();
+  const localeTag = useAppLocaleTag();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -84,14 +77,13 @@ export default function LocationPrivacy() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Location precision</Text>
+        <Text style={styles.headerTitle}>{t("account.location.title")}</Text>
         <View style={styles.placeholder} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.intro}>
-          Winkly uses your location to show how far away people are. Choose how precise that is. Either way, your raw
-          GPS position is never stored, and other people only ever see a rounded distance — never your coordinates.
+          {t("account.location.intro")}
         </Text>
 
         <View style={styles.card}>
@@ -119,8 +111,12 @@ export default function LocationPrivacy() {
                       />
                     </View>
                     <View style={styles.rowContent}>
-                      <Text style={styles.rowTitle}>{opt.title}</Text>
-                      <Text style={styles.rowSubtitle}>{opt.subtitle}</Text>
+                      <Text style={styles.rowTitle}>{t(`account.location.${opt.value}.title`)}</Text>
+                      <Text style={styles.rowSubtitle}>
+                        {t(`account.location.${opt.value}.subtitle`, {
+                          size: formatApproxDistance(opt.gridMeters, undefined, localeTag),
+                        })}
+                      </Text>
                     </View>
                     {saving === opt.value ? (
                       <ActivityIndicator color={theme.colors.primary} />
@@ -139,8 +135,7 @@ export default function LocationPrivacy() {
         </View>
 
         <Text style={styles.footnote}>
-          Switching to Approximate takes effect immediately. Switching to Precise applies the next time your location
-          refreshes.
+          {t("account.location.footnote")}
         </Text>
       </ScrollView>
     </SafeScreenView>

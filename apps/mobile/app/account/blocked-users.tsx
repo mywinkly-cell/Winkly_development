@@ -15,6 +15,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeScreenView } from "@/components/SafeScreenView";
@@ -26,6 +27,7 @@ import { getOtherUserCoreFields, modeDisplayName } from "@/lib/profile/otherUser
 type BlockedRow = { id: string; name: string; photoUrl: string | null };
 
 export default function BlockedUsers() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -60,9 +62,9 @@ export default function BlockedUsers() {
                   show_full_name: core.show_full_name,
                 },
                 "friends",
-                "Blocked user"
+                t("account.blocked.fallbackName")
               )
-            : "Blocked user";
+            : t("account.blocked.fallbackName");
           return { id, name, photoUrl: core?.core_photos?.[0] ?? null };
         })
       );
@@ -73,7 +75,7 @@ export default function BlockedUsers() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -82,12 +84,12 @@ export default function BlockedUsers() {
   const handleUnblock = (id: string, name: string) => {
     Haptics.selectionAsync();
     Alert.alert(
-      "Unblock user?",
-      `Unblock ${name}? They will not be notified. They will not automatically reappear in your recommendations.`,
+      t("account.blocked.unblockTitle"),
+      t("account.blocked.unblockMessage", { name }),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Unblock",
+          text: t("account.blocked.unblock"),
           onPress: async () => {
             try {
               await unblockUser(id);
@@ -95,7 +97,7 @@ export default function BlockedUsers() {
               setBlocked((prev) => prev.filter((b) => b.id !== id));
             } catch (e) {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-              Alert.alert("Error", "Could not unblock. Please try again.");
+              Alert.alert(t("common.error"), t("account.blocked.unblockFailed"));
               if (__DEV__) console.warn("[blocked-users] unblock failed", e);
             }
           },
@@ -107,10 +109,10 @@ export default function BlockedUsers() {
   return (
     <SafeScreenView style={styles.screen}>
       <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.8} accessibilityLabel="Back">
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.8} accessibilityLabel={t("common.back")}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Blocked users</Text>
+        <Text style={styles.headerTitle}>{t("account.blocked.title")}</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -121,9 +123,9 @@ export default function BlockedUsers() {
       ) : blocked.length === 0 ? (
         <View style={styles.empty}>
           <Ionicons name="happy-outline" size={64} color={theme.colors.border} />
-          <Text style={styles.emptyTitle}>No blocked users</Text>
+          <Text style={styles.emptyTitle}>{t("account.blocked.emptyTitle")}</Text>
           <Text style={styles.emptySubtitle}>
-            Users you block will appear here. You can unblock anytime; they will not be notified.
+            {t("account.blocked.emptySubtitle")}
           </Text>
         </View>
       ) : (
@@ -139,14 +141,14 @@ export default function BlockedUsers() {
               )}
               <View style={styles.rowContent}>
                 <Text style={styles.rowName}>{user.name}</Text>
-                <Text style={styles.rowHint}>Blocked</Text>
+                <Text style={styles.rowHint}>{t("account.blocked.status")}</Text>
               </View>
               <TouchableOpacity
                 onPress={() => handleUnblock(user.id, user.name)}
                 style={styles.unblockBtn}
                 activeOpacity={0.7}
               >
-                <Text style={styles.unblockText}>Unblock</Text>
+                <Text style={styles.unblockText}>{t("account.blocked.unblock")}</Text>
               </TouchableOpacity>
             </View>
           ))}

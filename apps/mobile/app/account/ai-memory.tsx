@@ -3,6 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView, Switch } f
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { useModeContext } from "@/providers";
@@ -11,12 +13,13 @@ import { requestDeleteAiMemory, type DeleteAiMemoryScope } from "@/lib/account/d
 
 const MODES: Mode[] = ["romance", "friends", "business", "events"];
 
-function scopeLabel(scope: DeleteAiMemoryScope): string {
-  if (scope === "all") return "All modes";
-  return scope.charAt(0).toUpperCase() + scope.slice(1);
+function scopeLabel(t: TFunction, scope: DeleteAiMemoryScope): string {
+  if (scope === "all") return t("account.aiMemory.allModes");
+  return t(`modes.${scope}`);
 }
 
 export default function AiMemoryScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -27,34 +30,31 @@ export default function AiMemoryScreen() {
   const [deleteSignals, setDeleteSignals] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const warning = useMemo(() => {
-    const bits = [
-      "This deletes Winkly’s AI memory for you (vector profile + cached AI plans + AI usage records).",
-      "It does not delete your account or chats.",
-    ];
-    if (deleteSignals) bits.push("It will also delete your concierge preference signals.");
-    return bits.join(" ");
-  }, [deleteSignals]);
+  const warning = useMemo(
+    () => (deleteSignals ? t("account.aiMemory.warningWithSignals") : t("account.aiMemory.warning")),
+    [deleteSignals, t],
+  );
 
   const confirmAndDelete = async () => {
     if (loading) return;
     Haptics.selectionAsync();
     Alert.alert(
-      "Delete AI memory?",
-      `${warning}\n\nScope: ${scopeLabel(scope)}\n\nYou can’t undo this.`,
+      t("account.aiMemory.confirmTitle"),
+      t("account.aiMemory.confirmMessage", { warning, scope: scopeLabel(t, scope) }),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("common.delete"),
           style: "destructive",
           onPress: async () => {
             setLoading(true);
             try {
               const res = await requestDeleteAiMemory({ scope, deleteConciergeSignals: deleteSignals });
               if ("error" in res) {
-                Alert.alert("Couldn’t delete AI memory", res.error);
+                if (__DEV__) console.warn("[ai-memory] delete failed:", res.error);
+                Alert.alert(t("account.aiMemory.deleteFailedTitle"), t("common.tryAgain"));
               } else {
-                Alert.alert("Deleted", "Your AI memory has been deleted.");
+                Alert.alert(t("account.aiMemory.deletedTitle"), t("account.aiMemory.deletedMessage"));
               }
             } finally {
               setLoading(false);
@@ -71,29 +71,29 @@ export default function AiMemoryScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>AI memory</Text>
+        <Text style={styles.headerTitle}>{t("account.aiMemory.title")}</Text>
         <View style={styles.placeholder} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>What this does</Text>
+          <Text style={styles.cardTitle}>{t("account.aiMemory.whatThisDoes")}</Text>
           <Text style={styles.body}>{warning}</Text>
           <Text style={styles.hint}>
-            If you want full deletion of your profile, chats, and planner data, use “Delete account” instead.
+            {t("account.aiMemory.fullDeletionHint")}
           </Text>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Scope</Text>
+          <Text style={styles.cardTitle}>{t("account.aiMemory.scope")}</Text>
 
           <TouchableOpacity
             onPress={() => setScope(activeMode)}
             style={[styles.choiceRow, scope === activeMode && styles.choiceRowActive]}
             activeOpacity={0.7}
           >
-            <Text style={styles.choiceTitle}>Current mode</Text>
-            <Text style={styles.choiceValue}>{scopeLabel(activeMode)}</Text>
+            <Text style={styles.choiceTitle}>{t("account.aiMemory.currentMode")}</Text>
+            <Text style={styles.choiceValue}>{scopeLabel(t, activeMode)}</Text>
           </TouchableOpacity>
 
           <View style={styles.divider} />
@@ -103,13 +103,12 @@ export default function AiMemoryScreen() {
             style={[styles.choiceRow, scope === "all" && styles.choiceRowActive]}
             activeOpacity={0.7}
           >
-            <Text style={styles.choiceTitle}>All modes</Text>
-            <Text style={styles.choiceValue}>All modes</Text>
+            <Text style={styles.choiceTitle}>{t("account.aiMemory.allModes")}</Text>
           </TouchableOpacity>
 
           <View style={styles.divider} />
 
-          <Text style={styles.sectionLabel}>Or pick a mode</Text>
+          <Text style={styles.sectionLabel}>{t("account.aiMemory.pickMode")}</Text>
           <View style={styles.pills}>
             {MODES.map((m) => (
               <TouchableOpacity
@@ -118,19 +117,19 @@ export default function AiMemoryScreen() {
                 style={[styles.pill, scope === m && styles.pillActive]}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.pillText, scope === m && styles.pillTextActive]}>{scopeLabel(m)}</Text>
+                <Text style={[styles.pillText, scope === m && styles.pillTextActive]}>{scopeLabel(t, m)}</Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Optional</Text>
+          <Text style={styles.cardTitle}>{t("account.aiMemory.optional")}</Text>
           <View style={styles.switchRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.choiceTitle}>Also delete concierge signals</Text>
+              <Text style={styles.choiceTitle}>{t("account.aiMemory.alsoDeleteSignals")}</Text>
               <Text style={styles.switchHint}>
-                Removes your saved preference signals used to personalize suggestions (avoid/prefer/noise).
+                {t("account.aiMemory.alsoDeleteSignalsHint")}
               </Text>
             </View>
             <Switch value={deleteSignals} onValueChange={setDeleteSignals} />
@@ -144,7 +143,7 @@ export default function AiMemoryScreen() {
           disabled={loading}
         >
           <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
-          <Text style={styles.dangerBtnText}>{loading ? "Deleting…" : "Delete AI memory"}</Text>
+          <Text style={styles.dangerBtnText}>{loading ? t("account.aiMemory.deleting") : t("account.aiMemory.deleteButton")}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeScreenView>

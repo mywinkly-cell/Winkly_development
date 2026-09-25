@@ -6,6 +6,7 @@
 // The image URI is normalized to a readable temp JPEG first to avoid issues with
 // content:// URIs and very large images on some Android devices.
 
+import { useTranslation } from "react-i18next";
 import React, { useEffect, useState } from "react";
 import { Modal, View, ActivityIndicator, Text, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -50,6 +51,7 @@ export function ImageCropModal({
   onSave,
   onClose,
 }: ImageCropModalProps) {
+  const { t } = useTranslation();
   const [normalizedUri, setNormalizedUri] = useState<string | null>(null);
   const [normalizing, setNormalizing] = useState(false);
 
@@ -77,7 +79,7 @@ export function ImageCropModal({
           <View style={styles.loadingOverlay}>
             <View style={styles.loadingBox}>
               <ActivityIndicator size="large" color={Colors.primaryViolet} />
-              <Text style={styles.loadingText}>Preparing crop…</Text>
+              <Text style={styles.loadingText}>{t("common.preparingCrop")}</Text>
             </View>
           </View>
         ) : (

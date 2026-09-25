@@ -8,6 +8,7 @@ import { Pressable, Text, View, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useAppTheme } from "@/constants/design-system";
 
 type HeaderProps = {
@@ -22,6 +23,7 @@ type HeaderProps = {
 export function Header({ title, onBack, leading, trailing, style }: HeaderProps) {
   const theme = useAppTheme();
   const router = useRouter();
+  const { t } = useTranslation();
 
   const handleBack = () => {
     Haptics.selectionAsync();
@@ -51,7 +53,7 @@ export function Header({ title, onBack, leading, trailing, style }: HeaderProps)
           <Pressable
             onPress={handleBack}
             accessibilityRole="button"
-            accessibilityLabel="Go back"
+            accessibilityLabel={t("common.goBackA11y")}
             hitSlop={8}
             style={{
               width: 40,

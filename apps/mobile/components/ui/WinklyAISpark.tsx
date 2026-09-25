@@ -5,6 +5,7 @@ import React from "react";
 import { TouchableOpacity, Alert, StyleSheet, ViewStyle, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Colors } from "@/constants/tokens";
 import { useModeContext } from "@/providers/ModeContextProvider";
@@ -36,47 +37,8 @@ export function SparklesIcon({ size, color }: { size: number; color: string }) {
   );
 }
 
-const FEATURE_UPSELL_MESSAGES: Record<
-  AIFeature,
-  { title: string; message: string }
-> = {
-  smart_matching:
-    {
-      title: "Smart AI matching",
-      message:
-        "Winkly AI analyses profiles and surfaces better matches for you. Upgrade to Super or Premium to use it.",
-    },
-  event_suggestions:
-    {
-      title: "AI event suggestions",
-      message:
-        "Get event suggestions that fit your interests and location. Upgrade to Super or Premium.",
-    },
-  planning_ideas:
-    {
-      title: "AI planning ideas",
-      message:
-        "You've used your 3 free AI plans for today. Upgrade to Super or Premium for unlimited planning ideas.",
-    },
-  chat_opener:
-    {
-      title: "AI chat opener",
-      message:
-        "Get a suggested first message to break the ice. Upgrade to Super or Premium.",
-    },
-  match_bridge:
-    {
-      title: "AI Match Bridge",
-      message:
-        "See the AI date idea Winkly created for you and your match — based on your shared interests. Upgrade to Premium to unlock it.",
-    },
-  concierge:
-    {
-      title: "Winkly AI concierge",
-      message:
-        "Get a full 5-star date plan with weather check, venues, and backup options. Upgrade to Premium for the complete experience.",
-    },
-};
+/** Upsell copy per feature: i18n keys paywall.aiFeature.<feature>.title / .message */
+const FREE_DAILY_AI_PLANS = 3;
 
 export type WinklyAISparkProps = {
   /** Which AI feature this Spark unlocks. Determines access and upsell copy. */
@@ -102,24 +64,28 @@ export function WinklyAISpark({
   style,
   accessibilityLabel,
 }: WinklyAISparkProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const { context } = useModeContext();
   const tier = context.subscription_tier;
   const hasAccess = canUseAIFeature(tier, feature);
-  const upsell = FEATURE_UPSELL_MESSAGES[feature];
 
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (hasAccess) {
       onPress?.();
     } else {
-      Alert.alert(upsell.title, upsell.message, [
-        { text: "Cancel", style: "cancel" },
+      Alert.alert(
+        t(`paywall.aiFeature.${feature}.title`),
+        t(`paywall.aiFeature.${feature}.message`, { count: FREE_DAILY_AI_PLANS }),
+        [
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "See plans",
+          text: t("paywall.limit.seePlans"),
           onPress: () => router.push("/account/subscription"),
         },
-      ]);
+        ],
+      );
     }
   };
 
@@ -130,7 +96,7 @@ export function WinklyAISpark({
       onPress={handlePress}
       activeOpacity={0.8}
       style={[styles.touchTarget, { minWidth: size + 16, minHeight: size + 16 }, style]}
-      accessibilityLabel={accessibilityLabel ?? (hasAccess ? "Use Winkly AI" : "Winkly AI — upgrade to use")}
+      accessibilityLabel={accessibilityLabel ?? (hasAccess ? t("paywall.aiFeature.useA11y") : t("paywall.aiFeature.lockedA11y"))}
       accessibilityRole="button"
     >
       <View style={styles.iconWrap}>

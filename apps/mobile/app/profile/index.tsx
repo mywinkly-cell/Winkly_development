@@ -5,12 +5,14 @@
 import React from "react";
 import { View, Text, ScrollView, StyleSheet, Image, Alert } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Card, Header, ListRow, PrimaryButton, TextButton } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { isModeAvailable } from "@/lib/modes/availability";
 import { supabase } from "@/lib/supabase";
 
 export default function ProfileIndex() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -20,16 +22,16 @@ export default function ProfileIndex() {
       await supabase.auth.signOut();
       router.replace("/(auth)/signin");
     } catch {
-      Alert.alert("Error", "Could not sign out. Please try again.");
+      Alert.alert(t("common.error"), t("profile.hub.signOutFailed"));
     }
   };
 
   return (
     <View style={styles.screen}>
       <Header
-        title="Profile"
+        title={t("profile.hub.title")}
         onBack={() => router.back()}
-        trailing={<TextButton title="Sign out" onPress={onSignOut} style={styles.signOutBtn} />}
+        trailing={<TextButton title={t("auth.signOut")} onPress={onSignOut} style={styles.signOutBtn} />}
       />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Card style={styles.heroCard}>
@@ -41,51 +43,51 @@ export default function ProfileIndex() {
             />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.name}>Your Winkly Profile</Text>
-            <Text style={styles.meta}>Edit your core profile and mode-specific sections.</Text>
+            <Text style={styles.name}>{t("profile.hub.heading")}</Text>
+            <Text style={styles.meta}>{t("profile.hub.subtitle")}</Text>
 
-            <PrimaryButton title="View profile" onPress={() => router.push("/profile/view-profile")} />
+            <PrimaryButton title={t("profile.viewProfile")} onPress={() => router.push("/profile/view-profile")} />
           </View>
         </Card>
 
-        <Text style={styles.sectionTitle}>Edit sections</Text>
+        <Text style={styles.sectionTitle}>{t("profile.hub.editSections")}</Text>
 
         <Card padding="none" style={styles.rowsCard}>
           <ListRow
-            title="Core profile"
-            subtitle="Name, bio, city, languages, basics"
+            title={t("account.profileSettings.coreProfile")}
+            subtitle={t("profile.hub.coreSub")}
             onPress={() => router.push("/profile/edit-core")}
             style={styles.row}
           />
           <ListRow
-            title="Romance"
-            subtitle="Preferences, relationship goals, dating details"
+            title={t("modes.romance")}
+            subtitle={t("profile.hub.romanceSub")}
             onPress={() => router.push("/profile/edit-romance")}
             style={styles.row}
           />
           <ListRow
-            title="Friends"
-            subtitle="Interests, activities, meetup style"
+            title={t("modes.friends")}
+            subtitle={t("profile.hub.friendsSub")}
             onPress={() => router.push("/profile/edit-friends")}
             style={styles.row}
           />
           {isModeAvailable("business") ? (
             <ListRow
-              title="Business"
-              subtitle="Role, company, networking focus"
+              title={t("modes.business")}
+              subtitle={t("profile.hub.businessSub")}
               onPress={() => router.push("/profile/edit-business")}
               style={styles.row}
             />
           ) : null}
           <ListRow
-            title="Media"
-            subtitle="Photos and profile visuals"
+            title={t("profile.hub.media")}
+            subtitle={t("profile.hub.mediaSub")}
             onPress={() => router.push("/profile/edit-media")}
             style={styles.row}
           />
           <ListRow
-            title="Verification"
-            subtitle="Verify your photo to earn a verified badge"
+            title={t("profile.verification")}
+            subtitle={t("profile.hub.verificationSub")}
             onPress={() => router.push("/account/photo-verification")}
             style={styles.row}
           />

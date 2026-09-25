@@ -1,4 +1,5 @@
 import { Alert } from "react-native";
+import { t } from "i18next";
 import { supabase } from "@/lib/supabase";
 import type { AppMode } from "@/lib/chats/types";
 
@@ -12,21 +13,21 @@ export async function removeModeConnection(otherUserId: string, mode: AppMode): 
   if (!row?.ok) throw new Error(row?.error ?? "Could not remove connection");
 }
 
-function removeTitle(mode: AppMode) {
-  return mode === "romance" ? "Unmatch" : "Remove contact";
-}
 
 export function confirmRemoveConnection(params: {
   mode: AppMode;
   firstName: string;
   onConfirm: () => void | Promise<void>;
 }) {
-  const title = removeTitle(params.mode);
+  const romance = params.mode === "romance";
+  const title = romance ? t("alerts.removeConnection.unmatch") : t("alerts.removeConnection.remove");
   Alert.alert(
     title,
-    `If you ${title.toLowerCase()} ${params.firstName}:\n\n• Your chat will be removed for both of you\n• You won't see each other in Discover or Home again\n• This does not block them`,
+    romance
+      ? t("alerts.removeConnection.unmatchMessage", { name: params.firstName })
+      : t("alerts.removeConnection.removeMessage", { name: params.firstName }),
     [
-      { text: "Cancel", style: "cancel" },
+      { text: t("common.cancel"), style: "cancel" },
       {
         text: title,
         style: "destructive",

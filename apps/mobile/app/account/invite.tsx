@@ -6,12 +6,14 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Share, Alert, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import * as Contacts from "expo-contacts/legacy";
 import { supabase } from "@/lib/supabase";
 import { hashContactIdentifiers } from "@/lib/contacts/matching";
 
 export default function Invite() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -21,12 +23,12 @@ export default function Invite() {
 
   const onShare = async () => {
     try {
-      const message =
-        "Join me on Winkly 💜\n\nPlan dates, meetups, and events together — with AI that suggests the best options for everyone.\n\n(Invite link placeholder)";
+      const message = t("account.invite.shareMessage");
 
       await Share.share({ message });
     } catch (err: any) {
-      Alert.alert("Share failed", err?.message ?? "Please try again.");
+      if (__DEV__) console.warn("[invite] share failed:", err?.message);
+      Alert.alert(t("account.invite.shareFailed"), t("common.tryAgain"));
     }
   };
 
@@ -36,7 +38,7 @@ export default function Invite() {
 
       const perm = await Contacts.requestPermissionsAsync();
       if (perm.status !== "granted") {
-        Alert.alert("Contacts permission", "To connect contacts, allow access in your device settings.");
+        Alert.alert(t("account.invite.permissionTitle"), t("account.invite.permissionMessage"));
         return;
       }
 
@@ -69,7 +71,8 @@ export default function Invite() {
       setMatchesCount(uniqueMatchedUsers.size);
       setContactsConnected(true);
     } catch (err: any) {
-      Alert.alert("Connect contacts failed", err?.message ?? "Please try again.");
+      if (__DEV__) console.warn("[invite] connect contacts failed:", err?.message);
+      Alert.alert(t("account.invite.connectFailed"), t("common.tryAgain"));
     } finally {
       setContactsLoading(false);
     }
@@ -82,12 +85,12 @@ export default function Invite() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Invite</Text>
+          <Text style={styles.headerTitle}>{t("account.invite.title")}</Text>
           <View style={{ width: 60 }} />
         </View>
 
         <Text style={styles.pageSubtitle}>
-          Invite friends, connect contacts, and plan together
+          {t("account.invite.subtitle")}
         </Text>
 
         {/* Connect contacts — primary CTA */}
@@ -95,9 +98,9 @@ export default function Invite() {
           <View style={styles.iconBadge}>
             <Ionicons name="people" size={28} color={theme.colors.primary} />
           </View>
-          <Text style={styles.cardTitle}>Connect your contacts</Text>
+          <Text style={styles.cardTitle}>{t("account.invite.connectTitle")}</Text>
           <Text style={styles.cardSubtitle}>
-            See who&apos;s already on Winkly and invite others. We only use hashed identifiers for matching — your contacts stay private.
+            {t("account.invite.connectBody")}
           </Text>
           <TouchableOpacity
             onPress={onConnectContacts}
@@ -111,12 +114,18 @@ export default function Invite() {
               <Ionicons name="link" size={20} color={theme.colors.onPrimary} style={{ marginRight: 8 }} />
             )}
             <Text style={styles.primaryText}>
-              {contactsConnected ? "Contacts connected" : contactsLoading ? "Connecting…" : "Connect contacts"}
+              {contactsConnected
+                ? t("account.invite.connected")
+                : contactsLoading
+                  ? t("account.invite.connecting")
+                  : t("account.invite.connect")}
             </Text>
           </TouchableOpacity>
           {matchesCount !== null ? (
             <Text style={styles.matchNote}>
-              {matchesCount === 0 ? "No matches yet — invite friends to join Winkly." : `${matchesCount} contact${matchesCount === 1 ? "" : "s"} already on Winkly.`}
+              {matchesCount === 0
+                ? t("account.invite.noMatches")
+                : t("account.invite.matches", { count: matchesCount })}
             </Text>
           ) : null}
         </View>
@@ -126,17 +135,17 @@ export default function Invite() {
           <View style={styles.iconBadgeSecondary}>
             <Ionicons name="share-social" size={24} color={theme.colors.primary} />
           </View>
-          <Text style={styles.cardTitle}>Share invite link</Text>
+          <Text style={styles.cardTitle}>{t("account.invite.shareTitle")}</Text>
           <Text style={styles.cardSubtitle}>
-            Send your friends a link to join Winkly. No contact access needed.
+            {t("account.invite.shareBody")}
           </Text>
           <TouchableOpacity onPress={onShare} style={styles.secondaryBtn} activeOpacity={0.9}>
-            <Text style={styles.secondaryText}>Share invite</Text>
+            <Text style={styles.secondaryText}>{t("account.invite.shareButton")}</Text>
           </TouchableOpacity>
         </View>
 
         <Text style={styles.footerNote}>
-          Contact matching requires your permission. We hash identifiers for privacy and never store raw contact data.
+          {t("account.invite.footer")}
         </Text>
       </ScrollView>
     </View>
@@ -162,7 +171,7 @@ function createStyles(theme: AppTheme) {
       justifyContent: "center",
       ...theme.elevation(1),
     },
-    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary },
+    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary, flex: 1, textAlign: "center" },
     pageSubtitle: {
       ...theme.type.body,
       color: theme.colors.textSecondary,
@@ -206,11 +215,12 @@ function createStyles(theme: AppTheme) {
       backgroundColor: theme.colors.primary,
       borderRadius: theme.radii.md,
       paddingVertical: 14,
+      paddingHorizontal: theme.spacing.md,
     },
     primaryBtnDisabled: {
       opacity: 0.7,
     },
-    primaryText: { ...theme.type.button, color: theme.colors.onPrimary },
+    primaryText: { ...theme.type.button, color: theme.colors.onPrimary, flexShrink: 1, textAlign: "center" },
 
     secondaryBtn: {
       backgroundColor: theme.colors.backgroundMuted,
@@ -220,7 +230,7 @@ function createStyles(theme: AppTheme) {
       borderWidth: 1,
       borderColor: theme.colors.border,
     },
-    secondaryText: { ...theme.type.button, color: theme.colors.textPrimary },
+    secondaryText: { ...theme.type.button, color: theme.colors.textPrimary, textAlign: "center" },
 
     footerNote: { ...theme.type.caption, color: theme.colors.textMuted, textAlign: "center", marginTop: 8 },
     matchNote: { ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 12 },

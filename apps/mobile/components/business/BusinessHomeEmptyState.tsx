@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography, Layout, FontFamily, Shadow } from "@/constants/tokens";
 
 type BusinessHomeEmptyStateProps = {
@@ -9,6 +10,7 @@ type BusinessHomeEmptyStateProps = {
 };
 
 export function BusinessHomeEmptyState({ onEditProfile, onExploreDiscover }: BusinessHomeEmptyStateProps) {
+  const { t } = useTranslation();
   const accent = Colors.business.primary;
   const softBg = Colors.business.secondary;
 
@@ -18,8 +20,8 @@ export function BusinessHomeEmptyState({ onEditProfile, onExploreDiscover }: Bus
         <Ionicons name="business-outline" size={36} color={accent} />
       </View>
 
-      <Text style={styles.title}>Grow your professional network</Text>
-      <Text style={styles.body}>Complete your Business profile to start connecting</Text>
+      <Text style={styles.title}>{t("emptyStates.businessHome.title")}</Text>
+      <Text style={styles.body}>{t("emptyStates.businessHome.body")}</Text>
 
       <Pressable
         onPress={onEditProfile}
@@ -28,19 +30,19 @@ export function BusinessHomeEmptyState({ onEditProfile, onExploreDiscover }: Bus
           { backgroundColor: accent },
           pressed && styles.primaryBtnPressed,
         ]}
-        accessibilityLabel="Complete Business profile"
+        accessibilityLabel={t("emptyStates.businessHome.completeA11y")}
       >
         <Ionicons name="create-outline" size={20} color={Colors.white} />
-        <Text style={styles.primaryBtnText}>Complete profile</Text>
+        <Text style={styles.primaryBtnText}>{t("emptyStates.businessHome.complete")}</Text>
       </Pressable>
 
       {onExploreDiscover ? (
         <Pressable
           onPress={onExploreDiscover}
           style={({ pressed }) => [styles.secondaryBtn, pressed && styles.secondaryBtnPressed]}
-          accessibilityLabel="Explore Discover"
+          accessibilityLabel={t("emptyStates.businessHome.explore")}
         >
-          <Text style={[styles.secondaryBtnText, { color: accent }]}>Explore Discover</Text>
+          <Text style={[styles.secondaryBtnText, { color: accent }]}>{t("emptyStates.businessHome.explore")}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -100,6 +102,8 @@ const styles = StyleSheet.create({
     ...Typography.button,
     fontFamily: FontFamily.heading,
     color: Colors.white,
+    flexShrink: 1,
+    textAlign: "center",
   },
   secondaryBtn: {
     marginTop: Layout.spacing.md,

@@ -4,38 +4,40 @@
 import React from "react";
 import { Text, ScrollView, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { Card, Header, PrimaryButton, SecondaryButton } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 export default function Premium() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
 
   return (
     <SafeScreenView style={styles.screen}>
-      <Header title="Premium" onBack={() => router.back()} />
+      <Header title={t("paywall.premium.title")} onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Card style={styles.card}>
-          <Text style={styles.title}>Winkly Premium</Text>
+          <Text style={styles.title}>{t("paywall.premium.heading")}</Text>
           <Text style={styles.subtitle}>
-            Upgrade for better discovery, smarter suggestions, and more control. (UI placeholder — pricing later)
+            {t("paywall.premium.subtitle")}
           </Text>
 
           <Card padding="md" elevation={0} style={styles.featureBox}>
-            <Text style={styles.featureTitle}>What you&apos;ll get</Text>
-            <Text style={styles.featureText}>• More daily recommendations</Text>
-            <Text style={styles.featureText}>• Advanced filters in Friends & Business</Text>
-            <Text style={styles.featureText}>• Priority AI matches</Text>
-            <Text style={styles.featureText}>• See who viewed / liked you (future)</Text>
+            <Text style={styles.featureTitle}>{t("paywall.premium.whatYouGet")}</Text>
+            <Text style={styles.featureText}>{t("paywall.premium.bullet", { text: t("paywall.premium.featureRecommendations") })}</Text>
+            <Text style={styles.featureText}>{t("paywall.premium.bullet", { text: t("paywall.premium.featureFilters") })}</Text>
+            <Text style={styles.featureText}>{t("paywall.premium.bullet", { text: t("paywall.premium.featurePriority") })}</Text>
+            <Text style={styles.featureText}>{t("paywall.premium.bullet", { text: t("paywall.premium.featureWhoLiked") })}</Text>
           </Card>
 
-          <PrimaryButton title="View plans" onPress={() => router.push("/account/subscription")} style={styles.actionBtn} />
-          <SecondaryButton title="Payment methods" onPress={() => router.push("/account/payments")} />
+          <PrimaryButton title={t("paywall.premium.viewPlans")} onPress={() => router.push("/account/subscription")} style={styles.actionBtn} />
+          <SecondaryButton title={t("settings.paymentMethods")} onPress={() => router.push("/account/payments")} />
 
           <Text style={styles.note}>
-            Next step: integrate billing (App Store / Play / Stripe) and store entitlement in Supabase.
+            {t("paywall.premium.note")}
           </Text>
         </Card>
       </ScrollView>

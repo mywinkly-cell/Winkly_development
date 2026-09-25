@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, Text, ScrollView, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
 import { useAuth } from "@/providers";
 import { getOwnProfileMode, upsertOwnProfileMode } from "@/lib/access/profiles";
@@ -13,6 +14,7 @@ import { supabase } from "@/lib/supabase";
 import { pickAndUploadVideo } from "@/lib/uploadMedia";
 
 export default function EditRomance() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { user } = useAuth();
   const theme = useAppTheme();
@@ -84,7 +86,7 @@ export default function EditRomance() {
     });
     setSaving(false);
     if (error) {
-      Alert.alert("Error", "Could not save profile. Please try again.");
+      Alert.alert(t("common.error"), t("profile.edit.saveFailed"));
       return;
     }
     router.back();
@@ -121,13 +123,14 @@ export default function EditRomance() {
         setVoiceUrl(data.publicUrl);
         setVoiceSeconds(durSec);
       } catch (e) {
-        Alert.alert("Voice", e instanceof Error ? e.message : "Upload failed");
+        if (__DEV__) console.warn("[edit-romance] voice upload failed:", e);
+        Alert.alert(t("profile.edit.romance.voicePrompt"), t("errors.upload.voice"));
       }
       return;
     }
     const perm = await AudioModule.requestRecordingPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("Microphone", "Permission is required to record.");
+      Alert.alert(t("profile.edit.romance.microphone"), t("profile.edit.romance.microphonePermission"));
       return;
     }
     await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
@@ -138,34 +141,34 @@ export default function EditRomance() {
   return (
     <View style={styles.screen}>
       <Header
-        title="Edit romance"
+        title={t("profile.edit.romance.title")}
         onBack={() => router.back()}
-        trailing={<TextButton title={saving ? "Saving…" : "Save"} onPress={save} disabled={saving} style={styles.saveBtn} />}
+        trailing={<TextButton title={saving ? t("profile.edit.saving") : t("common.save")} onPress={save} disabled={saving} style={styles.saveBtn} />}
       />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Card style={styles.card}>
-          <Text style={styles.title}>Romance</Text>
-          <Text style={styles.subtitle}>Your dating intentions and preferences.</Text>
+          <Text style={styles.title}>{t("modes.romance")}</Text>
+          <Text style={styles.subtitle}>{t("profile.edit.romance.subtitle")}</Text>
 
           <Input
-            label="Relationship goal"
+            label={t("profile.edit.romance.goal")}
             value={goal}
             onChangeText={setGoal}
-            placeholder="e.g. serious relationship, long-term, etc."
+            placeholder={t("profile.edit.romance.goalPlaceholder")}
           />
           <Input
-            label="What you value"
+            label={t("profile.edit.romance.values")}
             value={aboutLove}
             onChangeText={setAboutLove}
-            placeholder="e.g. honesty, growth, emotional maturity…"
+            placeholder={t("profile.edit.romance.valuesPlaceholder")}
             style={{ minHeight: 110, textAlignVertical: "top" }}
             multiline
           />
           <Input
-            label="Dealbreakers (optional)"
+            label={t("profile.edit.romance.dealbreakers")}
             value={dealbreakers}
             onChangeText={setDealbreakers}
-            placeholder="e.g. smoking, disrespect, etc."
+            placeholder={t("profile.edit.romance.dealbreakersPlaceholder")}
             style={{ minHeight: 90, textAlignVertical: "top" }}
             multiline
             editable={!saving}
@@ -173,35 +176,35 @@ export default function EditRomance() {
         </Card>
 
         <Card style={styles.card2}>
-          <Text style={styles.title}>Rich profile</Text>
-          <Text style={styles.subtitle}>Lifestyle tags, a short voice prompt, and optional video intro.</Text>
+          <Text style={styles.title}>{t("profile.edit.romance.richProfile")}</Text>
+          <Text style={styles.subtitle}>{t("profile.edit.romance.richProfileSub")}</Text>
 
           <Input
-            label="Lifestyle tags (comma-separated)"
+            label={t("profile.edit.romance.lifestyleTags")}
             value={lifestyleTags}
             onChangeText={setLifestyleTags}
-            placeholder="e.g. gym, foodie, travel, early bird"
+            placeholder={t("profile.edit.romance.lifestyleTagsPlaceholder")}
             editable={!saving}
           />
 
-          <Text style={styles.label}>Voice prompt</Text>
+          <Text style={styles.label}>{t("profile.edit.romance.voicePrompt")}</Text>
           <View style={styles.voiceRow}>
             <SecondaryButton
-              title={recorderState.isRecording ? "Stop & upload" : "Record voice prompt"}
+              title={recorderState.isRecording ? t("profile.edit.romance.stopUpload") : t("profile.edit.romance.recordVoice")}
               onPress={handleVoicePress}
               disabled={saving}
               style={recorderState.isRecording ? { backgroundColor: theme.colors.errorBg } : undefined}
             />
             {voiceUrl ? (
               <Text style={styles.hint} numberOfLines={2}>
-                Saved voice clip
+                {t("profile.edit.romance.voiceSaved")}
               </Text>
             ) : null}
           </View>
 
-          <Text style={styles.label}>Video bio (short clip)</Text>
+          <Text style={styles.label}>{t("profile.edit.romance.videoBio")}</Text>
           <SecondaryButton
-            title={videoBioUrl ? "Replace video bio" : "Pick video from library"}
+            title={videoBioUrl ? t("profile.edit.romance.replaceVideo") : t("profile.edit.romance.pickVideo")}
             onPress={async () => {
               if (!user?.id) return;
               const url = await pickAndUploadVideo(user.id, "romance");
@@ -211,7 +214,7 @@ export default function EditRomance() {
           />
           {videoBioUrl ? (
             <Text style={{ ...styles.hint, marginTop: theme.spacing.sm }} numberOfLines={1}>
-              Video added
+              {t("profile.edit.romance.videoAdded")}
             </Text>
           ) : null}
         </Card>
@@ -236,7 +239,7 @@ function createStyles(theme: AppTheme) {
       color: theme.colors.textSecondary,
       marginBottom: theme.spacing.xs,
     },
-    voiceRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm, marginBottom: theme.spacing.md },
+    voiceRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: theme.spacing.sm, marginBottom: theme.spacing.md },
     hint: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, flex: 1 },
   });
 }

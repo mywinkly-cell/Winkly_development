@@ -27,11 +27,11 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const CARD_WIDTH = Math.min(SCREEN_WIDTH * 0.9, 340);
 const CARD_HEIGHT = Math.min(SCREEN_HEIGHT * 0.55, 400);
 
-const MODES: { key: PreviewMode; label: string }[] = [
-  { key: "romance", label: "Romance" },
-  { key: "friends", label: "Friends" },
-  { key: "business", label: "Business" },
-  { key: "events", label: "Events" },
+const MODES: { key: PreviewMode }[] = [
+  { key: "romance" },
+  { key: "friends" },
+  { key: "business" },
+  { key: "events" },
 ];
 
 function getAge(birthday: string | Date | null): number | null {
@@ -46,7 +46,7 @@ function getAge(birthday: string | Date | null): number | null {
 }
 
 export default function ProfilePreview() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -154,10 +154,10 @@ export default function ProfilePreview() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <Header title="Card preview" onBack={() => { Haptics.selectionAsync(); router.back(); }} />
+        <Header title={t("profile.preview.cardTitle")} onBack={() => { Haptics.selectionAsync(); router.back(); }} />
         <View style={styles.center}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={styles.loadingText}>Loading…</Text>
+          <Text style={styles.loadingText}>{t("common.loading")}</Text>
         </View>
       </View>
     );
@@ -169,7 +169,7 @@ export default function ProfilePreview() {
   const birthday = data?.birthday ? new Date(data.birthday) : null;
   const age = getAge(birthday);
   // On matching cards we show first name only — never full name or account details
-  const displayName = firstName || "Your first name";
+  const displayName = firstName || t("profile.preview.firstNameFallback");
 
   const getPhoto = (m: PreviewMode): string | null => {
     if (m === "events") {
@@ -210,15 +210,15 @@ export default function ProfilePreview() {
 
   return (
     <View style={styles.screen}>
-      <Header title="Card preview" onBack={() => { Haptics.selectionAsync(); router.back(); }} />
+      <Header title={t("profile.preview.cardTitle")} onBack={() => { Haptics.selectionAsync(); router.back(); }} />
 
-      <Text style={styles.hint}>How you appear on matching cards</Text>
+      <Text style={styles.hint}>{t("profile.preview.cardHint")}</Text>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBar} contentContainerStyle={styles.tabBarContent}>
         {MODES.map((m) => (
           <Chip
             key={m.key}
-            label={m.label}
+            label={t(`modes.${m.key}`)}
             mode={m.key as ModeName}
             selected={activeMode === m.key}
             onPress={() => { Haptics.selectionAsync(); setActiveMode(m.key); }}

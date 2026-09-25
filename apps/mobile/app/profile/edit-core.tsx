@@ -16,7 +16,7 @@ import { useAppTheme, type AppTheme } from "@/constants/design-system";
 export default function EditCore() {
   const router = useRouter();
   const { user } = useAuth();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const fmtLoc = useFormatLocationDisplay();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -83,7 +83,7 @@ export default function EditCore() {
     }
     setSaving(false);
     if (error) {
-      Alert.alert("Error", "Could not save profile. Please try again.");
+      Alert.alert(t("common.error"), t("profile.edit.saveFailed"));
       return;
     }
     router.back();
@@ -99,44 +99,44 @@ export default function EditCore() {
   }
 
   const nightOwlOptions: { key: string; label: string; value: boolean | null }[] = [
-    { key: "yes", label: "Yes", value: true },
-    { key: "no", label: "No", value: false },
-    { key: "skip", label: "Skip", value: null },
+    { key: "yes", label: t("common.yes"), value: true },
+    { key: "no", label: t("common.no"), value: false },
+    { key: "skip", label: t("profile.edit.skip"), value: null },
   ];
 
   return (
     <View style={styles.screen}>
       <Header
-        title="Edit core"
+        title={t("profile.edit.core.title")}
         onBack={() => router.back()}
-        trailing={<TextButton title={saving ? "Saving…" : "Save"} onPress={save} disabled={saving} style={styles.saveBtn} />}
+        trailing={<TextButton title={saving ? t("profile.edit.saving") : t("common.save")} onPress={save} disabled={saving} style={styles.saveBtn} />}
       />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Card style={styles.card}>
-          <Text style={styles.title}>Basics</Text>
-          <Text style={styles.subtitle}>This information appears across all modes.</Text>
+          <Text style={styles.title}>{t("profile.edit.core.basics")}</Text>
+          <Text style={styles.subtitle}>{t("profile.edit.core.basicsSub")}</Text>
 
-          <Input label="First name" value={firstName} onChangeText={setFirstName} placeholder="Alex" editable={!saving} />
-          <Input label="Last name" value={lastName} onChangeText={setLastName} placeholder="Schmidt" editable={!saving} />
+          <Input label={t("profile.firstName")} value={firstName} onChangeText={setFirstName} placeholder={t("profile.edit.core.firstNamePlaceholder")} editable={!saving} />
+          <Input label={t("profile.lastName")} value={lastName} onChangeText={setLastName} placeholder={t("profile.edit.core.lastNamePlaceholder")} editable={!saving} />
           <Input
-            label="City"
+            label={t("profile.city")}
             value={city}
             onChangeText={setCity}
             onBlur={() => setCity((c) => (c.trim() ? fmtLoc(c) : c))}
-            placeholder="Munich"
+            placeholder={t("profile.edit.core.cityPlaceholder")}
             editable={!saving}
           />
           <Input
-            label="Bio"
+            label={t("profile.bio")}
             value={bio}
             onChangeText={setBio}
-            placeholder="Short intro about you…"
+            placeholder={t("profile.edit.core.bioPlaceholder")}
             style={{ minHeight: 110, textAlignVertical: "top" }}
             multiline
             editable={!saving}
           />
 
-          <Text style={styles.segmentLabel}>Night owl</Text>
+          <Text style={styles.segmentLabel}>{t("profile.edit.core.nightOwl")}</Text>
           <View style={styles.segmentRow}>
             {nightOwlOptions.map((opt) => (
               <Chip

@@ -12,7 +12,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { supabase } from "@/lib/supabase";
 import { Alert } from "react-native";
 import { decode } from "base64-arraybuffer";
-import { validatePickerAsset, validateMediaForUpload } from "@/lib/mediaValidation";
+import { mediaValidationMessage, validatePickerAsset, validateMediaForUpload } from "@/lib/mediaValidation";
 import { CACHE_CONTROL_IMMUTABLE } from "@/lib/images/cdnImage";
 import { CHAT_MEDIA_BUCKET, signChatMediaPath } from "@/lib/chats/chatMedia";
 import { t } from "i18next";
@@ -46,6 +46,12 @@ async function uploadProfilePhotoForModeration(
   return requestModeration("profile_photo", filePath);
 }
 
+/** Localized "upload failed" alert; the raw error is only logged (it's English, technical). */
+function alertUploadFailed(messageKey: string, err: unknown) {
+  if (__DEV__) console.warn("[upload] failed:", err instanceof Error ? err.message : err);
+  Alert.alert(t("errors.upload.failedTitle"), t(messageKey));
+}
+
 /** One kind, non-alarming notice for photos that were held or rejected. */
 function alertProfileModeration(summary: Pick<UploadModerationSummary, "held" | "blocked">) {
   if (summary.blocked > 0) {
@@ -66,7 +72,7 @@ export async function pickAndUploadPhoto(userId: string, mode: string = "core") 
     // ───── Request media permission
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission denied", "Media access is required to upload photos.");
+      Alert.alert(t("errors.permission.deniedTitle"), t("errors.permission.mediaPhotos"));
       return null;
     }
 
@@ -85,7 +91,7 @@ export async function pickAndUploadPhoto(userId: string, mode: string = "core") 
     // ───── Validate before any network call (size + MIME)
     const check = await validatePickerAsset(asset, "image");
     if (!check.ok) {
-      Alert.alert("Photo not allowed", check.reason ?? "Please pick a different photo.");
+      Alert.alert(t("errors.upload.photoNotAllowed"), mediaValidationMessage(check, t) ?? t("errors.upload.pickDifferentPhoto"));
       return null;
     }
 
@@ -95,7 +101,7 @@ export async function pickAndUploadPhoto(userId: string, mode: string = "core") 
     alertProfileModeration({ held: res.status === "block" ? 0 : 1, blocked: res.status === "block" ? 1 : 0 });
     return null;
   } catch (err: any) {
-    Alert.alert("Upload failed", err.message ?? "Could not upload photo.");
+    alertUploadFailed("errors.upload.photo", err);
     return null;
   }
 }
@@ -110,7 +116,7 @@ export async function pickAndUploadVideo(userId: string, mode: string) {
   try {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission denied", "Media access is required to upload videos.");
+      Alert.alert(t("errors.permission.deniedTitle"), t("errors.permission.mediaVideos"));
       return null;
     }
 
@@ -126,7 +132,7 @@ export async function pickAndUploadVideo(userId: string, mode: string) {
     // ───── Validate before any network call (size + MIME)
     const check = await validatePickerAsset(asset, "video");
     if (!check.ok) {
-      Alert.alert("Video not allowed", check.reason ?? "Please pick a different video.");
+      Alert.alert(t("errors.upload.videoNotAllowed"), mediaValidationMessage(check, t) ?? t("errors.upload.pickDifferentVideo"));
       return null;
     }
 
@@ -151,7 +157,7 @@ export async function pickAndUploadVideo(userId: string, mode: string) {
     const { data } = supabase.storage.from("user-videos").getPublicUrl(filePath);
     return data.publicUrl;
   } catch (err: any) {
-    Alert.alert("Upload failed", err.message ?? "Could not upload video.");
+    alertUploadFailed("errors.upload.video", err);
     return null;
   }
 }
@@ -168,7 +174,7 @@ export async function pickAndUploadChatImages(
   try {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert("Permission denied", "Media access is required to add photos.");
+      Alert.alert(t("errors.permission.deniedTitle"), t("errors.permission.mediaAddPhotos"));
       return [];
     }
 
@@ -190,7 +196,7 @@ export async function pickAndUploadChatImages(
       // ───── Validate each image before upload (size + MIME)
       const check = await validatePickerAsset(asset, "image");
       if (!check.ok) {
-        Alert.alert("Photo skipped", check.reason ?? "One photo was not allowed.");
+        Alert.alert(t("errors.upload.photoSkipped"), mediaValidationMessage(check, t) ?? t("errors.upload.onePhotoNotAllowed"));
         continue;
       }
 
@@ -234,7 +240,7 @@ export async function pickAndUploadChatImages(
 
     return attachments;
   } catch (err: any) {
-    Alert.alert("Upload failed", err.message ?? "Could not add photos.");
+    alertUploadFailed("errors.upload.addPhotos", err);
     return [];
   }
 }
@@ -264,7 +270,7 @@ export async function uploadLocalPhotosModerated(
       const contentType = isPng ? "image/png" : "image/jpeg";
       const check = await validateMediaForUpload({ uri, kind: "image", mimeType: contentType });
       if (!check.ok) {
-        Alert.alert("Photo skipped", check.reason ?? "One photo was too large to upload.");
+        Alert.alert(t("errors.upload.photoSkipped"), mediaValidationMessage(check, t) ?? t("errors.upload.onePhotoTooLarge"));
         continue;
       }
       const base64 = await FileSystem.readAsStringAsync(uri, {
@@ -280,7 +286,7 @@ export async function uploadLocalPhotosModerated(
       results.push({ kind: "moderated", res });
     } catch (err: any) {
       results.push({ kind: "failed" });
-      Alert.alert("Upload failed", err?.message ?? "Could not upload a photo.");
+      alertUploadFailed("errors.upload.aPhoto", err);
     }
   }
   const summary = summarizeProfileUploads(results);
@@ -316,7 +322,7 @@ export async function uploadLocalVideos(
     try {
       const check = await validateMediaForUpload({ uri, kind: "video", mimeType: "video/mp4" });
       if (!check.ok) {
-        Alert.alert("Video skipped", check.reason ?? "One video was too large to upload.");
+        Alert.alert(t("errors.upload.videoSkipped"), mediaValidationMessage(check, t) ?? t("errors.upload.oneVideoTooLarge"));
         continue;
       }
       const response = await fetch(uri);
@@ -329,7 +335,7 @@ export async function uploadLocalVideos(
       const { data } = supabase.storage.from("user-videos").getPublicUrl(filePath);
       out.push(data.publicUrl);
     } catch (err: any) {
-      Alert.alert("Upload failed", err?.message ?? "Could not upload a video.");
+      alertUploadFailed("errors.upload.aVideo", err);
     }
   }
   return out;
@@ -348,7 +354,7 @@ export async function uploadChatVoiceFromUri(
   try {
     const check = await validateMediaForUpload({ uri: fileUri, kind: "audio", mimeType: "audio/mp4" });
     if (!check.ok) {
-      Alert.alert("Voice message not sent", check.reason ?? "Recording is too large.");
+      Alert.alert(t("errors.upload.voiceNotSent"), mediaValidationMessage(check, t) ?? t("errors.upload.recordingTooLarge"));
       return null;
     }
     const response = await fetch(fileUri);
@@ -362,7 +368,7 @@ export async function uploadChatVoiceFromUri(
     if (error) throw error;
     return { type: "audio", path, url: await signChatMediaPath(path), name: "Voice message" };
   } catch (err: unknown) {
-    Alert.alert("Upload failed", err instanceof Error ? err.message : "Could not send voice message.");
+    alertUploadFailed("errors.upload.voice", err);
     return null;
   }
 }

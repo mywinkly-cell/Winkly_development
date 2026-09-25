@@ -85,24 +85,24 @@ export default function ProfileSettingsScreen() {
 
   return (
     <SafeScreenView style={styles.screen}>
-      <Header title="Profile Settings" onBack={() => router.back()} />
+      <Header title={t("account.profileSettings.title")} onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <Card style={styles.card}>
-          <Text style={styles.cardTitle}>Core profile</Text>
-          <Text style={styles.cardSubtitle}>Name, photos, bio, location, languages</Text>
-          <PrimaryButton title="Open Core Profile" onPress={() => router.push("/profile")} style={styles.actionBtn} />
+          <Text style={styles.cardTitle}>{t("account.profileSettings.coreProfile")}</Text>
+          <Text style={styles.cardSubtitle}>{t("account.profileSettings.coreProfileSub")}</Text>
+          <PrimaryButton title={t("account.profileSettings.openCoreProfile")} onPress={() => router.push("/profile")} style={styles.actionBtn} />
         </Card>
 
         <Card style={styles.card}>
-          <Text style={styles.cardTitle}>Sub-profiles</Text>
-          <Text style={styles.cardSubtitle}>Friends & Business preferences, interests, goals</Text>
-          <SecondaryButton title="Manage Sub-profiles (placeholder)" onPress={() => router.push("/profile")} style={styles.actionBtn} />
+          <Text style={styles.cardTitle}>{t("account.profileSettings.subProfiles")}</Text>
+          <Text style={styles.cardSubtitle}>{t("account.profileSettings.subProfilesSub")}</Text>
+          <SecondaryButton title={t("account.profileSettings.manageSubProfiles")} onPress={() => router.push("/profile")} style={styles.actionBtn} />
         </Card>
 
         <Card padding="none" style={styles.card}>
-          <Text style={{ ...styles.cardTitle, padding: theme.spacing.lg, paddingBottom: 0 }}>Account</Text>
-          <ListRow title="Open Account Hub" onPress={() => router.push("/account")} style={styles.row} />
+          <Text style={{ ...styles.cardTitle, padding: theme.spacing.lg, paddingBottom: 0 }}>{t("settings.account")}</Text>
+          <ListRow title={t("account.profileSettings.openAccountHub")} onPress={() => router.push("/account")} style={styles.row} />
           {isAccountTypeAvailable(target) ? (
             <ListRow
               title={switchLabel}
@@ -112,7 +112,7 @@ export default function ProfileSettingsScreen() {
             />
           ) : null}
           <ListRow
-            title="Delete / Deactivate"
+            title={t("account.delete.title")}
             destructive
             onPress={() => router.push("/account/delete-deactivate")}
             style={styles.row}

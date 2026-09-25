@@ -6,6 +6,7 @@
 import React, { useState } from "react";
 import { View, Text, ScrollView, Alert, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
@@ -18,6 +19,7 @@ const APP_VERSION = Constants.expoConfig?.version ?? "1.0.0";
 const BUILD_NUMBER = Constants.expoConfig?.ios?.buildNumber ?? Constants.expoConfig?.android?.versionCode ?? "1";
 
 export default function AppInfo() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -26,14 +28,12 @@ export default function AppInfo() {
   const handleLogout = (allDevices: boolean) => {
     Haptics.selectionAsync();
     Alert.alert(
-      allDevices ? "Sign out from all devices?" : "Sign out?",
-      allDevices
-        ? "You will be signed out on this device and all other devices where you're logged in."
-        : "You will be signed out on this device only.",
+      allDevices ? t("account.appInfo.signOutAllTitle") : t("account.appInfo.signOutTitle"),
+      allDevices ? t("account.appInfo.signOutAllMessage") : t("account.appInfo.signOutMessage"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Sign out",
+          text: t("auth.signOut"),
           style: "destructive",
           onPress: async () => {
             setSigningOut(true);
@@ -47,7 +47,7 @@ export default function AppInfo() {
               }
               router.replace("/(auth)/signin");
             } catch (_err) {
-              Alert.alert("Error", "Could not sign out.");
+              Alert.alert(t("common.error"), t("account.appInfo.signOutFailed"));
             } finally {
               setSigningOut(false);
             }
@@ -59,33 +59,33 @@ export default function AppInfo() {
 
   return (
     <SafeScreenView style={styles.screen}>
-      <Header title="App Info & Logout" onBack={() => router.back()} />
+      <Header title={t("account.appInfo.title")} onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Card style={styles.card}>
-          <Text style={styles.cardTitle}>About Winkly</Text>
+          <Text style={styles.cardTitle}>{t("account.appInfo.about")}</Text>
           <View style={styles.row}>
-            <Text style={styles.label}>Version</Text>
+            <Text style={styles.label}>{t("account.appInfo.version")}</Text>
             <Text style={styles.value}>{APP_VERSION}</Text>
           </View>
           <View style={styles.row}>
-            <Text style={styles.label}>Build</Text>
+            <Text style={styles.label}>{t("account.appInfo.build")}</Text>
             <Text style={styles.value}>{BUILD_NUMBER}</Text>
           </View>
           <ListRow
-            title="What's new"
+            title={t("account.appInfo.whatsNew")}
             onPress={() => {
               Haptics.selectionAsync();
-              Alert.alert("What's new", "Release notes will appear here.");
+              Alert.alert(t("account.appInfo.whatsNew"), t("account.appInfo.whatsNewMessage"));
             }}
             style={styles.linkRow}
           />
         </Card>
 
         <Card padding="none" style={styles.card}>
-          <Text style={{ ...styles.cardTitle, padding: theme.spacing.lg, paddingBottom: 0 }}>Session</Text>
+          <Text style={{ ...styles.cardTitle, padding: theme.spacing.lg, paddingBottom: 0 }}>{t("account.appInfo.session")}</Text>
           <ListRow
-            title="Sign out (this device)"
+            title={t("account.appInfo.signOutThisDevice")}
             disabled={signingOut}
             onPress={() => !signingOut && handleLogout(false)}
             style={styles.sessionRow}
@@ -98,7 +98,7 @@ export default function AppInfo() {
             }
           />
           <ListRow
-            title="Sign out from all devices"
+            title={t("account.appInfo.signOutAllDevices")}
             disabled={signingOut}
             onPress={() => !signingOut && handleLogout(true)}
             style={{ ...styles.sessionRow, ...styles.rowBorder }}

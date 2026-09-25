@@ -6,6 +6,7 @@
 import React from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeScreenView } from "@/components/SafeScreenView";
@@ -13,6 +14,7 @@ import { Card, Header, ListRow } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 export default function PrivacySafety() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -48,31 +50,31 @@ export default function PrivacySafety() {
 
   return (
     <SafeScreenView style={styles.screen}>
-      <Header title="Privacy & Safety" onBack={() => router.back()} />
+      <Header title={t("account.privacy.title")} onBack={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>Discovery & visibility</Text>
+        <Text style={styles.sectionTitle}>{t("account.privacy.discoverySection")}</Text>
         <Card padding="none" style={styles.card}>
-          <Row title="Profile visibility" subtitle="Control who can see and discover you" onPress={() => {}} icon="eye-outline" />
-          <Row title="Recommendation preferences" subtitle="Adjust how you appear in feeds" onPress={() => {}} icon="options-outline" />
-          <Row title="Location & radius" subtitle="City suggestions, discovery distance, recommendations" onPress={() => router.push("/planner/settings")} icon="location-outline" />
-          <Row title="Location precision" subtitle="Exact or approximate — your raw GPS is never stored" onPress={() => router.push("/account/location-privacy" as never)} icon="navigate-outline" />
-          <Row title="Photo verification" subtitle="Selfie check against your profile photo" onPress={() => router.push("/account/photo-verification" as never)} icon="camera-outline" />
-          <Row title="Data sharing permissions" subtitle="What we share with partners" onPress={() => router.push("/account/ai-memory")} icon="share-social-outline" last />
+          <Row title={t("account.privacy.visibility")} subtitle={t("account.privacy.visibilitySub")} onPress={() => {}} icon="eye-outline" />
+          <Row title={t("account.privacy.recommendations")} subtitle={t("account.privacy.recommendationsSub")} onPress={() => {}} icon="options-outline" />
+          <Row title={t("account.privacy.locationRadius")} subtitle={t("account.privacy.locationRadiusSub")} onPress={() => router.push("/planner/settings")} icon="location-outline" />
+          <Row title={t("account.location.title")} subtitle={t("account.privacy.locationPrecisionSub")} onPress={() => router.push("/account/location-privacy" as never)} icon="navigate-outline" />
+          <Row title={t("settings.photoVerification")} subtitle={t("account.privacy.photoVerificationSub")} onPress={() => router.push("/account/photo-verification" as never)} icon="camera-outline" />
+          <Row title={t("account.privacy.dataSharing")} subtitle={t("account.privacy.dataSharingSub")} onPress={() => router.push("/account/ai-memory")} icon="share-social-outline" last />
         </Card>
 
-        <Text style={styles.sectionTitle}>AI & data controls</Text>
+        <Text style={styles.sectionTitle}>{t("account.privacy.aiSection")}</Text>
         <Card padding="none" style={styles.card}>
-          <Row title="Delete AI memory" subtitle="Clear your vector profile, cached AI plans, and AI usage records" onPress={() => router.push("/account/ai-memory")} icon="trash-outline" last />
+          <Row title={t("account.aiMemory.deleteButton")} subtitle={t("account.privacy.deleteAiMemorySub")} onPress={() => router.push("/account/ai-memory")} icon="trash-outline" last />
         </Card>
 
-        <Text style={styles.sectionTitle}>Blocked users</Text>
+        <Text style={styles.sectionTitle}>{t("account.blocked.title")}</Text>
         <Card style={styles.card}>
           <Text style={styles.hint}>
-            Manage your block list. Unblocking does not notify the user. Previously blocked profiles do not automatically reappear in recommendations.
+            {t("account.privacy.blockedHint")}
           </Text>
           <ListRow
-            title="View blocked users"
+            title={t("account.privacy.viewBlocked")}
             onPress={() => {
               Haptics.selectionAsync();
               router.push("/account/blocked-users");

@@ -62,7 +62,7 @@ function useSections(): Section[] {
       items: [
         { title: t("settings.legal"), subtitle: t("settings.legalSub"), route: "/account/legal", icon: "document-text-outline" },
         { title: t("settings.inviteFriends"), subtitle: t("settings.inviteFriendsSub"), route: "/account/invite", icon: "people-outline" },
-        { title: "Send feedback", subtitle: "Tell us what's working (or not)", route: "/account/send-feedback", icon: "chatbox-ellipses-outline" },
+        { title: t("account.feedback.title"), subtitle: t("settings.sendFeedbackSub"), route: "/account/send-feedback", icon: "chatbox-ellipses-outline" },
       ],
     },
     {
