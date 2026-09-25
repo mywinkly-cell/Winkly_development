@@ -360,7 +360,7 @@
   "chat.dateIdeas.breakIce": "Break the ice with a plan",
   "chat.dateIdeas.dismiss": "Dismiss date ideas",
   "chat.dateIdeas.shared": "Date ideas you both might like",
-  "chat.emptyInbox": "There is no active chats yet. It's time to spark a conversation!",
+  "chat.emptyInbox": "There are no active chats yet. It's time to spark a conversation!",
   "chat.errorWithMessage": "Error: {{message}}",
   "chat.eventChat": "Event chat",
   "chat.filters.placeholder": "Filter by mode, unread, or pinned. More options coming soon.",

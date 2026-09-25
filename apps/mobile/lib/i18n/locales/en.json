@@ -380,7 +380,7 @@
   "notifications.emptyTitle": "No notifications yet",
   "notifications.emptySubtitle": "You'll see updates about matches, events, and messages here.",
   "chat.loadingChats": "Loading chats…",
-  "chat.emptyInbox": "There is no active chats yet. It's time to spark a conversation!",
+  "chat.emptyInbox": "There are no active chats yet. It's time to spark a conversation!",
   "chat.newChatButton": "+ New chat",
   "chat.eventChat": "Event chat",
   "chat.groupChatTitle": "Group chat",
