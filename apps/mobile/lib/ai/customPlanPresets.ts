@@ -3,41 +3,23 @@
  * Merges profiles_core, all profiles_mode rows (interests + real meta keys), concierge signals, and planner history.
  */
 
+import i18n from "i18next";
 import type { Mode } from "@/types";
 import { supabase } from "@/lib/supabase";
 import { getOwnProfileCore, getOwnProfileBusiness, getOwnProfileMode } from "@/lib/access/profiles";
 import { getMyConciergeSignals } from "@/lib/ai/preferenceEngine";
 
-const MODE_FALLBACKS: Record<Mode, string[]> = {
-  romance: [
-    "Cozy dinner for two",
-    "Coffee date somewhere new",
-    "Evening walk & dessert",
-    "Wine bar with good atmosphere",
-    "Something cultural nearby",
-  ],
-  friends: [
-    "Group brunch this weekend",
-    "Casual drinks downtown",
-    "Outdoor hangout",
-    "Games or sports together",
-    "Try a new neighborhood spot",
-  ],
-  business: [
-    "Coffee meeting — quiet & professional",
-    "Lunch near the office",
-    "Networking-friendly venue",
-    "Working session with good Wi‑Fi",
-    "Industry-relevant event nearby",
-  ],
-  events: [
-    "Live music or show",
-    "Weekend festival or fair",
-    "Workshop or talk",
-    "Night out — dancing or club",
-    "Community meetup",
-  ],
-};
+/**
+ * Chip copy lands in the (editable) request field, so it's written in the app language via
+ * concierge.chips.* — the profile tokens interpolated into it (interests, hobbies, city) are user content.
+ */
+const chip = (key: string, opts?: Record<string, unknown>): string => i18n.t(`concierge.chips.${key}`, opts);
+
+/** Five generic fallbacks per mode: concierge.chips.fallback.<mode>.<1–5>. */
+function modeFallbacks(mode: Mode): string[] {
+  const m = mode === "romance" || mode === "friends" || mode === "business" ? mode : "events";
+  return [1, 2, 3, 4, 5].map((n) => chip(`fallback.${m}.${n}`));
+}
 
 function uniqPush(pool: string[], s: string) {
   const t = s.trim();
@@ -411,17 +393,17 @@ type ChipSeed = {
 function metaLineToPlanChip(line: string, mode: Mode): string {
   const s = line.trim();
   const rel = /^Relationship goal:\s*(.+)$/i.exec(s);
-  if (rel) return `Plan that fits my dating goal: ${clip(rel[1].trim(), 42)}`;
+  if (rel) return chip("meta.datingGoal", { value: clip(rel[1].trim(), 42) });
   const val = /^Values:\s*(.+)$/i.exec(s);
-  if (val) return `Reflect what I value: ${clip(val[1].trim(), 42)}`;
+  if (val) return chip("meta.values", { value: clip(val[1].trim(), 42) });
   const ms = /^Meetup style:\s*(.+)$/i.exec(s);
-  if (ms) return `Hangout matching my style: ${clip(ms[1].trim(), 42)}`;
+  if (ms) return chip("meta.meetupStyle", { value: clip(ms[1].trim(), 42) });
   const av = /^Availability:\s*(.+)$/i.exec(s);
-  if (av) return `Works with my availability: ${clip(av[1].trim(), 40)}`;
+  if (av) return chip("meta.availability", { value: clip(av[1].trim(), 40) });
   const net = /^Networking:\s*(.+)$/i.exec(s);
-  if (net) return `Networking aim: ${clip(net[1].trim(), 42)}`;
+  if (net) return chip("meta.networking", { value: clip(net[1].trim(), 42) });
   const sk = /^Skills:\s*(.+)$/i.exec(s);
-  if (sk) return `Leverage my skills: ${clip(sk[1].trim(), 42)}`;
+  if (sk) return chip("meta.skills", { value: clip(sk[1].trim(), 42) });
   return clip(s, 52);
 }
 
@@ -430,22 +412,22 @@ function interestToPlanChip(mode: Mode, token: string): string {
   if (!t) return "";
   switch (mode) {
     case "romance":
-      return `Date idea around: ${t}`;
+      return chip("interest.romance", { value: t });
     case "friends":
-      return `Meetup with ${t} in mind`;
+      return chip("interest.friends", { value: t });
     case "business":
-      return `Plan tied to ${t} professionally`;
+      return chip("interest.business", { value: t });
     case "events":
-      return `Something aligned with ${t}`;
+      return chip("interest.events", { value: t });
     default:
-      return `Built around ${t}`;
+      return chip("interest.other", { value: t });
   }
 }
 
 function noiseLevelChip(level: "low" | "medium" | "high"): string {
-  if (level === "low") return "Quieter venue — easy conversation";
-  if (level === "high") return "Lively / buzzy atmosphere is OK";
-  return "Balanced vibe — not too loud";
+  if (level === "low") return chip("noise.low");
+  if (level === "high") return chip("noise.high");
+  return chip("noise.medium");
 }
 
 /** Weight band for location + interests + lifestyle + hobbies (must rank above all other signals). */
@@ -517,60 +499,60 @@ function buildCombinedChips(ctx: PlanningProfileContext, seed: ChipSeed): Scored
   if (mode === "romance") {
     if (outdoor.length) {
       const t = pick(outdoor, outdoor[0] ?? "");
-      out.push({ text: `Active date: ${clip(t, 22)} + cozy place after`, weight: W_COMBINED_BASE });
+      out.push({ text: chip("combined.romanceActive", { value: clip(t, 22) }), weight: W_COMBINED_BASE });
     }
     if (culture.length) {
       const t = pick(culture, culture[0] ?? "");
-      out.push({ text: `Culture date: ${clip(t, 24)} then a dessert stop`, weight: W_COMBINED_BASE - 2 });
+      out.push({ text: chip("combined.romanceCulture", { value: clip(t, 24) }), weight: W_COMBINED_BASE - 2 });
     }
     if (food.length) {
       const t = pick(food, food[0] ?? "");
-      out.push({ text: `Foodie date inspired by ${clip(t, 22)}`, weight: W_COMBINED_BASE - 4 });
+      out.push({ text: chip("combined.romanceFood", { value: clip(t, 22) }), weight: W_COMBINED_BASE - 4 });
     }
-    if (preferQuiet) out.push({ text: "Low-key date: quiet bar or cozy café for real conversation", weight: W_COMBINED_BASE - 6 });
-    if (preferLively) out.push({ text: "Buzzy date: lively spot + something fun nearby after", weight: W_COMBINED_BASE - 6 });
+    if (preferQuiet) out.push({ text: chip("combined.romanceQuiet"), weight: W_COMBINED_BASE - 6 });
+    if (preferLively) out.push({ text: chip("combined.romanceLively"), weight: W_COMBINED_BASE - 6 });
   } else if (mode === "friends") {
     if (outdoor.length) {
       const t = pick(outdoor, outdoor[0] ?? "");
-      out.push({ text: `Friend hang: ${clip(t, 24)} then casual food`, weight: W_COMBINED_BASE });
+      out.push({ text: chip("combined.friendsActive", { value: clip(t, 24) }), weight: W_COMBINED_BASE });
     }
     if (creative.length) {
       const t = pick(creative, creative[0] ?? "");
-      out.push({ text: `Creative catch-up: ${clip(t, 24)} + a chill café`, weight: W_COMBINED_BASE - 2 });
+      out.push({ text: chip("combined.friendsCreative", { value: clip(t, 24) }), weight: W_COMBINED_BASE - 2 });
     }
     if (culture.length) {
       const t = pick(culture, culture[0] ?? "");
-      out.push({ text: `Go out plan: ${clip(t, 26)} + drinks after`, weight: W_COMBINED_BASE - 4 });
+      out.push({ text: chip("combined.friendsCulture", { value: clip(t, 26) }), weight: W_COMBINED_BASE - 4 });
     }
-    if (preferQuiet) out.push({ text: "Easy talk vibe: quieter bar or café, not too loud", weight: W_COMBINED_BASE - 6 });
+    if (preferQuiet) out.push({ text: chip("combined.friendsQuiet"), weight: W_COMBINED_BASE - 6 });
   } else if (mode === "business") {
     const prof = (ctx.conciergeProfessionalTopics ?? []).map((x) => x.trim()).filter(Boolean);
     if (prof.length) {
       const t = pick(prof, prof[0] ?? "");
-      out.push({ text: `Networking angle: ${clip(t, 28)} + introductions`, weight: W_COMBINED_BASE });
+      out.push({ text: chip("combined.businessNetworking", { value: clip(t, 28) }), weight: W_COMBINED_BASE });
     }
     if (ctx.occupation?.trim()) {
-      out.push({ text: `Meeting format for ${clip(ctx.occupation.trim(), 26)}: quiet coffee + agenda`, weight: W_COMBINED_BASE - 2 });
+      out.push({ text: chip("combined.businessOccupation", { value: clip(ctx.occupation.trim(), 26) }), weight: W_COMBINED_BASE - 2 });
     }
     out.push({
-      text: preferQuiet ? "Quiet, professional venue with Wi‑Fi (easy to talk)" : "Business-friendly spot (good seating + low friction)",
+      text: preferQuiet ? chip("combined.businessQuiet") : chip("combined.businessFriendly"),
       weight: W_COMBINED_BASE - 4,
     });
   } else {
     // events (or fallback)
     if (culture.length) {
       const t = pick(culture, culture[0] ?? "");
-      out.push({ text: `Event night around ${clip(t, 26)} + after spot`, weight: W_COMBINED_BASE });
+      out.push({ text: chip("combined.eventsCulture", { value: clip(t, 26) }), weight: W_COMBINED_BASE });
     }
     if (outdoor.length) {
       const t = pick(outdoor, outdoor[0] ?? "");
-      out.push({ text: `Day event + activity: ${clip(t, 26)} nearby`, weight: W_COMBINED_BASE - 2 });
+      out.push({ text: chip("combined.eventsActive", { value: clip(t, 26) }), weight: W_COMBINED_BASE - 2 });
     }
   }
 
   // 2) Use goals/meta as “steering” chips (non-generic, but short).
   if (ctx.goalsLine?.trim()) {
-    out.push({ text: `Make it fit: ${clip(ctx.goalsLine.trim(), 48)}`, weight: W_SECONDARY_CEILING - 6 });
+    out.push({ text: chip("makeItFit", { value: clip(ctx.goalsLine.trim(), 48) }), weight: W_SECONDARY_CEILING - 6 });
   }
   if ((ctx.profileMetaLines?.length ?? 0) > 0) {
     const line = ctx.profileMetaLines![0];
@@ -592,8 +574,8 @@ export function buildProfileAwareSuggestionChips(ctx: PlanningProfileContext): s
   const seed = buildChipSeed(ctx);
 
   if (cityFirst) {
-    candidates.push({ text: `New spots in ${cityFirst}`, weight: W_LOCATION });
-    candidates.push({ text: `Weekend ideas in ${cityFirst}`, weight: W_LOCATION - 2 });
+    candidates.push({ text: chip("city.newSpots", { city: cityFirst }), weight: W_LOCATION });
+    candidates.push({ text: chip("city.weekendIdeas", { city: cityFirst }), weight: W_LOCATION - 2 });
   }
 
   // Combined, plan-shaped chips first (strongest personalization).
@@ -610,7 +592,7 @@ export function buildProfileAwareSuggestionChips(ctx: PlanningProfileContext): s
     const t = typeof raw === "string" ? raw.trim() : "";
     if (!t) continue;
     candidates.push({
-      text: `Lifestyle fit: ${clip(t, 36)}`,
+      text: chip("lifestyle", { value: clip(t, 36) }),
       weight: W_LIFESTYLE_BASE - i * 2,
     });
   }
@@ -619,17 +601,17 @@ export function buildProfileAwareSuggestionChips(ctx: PlanningProfileContext): s
     const h = ctx.hobbies[i];
     if (typeof h !== "string" || !h.trim()) continue;
     const ht = h.trim();
-    const prefix =
-      tokenLooksLikeOutdoorFitness(ht) ? "Active" :
-      tokenLooksLikeCulture(ht) ? "Culture" :
-      tokenLooksLikeFoodDrink(ht) ? "Food/drink" :
-      tokenLooksLikeCreative(ht) ? "Creative" :
-      "Inspired";
-    candidates.push({ text: `${prefix}: ${clip(ht, 38)}`, weight: W_HOBBY_BASE - i * 2 });
+    const kind =
+      tokenLooksLikeOutdoorFitness(ht) ? "active" :
+      tokenLooksLikeCulture(ht) ? "culture" :
+      tokenLooksLikeFoodDrink(ht) ? "food" :
+      tokenLooksLikeCreative(ht) ? "creative" :
+      "inspired";
+    candidates.push({ text: chip(`hobby.${kind}`, { value: clip(ht, 38) }), weight: W_HOBBY_BASE - i * 2 });
   }
 
   for (const p of ctx.conciergePrefer ?? []) {
-    candidates.push({ text: `Prefer: ${clip(p, 46)}`, weight: W_SECONDARY_CEILING });
+    candidates.push({ text: chip("prefer", { value: clip(p, 46) }), weight: W_SECONDARY_CEILING });
   }
 
   for (let i = 0; i < (ctx.profileMetaLines ?? []).length && i < 5; i++) {
@@ -639,12 +621,12 @@ export function buildProfileAwareSuggestionChips(ctx: PlanningProfileContext): s
   }
 
   if (ctx.goalsLine?.trim()) {
-    candidates.push({ text: `Honor my goals: ${clip(ctx.goalsLine.trim(), 48)}`, weight: W_SECONDARY_CEILING - 14 });
+    candidates.push({ text: chip("goals", { value: clip(ctx.goalsLine.trim(), 48) }), weight: W_SECONDARY_CEILING - 14 });
   }
 
   for (let i = 0; i < (ctx.conciergeProfessionalTopics ?? []).length && i < 3; i++) {
     const t = ctx.conciergeProfessionalTopics![i];
-    candidates.push({ text: `Professional angle: ${clip(t, 42)}`, weight: W_SECONDARY_CEILING - 16 - i });
+    candidates.push({ text: chip("professional", { value: clip(t, 42) }), weight: W_SECONDARY_CEILING - 16 - i });
   }
 
   if (ctx.conciergeNoiseLevel) {
@@ -652,29 +634,29 @@ export function buildProfileAwareSuggestionChips(ctx: PlanningProfileContext): s
   }
 
   if (ctx.occupation?.trim() && ctx.mode === "business") {
-    candidates.push({ text: `Right for ${clip(ctx.occupation.trim(), 38)}`, weight: W_SECONDARY_CEILING - 24 });
+    candidates.push({ text: chip("occupation", { value: clip(ctx.occupation.trim(), 38) }), weight: W_SECONDARY_CEILING - 24 });
   }
 
   for (const title of ctx.recentPlanTitles.slice(0, 3)) {
-    candidates.push({ text: `Similar to a past plan: ${clip(title, 40)}`, weight: W_SECONDARY_CEILING - 28 });
+    candidates.push({ text: chip("pastPlan", { value: clip(title, 40) }), weight: W_SECONDARY_CEILING - 28 });
   }
 
   if ((ctx.languages?.length ?? 0) >= 2) {
     candidates.push({
-      text: `Language practice (${clip(ctx.languages!.slice(0, 3).join(", "), 36)})`,
+      text: chip("languages", { value: clip(ctx.languages!.slice(0, 3).join(", "), 36) }),
       weight: W_SECONDARY_CEILING - 32,
     });
   }
 
   if (ctx.bioSnippet && (ctx.interests.length < 2 || (ctx.profileMetaLines?.length ?? 0) < 1)) {
-    candidates.push({ text: `Match my intro: ${clip(ctx.bioSnippet, 44)}`, weight: W_SECONDARY_CEILING - 36 });
+    candidates.push({ text: chip("bio", { value: clip(ctx.bioSnippet, 44) }), weight: W_SECONDARY_CEILING - 36 });
   }
 
   for (const a of ctx.conciergeAvoid ?? []) {
-    candidates.push({ text: `Avoid: ${clip(a, 40)}`, weight: W_SECONDARY_CEILING - 42 });
+    candidates.push({ text: chip("avoid", { value: clip(a, 40) }), weight: W_SECONDARY_CEILING - 42 });
   }
 
-  for (const f of MODE_FALLBACKS[ctx.mode] ?? MODE_FALLBACKS.events) {
+  for (const f of modeFallbacks(ctx.mode)) {
     candidates.push({ text: f, weight: 12 });
   }
 
@@ -706,7 +688,8 @@ export async function loadProfileAwareSuggestionChips(
 ): Promise<{ chips: string[]; ctx: PlanningProfileContext }> {
   const ctx = await loadPlanningProfileContext(userId, mode);
   const version = ctx.profileVersion ?? "";
-  const key = `${userId}|${mode}`;
+  // Chips are rendered text, so the cache is per language too.
+  const key = `${userId}|${mode}|${i18n.language ?? ""}`;
   const cached = chipsCache.get(key);
   if (cached && cached.profileVersion && cached.profileVersion === version && cached.chips.length === 5) {
     return { chips: cached.chips, ctx };
