@@ -38,13 +38,9 @@ export default function AppInfo() {
           onPress: async () => {
             setSigningOut(true);
             try {
-              if (allDevices) {
-                // Supabase: signOut doesn't revoke other sessions by default
-                // For "all devices" you'd typically call an Edge Function to revoke refresh tokens
-                await supabase.auth.signOut();
-              } else {
-                await supabase.auth.signOut();
-              }
+              // "global" revokes every refresh token for this user (all devices); "local" only this one.
+              const { error } = await supabase.auth.signOut({ scope: allDevices ? "global" : "local" });
+              if (error) throw error;
               router.replace("/(auth)/signin");
             } catch (_err) {
               Alert.alert(t("common.error"), t("account.appInfo.signOutFailed"));

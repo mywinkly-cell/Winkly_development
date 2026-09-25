@@ -35,10 +35,6 @@ export default function Premium() {
 
           <PrimaryButton title={t("paywall.premium.viewPlans")} onPress={() => router.push("/account/subscription")} style={styles.actionBtn} />
           <SecondaryButton title={t("settings.paymentMethods")} onPress={() => router.push("/account/payments")} />
-
-          <Text style={styles.note}>
-            {t("paywall.premium.note")}
-          </Text>
         </Card>
       </ScrollView>
     </SafeScreenView>
@@ -56,6 +52,5 @@ function createStyles(theme: AppTheme) {
     featureTitle: { ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textPrimary, marginBottom: theme.spacing.sm },
     featureText: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.xxs },
     actionBtn: { marginBottom: theme.spacing.sm },
-    note: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.md, textAlign: "center" },
   });
 }

@@ -7,6 +7,7 @@ import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/providers";
 import { getOwnProfileCore, upsertOwnProfileCore } from "@/lib/access/profiles";
+import { pickAndUploadPhoto } from "@/lib/uploadMedia";
 import { Card, Header, SecondaryButton, TextButton } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
@@ -47,8 +48,19 @@ export default function EditMedia() {
     router.back();
   };
 
-  const addReal = () => {
-    Alert.alert(t("profile.edit.media.addPhotosTitle"), t("profile.edit.media.addPhotosMessage"));
+  const [adding, setAdding] = useState(false);
+  const canAdd = corePhotos.length < SLOT_COUNT;
+
+  /** Pick → quarantine upload → moderation. Held photos are added server-side once approved. */
+  const addPhoto = async () => {
+    if (!user?.id || !canAdd || adding) return;
+    setAdding(true);
+    try {
+      const url = await pickAndUploadPhoto(user.id, "core");
+      if (url) setCorePhotos((prev) => [...prev, url].slice(0, SLOT_COUNT));
+    } finally {
+      setAdding(false);
+    }
   };
 
   if (!user) return null;
@@ -95,10 +107,15 @@ export default function EditMedia() {
             })}
           </View>
 
-          <SecondaryButton title={t("profile.edit.media.enableUpload")} onPress={addReal} style={styles.secondaryBtn} />
+          <SecondaryButton
+            title={t("profile.edit.media.addPhoto")}
+            onPress={() => void addPhoto()}
+            loading={adding}
+            disabled={!canAdd || adding || saving}
+            style={styles.secondaryBtn}
+          />
         </Card>
 
-        <Text style={styles.note}>{t("profile.edit.media.note")}</Text>
       </ScrollView>
     </View>
   );
@@ -127,6 +144,5 @@ function createStyles(theme: AppTheme) {
     plus: { fontSize: 28, color: theme.colors.textSecondary },
     slotLabel: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textPrimary },
     secondaryBtn: { marginTop: theme.spacing.md },
-    note: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, textAlign: "center", marginTop: theme.spacing.md },
   });
 }

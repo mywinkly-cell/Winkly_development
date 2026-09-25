@@ -12,6 +12,9 @@ import * as Contacts from "expo-contacts/legacy";
 import { supabase } from "@/lib/supabase";
 import { hashContactIdentifiers } from "@/lib/contacts/matching";
 
+/** Public landing page; mywinkly.de/app/* would open the app but has no web fallback yet. */
+const INVITE_URL = "https://mywinkly.de";
+
 export default function Invite() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -23,7 +26,7 @@ export default function Invite() {
 
   const onShare = async () => {
     try {
-      const message = t("account.invite.shareMessage");
+      const message = t("account.invite.shareMessage", { link: INVITE_URL });
 
       await Share.share({ message });
     } catch (err: any) {
