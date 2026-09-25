@@ -15,6 +15,7 @@ import type { ActivityDetails } from "@/lib/ai/conciergePlanningFlow";
 import { useNormalizedLocation } from "@/lib/location/useLocationDisplay";
 import { translateCatalogText } from "@/lib/ai/conciergeCatalogI18n";
 import { useAppLocaleTag } from "@/lib/i18n/appLocale";
+import { formatMoney } from "@/lib/i18n/format";
 
 function dayKey(d: Date, locale: string): string {
   return d.toLocaleDateString(locale, { weekday: "short", month: "short", day: "numeric" });
@@ -66,7 +67,7 @@ export function ConciergeSummaryStep({
         : "";
   const budgetStr =
     details.budgetAmount && details.budgetCurrency
-      ? `${details.budgetCurrency} ${details.budgetAmount}`
+      ? formatMoney(details.budgetAmount, details.budgetCurrency, appLocale)
       : details.budgetCurrency
         ? details.budgetCurrency
         : "";

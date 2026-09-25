@@ -1,0 +1,42 @@
+{
+  "de": {
+    "concierge.error.aiDisabled": "Die KI-Planung ist gerade nicht verfügbar. Bitte versuch es später noch einmal.",
+    "concierge.error.contextTooLarge": "Diese Anfrage ist zu lang. Kürze sie ein wenig und versuch es noch einmal.",
+    "concierge.error.planFailed": "Gerade konnten keine Planvorschläge erstellt werden. Bitte warte kurz und versuch es noch einmal."
+  },
+  "fr": {
+    "concierge.error.aiDisabled": "La planification IA est momentanément indisponible. Réessaie plus tard.",
+    "concierge.error.contextTooLarge": "Cette demande est trop longue. Raccourcis-la un peu et réessaie.",
+    "concierge.error.planFailed": "Impossible de proposer des plans pour le moment. Patiente un instant et réessaie."
+  },
+  "es": {
+    "concierge.error.aiDisabled": "La planificación con IA no está disponible ahora mismo. Inténtalo más tarde.",
+    "concierge.error.contextTooLarge": "Esta solicitud es demasiado larga. Acórtala un poco e inténtalo de nuevo.",
+    "concierge.error.planFailed": "Ahora mismo no se pudieron generar opciones de plan. Espera un momento e inténtalo de nuevo."
+  },
+  "it": {
+    "concierge.error.aiDisabled": "La pianificazione con IA non è disponibile al momento. Riprova più tardi.",
+    "concierge.error.contextTooLarge": "Questa richiesta è troppo lunga. Accorciala un po' e riprova.",
+    "concierge.error.planFailed": "Al momento non è stato possibile generare proposte di piano. Aspetta un attimo e riprova."
+  },
+  "pl": {
+    "concierge.error.aiDisabled": "Planowanie z AI jest chwilowo niedostępne. Spróbuj ponownie później.",
+    "concierge.error.contextTooLarge": "Ta prośba jest za długa. Skróć ją trochę i spróbuj ponownie.",
+    "concierge.error.planFailed": "Nie udało się teraz przygotować propozycji planu. Odczekaj chwilę i spróbuj ponownie."
+  },
+  "uk": {
+    "concierge.error.aiDisabled": "Планування з ШІ тимчасово недоступне. Спробуй пізніше.",
+    "concierge.error.contextTooLarge": "Цей запит задовгий. Трохи скороти його й спробуй ще раз.",
+    "concierge.error.planFailed": "Зараз не вдалося створити варіанти плану. Зачекай трохи й спробуй ще раз."
+  },
+  "nl": {
+    "concierge.error.aiDisabled": "AI-planning is even niet beschikbaar. Probeer het later opnieuw.",
+    "concierge.error.contextTooLarge": "Dit verzoek is te lang. Maak het wat korter en probeer het opnieuw.",
+    "concierge.error.planFailed": "Er konden nu geen planopties worden gemaakt. Wacht even en probeer het opnieuw."
+  },
+  "pt": {
+    "concierge.error.aiDisabled": "O planeamento com IA está temporariamente indisponível. Tenta mais tarde.",
+    "concierge.error.contextTooLarge": "Este pedido é demasiado longo. Encurta-o um pouco e tenta novamente.",
+    "concierge.error.planFailed": "Não foi possível gerar opções de plano agora. Aguarda um momento e tenta novamente."
+  }
+}

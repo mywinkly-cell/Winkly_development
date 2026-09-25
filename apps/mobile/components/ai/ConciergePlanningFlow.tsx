@@ -77,12 +77,12 @@ import {
   getSmartDefaultsForActivity,
   getActivityCategoryByKey,
   getIntentCards,
-  getCurrencySymbol,
   type IntentSection,
   type RankInput,
   FOOD_AND_DRINKS_FORMAT_PROMPTS,
 } from "@/lib/ai/conciergePlanningFlow";
 import { translateCatalogText } from "@/lib/ai/conciergeCatalogI18n";
+import { defaultCurrency, formatDayDate, formatMoney } from "@/lib/i18n/format";
 import { buildPlanRequestText, inclusivePlanDayCount } from "@/lib/ai/buildPlanRequestText";
 import {
   clampTimeOfDayToFutureIfToday,
@@ -244,7 +244,7 @@ export function ConciergePlanningFlow({
     singleDay: true,
     timeOfDay: "any",
     budgetAmount: "",
-    budgetCurrency: "EUR",
+    budgetCurrency: defaultCurrency(formatDefaultLocationDisplay(defaultCity, defaultCountry, appLanguage)),
   });
   // Default to decide_later so the selection actually affects Summary/Invite even if user never taps it.
   const [whoJoining, setWhoJoining] = useState<WhoJoining>("decide_later");
@@ -1024,7 +1024,7 @@ export function ConciergePlanningFlow({
         }
       } else if (a.field === "budget") {
         const b = parseBudgetValue(a.value);
-        if (b) return t("planIt.assumptions.budgetValue", { amount: `${getCurrencySymbol(b.currency)}${b.amount}` });
+        if (b) return t("planIt.assumptions.budgetValue", { amount: formatMoney(b.amount, b.currency) });
       } else if (a.field === "setting" && a.value) {
         return t(`planIt.assumptions.setting.${a.value}`);
       } else if (a.field === "area" && a.value) {
@@ -1302,7 +1302,7 @@ export function ConciergePlanningFlow({
             setSelectedCategory(getActivityCategoryByKey(resolvedKey) ?? null);
             setSubActivityKey(null);
             setSubActivityLabel(null);
-            const smart = getSmartDefaultsForActivity(resolvedKey, label, details.budgetCurrency || "EUR");
+            const smart = getSmartDefaultsForActivity(resolvedKey, label, details.budgetCurrency || defaultCurrency(details.location));
             setDetails((prev) => ({
               ...prev,
               ...(clearWishlist ? { customPromptExtra: undefined } : {}),
@@ -1836,7 +1836,7 @@ export function ConciergePlanningFlow({
           mode={effectiveMode}
           planTitle={chosenOption ? String(chosenOption.option_name ?? chosenOption.narrative) : undefined}
           planLocation={locationLineDisplay || undefined}
-          planDate={details.date ? details.date.toLocaleDateString() : undefined}
+          planDate={details.date ? formatDayDate(details.date) : undefined}
           onSelect={(choice) => {
             if (choice === "skip" || choice === "share_external") {
               setFlowStep("add_to_planner");

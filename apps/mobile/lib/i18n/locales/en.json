@@ -2660,5 +2660,9 @@
   "profile.preview.firstNameFallback": "Your first name",
   "profile.preview.cardHint": "How you appear on matching cards",
   "profile.preview.title": "Profile preview",
-  "profile.preview.hint": "How others see you in each mode"
+  "profile.preview.hint": "How others see you in each mode",
+
+  "concierge.error.aiDisabled": "AI planning is temporarily unavailable. Please try again later.",
+  "concierge.error.contextTooLarge": "This request is too long. Shorten it a little and try again.",
+  "concierge.error.planFailed": "Could not generate plan options right now. Please wait a moment and try again."
 }

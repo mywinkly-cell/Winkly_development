@@ -43,10 +43,10 @@ import {
   type TimeOfDay,
   type WhoJoining,
   BUDGET_QUICK_AMOUNTS,
-  getCurrencySymbol,
 } from "@/lib/ai/conciergePlanningFlow";
 import { translateCatalogText } from "@/lib/ai/conciergeCatalogI18n";
 import { useAppLocaleTag } from "@/lib/i18n/appLocale";
+import { defaultCurrency, currencyForPlace, formatMoney } from "@/lib/i18n/format";
 import type { Mode } from "@/types";
 import { supabase } from "@/lib/supabase";
 import {
@@ -231,7 +231,11 @@ export function ConciergeActivityDetailsStep({
   );
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(initialDetails.timeOfDay ?? "any");
   const [budgetAmount, setBudgetAmount] = useState(initialDetails.budgetAmount ?? "");
-  const [budgetCurrency, setBudgetCurrency] = useState(initialDetails.budgetCurrency ?? "EUR");
+  const [budgetCurrency, setBudgetCurrency] = useState(
+    () => initialDetails.budgetCurrency || defaultCurrency(initialDetails.location)
+  );
+  /** The planned place decides the currency until the user picks one. */
+  const [currencyTouched, setCurrencyTouched] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showDateEndPicker, setShowDateEndPicker] = useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
@@ -372,6 +376,12 @@ export function ConciergeActivityDetailsStep({
       })
       .finally(() => setDeviceLocationLoading(false));
   }, [initialDetails.location, appLanguage]);
+
+  useEffect(() => {
+    if (currencyTouched) return;
+    const fromPlace = currencyForPlace(location);
+    if (fromPlace) setBudgetCurrency(fromPlace);
+  }, [location, currencyTouched]);
 
   // Weather: refresh when location, date, or time change
   useEffect(() => {
@@ -1032,7 +1042,6 @@ export function ConciergeActivityDetailsStep({
         <View style={styles.surfaceCard}>
         <View style={[styles.chipsRow, { marginBottom: 12 }]}>
         {BUDGET_QUICK_AMOUNTS.map((amount) => {
-          const symbol = getCurrencySymbol(budgetCurrency);
           const isActive = budgetAmount === String(amount);
           return (
             <TouchableOpacity
@@ -1041,7 +1050,7 @@ export function ConciergeActivityDetailsStep({
               onPress={() => { Haptics.selectionAsync(); setBudgetAmount(String(amount)); }}
               activeOpacity={0.85}
             >
-              <Text style={[styles.chipText, isActive && styles.chipTextActive]}>{symbol}{amount}</Text>
+              <Text style={[styles.chipText, isActive && styles.chipTextActive]}>{formatMoney(amount, budgetCurrency, appLocale)}</Text>
             </TouchableOpacity>
           );
         })}
@@ -1092,11 +1101,11 @@ export function ConciergeActivityDetailsStep({
         <Pressable style={styles.pickerOverlay} onPress={() => setShowCurrencyPicker(false)}>
           <View style={styles.pickerSheet}>
             <Text style={styles.pickerTitle}>{t("concierge.details.currency")}</Text>
-            {COMMON_CURRENCIES.map((c) => (
+            {[...new Set([budgetCurrency, ...COMMON_CURRENCIES])].map((c) => (
               <TouchableOpacity
                 key={c}
                 style={[styles.pickerItem, budgetCurrency === c && styles.pickerItemActive]}
-                onPress={() => { Haptics.selectionAsync(); setBudgetCurrency(c); setShowCurrencyPicker(false); }}
+                onPress={() => { Haptics.selectionAsync(); setBudgetCurrency(c); setCurrencyTouched(true); setShowCurrencyPicker(false); }}
               >
                 <Text style={[styles.pickerItemText, budgetCurrency === c && styles.pickerItemTextActive]}>{c}</Text>
               </TouchableOpacity>

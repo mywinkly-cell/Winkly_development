@@ -45,6 +45,7 @@ import { getDeviceLocationDisplay } from "@/lib/location/deviceLocation";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import { PlanningLocationFields } from "@/components/ai/PlanningLocationFields";
 import { parseDescribePhrase } from "@/lib/ai/describePhrase";
+import { currencyForPlace, defaultCurrency } from "@/lib/i18n/format";
 
 function dayKey(d: Date): string {
   const y = d.getFullYear();
@@ -86,15 +87,6 @@ function getNextSaturday(d: Date): Date {
   return x;
 }
 
-/** Currency by city (lowercase) for default. EUR is initial state for most of Europe. */
-const CITY_CURRENCY: Record<string, string> = {
-  london: "GBP", "new york": "USD", "los angeles": "USD", chicago: "USD", miami: "USD", boston: "USD",
-  zurich: "CHF", geneva: "CHF", bern: "CHF",
-  warsaw: "PLN", krakow: "PLN",
-  prague: "CZK", budapest: "HUF", bucharest: "RON", sofia: "BGN",
-  oslo: "NOK", stockholm: "SEK", copenhagen: "DKK", reykjavik: "ISK",
-  berlin: "EUR", munich: "EUR", paris: "EUR", amsterdam: "EUR", rome: "EUR", madrid: "EUR", vienna: "EUR",
-};
 const COMMON_CURRENCIES = ["EUR", "GBP", "USD", "CHF", "PLN", "CZK", "NOK", "SEK", "DKK"];
 
 /** Quick-select activity chips per mode (Unified Architecture: "Activity/Prompt" with chips based on interests context). */
@@ -186,7 +178,9 @@ export function ConciergeRequestForm({
   const [showDateRangePicker, setShowDateRangePicker] = useState(false);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [budgetAmount, setBudgetAmount] = useState("");
-  const [budgetCurrency, setBudgetCurrency] = useState("EUR");
+  const [budgetCurrency, setBudgetCurrency] = useState(() =>
+    defaultCurrency(defaultCity && defaultCountry ? `${defaultCity}, ${defaultCountry}` : defaultCity)
+  );
   const [showDetails, setShowDetails] = useState(source_screen === "planner");
   const [weatherSnapshot, setWeatherSnapshot] = useState<WeatherSnapshot | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
@@ -240,13 +234,11 @@ export function ConciergeRequestForm({
     onClearError?.();
   }, [location, dateStr, dateEndStr, dateRangePreset, budgetCurrency, budgetAmount, onClearError]);
 
-  // Default currency from location (city part for lookup)
+  // Default currency from the planned place ("City, Country" or a known city)
   useEffect(() => {
-    const { city: cityPart } = parseLocation(location, appLanguage);
-    const key = cityPart.toLowerCase().replace(/\s+/g, " ");
-    const curr = key ? CITY_CURRENCY[key] : null;
+    const curr = currencyForPlace(normalizeLocationDisplayString(location, appLanguage));
     if (curr) setBudgetCurrency(curr);
-  }, [location]);
+  }, [location, appLanguage]);
 
   // Debounced search for Invite → Search
   useEffect(() => {
@@ -779,7 +771,7 @@ export function ConciergeRequestForm({
             <Pressable style={styles.pickerOverlay} onPress={() => setShowCurrencyPicker(false)}>
               <View style={styles.pickerSheet}>
                 <Text style={styles.pickerTitle}>{t("concierge.details.currency")}</Text>
-                {COMMON_CURRENCIES.map((curr) => (
+                {[...new Set([budgetCurrency, ...COMMON_CURRENCIES])].map((curr) => (
                   <TouchableOpacity
                     key={curr}
                     onPress={() => {

@@ -7,6 +7,8 @@ import { supabase } from "@/lib/supabase";
 import { sendMessage } from "@/lib/chats/api";
 import type { Message } from "@/lib/chats/types";
 import { getFreeDaytimeSlotsForBridge } from "@/lib/ai/conciergeCalendar";
+import { gatewayErrorMessage } from "@/lib/ai/conciergeClient";
+import i18n from "i18next";
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -81,11 +83,11 @@ export async function callMatchBridge(params: {
 
     const json = (await res.json()) as MatchBridgeApiResponse;
     if (!res.ok) {
-      return { error: (json as { error?: string }).error ?? `HTTP ${res.status}` };
+      return { error: gatewayErrorMessage(json as Record<string, unknown>, res.status) };
     }
     return json;
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Network error" };
+    return { error: i18n.t("concierge.error.offline") };
   }
 }
 

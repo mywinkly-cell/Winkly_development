@@ -85,6 +85,7 @@ import type { PlanRecommendationRating } from "@/lib/ai/planRecommendationFeedba
 import type { Mode } from "@/types";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 import { useAppLocaleTag } from "@/lib/i18n/appLocale";
+import { formatClockTime, formatDayDate } from "@/lib/i18n/format";
 import { PlanItBar, type PlanItBarHandle } from "@/components/ai/PlanItBar";
 import { PLAN_IT_ENTRY_ENABLED } from "@/config/flags";
 import { useModeContext } from "@/providers/ModeContextProvider";
@@ -532,7 +533,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         const dateStr = valid
           ? `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`
           : "";
-        const timeLabel = valid ? d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "";
+        const timeLabel = valid ? formatClockTime(d) : "";
         const sourceMode = typeof row.source_mode === "string" ? row.source_mode : "events";
         const source: TabKey =
           sourceMode === "romance"
@@ -997,7 +998,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
       : `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
     const timeLabel = Number.isNaN(d.getTime())
       ? ""
-      : d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+      : formatClockTime(d);
     const source: TabKey =
       info.sourceMode === "romance"
         ? "dates"
@@ -1309,7 +1310,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         title={it.title}
         badges={
           <>
-            <PlanCardBadge label={it.dateStr} />
+            <PlanCardBadge label={formatDayDate(parseItemDate(it.dateStr), appLocale) || it.dateStr} />
             {past ? <PlanCardBadge label={t("planner.past")} /> : null}
             <PlanCardBadge label={topicLabel(it.topic)} variant="outlined" color={accent} />
           </>
@@ -1340,7 +1341,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         </View>
       </PlanCard>
     );
-  }, [openDetails, restoreItem, myPhotoBySource, openCancelModal, theme, styles, TAB_CONFIG, t, topicLabel]);
+  }, [openDetails, restoreItem, myPhotoBySource, openCancelModal, theme, styles, TAB_CONFIG, t, topicLabel, appLocale]);
 
   return (
     <View style={styles.screen}>
@@ -1904,7 +1905,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                     <View style={{ alignSelf: "flex-start", marginBottom: 12 }}>
                       <PlanCardBadge label={topicLabel(selectedItem.topic)} variant="outlined" color={theme.colors.primary} />
                     </View>
-                    <Text style={styles.detailsMeta}>{selectedItem.dateStr} · {selectedItem.timeLabel}</Text>
+                    <Text style={styles.detailsMeta}>{formatDayDate(parseItemDate(selectedItem.dateStr), appLocale) || selectedItem.dateStr} · {selectedItem.timeLabel}</Text>
                     {selectedItem.location && (
                       <View style={styles.detailsRow}>
                         <Ionicons name="location-outline" size={18} color={theme.colors.textSecondary} style={{ marginRight: 8 }} />

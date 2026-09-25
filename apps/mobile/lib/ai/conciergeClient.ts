@@ -144,8 +144,7 @@ export async function callWinklyPlan(params: {
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const message =
-      (typeof data?.error === "string" ? data.error : undefined) ?? i18n.t("concierge.error.requestFailed", { status: res.status });
+    const message = gatewayErrorMessage(data, res.status);
     throw new WinklyPlanError(message, res.status, mapGatewayErrorResponse(data ?? {}, res.status));
   }
   if (!data?.options || !Array.isArray(data.options) || data.options.length < 2) throw new Error(i18n.t("concierge.error.noOptions"));
@@ -286,7 +285,7 @@ export async function confirmPendingPlan(
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((typeof data?.error === "string" ? data.error : undefined) ?? i18n.t("concierge.error.requestFailed", { status: res.status }));
+    throw new Error(gatewayErrorMessage(data, res.status));
   }
   return data as PendingPlanConfirmResponse;
 }
@@ -635,6 +634,35 @@ export function secondsUntilUtcMidnight(): number {
   return Math.max(60, Math.ceil((next - now) / 1000));
 }
 
+
+/** Gateway error codes → user-facing message keys. The gateway's English `error` text is for logs only. */
+const GATEWAY_ERROR_KEYS: Record<string, string> = {
+  ai_disabled: "concierge.error.aiDisabled",
+  ai_budget_exhausted: "concierge.error.aiDisabled",
+  context_too_large: "concierge.error.contextTooLarge",
+  plan_generation_failed: "concierge.error.planFailed",
+  limit_reached: "concierge.error.limitReached",
+};
+
+/**
+ * Translated message for a failed gateway response: by `code` when known, by HTTP status otherwise
+ * (401/403 → sign in again), never the raw server string.
+ */
+export function gatewayErrorMessage(data: Record<string, unknown> | null | undefined, status?: number): string {
+  const code = typeof data?.code === "string" ? data.code : undefined;
+  if (code && GATEWAY_ERROR_KEYS[code]) return i18n.t(GATEWAY_ERROR_KEYS[code]);
+  if (status === 401 || status === 403) return i18n.t("concierge.error.notSignedIn");
+  if (status === 429) return i18n.t("concierge.error.limitReached");
+  if (status != null && status >= 400) return i18n.t("concierge.error.requestFailed", { status });
+  return i18n.t("concierge.error.generic");
+}
+
+/** Same for an error that arrived inside a 200 body or a stream event (no status). */
+function localizeGatewayError(raw: unknown, code?: unknown): string | undefined {
+  if (raw == null || raw === "") return undefined;
+  return gatewayErrorMessage({ code });
+}
+
 function mapGatewayErrorResponse(
   data: Record<string, unknown>,
   status: number,
@@ -682,9 +710,7 @@ function mapGatewayErrorResponse(
     };
   }
 
-  const baseError =
-    (typeof data.error === "string" ? data.error : undefined) ??
-    (status === 429 ? i18n.t("concierge.error.limitReached") : i18n.t("concierge.error.requestFailed", { status }));
+  const baseError = gatewayErrorMessage(data, status);
   return { error: baseError, error_code: "unknown", retry_after: retryAfter };
 }
 
@@ -870,8 +896,8 @@ export async function callConcierge(params: {
     }
     const detail = typeof data?.detail === "string" ? data.detail.trim() : "";
     const error =
-      __DEV__ && detail && mapped.error === "Internal error"
-        ? `${mapped.error}: ${detail}`
+      __DEV__ && detail && data?.error === "Internal error"
+        ? `${mapped.error} (${detail})`
         : mapped.error ?? i18n.t("concierge.error.requestFailed", { status: res.status });
     return {
       message: "",
@@ -994,7 +1020,7 @@ export async function callConciergeStream(
     onDone({
       message: "",
       error:
-        (typeof parsedBody.error === "string" ? parsedBody.error : undefined) ?? i18n.t("concierge.error.requestFailed", { status: res.status }),
+        gatewayErrorMessage(parsedBody, res.status),
       error_code: mapped.error_code ?? "unknown",
       retry_after: mapped.retry_after,
     });
@@ -1016,7 +1042,7 @@ export async function callConciergeStream(
       suggestions: coerceSuggestions(list),
       no_options_reason: typeof data.no_options_reason === "string" ? data.no_options_reason : undefined,
       request_id: typeof data.request_id === "string" ? data.request_id : undefined,
-      error: typeof data.error === "string" ? data.error : undefined,
+      error: localizeGatewayError(data.error, data.code),
       match_agent: pickMatchAgentFromResponse(data),
     });
     return;
@@ -1087,7 +1113,7 @@ export async function callConciergeStream(
             suggestions: coerceSuggestions(payload.suggestions),
             no_options_reason: payload.no_options_reason,
             request_id: payload.request_id,
-            error: payload.error,
+            error: localizeGatewayError(payload.error),
             match_agent: pickMatchAgentFromResponse(payload),
           });
           return;
@@ -1108,7 +1134,7 @@ export async function callConciergeStream(
           suggestions: coerceSuggestions(list),
           no_options_reason: json.no_options_reason,
           request_id: json.request_id,
-          error: json.error,
+          error: localizeGatewayError(json.error),
           match_agent: pickMatchAgentFromResponse(json),
         });
         return;
