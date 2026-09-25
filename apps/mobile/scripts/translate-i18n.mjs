@@ -54,6 +54,7 @@ const {
   pluralGroups,
   pluralCategories,
   pluralSource,
+  glossaryRules,
   toCsv,
   parseCsv,
   reviewRows,
@@ -146,7 +147,7 @@ function chunk(list, size) {
  * @returns {{ results: Record<key, string>, failures: Array<{ key, errors }> }}
  */
 async function translateItems({ items, locale, provider, glossary, cache, concurrency, batchSize }) {
-  const dnt = glossary.doNotTranslate ?? [];
+  const rulesFor = (it) => glossaryRules(glossary, it.key);
   const results = {};
   const lastErrors = {};
   const keyOf = (it) =>
@@ -155,7 +156,7 @@ async function translateItems({ items, locale, provider, glossary, cache, concur
   let pending = [];
   for (const it of items) {
     const cached = cache.get(keyOf(it));
-    if (cached !== undefined && validateTranslation(it.source, cached, { doNotTranslate: dnt }).length === 0) {
+    if (cached !== undefined && validateTranslation(it.source, cached, rulesFor(it)).length === 0) {
       results[it.key] = cached;
     } else pending.push(it);
   }
@@ -181,7 +182,7 @@ async function translateItems({ items, locale, provider, glossary, cache, concur
           failedThisRound.push(it);
           continue;
         }
-        const errors = validateTranslation(it.source, text, { doNotTranslate: dnt });
+        const errors = validateTranslation(it.source, text, rulesFor(it));
         if (errors.length) {
           lastErrors[it.key] = errors;
           failedThisRound.push(it);
@@ -240,12 +241,22 @@ async function runTranslate(args) {
     const loc = synced.loc;
     status[locale] = synced.status;
 
-    let { items } = planLocale({ en, loc, locale, status: status[locale], allowlist: config.allowlist, force: args.force, only: args.only });
+    let { items } = planLocale({
+      en,
+      loc,
+      locale,
+      status: status[locale],
+      allowlist: config.allowlist,
+      glossary,
+      force: args.force,
+      only: args.only,
+    });
     if (args.limit > 0) items = items.slice(0, args.limit);
     const plural = items.filter((it) => it.plural).length;
     const stale = items.filter((it) => it.reason === "english changed").length;
+    const glossaryFixes = items.filter((it) => it.reason === "glossary").length;
     const chars = items.reduce((n, it) => n + it.source.length, 0);
-    console.log(`\n${locale}: ${items.length} to translate (${plural} plural forms, ${stale} English changed) · ${chars} chars`);
+    console.log(`\n${locale}: ${items.length} to translate (${plural} plural forms, ${stale} English changed, ${glossaryFixes} glossary fixes) · ${chars} chars`);
 
     if (args.dryRun || !items.length) {
       summary.push({ locale, translated: 0, failed: 0, warnings: [] });
@@ -307,7 +318,6 @@ function runCheck(args) {
   const glossary = loadGlossary();
   const en = loadEn();
   const status = loadStatus();
-  const dnt = glossary.doNotTranslate ?? [];
   const HARD = /^(missing|added) (placeholder|tag)/;
   let errorCount = 0;
 
@@ -319,7 +329,7 @@ function runCheck(args) {
     const check = (key, source) => {
       const value = loc[key];
       if (value === undefined || st[key]?.status === NEEDS_TRANSLATION) return;
-      for (const e of validateTranslation(source, value, { doNotTranslate: dnt })) {
+      for (const e of validateTranslation(source, value, glossaryRules(glossary, key))) {
         (HARD.test(e) ? errors : warnings).push(`${key}: ${e}`);
       }
       const warn = lengthWarning(key, source, value);
@@ -363,9 +373,10 @@ function runExport(args) {
   const config = loadConfig();
   const en = loadEn();
   const status = loadStatus();
+  const glossary = loadGlossary();
   fs.mkdirSync(reviewDir, { recursive: true });
   for (const locale of resolveLocales(args.exportReview)) {
-    const rows = reviewRows({ en, loc: loadLocale(locale), locale, status: status[locale] ?? {}, allowlist: config.allowlist, all: args.all });
+    const rows = reviewRows({ en, loc: loadLocale(locale), locale, status: status[locale] ?? {}, allowlist: config.allowlist, glossary, all: args.all });
     const file = path.join(reviewDir, `${locale}.csv`);
     fs.writeFileSync(file, toCsv(rows), "utf8");
     console.log(`${path.relative(process.cwd(), file)}: ${rows.length} row(s) to review`);
@@ -387,7 +398,7 @@ function runImport(args) {
     locale,
     status: status[locale] ?? {},
     date: today(),
-    doNotTranslate: loadGlossary().doNotTranslate,
+    glossary: loadGlossary(),
   });
   writeLocale(locale, r.loc);
   status[locale] = r.status;

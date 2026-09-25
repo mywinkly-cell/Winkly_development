@@ -63,11 +63,36 @@ function doNotTranslateIn(source, terms = []) {
 }
 
 /**
+ * Glossary rules for one key: never-translate names (all keys) and English words that must stay
+ * English in this key (glossary.keepEnglishInKeys, e.g. "match" where it is the dating noun).
+ * Plural forms (key_few, …) follow their base key.
+ */
+function glossaryRules(glossary = {}, key = "") {
+  const base = key.replace(/_(zero|one|two|few|many|other)$/, "");
+  const keepEnglish = Object.entries(glossary.keepEnglishInKeys ?? {})
+    .filter(([term, keys]) => !term.startsWith("_") && Array.isArray(keys) && (keys.includes(key) || keys.includes(base)))
+    .map(([term]) => term);
+  return { doNotTranslate: glossary.doNotTranslate ?? [], keepEnglish };
+}
+
+/** Glossary problems only: a never-translate name dropped, or a keep-English word translated. */
+function glossaryViolations(source, translation, { doNotTranslate = [], keepEnglish = [] } = {}) {
+  const errors = [];
+  for (const term of doNotTranslateIn(source, doNotTranslate)) {
+    if (!translation.includes(term)) errors.push(`"${term}" must stay untranslated`);
+  }
+  for (const term of keepEnglish) {
+    if (!translation.toLowerCase().includes(term.toLowerCase())) errors.push(`"${term}" must stay in English`);
+  }
+  return errors;
+}
+
+/**
  * Problems with `translation` as a rendering of `source`. Empty array = valid.
  * Placeholders and tags must match exactly (none missing, none added); emoji and line breaks
- * must be kept; never-translate terms in the source must appear verbatim.
+ * must be kept; glossary rules (see glossaryRules) must hold.
  */
-function validateTranslation(source, translation, { doNotTranslate = [] } = {}) {
+function validateTranslation(source, translation, rules = {}) {
   const errors = [];
   if (typeof translation !== "string" || translation.trim() === "") return ["empty translation"];
   const check = (label, fn) => {
@@ -84,9 +109,7 @@ function validateTranslation(source, translation, { doNotTranslate = [] } = {}) 
   if (lineBreaks(source) !== lineBreaks(translation)) {
     errors.push(`line breaks: expected ${lineBreaks(source)}, got ${lineBreaks(translation)}`);
   }
-  for (const term of doNotTranslateIn(source, doNotTranslate)) {
-    if (!translation.includes(term)) errors.push(`"${term}" must stay untranslated`);
-  }
+  errors.push(...glossaryViolations(source, translation, rules));
   return errors;
 }
 
@@ -177,23 +200,28 @@ function pluralSource(locale, category, group) {
  *  - plain keys: recorded placeholders (needs_translation) and translations whose English changed
  *  - plural groups: every category the language needs (from en _one/_other), when any form is
  *    missing, a placeholder or stale
+ *  - machine / legacy translations that break the glossary (a never-translate name or a
+ *    keep-English word translated anyway)
  * With `force`, every non-allowlisted key except human translations is redone.
  * `only` limits keys to a prefix.
  *
  * @returns {{ items: Array<{ key, source, previous?, reason, plural? }> }}
  */
-function planLocale({ en, loc, locale, status = {}, allowlist = {}, force = false, only }) {
+function planLocale({ en, loc, locale, status = {}, allowlist = {}, glossary = {}, force = false, only }) {
   const items = [];
   const groups = pluralGroups(en);
   const groupKeys = new Set(groups.flatMap((g) => [`${g.base}_one`, `${g.base}_other`]));
   const inScope = (key) => !only || key.startsWith(only);
 
-  const reasonFor = (key, enValue) => {
+  const reasonFor = (key, enValue, source = enValue) => {
     const entry = status[key];
     if (!(key in loc)) return "missing";
     if (entry?.status === NEEDS_TRANSLATION) return "untranslated";
     if (loc[key] === enValue && !(entry?.status === TRANSLATED && entry.same_as_en)) return "untranslated";
     if (isStale(key, entry, en)) return "english changed";
+    if (entry?.method !== "human" && glossaryViolations(source, loc[key], glossaryRules(glossary, key)).length) {
+      return "glossary";
+    }
     if (force && entry?.method !== "human") return "forced";
     return null;
   };
@@ -216,7 +244,7 @@ function planLocale({ en, loc, locale, status = {}, allowlist = {}, force = fals
       if (key in loc) existing[cat] = loc[key];
       const source = pluralSource(locale, cat, group);
       if (isAllowlisted(key, source, locale, allowlist)) continue;
-      const reason = reasonFor(key, en[key] ?? source);
+      const reason = reasonFor(key, en[key] ?? source, source);
       if (reason) need.push({ cat, key, source, reason });
     }
     for (const n of need) {
@@ -274,7 +302,9 @@ const PROTECT = String.raw`\{\{\s*[^}]+?\s*\}\}|<\/?[A-Za-z0-9]+\s*\/?>|\p{Exten
 
 function protectForDeepl(text, doNotTranslate = []) {
   const names = [...doNotTranslate].sort((a, b) => b.length - a.length).map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const re = new RegExp(`${PROTECT}${names.length ? `|${names.join("|")}` : ""}|\\n`, "gu");
+  // Whole words only: "match" is protected, "matching" is not.
+  const nameAlt = names.length ? `|(?<!\\p{L})(?:${names.join("|")})(?!\\p{L})` : "";
+  const re = new RegExp(`${PROTECT}${nameAlt}|\\n`, "gu");
   let out = "";
   let last = 0;
   for (const m of text.matchAll(re)) {
@@ -361,7 +391,7 @@ const APPROVED = /^(x|y|yes|ja|так|tak|oui|sí|si|1|true|ok|✓|✔)$/i;
  * Rows for a native speaker: every translatable key (plural forms included) that is not yet
  * human-reviewed — or every key with `all`.
  */
-function reviewRows({ en, loc, locale, status = {}, allowlist = {}, all = false }) {
+function reviewRows({ en, loc, locale, status = {}, allowlist = {}, glossary = {}, all = false }) {
   const rows = [];
   const push = (key, source) => {
     if (isAllowlisted(key, source, locale, allowlist)) return;
@@ -372,6 +402,7 @@ function reviewRows({ en, loc, locale, status = {}, allowlist = {}, all = false 
     if (isStale(key, entry, en)) notes.push("English changed since translation");
     const warn = lengthWarning(key, source, loc[key]);
     if (warn) notes.push("too long for a button/chip/tab");
+    if (typeof loc[key] === "string") notes.push(...glossaryViolations(source, loc[key], glossaryRules(glossary, key)));
     rows.push({
       key,
       english: source,
@@ -399,7 +430,7 @@ function reviewRows({ en, loc, locale, status = {}, allowlist = {}, all = false 
  *
  * @returns {{ loc, status, corrected: string[], approved: string[], skipped: Array<{ key, reason }> }}
  */
-function applyReview({ rows, en, loc, locale, status = {}, date, doNotTranslate = [] }) {
+function applyReview({ rows, en, loc, locale, status = {}, date, glossary = {} }) {
   const nextLoc = { ...loc };
   const nextStatus = { ...status };
   const corrected = [];
@@ -424,7 +455,7 @@ function applyReview({ rows, en, loc, locale, status = {}, date, doNotTranslate 
     }
     const correction = row.correction ?? "";
     if (correction.trim() !== "") {
-      const errors = validateTranslation(source, correction, { doNotTranslate });
+      const errors = validateTranslation(source, correction, glossaryRules(glossary, key));
       if (errors.length) {
         skipped.push({ key, reason: errors.join("; ") });
         continue;
@@ -456,6 +487,8 @@ module.exports = {
   emoji,
   validateTranslation,
   doNotTranslateIn,
+  glossaryRules,
+  glossaryViolations,
   isLengthChecked,
   lengthWarning,
   pluralCategories,

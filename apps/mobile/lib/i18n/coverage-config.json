@@ -30,7 +30,12 @@
       "WhatsApp",
       "Google",
       "Apple",
-      "Spotify"
+      "Spotify",
+      "Weekly Sparks",
+      "Match",
+      "Matches",
+      "Match AI",
+      "Match Agent"
     ],
     "keys": [
       "onboarding.review.fullName",

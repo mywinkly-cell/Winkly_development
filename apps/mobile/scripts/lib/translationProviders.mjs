@@ -17,7 +17,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import translate from "./i18nTranslate.js";
 
-const { protectForDeepl, restoreFromDeepl, restoreCount, sampleNumber } = translate;
+const { protectForDeepl, restoreFromDeepl, restoreCount, sampleNumber, glossaryRules } = translate;
 
 export function createProvider(name, env = process.env) {
   if (name === "anthropic") return anthropicProvider(env);
@@ -46,6 +46,11 @@ function localeGuide(locale, glossary) {
     return `- ${t}${note ? ` — ${note}` : ""}`;
   });
   return { language, tone, terms, dnt };
+}
+
+/** English words `item` must keep (glossary.keepEnglishInKeys). */
+function keepEnglish(glossary, item) {
+  return glossaryRules(glossary, item.key).keepEnglish;
 }
 
 // ─── Anthropic (Claude) ────────────────────────────────────────────────────────
@@ -90,6 +95,7 @@ function anthropicSystemPrompt(locale, glossary) {
     "Keep buttons, chips, tabs and titles about as short as the English.",
     "",
     'Input: a JSON array of items { id, key, text, previous?, plural? }. "key" hints at where the string appears.',
+    '"keep_in_english" lists English words this string must keep in English (Latin letters, local inflection allowed).',
     '"previous" is an older translation made for different English; reuse its wording where it still fits.',
     '"plural" means: write the form for the CLDR plural category given, i.e. the text shown when {{count}} is one',
     "of the example numbers. English one/other forms and the language's existing forms are included for context.",
@@ -128,6 +134,7 @@ function anthropicProvider(env) {
               },
             }
           : {}),
+        ...(keepEnglish(glossary, it).length ? { keep_in_english: keepEnglish(glossary, it) } : {}),
         ...(retryErrors[it.id] ? { rejected_before_because: retryErrors[it.id] } : {}),
       }));
 
@@ -198,12 +205,16 @@ function deeplProvider(env) {
     batchSize: 50,
     async translate(items, { locale, glossary }) {
       const dnt = glossary.doNotTranslate ?? [];
+      const protectedWords = (it) => [
+        ...dnt,
+        ...keepEnglish(glossary, it).flatMap((w) => [w, `${w}es`, `${w}s`].flatMap((v) => [v, v[0].toUpperCase() + v.slice(1)])),
+      ];
       const prepared = items.map((it) => {
         if (!it.plural || !it.source.includes("{{count}}")) return { it, text: it.source };
         const n = sampleNumber(it);
         return { it, n, text: it.source.replace(/\{\{\s*count\s*\}\}/g, String(n)) };
       });
-      const out = await call(prepared.map((p) => protectForDeepl(p.text, dnt)), locale, glossary);
+      const out = await call(prepared.map((p) => protectForDeepl(p.text, protectedWords(p.it))), locale, glossary);
       const result = {};
       prepared.forEach((p, i) => {
         let text = restoreFromDeepl(out[i]);

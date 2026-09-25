@@ -1,6 +1,6 @@
 {
-  "_readme": "Used by scripts/translate-i18n.mjs (see docs/I18N.md). doNotTranslate: kept verbatim in every language (the script fails a translation that drops one). terms: preferred translation per language; the LLM provider gets them as rules, DeepL does not. tone: how to address the user. Bump `version` after changing anything here so cached machine translations are redone.",
-  "version": 1,
+  "_readme": "Used by scripts/translate-i18n.mjs (see docs/I18N.md). doNotTranslate: kept verbatim in every language (the script fails a translation that drops one). keepEnglishInKeys: English words that must stay English (Latin letters, local inflection allowed, checked case-insensitively) in the listed keys only — for words that are also ordinary English elsewhere (\"match\" the verb). terms: preferred translation per language; the LLM provider gets them as rules, DeepL does not. tone: how to address the user. Bump `version` after changing anything here so cached machine translations are redone.",
+  "version": 2,
   "product": "Winkly is a social app for meeting people and doing things together: dating (romance mode), making friends, business networking and events. It suggests plans and date ideas, has a planner, group chats, a weekly personalised suggestion called the Weekly Spark, an AI concierge, and a paid Premium tier. Copy is short, friendly, warm and playful, never formal or corporate. Most strings are UI labels, buttons, chips, tabs and short notifications on a phone screen, so keep them as short as the English.",
   "doNotTranslate": [
     "Winkly",
@@ -16,67 +16,290 @@
     "Spotify"
   ],
   "doNotTranslateNotes": {
-    "Weekly Spark": "Feature name, like a brand: keep it in English everywhere (most tier-1 languages already do). Articles/possessives around it are translated: \"Dein Weekly Spark\", \"Twój Weekly Spark\".",
+    "Weekly Spark": "Feature name, like a brand: keep it in English in every language. Articles/possessives around it are translated: \"Dein Weekly Spark\", \"Twój Weekly Spark\", \"Твій Weekly Spark\".",
     "Super": "Name of a subscription tier next to Premium."
+  },
+  "keepEnglishInKeys": {
+    "_note": "The translation of each listed key must contain the English word (case-insensitive, Latin letters). Existing machine/legacy translations that don't are retranslated.",
+    "match": [
+      "modes.matches",
+      "notifications.matchesMessages",
+      "notifications.matchesMessagesSub",
+      "notifications.emptySubtitle",
+      "planner.datesScreen.subtitle",
+      "planner.datesScreen.emptySubtitle",
+      "concierge.form.noMatches",
+      "concierge.form.placeholderChats",
+      "concierge.invite.subtitle",
+      "concierge.invite.option.matches",
+      "concierge.picker.match",
+      "concierge.social.personType.match",
+      "concierge.social.option.invite_match",
+      "onboarding.wizard.validation.city",
+      "onboarding.location.promptMessage",
+      "onboarding.profile.photoTip",
+      "chat.attach.matchAi",
+      "chat.inbox.empty.friendsMatches",
+      "chat.inbox.empty.romanceMatches",
+      "chat.matchAgent.title",
+      "chat.matchContext.itsAMatch",
+      "chat.matches.fallbackName",
+      "chat.matches.loading",
+      "chat.matches.romanceTitle",
+      "chat.newChatScreen.createGroupSubtitle",
+      "chat.newChatScreen.emptyRomance",
+      "chat.newChatScreen.loadMatchesFailed",
+      "chat.newChatScreen.romanceTitle",
+      "groups.invite.noMatchesTitle",
+      "paywall.premium.featurePriority",
+      "paywall.aiFeature.smart_matching.message",
+      "paywall.aiFeature.match_bridge.title",
+      "paywall.aiFeature.match_bridge.message"
+    ]
   },
   "terms": {
     "plan": {
       "note": "A concrete thing to do together (date idea, outing) that the app suggests or the user creates; not a subscription plan unless the English says subscription.",
-      "de": "Plan", "fr": "plan", "es": "plan", "it": "piano", "pl": "plan", "uk": "план", "nl": "plan", "pt": "plano",
-      "ru": "план", "bg": "план", "cs": "plán", "da": "plan", "el": "πλάνο", "et": "plaan", "fi": "suunnitelma", "ga": "plean",
-      "hr": "plan", "hu": "terv", "lt": "planas", "lv": "plāns", "mt": "pjan", "ro": "plan", "sk": "plán", "sl": "načrt", "sv": "plan"
+      "de": "Plan",
+      "fr": "plan",
+      "es": "plan",
+      "it": "piano",
+      "pl": "plan",
+      "uk": "план",
+      "nl": "plan",
+      "pt": "plano",
+      "ru": "план",
+      "bg": "план",
+      "cs": "plán",
+      "da": "plan",
+      "el": "πλάνο",
+      "et": "plaan",
+      "fi": "suunnitelma",
+      "ga": "plean",
+      "hr": "plan",
+      "hu": "terv",
+      "lt": "planas",
+      "lv": "plāns",
+      "mt": "pjan",
+      "ro": "plan",
+      "sk": "plán",
+      "sl": "načrt",
+      "sv": "plan"
     },
     "planner": {
       "note": "The in-app calendar of saved plans and events.",
-      "de": "Planer", "fr": "planner", "es": "planificador", "it": "planner", "pl": "planer", "uk": "планер", "nl": "planner", "pt": "planeador",
-      "ru": "планер", "bg": "планер", "cs": "plánovač", "da": "planlægger", "el": "planner", "et": "planeerija", "fi": "suunnittelija", "ga": "pleanálaí",
-      "hr": "planer", "hu": "tervező", "lt": "planuoklis", "lv": "plānotājs", "mt": "planner", "ro": "planificator", "sk": "plánovač", "sl": "planer", "sv": "planerare"
+      "de": "Planer",
+      "fr": "planner",
+      "es": "planificador",
+      "it": "planner",
+      "pl": "planer",
+      "uk": "планер",
+      "nl": "planner",
+      "pt": "planeador",
+      "ru": "планер",
+      "bg": "планер",
+      "cs": "plánovač",
+      "da": "planlægger",
+      "el": "planner",
+      "et": "planeerija",
+      "fi": "suunnittelija",
+      "ga": "pleanálaí",
+      "hr": "planer",
+      "hu": "tervező",
+      "lt": "planuoklis",
+      "lv": "plānotājs",
+      "mt": "planner",
+      "ro": "planificator",
+      "sk": "plánovač",
+      "sl": "planer",
+      "sv": "planerare"
     },
     "match": {
-      "note": "Two people who liked each other (dating/friends), as in dating apps; never a sports match. Where the language uses the English loanword, inflect it naturally.",
-      "de": "Match", "fr": "match", "es": "match", "it": "match", "pl": "match", "uk": "метч", "nl": "match", "pt": "match",
-      "ru": "мэтч", "bg": "мач", "cs": "match", "da": "match", "el": "match", "et": "match", "fi": "mätsi", "ga": "meaitseáil",
-      "hr": "match", "hu": "match", "lt": "match", "lv": "match", "mt": "match", "ro": "match", "sk": "match", "sl": "ujemanje", "sv": "match"
+      "note": "Dating/friends match (two people who liked each other) and the feature names Match AI, Match Agent, AI Match Bridge: ALWAYS the English word \"Match\" / \"Matches\" in Latin letters, in every language — never translated or transliterated (not \"Treffer\", \"dopasowanie\", \"збіг\", \"метч\", \"матч\"). In inflecting languages keep the English stem (\"matche\", \"matchów\"). Only the verb \"to match\" (\"Passwords do not match\", \"matching your interests\") and a sports match are translated normally.",
+      "de": "Match",
+      "fr": "Match",
+      "es": "Match",
+      "it": "Match",
+      "pl": "Match",
+      "uk": "Match",
+      "nl": "Match",
+      "pt": "Match",
+      "ru": "Match",
+      "bg": "Match",
+      "cs": "Match",
+      "da": "Match",
+      "el": "Match",
+      "et": "Match",
+      "fi": "Match",
+      "ga": "Match",
+      "hr": "Match",
+      "hu": "Match",
+      "lt": "Match",
+      "lv": "Match",
+      "mt": "Match",
+      "ro": "Match",
+      "sk": "Match",
+      "sl": "Match",
+      "sv": "Match"
     },
     "event": {
       "note": "Something happening at a place and time (concert, meetup). \"Events\" is also the name of a mode; as a mode name keep the language's word for events.",
-      "de": "Event", "fr": "événement", "es": "evento", "it": "evento", "pl": "wydarzenie", "uk": "подія", "nl": "evenement", "pt": "evento",
-      "ru": "событие", "bg": "събитие", "cs": "událost", "da": "begivenhed", "el": "εκδήλωση", "et": "üritus", "fi": "tapahtuma", "ga": "imeacht",
-      "hr": "događaj", "hu": "esemény", "lt": "renginys", "lv": "pasākums", "mt": "avveniment", "ro": "eveniment", "sk": "udalosť", "sl": "dogodek", "sv": "evenemang"
+      "de": "Event",
+      "fr": "événement",
+      "es": "evento",
+      "it": "evento",
+      "pl": "wydarzenie",
+      "uk": "подія",
+      "nl": "evenement",
+      "pt": "evento",
+      "ru": "событие",
+      "bg": "събитие",
+      "cs": "událost",
+      "da": "begivenhed",
+      "el": "εκδήλωση",
+      "et": "üritus",
+      "fi": "tapahtuma",
+      "ga": "imeacht",
+      "hr": "događaj",
+      "hu": "esemény",
+      "lt": "renginys",
+      "lv": "pasākums",
+      "mt": "avveniment",
+      "ro": "eveniment",
+      "sk": "udalosť",
+      "sl": "dogodek",
+      "sv": "evenemang"
     },
     "Premium": {
       "note": "Name of the paid subscription tier: keep \"Premium\" (capitalised) in every language. As a plain adjective (\"premium dining\") translate normally.",
-      "de": "Premium", "fr": "Premium", "es": "Premium", "it": "Premium", "pl": "Premium", "uk": "Premium", "nl": "Premium", "pt": "Premium",
-      "ru": "Premium", "bg": "Premium", "cs": "Premium", "da": "Premium", "el": "Premium", "et": "Premium", "fi": "Premium", "ga": "Premium",
-      "hr": "Premium", "hu": "Premium", "lt": "Premium", "lv": "Premium", "mt": "Premium", "ro": "Premium", "sk": "Premium", "sl": "Premium", "sv": "Premium"
+      "de": "Premium",
+      "fr": "Premium",
+      "es": "Premium",
+      "it": "Premium",
+      "pl": "Premium",
+      "uk": "Premium",
+      "nl": "Premium",
+      "pt": "Premium",
+      "ru": "Premium",
+      "bg": "Premium",
+      "cs": "Premium",
+      "da": "Premium",
+      "el": "Premium",
+      "et": "Premium",
+      "fi": "Premium",
+      "ga": "Premium",
+      "hr": "Premium",
+      "hu": "Premium",
+      "lt": "Premium",
+      "lv": "Premium",
+      "mt": "Premium",
+      "ro": "Premium",
+      "sk": "Premium",
+      "sl": "Premium",
+      "sv": "Premium"
     }
   },
   "tone": {
     "_default": "Friendly, warm and casual, like a good friend recommending something. Address the user informally. Short sentences, no corporate phrasing.",
-    "de": { "language": "German", "address": "du (informal); capitalise nothing extra (\"du\", \"dein\")" },
-    "fr": { "language": "French", "address": "tu" },
-    "es": { "language": "Spanish (Spain)", "address": "tú" },
-    "it": { "language": "Italian", "address": "tu" },
-    "pl": { "language": "Polish", "address": "ty (2nd person singular, informal)" },
-    "uk": { "language": "Ukrainian", "address": "ти (informal); never \"Ви/ваш\"" },
-    "nl": { "language": "Dutch", "address": "je/jij" },
-    "pt": { "language": "European Portuguese (Portugal)", "address": "tu; use European spelling and vocabulary (\"planear\", \"ecrã\"), not Brazilian" },
-    "ru": { "language": "Russian", "address": "ты (informal); never \"Вы/ваш\"" },
-    "bg": { "language": "Bulgarian", "address": "ти" },
-    "cs": { "language": "Czech", "address": "ty (tykání)" },
-    "da": { "language": "Danish", "address": "du" },
-    "el": { "language": "Greek", "address": "εσύ (informal 2nd person singular)" },
-    "et": { "language": "Estonian", "address": "sina" },
-    "fi": { "language": "Finnish", "address": "sinä (sinuttelu)" },
-    "ga": { "language": "Irish (Gaeilge)", "address": "tú" },
-    "hr": { "language": "Croatian", "address": "ti" },
-    "hu": { "language": "Hungarian", "address": "te (tegeződés)" },
-    "lt": { "language": "Lithuanian", "address": "tu" },
-    "lv": { "language": "Latvian", "address": "tu" },
-    "mt": { "language": "Maltese", "address": "int (informal)" },
-    "ro": { "language": "Romanian", "address": "tu" },
-    "sk": { "language": "Slovak", "address": "ty (tykanie)" },
-    "sl": { "language": "Slovenian", "address": "ti (tikanje)" },
-    "sv": { "language": "Swedish", "address": "du" }
+    "de": {
+      "language": "German",
+      "address": "du (informal); capitalise nothing extra (\"du\", \"dein\")"
+    },
+    "fr": {
+      "language": "French",
+      "address": "tu"
+    },
+    "es": {
+      "language": "Spanish (Spain)",
+      "address": "tú"
+    },
+    "it": {
+      "language": "Italian",
+      "address": "tu"
+    },
+    "pl": {
+      "language": "Polish",
+      "address": "ty (2nd person singular, informal)"
+    },
+    "uk": {
+      "language": "Ukrainian",
+      "address": "ти (informal); never \"Ви/ваш\""
+    },
+    "nl": {
+      "language": "Dutch",
+      "address": "je/jij"
+    },
+    "pt": {
+      "language": "European Portuguese (Portugal)",
+      "address": "tu; use European spelling and vocabulary (\"planear\", \"ecrã\"), not Brazilian"
+    },
+    "ru": {
+      "language": "Russian",
+      "address": "ты (informal); never \"Вы/ваш\""
+    },
+    "bg": {
+      "language": "Bulgarian",
+      "address": "ти"
+    },
+    "cs": {
+      "language": "Czech",
+      "address": "ty (tykání)"
+    },
+    "da": {
+      "language": "Danish",
+      "address": "du"
+    },
+    "el": {
+      "language": "Greek",
+      "address": "εσύ (informal 2nd person singular)"
+    },
+    "et": {
+      "language": "Estonian",
+      "address": "sina"
+    },
+    "fi": {
+      "language": "Finnish",
+      "address": "sinä (sinuttelu)"
+    },
+    "ga": {
+      "language": "Irish (Gaeilge)",
+      "address": "tú"
+    },
+    "hr": {
+      "language": "Croatian",
+      "address": "ti"
+    },
+    "hu": {
+      "language": "Hungarian",
+      "address": "te (tegeződés)"
+    },
+    "lt": {
+      "language": "Lithuanian",
+      "address": "tu"
+    },
+    "lv": {
+      "language": "Latvian",
+      "address": "tu"
+    },
+    "mt": {
+      "language": "Maltese",
+      "address": "int (informal)"
+    },
+    "ro": {
+      "language": "Romanian",
+      "address": "tu"
+    },
+    "sk": {
+      "language": "Slovak",
+      "address": "ty (tykanie)"
+    },
+    "sl": {
+      "language": "Slovenian",
+      "address": "ti (tikanje)"
+    },
+    "sv": {
+      "language": "Swedish",
+      "address": "du"
+    }
   }
 }

@@ -1,6 +1,7 @@
 import { hashEn, NEEDS_TRANSLATION, TRANSLATED } from "../scripts/lib/i18nCoverage";
 import {
   applyReview,
+  glossaryRules,
   isLengthChecked,
   lengthWarning,
   parseCsv,
@@ -43,6 +44,24 @@ describe("validateTranslation", () => {
       '"Weekly Spark" must stay untranslated',
     ]);
     expect(validateTranslation("", "")).toEqual(["empty translation"]);
+  });
+});
+
+describe("glossary rules", () => {
+  const glossary = { doNotTranslate: ["Weekly Spark"], keepEnglishInKeys: { _note: "x", match: ["chat.title", "chat.members"] } };
+
+  it("applies keep-English words only to the listed keys (and their plural forms)", () => {
+    expect(glossaryRules(glossary, "chat.title").keepEnglish).toEqual(["match"]);
+    expect(glossaryRules(glossary, "chat.members_few").keepEnglish).toEqual(["match"]);
+    expect(glossaryRules(glossary, "auth.mismatch").keepEnglish).toEqual([]);
+  });
+
+  it("requires the English word, allowing case and local inflection but not translation", () => {
+    const rules = glossaryRules(glossary, "chat.title");
+    expect(validateTranslation("Your matches", "Deine Matches", rules)).toEqual([]);
+    expect(validateTranslation("Your matches", "Twoje matche", rules)).toEqual([]);
+    expect(validateTranslation("Your matches", "Твої збіги", rules)).toEqual(['"match" must stay in English']);
+    expect(validateTranslation("Passwords do not match", "Passwörter stimmen nicht überein", glossaryRules(glossary, "auth.mismatch"))).toEqual([]);
   });
 });
 
@@ -123,6 +142,19 @@ describe("planLocale", () => {
     expect(items.find((i) => i.key === "m_few")?.plural).toMatchObject({ category: "few", existing: { one: "{{count}} członek" } });
   });
 
+  it("redoes machine/legacy translations that break the glossary, never human ones", () => {
+    const glossary = { doNotTranslate: ["Weekly Spark"], keepEnglishInKeys: { match: ["title", "sub"] } };
+    const en2 = { spark: "Your Weekly Spark", title: "Your matches", sub: "It's a match!" };
+    const rec = (v: string, method = "legacy") => ({ status: TRANSLATED, method, reviewed: false, en_hash: hashEn(v) });
+    const loc = { spark: "Ваша щотижнева іскра", title: "Твої збіги", sub: "Це метч!" };
+    const status = { spark: rec(en2.spark), title: rec(en2.title), sub: rec(en2.sub, "human") };
+    const { items } = planLocale({ en: en2, loc, locale: "uk", status, glossary });
+    expect(items.map((i) => [i.key, i.reason])).toEqual([
+      ["spark", "glossary"],
+      ["title", "glossary"],
+    ]);
+  });
+
   it("with force redoes machine and legacy translations but never human ones", () => {
     const loc = { hello: "Hallo", bye: "Tschüss", premium: "Premium", ok: "OK", m_one: "a {{count}}", m_other: "b {{count}}" };
     const human = { status: TRANSLATED, method: "human", reviewed: true, en_hash: hashEn("Hello") };
@@ -142,6 +174,7 @@ describe("translationRecord", () => {
 describe("DeepL markup", () => {
   it("protects tokens and names and restores them", () => {
     const text = "Hi {{name}} & <bold>Winkly</bold> 💫\nbye";
+    expect(protectForDeepl("matches, matching", ["match", "matches"])).toBe("<x>matches</x>, matching");
     const xml = protectForDeepl(text, dnt);
     expect(xml).toBe("Hi <x>{{name}}</x> &amp; <x>&lt;bold&gt;</x><x>Winkly</x><x>&lt;/bold&gt;</x> <x>💫</x><lb/>bye");
     expect(restoreFromDeepl(xml)).toBe(text);
