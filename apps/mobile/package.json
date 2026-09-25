@@ -25,7 +25,8 @@
     "audit-i18n": "node scripts/audit-i18n.mjs",
     "audit-a11y": "node scripts/lint-a11y-touchables.mjs",
     "audit-design-tokens": "node scripts/audit-design-tokens.mjs",
-    "sync-i18n": "node scripts/sync-i18n-keys.mjs"
+    "sync-i18n": "node scripts/sync-i18n-keys.mjs",
+    "translate-i18n": "node scripts/translate-i18n.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/archivo": "^0.4.2",
@@ -87,6 +88,7 @@
     "uuid": "^14.0.0"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "@babel/core": "^7.28.0",
     "@react-native/jest-preset": "0.86.3",
     "@types/jest": "29.5.14",

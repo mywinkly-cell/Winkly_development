@@ -140,6 +140,7 @@ module.exports = {
   NEEDS_TRANSLATION,
   hashEn,
   isAllowlisted,
+  isRecordedPlaceholder,
   isCovered,
   computeCoverage,
   syncLocale,

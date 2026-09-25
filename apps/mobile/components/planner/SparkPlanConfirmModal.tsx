@@ -17,7 +17,6 @@ import {
   StyleSheet,
   Pressable,
 } from "react-native";
-import { formatDayDate } from "@/lib/i18n/format";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -188,7 +187,7 @@ export function SparkPlanConfirmModal({
               locationLineDisplay ||
               undefined
             }
-            planDate={formatDayDate(dateForPlan)}
+            planDate={dateForPlan.toLocaleDateString()}
             onSelect={onInviteSelect}
             onBack={() => setStep("confirm")}
             showInlineBack
