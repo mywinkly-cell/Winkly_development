@@ -4,15 +4,17 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl, StyleSheet } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Card, Header, Input, TextButton } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 import { getGroupMeetups, type GroupMeetup } from "@/lib/access/planner";
+import { useAppLocaleTag } from "@/lib/i18n/appLocale";
 
-function formatTimeLabel(iso: string): string {
+function formatTimeLabel(iso: string, locale: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString(undefined, {
+  return d.toLocaleString(locale, {
     weekday: "short",
     hour: "2-digit",
     minute: "2-digit",
@@ -21,6 +23,8 @@ function formatTimeLabel(iso: string): string {
 
 export default function FriendsMeetups() {
   const router = useRouter();
+  const { t } = useTranslation();
+  const appLocale = useAppLocaleTag();
   const theme = useAppTheme();
   const styles = createStyles(theme);
   const [query, setQuery] = useState("");
@@ -60,10 +64,10 @@ export default function FriendsMeetups() {
   return (
     <View style={styles.screen}>
       <Header
-        title="Friends meetups"
+        title={t("planner.meetupsScreen.title")}
         onBack={() => router.back()}
         trailing={
-          <TextButton title="Groups" onPress={() => router.push({ pathname: "/groups", params: { mode: "friends" } })} style={styles.headerAction} />
+          <TextButton title={t("planner.meetupsScreen.groups")} onPress={() => router.push({ pathname: "/groups", params: { mode: "friends" } })} style={styles.headerAction} />
         }
       />
       <ScrollView
@@ -80,20 +84,17 @@ export default function FriendsMeetups() {
         }
       >
         <Card style={styles.card}>
-          <Text style={styles.title}>Your group plans</Text>
-          <Text style={styles.subtitle}>Confirmed group meetups in Friends mode (2+ people).</Text>
+          <Text style={styles.title}>{t("planner.meetupsScreen.heading")}</Text>
+          <Text style={styles.subtitle}>{t("planner.meetupsScreen.subtitle")}</Text>
 
-          <Input value={query} onChangeText={setQuery} placeholder="Search meetups..." containerStyle={styles.searchContainer} />
+          <Input value={query} onChangeText={setQuery} placeholder={t("planner.meetupsScreen.searchPlaceholder")} containerStyle={styles.searchContainer} />
         </Card>
 
         {loading ? (
           <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: theme.spacing.xxl }} />
         ) : filtered.length === 0 ? (
           <Card style={styles.itemCard}>
-            <Text style={styles.itemSub}>
-              No group meetups yet. Plan one from a group chat with &quot;Plan with group&quot;, and it will show up here once
-              confirmed.
-            </Text>
+            <Text style={styles.itemSub}>{t("planner.meetupsScreen.empty")}</Text>
           </Card>
         ) : (
           filtered.map((it) => (
@@ -102,9 +103,9 @@ export default function FriendsMeetups() {
                 <Text style={styles.itemTitle} numberOfLines={1}>
                   {it.title}
                 </Text>
-                <Text style={styles.badge}>{it.participant_count} people</Text>
+                <Text style={styles.badge}>{t("planner.meetupsScreen.people", { count: it.participant_count })}</Text>
               </View>
-              <Text style={styles.itemSub}>{formatTimeLabel(it.starts_at)}</Text>
+              <Text style={styles.itemSub}>{formatTimeLabel(it.starts_at, appLocale)}</Text>
             </Card>
           ))
         )}
@@ -123,8 +124,8 @@ function createStyles(theme: AppTheme) {
     subtitle: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginBottom: theme.spacing.md },
     searchContainer: { marginBottom: 0 },
     itemCard: { marginBottom: theme.spacing.md },
-    itemTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-    itemTitle: { ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textPrimary },
+    itemTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: theme.spacing.sm },
+    itemTitle: { ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textPrimary, flexShrink: 1 },
     badge: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.primary },
     itemSub: { ...theme.type.body, fontFamily: theme.type.body.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.sm },
   });

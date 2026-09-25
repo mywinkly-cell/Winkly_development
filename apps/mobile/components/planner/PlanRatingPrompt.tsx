@@ -21,6 +21,7 @@ import {
   Switch,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography } from "@/constants/tokens";
 import { StarRating } from "@/components/planner/StarRating";
 import { ratePlan, setPlanVisibility, type SharedPlan } from "@/lib/ai/sharedPlans";
@@ -32,6 +33,7 @@ export type PlanRatingPromptProps = {
 };
 
 export function PlanRatingPrompt({ plan, onDone, onDismiss }: PlanRatingPromptProps) {
+  const { t } = useTranslation();
   const [stars, setStars] = useState(0);
   const [comment, setComment] = useState("");
   const [wasAdjusted, setWasAdjusted] = useState(false);
@@ -60,7 +62,7 @@ export function PlanRatingPrompt({ plan, onDone, onDismiss }: PlanRatingPromptPr
       setSubmitted(true);
       onDone?.(stars);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save your rating.");
+      setError(e instanceof Error ? e.message : t("planner.rating.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -71,7 +73,7 @@ export function PlanRatingPrompt({ plan, onDone, onDismiss }: PlanRatingPromptPr
       <View style={[styles.card, styles.cardDone]}>
         <Ionicons name="checkmark-circle" size={20} color={Colors.successGreen} />
         <Text style={styles.doneText}>
-          {share ? "Thanks — shared so others can use it too." : "Thanks for the feedback."}
+          {share ? t("planner.rating.thanksShared") : t("planner.rating.thanks")}
         </Text>
       </View>
     );
@@ -82,16 +84,16 @@ export function PlanRatingPrompt({ plan, onDone, onDismiss }: PlanRatingPromptPr
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={styles.title} numberOfLines={2}>
-            How was {plan.title}?
+            {t("planner.rating.howWas", { title: plan.title })}
           </Text>
-          <Text style={styles.subtitle}>Your rating helps us suggest better plans.</Text>
+          <Text style={styles.subtitle}>{t("planner.rating.subtitle")}</Text>
         </View>
         {onDismiss ? (
           <TouchableOpacity
             onPress={onDismiss}
             hitSlop={10}
             accessibilityRole="button"
-            accessibilityLabel="Dismiss rating prompt"
+            accessibilityLabel={t("planner.rating.dismissA11y")}
           >
             <Ionicons name="close" size={20} color={Colors.gray500} />
           </TouchableOpacity>
@@ -104,33 +106,33 @@ export function PlanRatingPrompt({ plan, onDone, onDismiss }: PlanRatingPromptPr
         <View style={styles.expanded}>
           <TextInput
             style={styles.input}
-            placeholder="Anything worth knowing? (optional)"
+            placeholder={t("planner.rating.commentPlaceholder")}
             placeholderTextColor={Colors.gray500}
             value={comment}
             onChangeText={setComment}
             multiline
             maxLength={500}
-            accessibilityLabel="Optional comment about this plan"
+            accessibilityLabel={t("planner.rating.commentA11y")}
           />
 
           <View style={styles.toggleRow}>
-            <Text style={styles.toggleLabel}>I changed the plan before doing it</Text>
+            <Text style={styles.toggleLabel}>{t("planner.rating.adjusted")}</Text>
             <Switch
               value={wasAdjusted}
               onValueChange={setWasAdjusted}
               trackColor={{ true: Colors.primaryViolet, false: Colors.gray300 }}
-              accessibilityLabel="I changed the plan before doing it"
+              accessibilityLabel={t("planner.rating.adjusted")}
             />
           </View>
 
           {stars >= 4 ? (
             <View style={styles.toggleRow}>
-              <Text style={styles.toggleLabel}>Share it so others can use it (anonymously)</Text>
+              <Text style={styles.toggleLabel}>{t("planner.rating.share")}</Text>
               <Switch
                 value={share}
                 onValueChange={setShare}
                 trackColor={{ true: Colors.primaryViolet, false: Colors.gray300 }}
-                accessibilityLabel="Share this plan anonymously"
+                accessibilityLabel={t("planner.rating.shareA11y")}
               />
             </View>
           ) : null}
@@ -142,12 +144,12 @@ export function PlanRatingPrompt({ plan, onDone, onDismiss }: PlanRatingPromptPr
             onPress={handleSubmit}
             disabled={saving}
             accessibilityRole="button"
-            accessibilityLabel="Submit rating"
+            accessibilityLabel={t("planner.rating.submitA11y")}
           >
             {saving ? (
               <ActivityIndicator color={Colors.white} size="small" />
             ) : (
-              <Text style={styles.submitText}>Submit</Text>
+              <Text style={styles.submitText}>{t("planner.rating.submit")}</Text>
             )}
           </TouchableOpacity>
         </View>

@@ -8,6 +8,8 @@
 import React, { useCallback, useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from "react-native";
 import { useFocusEffect } from "expo-router";
+import { useTranslation } from "react-i18next";
+import { getAppLocaleTag } from "@/lib/i18n/appLocale";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography } from "@/constants/tokens";
@@ -22,10 +24,11 @@ function formatPivotDate(iso: string | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  return d.toLocaleDateString(getAppLocaleTag(), { weekday: "short", month: "short", day: "numeric" });
 }
 
 export function WeatherPivotBanner() {
+  const { t } = useTranslation();
   const [pivots, setPivots] = useState<WeatherPivotPlan[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -54,11 +57,11 @@ export function WeatherPivotBanner() {
       await confirmPendingPlan(pivot.id);
       setPivots((prev) => prev.filter((p) => p.id !== pivot.id));
     } catch {
-      Alert.alert("Couldn’t confirm", "Please try again in a moment.");
+      Alert.alert(t("planner.pivot.confirmFailedTitle"), t("planner.pivot.confirmFailedBody"));
     } finally {
       setBusyId(null);
     }
-  }, []);
+  }, [t]);
 
   if (pivots.length === 0) return null;
 
@@ -68,35 +71,36 @@ export function WeatherPivotBanner() {
         const venue = pivot.plan.location_details;
         const dateLabel = formatPivotDate(pivot.plan.date_time);
         const hasVenue = !!venue?.name && venue.name !== "No suitable venue found";
-        const topic = (pivot.plan.topic ?? "").replace(/^Pivot:\s*/i, "").trim() || "your plan";
+        const topic = (pivot.plan.topic ?? "").replace(/^Pivot:\s*/i, "").trim() || t("planner.pivot.yourPlan");
         return (
           <View key={pivot.id} style={styles.card}>
             <View style={styles.header}>
               <View style={styles.badge}>
                 <Ionicons name="rainy" size={16} color={Colors.primaryViolet} />
-                <Text style={styles.badgeText}>Weather alert</Text>
+                <Text style={styles.badgeText}>{t("planner.pivot.badge")}</Text>
               </View>
               <TouchableOpacity
                 onPress={() => handleDismiss(pivot)}
                 hitSlop={12}
                 style={styles.dismissBtn}
-                accessibilityLabel="Dismiss weather alert"
+                accessibilityLabel={t("planner.pivot.dismissA11y")}
               >
                 <Ionicons name="close" size={22} color={Colors.gray500} />
               </TouchableOpacity>
             </View>
 
             <Text style={styles.title}>
-              The weather looks rough for {topic}
-              {dateLabel ? ` on ${dateLabel}` : ""}.
+              {dateLabel
+                ? t("planner.pivot.titleOnDate", { topic, date: dateLabel })
+                : t("planner.pivot.title", { topic })}
             </Text>
             {hasVenue ? (
               <Text style={styles.body}>
-                We found an indoor alternative: <Text style={styles.venue}>{venue?.name}</Text>
+                {t("planner.pivot.foundIndoor")} <Text style={styles.venue}>{venue?.name}</Text>
                 {venue?.address ? ` · ${venue.address}` : ""}.
               </Text>
             ) : (
-              <Text style={styles.body}>We can switch this to an indoor-friendly plan.</Text>
+              <Text style={styles.body}>{t("planner.pivot.canSwitch")}</Text>
             )}
 
             <View style={styles.actions}>
@@ -106,7 +110,7 @@ export function WeatherPivotBanner() {
                 activeOpacity={0.85}
                 disabled={busyId === pivot.id}
               >
-                <Text style={styles.btnGhostText}>Keep original</Text>
+                <Text style={styles.btnGhostText}>{t("planner.pivot.keep")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, styles.btnPrimary]}
@@ -117,7 +121,7 @@ export function WeatherPivotBanner() {
                 {busyId === pivot.id ? (
                   <ActivityIndicator size="small" color={Colors.white} />
                 ) : (
-                  <Text style={styles.btnPrimaryText}>Use indoor plan</Text>
+                  <Text style={styles.btnPrimaryText}>{t("planner.pivot.useIndoor")}</Text>
                 )}
               </TouchableOpacity>
             </View>

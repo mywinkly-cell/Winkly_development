@@ -4,6 +4,7 @@
 
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography } from "@/constants/tokens";
@@ -30,10 +31,11 @@ export function PlanRecommendationFeedback({
   mode,
   aiRequestId,
   plannerItemId,
-  label = "Did this meet your expectations?",
+  label,
   initialRating = null,
   compact = false,
 }: PlanRecommendationFeedbackProps) {
+  const { t } = useTranslation();
   const [rating, setRating] = useState<PlanRecommendationRating | null>(initialRating);
   const [saving, setSaving] = useState(false);
 
@@ -60,7 +62,7 @@ export function PlanRecommendationFeedback({
   return (
     <View style={[styles.wrap, compact && styles.wrapCompact]}>
       <Text style={[styles.label, compact && styles.labelCompact]} numberOfLines={2}>
-        {rating ? "Thanks for the feedback" : label}
+        {rating ? t("planner.feedback.thanks") : label ?? t("planner.feedback.metExpectations")}
       </Text>
       <View style={styles.actions}>
         <TouchableOpacity
@@ -69,7 +71,7 @@ export function PlanRecommendationFeedback({
           disabled={!!rating || saving}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Thumbs up — plan met expectations"
+          accessibilityLabel={t("planner.feedback.upA11y")}
           accessibilityState={{ selected: rating === "up", disabled: !!rating }}
         >
           <Ionicons
@@ -84,7 +86,7 @@ export function PlanRecommendationFeedback({
           disabled={!!rating || saving}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Thumbs down — plan did not meet expectations"
+          accessibilityLabel={t("planner.feedback.downA11y")}
           accessibilityState={{ selected: rating === "down", disabled: !!rating }}
         >
           <Ionicons

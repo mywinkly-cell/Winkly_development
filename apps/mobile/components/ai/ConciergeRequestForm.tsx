@@ -15,6 +15,7 @@ import {
   Pressable,
 } from "react-native";
 import { useTranslation } from "react-i18next";
+import { useAppLocaleTag } from "@/lib/i18n/appLocale";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -147,10 +148,10 @@ const COMMON_CURRENCIES = ["EUR", "GBP", "USD", "CHF", "PLN", "CZK", "NOK", "SEK
 
 /** Quick-select activity chips per mode (Unified Architecture: "Activity/Prompt" with chips based on interests context). */
 const ACTIVITY_CHIPS: Record<Mode, string[]> = {
-  romance: ["Dinner date", "Coffee together", "Evening walk", "Cinema", "Weekend brunch", "Day trip"],
-  friends: ["Brunch", "Sports or games", "Hike", "Drinks", "Concert", "Board games"],
-  business: ["Coffee chat", "Lunch meeting", "Golf", "Working session", "Networking event"],
-  events: ["Concert", "Workshop", "Nightlife", "Outdoor event", "Exhibition", "Meetup"],
+  romance: ["dinnerDate", "coffeeTogether", "eveningWalk", "cinema", "weekendBrunch", "dayTrip"],
+  friends: ["brunch", "sportsGames", "hike", "drinks", "concert", "boardGames"],
+  business: ["coffeeChat", "lunchMeeting", "golf", "workingSession", "networkingEvent"],
+  events: ["concert", "workshop", "nightlife", "outdoorEvent", "exhibition", "meetup"],
 };
 
 export type ConciergeRequestFormProps = {
@@ -202,8 +203,9 @@ export function ConciergeRequestForm({
   presentation,
   selectedTopicLabel,
 }: ConciergeRequestFormProps) {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
+  const appLocale = useAppLocaleTag();
   const insets = useSafeAreaInsets();
   const theme = useAppTheme();
   const styles = useMemo(() => makeStyles(theme, mode), [theme, mode]);
@@ -383,7 +385,7 @@ export function ConciergeRequestForm({
     const plan_request_text = buildPlanRequestText({
       mode,
       planningEntrySurface: source_screen === "planner" ? "planner" : "chats",
-      activityOrTopic: prompt.trim() || "Plan",
+      activityOrTopic: prompt.trim() || t("planner.untitledPlan"),
       city: cityPart || undefined,
       country: countryPart,
       latitude: pinLatitude ?? undefined,
@@ -440,7 +442,7 @@ export function ConciergeRequestForm({
       sanitized_requester_persona: sanitizedPersona || undefined,
     };
     return ctx;
-  }, [mode, source_screen, source_planner_tab, prompt, extraNotes, location, searchRadiusKm, pinLatitude, pinLongitude, pinLabel, dateStr, dateEndStr, dateRangePreset, budgetAmount, budgetCurrency, partner, weatherSnapshot, timePreference, availableSlots, appLanguage, presentation]);
+  }, [mode, source_screen, source_planner_tab, prompt, extraNotes, location, searchRadiusKm, pinLatitude, pinLongitude, pinLabel, dateStr, dateEndStr, dateRangePreset, budgetAmount, budgetCurrency, partner, weatherSnapshot, timePreference, availableSlots, appLanguage, presentation, t]);
 
   const handleSelectPartner = (p: ConciergePartner | null) => {
     Haptics.selectionAsync();
@@ -465,13 +467,13 @@ export function ConciergeRequestForm({
 
   const modeLabel =
     mode === "romance"
-      ? "Dates"
+      ? t("planner.dates")
       : mode === "friends"
-        ? "Meet-ups"
+        ? t("planner.meetups")
         : mode === "business"
-          ? "Business"
-          : "Events";
-  const chips = ACTIVITY_CHIPS[mode] ?? ACTIVITY_CHIPS.events;
+          ? t("planner.business")
+          : t("planner.events");
+  const chips = (ACTIVITY_CHIPS[mode] ?? ACTIVITY_CHIPS.events).map((id) => t(`concierge.form.chip.${id}`));
   // Note: the proactive rain advisory now lives in ConciergeActivityDetailsStep (the Planner
   // flow step). This form only renders for chat (non-planner) entry points, where the advisory
   // was unreachable, so it was removed here to avoid dead code.
@@ -492,29 +494,31 @@ export function ConciergeRequestForm({
       {showModeLabel && (
         <View style={styles.modeLabelRow}>
           <Text style={styles.modeLabelText}>
-            {source_screen === "chats" ? "Suggestions for" : "Planning for"}: {modeLabel}
+            {source_screen === "chats"
+              ? t("concierge.form.suggestionsFor", { mode: modeLabel })
+              : t("concierge.form.planningFor", { mode: modeLabel })}
           </Text>
         </View>
       )}
       <Text style={styles.hint}>
         {source_screen === "chats"
-          ? "Get a suggested first message, conversation starters, or date ideas to suggest in this chat. Planning with someone here? Use Invite to add them so suggestions fit you both."
+          ? t("concierge.form.hintChats")
           : compact
-            ? "Describe what you want (e.g. “date night”, “weekend brunch”) or add details below."
-            : "Write a short request or fill in the details. We’ll suggest options and show weather for your date and location."}
+            ? t("concierge.form.hintCompact")
+            : t("concierge.form.hint")}
       </Text>
 
       {selectedTopicLabel?.trim() ? (
         <View style={styles.selectedTopicPill}>
           <Ionicons name="pricetag-outline" size={16} color={theme.colors.primary} />
           <Text style={styles.selectedTopicText} numberOfLines={1}>
-            Topic: {selectedTopicLabel.trim()}
+            {t("concierge.form.topic", { topic: selectedTopicLabel.trim() })}
           </Text>
         </View>
       ) : null}
       {recentRequests && recentRequests.length > 0 && (
         <View style={styles.recentWrap}>
-          <Text style={styles.recentLabel}>Recent ideas</Text>
+          <Text style={styles.recentLabel}>{t("concierge.form.recentIdeas")}</Text>
           <View style={styles.recentChipsRow}>
             {recentRequests.slice(0, 2).map((r, i) => (
               <Chip
@@ -549,15 +553,15 @@ export function ConciergeRequestForm({
         </ScrollView>
       )}
       <View style={styles.promptRow}>
-        <Text style={styles.fieldLabel}>What are you planning?</Text>
+        <Text style={styles.fieldLabel}>{t("concierge.form.whatPlanning")}</Text>
         <TextInput
           style={[styles.promptInput, styles.promptPrimary]}
           placeholder={
             refinementPlaceholder
               ? refinementPlaceholder
               : source_screen === "chats"
-                ? "e.g. Suggest an opening line, What to do this weekend with my match, Fun topic to talk about"
-                : "e.g. Plan a date, weekend brunch, something outdoors"
+                ? t("concierge.form.placeholderChats")
+                : t("concierge.form.placeholder")
           }
           placeholderTextColor={theme.colors.textMuted}
           value={prompt}
@@ -566,7 +570,7 @@ export function ConciergeRequestForm({
           maxLength={300}
         />
         <TextButton
-          title="Say what you want"
+          title={t("concierge.form.sayWhatYouWant")}
           icon={<Ionicons name="mic-outline" size={22} color={theme.colors.primary} />}
           onPress={() => { setVoiceInputText(""); setShowVoiceModal(true); }}
           style={styles.voiceInputBtn}
@@ -576,11 +580,11 @@ export function ConciergeRequestForm({
       <Modal visible={showVoiceModal} transparent animationType="fade">
         <Pressable style={styles.voiceModalBackdrop} onPress={() => setShowVoiceModal(false)}>
           <Pressable style={styles.voiceModalCard} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.voiceModalTitle}>Say what you want</Text>
-            <Text style={styles.voiceModalHint}>e.g. Dinner for two this Saturday under 50 euros</Text>
+            <Text style={styles.voiceModalTitle}>{t("concierge.form.sayWhatYouWant")}</Text>
+            <Text style={styles.voiceModalHint}>{t("concierge.form.voiceHint")}</Text>
             <TextInput
               style={styles.voiceModalInput}
-              placeholder="Describe your plan in one sentence"
+              placeholder={t("concierge.form.voicePlaceholder")}
               placeholderTextColor={theme.colors.textMuted}
               value={voiceInputText}
               onChangeText={setVoiceInputText}
@@ -589,7 +593,7 @@ export function ConciergeRequestForm({
             />
             <View style={styles.voiceModalActions}>
               <TouchableOpacity style={styles.voiceModalCancel} onPress={() => setShowVoiceModal(false)} activeOpacity={0.8}>
-                <Text style={styles.voiceModalCancelText}>Cancel</Text>
+                <Text style={styles.voiceModalCancelText}>{t("common.cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.voiceModalDone}
@@ -604,7 +608,7 @@ export function ConciergeRequestForm({
                 }}
                 activeOpacity={0.9}
               >
-                <Text style={styles.voiceModalDoneText}>Pre-fill form</Text>
+                <Text style={styles.voiceModalDoneText}>{t("concierge.form.prefill")}</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -626,19 +630,19 @@ export function ConciergeRequestForm({
         />
         <Text style={styles.detailsToggleText}>
           {showDetails
-            ? "Hide details"
+            ? t("concierge.form.hideDetails")
             : source_screen === "chats"
-              ? "Optional: add location, date or budget for context"
-              : "Add location, date & budget"}
+              ? t("concierge.form.addDetailsChats")
+              : t("concierge.form.addDetails")}
         </Text>
       </TouchableOpacity>
 
       {showDetails && (
         <View style={styles.details}>
-          <Text style={styles.fieldLabel}>Extra notes (optional)</Text>
+          <Text style={styles.fieldLabel}>{t("concierge.form.extraNotes")}</Text>
           <TextInput
             style={[styles.promptInput, styles.promptSecondary]}
-            placeholder="Allergies, vibe, constraints, dress code…"
+            placeholder={t("concierge.form.extraNotesPlaceholder")}
             placeholderTextColor={theme.colors.textMuted}
             value={extraNotes}
             onChangeText={setExtraNotes}
@@ -680,39 +684,22 @@ export function ConciergeRequestForm({
               ) : null}
             </View>
           )}
-          <Text style={styles.label}>Date range</Text>
+          <Text style={styles.label}>{t("concierge.form.dateRange")}</Text>
           <TouchableOpacity
             style={styles.dropdownTriggerFull}
             onPress={() => setShowDateRangePicker(true)}
             activeOpacity={0.8}
           >
             <Text style={styles.dropdownTriggerText}>
-              {dateRangePreset === "single"
-                ? "Single day"
-                : dateRangePreset === "weekend"
-                  ? "This weekend"
-                  : dateRangePreset === "next_weekend"
-                    ? "Next weekend"
-                    : dateRangePreset === "week"
-                      ? "This week"
-                      : dateRangePreset === "next_week"
-                        ? "Next week"
-                        : "Custom range"}
+              {t(`concierge.form.range.${dateRangePreset}`)}
             </Text>
             <Ionicons name="chevron-down" size={18} color={theme.colors.textSecondary} />
           </TouchableOpacity>
           <Modal visible={showDateRangePicker} transparent animationType="fade">
             <Pressable style={styles.pickerOverlay} onPress={() => setShowDateRangePicker(false)}>
               <View style={styles.pickerSheet}>
-                <Text style={styles.pickerTitle}>Date range</Text>
-                {[
-                  { key: "single" as const, label: "Single day" },
-                  { key: "weekend" as const, label: "This weekend" },
-                  { key: "next_weekend" as const, label: "Next weekend" },
-                  { key: "week" as const, label: "This week" },
-                  { key: "next_week" as const, label: "Next week" },
-                  { key: "custom" as const, label: "Custom range" },
-                ].map(({ key, label }) => (
+                <Text style={styles.pickerTitle}>{t("concierge.form.dateRange")}</Text>
+                {(["single", "weekend", "next_weekend", "week", "next_week", "custom"] as const).map((key) => (
                   <TouchableOpacity
                     key={key}
                     onPress={() => {
@@ -755,7 +742,7 @@ export function ConciergeRequestForm({
                     style={[styles.pickerItem, dateRangePreset === key && styles.pickerItemActive]}
                     activeOpacity={0.8}
                   >
-                    <Text style={[styles.pickerItemText, dateRangePreset === key && styles.pickerItemTextActive]}>{label}</Text>
+                    <Text style={[styles.pickerItemText, dateRangePreset === key && styles.pickerItemTextActive]}>{t(`concierge.form.range.${key}`)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -765,14 +752,14 @@ export function ConciergeRequestForm({
             <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateBtn} activeOpacity={0.8}>
               <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
               <Text style={styles.dateBtnText} numberOfLines={1}>
-                From: {date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                {t("concierge.form.from", { date: date.toLocaleDateString(appLocale, { weekday: "short", month: "short", day: "numeric", year: "numeric" }) })}
               </Text>
             </TouchableOpacity>
             {dateRangePreset !== "single" && (
               <TouchableOpacity onPress={() => setShowDateEndPicker(true)} style={[styles.dateBtn, styles.dateBtnSecond]} activeOpacity={0.8}>
                 <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
                 <Text style={styles.dateBtnText} numberOfLines={1}>
-                  To: {dateEnd.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                  {t("concierge.details.dateTo", { date: dateEnd.toLocaleDateString(appLocale, { weekday: "short", month: "short", day: "numeric", year: "numeric" }) })}
                 </Text>
               </TouchableOpacity>
             )}
@@ -791,7 +778,7 @@ export function ConciergeRequestForm({
               />
               {Platform.OS === "ios" && (
                 <TouchableOpacity onPress={() => setShowDatePicker(false)} style={styles.datePickerDone}>
-                  <Text style={styles.datePickerDoneText}>Done</Text>
+                  <Text style={styles.datePickerDoneText}>{t("common.done")}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -810,16 +797,16 @@ export function ConciergeRequestForm({
               />
               {Platform.OS === "ios" && (
                 <TouchableOpacity onPress={() => setShowDateEndPicker(false)} style={styles.datePickerDone}>
-                  <Text style={styles.datePickerDoneText}>Done</Text>
+                  <Text style={styles.datePickerDoneText}>{t("common.done")}</Text>
                 </TouchableOpacity>
               )}
             </View>
           )}
-          <Text style={styles.label}>Budget</Text>
+          <Text style={styles.label}>{t("concierge.details.budget")}</Text>
           <View style={styles.budgetAmountRow}>
             <TextInput
               style={styles.budgetAmountInput}
-              placeholder="Amount (optional)"
+              placeholder={t("concierge.form.amountPlaceholder")}
               placeholderTextColor={theme.colors.textMuted}
               value={budgetAmount}
               onChangeText={(t) => setBudgetAmount(t.replace(/[^0-9.,]/g, ""))}
@@ -840,7 +827,7 @@ export function ConciergeRequestForm({
           <Modal visible={showCurrencyPicker} transparent animationType="fade">
             <Pressable style={styles.pickerOverlay} onPress={() => setShowCurrencyPicker(false)}>
               <View style={styles.pickerSheet}>
-                <Text style={styles.pickerTitle}>Currency</Text>
+                <Text style={styles.pickerTitle}>{t("concierge.details.currency")}</Text>
                 {COMMON_CURRENCIES.map((curr) => (
                   <TouchableOpacity
                     key={curr}
@@ -861,18 +848,12 @@ export function ConciergeRequestForm({
 
           {dateRangePreset === "single" && (
             <>
-              <Text style={styles.label}>Part of the day</Text>
+              <Text style={styles.label}>{t("concierge.form.partOfDay")}</Text>
               <View style={styles.freeWhenRow}>
-                {[
-                  { key: "any", label: "Any time" },
-                  { key: "morning", label: "Morning" },
-                  { key: "lunchtime", label: "Lunchtime" },
-                  { key: "afternoon", label: "Afternoon" },
-                  { key: "evening", label: "Evening" },
-                ].map(({ key, label }) => (
+                {(["any", "morning", "lunchtime", "afternoon", "evening"] as const).map((key) => (
                   <Chip
                     key={key}
-                    label={label}
+                    label={t(`concierge.timeOfDay.${key === "lunchtime" ? "lunch" : key}`)}
                     selected={timePreference === key}
                     onPress={() => {
                       setTimePreference(key);
@@ -900,7 +881,9 @@ export function ConciergeRequestForm({
                   <>
                     <Ionicons name="calendar-outline" size={18} color={availableSlots.length > 0 ? theme.colors.onPrimary : theme.colors.primary} />
                     <Text style={[styles.whenFreeBtnText, availableSlots.length > 0 && styles.whenFreeBtnTextActive]}>
-                      {availableSlots.length > 0 ? `Suggest when I'm free (${availableSlots.length} evenings)` : "Suggest when I am free"}
+                      {availableSlots.length > 0
+                        ? t("concierge.form.whenFreeCount", { count: availableSlots.length })
+                        : t("concierge.form.whenFree")}
                     </Text>
                   </>
                 )}
@@ -914,7 +897,7 @@ export function ConciergeRequestForm({
                 <View style={styles.partnerSelectedRow}>
                   <Avatar uri={partner.avatar_url} size={32} />
                   <Text style={styles.partnerName} numberOfLines={1}>{partner.displayName}</Text>
-                  <TouchableOpacity onPress={() => handleSelectPartner(null)} hitSlop={8} accessibilityLabel="Clear">
+                  <TouchableOpacity onPress={() => handleSelectPartner(null)} hitSlop={8} accessibilityLabel={t("concierge.form.clearPartner")}>
                     <Ionicons name="close-circle" size={24} color={theme.colors.textMuted} />
                   </TouchableOpacity>
                 </View>
@@ -929,7 +912,7 @@ export function ConciergeRequestForm({
                   activeOpacity={0.8}
                 >
                   <Ionicons name="person-add-outline" size={20} color={theme.colors.primary} />
-                  <Text style={styles.partnerBtnText}>Invite</Text>
+                  <Text style={styles.partnerBtnText}>{t("concierge.flow.header.invite")}</Text>
                 </TouchableOpacity>
               )}
               {showPartnerPicker && (
@@ -940,20 +923,20 @@ export function ConciergeRequestForm({
                       style={[styles.inviteSourceTab, inviteSource === "matches" && styles.inviteSourceTabActive]}
                     >
                       <Text style={[styles.inviteSourceTabText, inviteSource === "matches" && styles.inviteSourceTabTextActive]}>
-                        {mode === "romance" ? "Matches" : "Connections"}
+                        {mode === "romance" ? t("modes.matches") : t("modes.connections")}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => { Haptics.selectionAsync(); setInviteSource("search"); }}
                       style={[styles.inviteSourceTab, inviteSource === "search" && styles.inviteSourceTabActive]}
                     >
-                      <Text style={[styles.inviteSourceTabText, inviteSource === "search" && styles.inviteSourceTabTextActive]}>Search</Text>
+                      <Text style={[styles.inviteSourceTabText, inviteSource === "search" && styles.inviteSourceTabTextActive]}>{t("common.search")}</Text>
                     </TouchableOpacity>
                   </View>
                   {inviteSource === "search" && (
                     <TextInput
                       style={[styles.input, { marginBottom: 8 }]}
-                      placeholder="Search by name"
+                      placeholder={t("concierge.form.searchByName")}
                       placeholderTextColor={theme.colors.textMuted}
                       value={inviteSearchQuery}
                       onChangeText={setInviteSearchQuery}
@@ -966,7 +949,7 @@ export function ConciergeRequestForm({
                           <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginVertical: 12 }} />
                         ) : partners.length === 0 ? (
                           <Text style={styles.inviteEmptyText}>
-                            {mode === "romance" ? "No matches yet." : "No connections yet."}
+                            {mode === "romance" ? t("concierge.form.noMatches") : t("concierge.form.noConnections")}
                           </Text>
                         ) : (
                           partners.map((p) => (
@@ -979,9 +962,9 @@ export function ConciergeRequestForm({
                       : (inviteSearchLoading ? (
                           <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginVertical: 12 }} />
                         ) : inviteSearchQuery.trim().length < 2 ? (
-                          <Text style={styles.inviteEmptyText}>Type at least 2 characters to search.</Text>
+                          <Text style={styles.inviteEmptyText}>{t("concierge.form.minChars", { count: 2 })}</Text>
                         ) : inviteSearchResults.length === 0 ? (
-                          <Text style={styles.inviteEmptyText}>No one found.</Text>
+                          <Text style={styles.inviteEmptyText}>{t("concierge.form.noOneFound")}</Text>
                         ) : (
                           inviteSearchResults.map((p) => (
                             <TouchableOpacity key={p.id} style={styles.partnerRow} onPress={() => handleSelectPartner(p)} activeOpacity={0.8}>
@@ -1002,7 +985,7 @@ export function ConciergeRequestForm({
       {/* Sticky footer CTA so form is always usable + scrolling stays vertical */}
       <View style={[styles.footer, { paddingBottom: Math.max(12, insets.bottom + 10) }]}>
         <PrimaryButton
-          title={source_screen === "chats" ? "Get chat suggestions" : "Get suggestions"}
+          title={source_screen === "chats" ? t("concierge.form.submitChats") : t("concierge.form.submit")}
           onPress={handleSubmit}
           loading={loading}
           disabled={!canSubmit}

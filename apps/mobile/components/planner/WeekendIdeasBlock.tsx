@@ -137,7 +137,7 @@ export function WeekendIdeasBlock({
                 onPress={() => { Haptics.selectionAsync(); onDismiss(); }}
                 hitSlop={12}
                 style={styles.dismissBtn}
-                accessibilityLabel="Dismiss"
+                accessibilityLabel={t("weeklySpark.dismissA11y")}
               >
                 <Ionicons name="close" size={22} color={Colors.gray500} />
               </TouchableOpacity>

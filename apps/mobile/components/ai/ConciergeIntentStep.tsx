@@ -4,12 +4,16 @@
 
 import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { useTranslation } from "react-i18next";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme, type AppTheme, type ModeName } from "@/constants/design-system";
 import type { Mode } from "@/types";
 import type { IntentSection, RankedCard } from "@/lib/ai/conciergePlanningFlow";
+import { translateCatalogText } from "@/lib/ai/conciergeCatalogI18n";
+
+const BOOST_MARK = "✦ ";
 
 export type IntentContinuePayload = {
   key: string;
@@ -31,6 +35,7 @@ export function ConciergeIntentStep({
   sections,
   onContinue,
 }: ConciergeIntentStepProps) {
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const derived = useMemo(() => sections ?? [], [sections]);
@@ -46,7 +51,7 @@ export function ConciergeIntentStep({
 
   return (
     <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>What would you like to plan?</Text>
+      <Text style={styles.title}>{t("concierge.intent.title")}</Text>
 
       {derived.map((section) => (
         <View
@@ -54,7 +59,9 @@ export function ConciergeIntentStep({
           style={[styles.section, { borderLeftColor: sectionAccent(section.labelStyle) }]}
         >
           <Text style={[styles.sectionTitle, { color: sectionAccent(section.labelStyle) }]}>
-            {section.label}
+            {section.label.startsWith(BOOST_MARK)
+              ? BOOST_MARK + translateCatalogText(t, section.label.slice(BOOST_MARK.length))
+              : translateCatalogText(t, section.label)}
           </Text>
           <View style={styles.grid}>
             {section.cards.map((card) => (
@@ -92,22 +99,24 @@ const CardButton = React.memo(function CardButton({
   styles: ReturnType<typeof makeStyles>;
   onPress: () => void;
 }) {
+  const { t } = useTranslation();
+  const label = translateCatalogText(t, card.label);
   return (
     <TouchableOpacity
       style={styles.button}
       onPress={onPress}
       activeOpacity={0.85}
-      accessibilityLabel={card.label}
+      accessibilityLabel={label}
     >
       <View style={styles.iconWrap}>
         <Ionicons name={card.icon as never} size={28} color={theme.colors.primary} />
       </View>
-      <Text style={styles.buttonLabel} numberOfLines={2}>
-        {card.label}
+      <Text style={styles.buttonLabel} numberOfLines={3}>
+        {label}
       </Text>
-      {card.boosted && card.boostReason ? (
+      {card.boosted && card.boostInterest ? (
         <Text style={styles.boostHint} numberOfLines={2}>
-          {card.boostReason}
+          {t("concierge.intent.bothLove", { interest: card.boostInterest })}
         </Text>
       ) : null}
     </TouchableOpacity>

@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import MapView, { Circle, Marker, PROVIDER_GOOGLE, type Region } from "react-native-maps";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
@@ -72,6 +73,7 @@ export function MapPinPickerModal({
   onClear,
   onClose,
 }: MapPinPickerModalProps) {
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const [loading, setLoading] = useState(false);
@@ -129,7 +131,7 @@ export function MapPinPickerModal({
   const placePin = async (latitude: number, longitude: number) => {
     Haptics.selectionAsync();
     setPin({ latitude, longitude });
-    setHint("Resolving address…");
+    setHint(t("concierge.map.resolving"));
     const geo = await reverseGeocodeToDisplay(latitude, longitude, language);
     if (geo.ok) {
       setPin({ latitude, longitude, label: geo.display });
@@ -143,17 +145,16 @@ export function MapPinPickerModal({
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.wrap}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} hitSlop={12} accessibilityLabel="Close map">
+          <TouchableOpacity onPress={onClose} hitSlop={12} accessibilityLabel={t("concierge.map.close")}>
             <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
           </TouchableOpacity>
-          <Text style={styles.title}>Set precise spot</Text>
+          <Text style={styles.title}>{t("concierge.map.title")}</Text>
           <View style={{ width: 24 }} />
         </View>
 
         <Text style={styles.subtitle}>
-          Tap the map to drop a pin
-          {city?.trim() ? ` near ${city.trim()}` : ""}.
-          {radiusKm ? ` Search radius: ${radiusKm} km.` : ""}
+          {city?.trim() ? t("concierge.map.tapNear", { city: city.trim() }) : t("concierge.map.tap")}
+          {radiusKm ? ` ${t("concierge.map.radius", { km: radiusKm })}` : ""}
         </Text>
 
         <View style={styles.mapWrap}>
@@ -180,7 +181,7 @@ export function MapPinPickerModal({
                     const { latitude, longitude } = e.nativeEvent.coordinate;
                     void placePin(latitude, longitude);
                   }}
-                  title="Search center"
+                  title={t("concierge.map.searchCenter")}
                   description={pin.label}
                 />
               ) : null}
@@ -202,7 +203,7 @@ export function MapPinPickerModal({
         <View style={styles.actions}>
           {onClear && (initialPin || pin) ? (
             <SecondaryButton
-              title="Clear pin"
+              title={t("concierge.map.clearPin")}
               onPress={() => {
                 onClear();
                 onClose();
@@ -211,7 +212,7 @@ export function MapPinPickerModal({
           ) : null}
           <View style={styles.primaryBtnWrap}>
             <PrimaryButton
-              title="Use this spot"
+              title={t("concierge.map.useSpot")}
               disabled={!pin}
               icon={<Ionicons name="checkmark" size={18} color={theme.colors.onPrimary} />}
               onPress={() => {

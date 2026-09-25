@@ -3,6 +3,7 @@
 // Uses allowlisted context only; session required.
 // ────────────────────────────────────────────────
 
+import i18n from "i18next";
 import { supabase } from "@/lib/supabase";
 import { getConciergeDevLimitMockResponse } from "@/lib/ai/conciergeDevLimitMock";
 import { getAppLanguageCode } from "@/lib/i18n/appLocale";
@@ -96,10 +97,10 @@ export async function callWinklyPlan(params: {
   context: ConciergeContext & { participant_user_ids?: string[] } & WinklyPlanItContext;
 }): Promise<WinklyPlanResponse> {
   const { context } = params;
-  if (!SUPABASE_URL) throw new Error("Missing Supabase URL");
+  if (!SUPABASE_URL) throw new Error(i18n.t("concierge.error.generic"));
 
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError || !session?.access_token) throw new Error("Not signed in");
+  if (sessionError || !session?.access_token) throw new Error(i18n.t("concierge.error.notSignedIn"));
 
   const url = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/ai-gateway`;
   const res = await fetch(url, {
@@ -144,10 +145,10 @@ export async function callWinklyPlan(params: {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const message =
-      (typeof data?.error === "string" ? data.error : undefined) ?? `Request failed: ${res.status}`;
+      (typeof data?.error === "string" ? data.error : undefined) ?? i18n.t("concierge.error.requestFailed", { status: res.status });
     throw new WinklyPlanError(message, res.status, mapGatewayErrorResponse(data ?? {}, res.status));
   }
-  if (!data?.options || !Array.isArray(data.options) || data.options.length < 2) throw new Error("No plan options returned");
+  if (!data?.options || !Array.isArray(data.options) || data.options.length < 2) throw new Error(i18n.t("concierge.error.noOptions"));
   return data as WinklyPlanResponse;
 }
 
@@ -168,9 +169,9 @@ export async function callWinklySurprise(params: {
   city?: string | null;
   country?: string | null;
 }): Promise<WinklySurpriseResult> {
-  if (!SUPABASE_URL) return { ok: false, error: "Missing Supabase URL" };
+  if (!SUPABASE_URL) return { ok: false, error: i18n.t("concierge.error.generic") };
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError || !session?.access_token) return { ok: false, error: "Not signed in" };
+  if (sessionError || !session?.access_token) return { ok: false, error: i18n.t("concierge.error.notSignedIn") };
 
   const devLimitMock = getConciergeDevLimitMockResponse();
   if (devLimitMock?.error_code) return { ok: false, limit: devLimitMock };
@@ -191,7 +192,7 @@ export async function callWinklySurprise(params: {
       body: JSON.stringify({ mode: params.mode, task: "winkly_plan", context }),
     });
   } catch {
-    return { ok: false, error: "Check connection and try again." };
+    return { ok: false, error: i18n.t("concierge.error.offline") };
   }
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
@@ -202,7 +203,7 @@ export async function callWinklySurprise(params: {
     return { ok: false, error: mapped.error };
   }
   const options = parseSurpriseOptions(data.options);
-  if (!options.length) return { ok: false, error: "No plan options returned" };
+  if (!options.length) return { ok: false, error: i18n.t("concierge.error.noOptions") };
   return {
     ok: true,
     options,
@@ -268,10 +269,10 @@ export async function confirmPendingPlan(
   pendingPlanId: string,
   opts?: { asHost?: boolean; optionId?: "A" | "B" }
 ): Promise<PendingPlanConfirmResponse> {
-  if (!SUPABASE_URL) throw new Error("Missing Supabase URL");
+  if (!SUPABASE_URL) throw new Error(i18n.t("concierge.error.generic"));
 
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError || !session?.access_token) throw new Error("Not signed in");
+  if (sessionError || !session?.access_token) throw new Error(i18n.t("concierge.error.notSignedIn"));
 
   const url = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/pending-plan-confirm`;
   const res = await fetch(url, {
@@ -285,7 +286,7 @@ export async function confirmPendingPlan(
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((typeof data?.error === "string" ? data.error : undefined) ?? `Request failed: ${res.status}`);
+    throw new Error((typeof data?.error === "string" ? data.error : undefined) ?? i18n.t("concierge.error.requestFailed", { status: res.status }));
   }
   return data as PendingPlanConfirmResponse;
 }
@@ -306,7 +307,7 @@ export async function setPendingPlanReaction(
 ): Promise<void> {
   const { data: auth } = await supabase.auth.getUser();
   const me = auth.user?.id;
-  if (!me) throw new Error("Not signed in");
+  if (!me) throw new Error(i18n.t("concierge.error.notSignedIn"));
   const { error } = await supabase
     .from("pending_plan_reactions")
     .upsert(
@@ -683,7 +684,7 @@ function mapGatewayErrorResponse(
 
   const baseError =
     (typeof data.error === "string" ? data.error : undefined) ??
-    (status === 429 ? "Request limit reached." : `Request failed: ${status}`);
+    (status === 429 ? i18n.t("concierge.error.limitReached") : i18n.t("concierge.error.requestFailed", { status }));
   return { error: baseError, error_code: "unknown", retry_after: retryAfter };
 }
 
@@ -770,17 +771,17 @@ export async function callConcierge(params: {
   const logPrefix = "[ai-gateway]";
   if (!SUPABASE_URL) {
     if (__DEV__) console.warn(logPrefix, "callConcierge aborted: missing EXPO_PUBLIC_SUPABASE_URL", { task });
-    return { message: "", error: "Missing Supabase URL" };
+    return { message: "", error: i18n.t("concierge.error.generic") };
   }
   if (!AI_GATEWAY_TASKS.includes(task)) {
     if (__DEV__) console.warn(logPrefix, "callConcierge aborted: invalid task", { task });
-    return { message: "", error: "Invalid task" };
+    return { message: "", error: i18n.t("concierge.error.generic") };
   }
 
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
   if (sessionError || !session?.access_token) {
     if (__DEV__) console.warn(logPrefix, "callConcierge aborted: no session", { task });
-    return { message: "", error: "Not signed in" };
+    return { message: "", error: i18n.t("concierge.error.notSignedIn") };
   }
 
   const devLimitMock = getConciergeDevLimitMockResponse();
@@ -836,7 +837,7 @@ export async function callConcierge(params: {
     }
     return {
       message: "",
-      error: "Check connection and try again.",
+      error: i18n.t("concierge.error.offline"),
       error_code: isNetwork ? "network" : "unknown",
     };
   }
@@ -871,7 +872,7 @@ export async function callConcierge(params: {
     const error =
       __DEV__ && detail && mapped.error === "Internal error"
         ? `${mapped.error}: ${detail}`
-        : mapped.error ?? `Request failed: ${res.status}`;
+        : mapped.error ?? i18n.t("concierge.error.requestFailed", { status: res.status });
     return {
       message: "",
       error,
@@ -911,7 +912,7 @@ export async function callConciergeStream(
 ): Promise<void> {
   const { task, context, onDelta, onDone } = params;
   if (!SUPABASE_URL) {
-    onDone({ message: "", error: "Missing Supabase URL" });
+    onDone({ message: "", error: i18n.t("concierge.error.generic") });
     return;
   }
   const cacheKey = optionsCacheKey(context);
@@ -930,7 +931,7 @@ export async function callConciergeStream(
   }
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
   if (sessionError || !session?.access_token) {
-    onDone({ message: "", error: "Not signed in" });
+    onDone({ message: "", error: i18n.t("concierge.error.notSignedIn") });
     return;
   }
   const devLimitMock = getConciergeDevLimitMockResponse();
@@ -962,7 +963,7 @@ export async function callConciergeStream(
   } catch {
     onDone({
       message: "",
-      error: "Check connection and try again.",
+      error: i18n.t("concierge.error.offline"),
       error_code: "network",
     });
     return;
@@ -993,7 +994,7 @@ export async function callConciergeStream(
     onDone({
       message: "",
       error:
-        (typeof parsedBody.error === "string" ? parsedBody.error : undefined) ?? `Request failed: ${res.status}`,
+        (typeof parsedBody.error === "string" ? parsedBody.error : undefined) ?? i18n.t("concierge.error.requestFailed", { status: res.status }),
       error_code: mapped.error_code ?? "unknown",
       retry_after: mapped.retry_after,
     });
@@ -1033,7 +1034,7 @@ export async function callConciergeStream(
     onDone(res);
   };
   timeoutId = setTimeout(() => {
-    finishStream({ message: "", error: "Request timed out. Try again." });
+    finishStream({ message: "", error: i18n.t("concierge.error.timeout") });
   }, STREAM_TIMEOUT_MS);
   try {
     while (true) {
@@ -1119,7 +1120,7 @@ export async function callConciergeStream(
   if (__DEV__ && trimmed) {
     console.warn("[conciergeClient] ai-gateway stream ended without parseable done; buffer preview:", trimmed.slice(0, 400));
   }
-  finishStream({ message: "", suggestions: undefined, error: "Response ended unexpectedly. Try again." });
+  finishStream({ message: "", suggestions: undefined, error: i18n.t("concierge.error.streamEnded") });
 }
 
 /** Report outcome for A/B (add-to-planner rate, satisfaction). Call when user adds to planner or submits feedback. */

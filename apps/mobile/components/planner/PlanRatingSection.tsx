@@ -11,6 +11,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography } from "@/constants/tokens";
 import { PlanRatingPrompt } from "@/components/planner/PlanRatingPrompt";
 import { listPlansAwaitingRating, type SharedPlan } from "@/lib/ai/sharedPlans";
@@ -22,6 +23,7 @@ export type PlanRatingSectionProps = {
 };
 
 export function PlanRatingSection({ refreshKey = 0, maxVisible = 2 }: PlanRatingSectionProps) {
+  const { t } = useTranslation();
   const [plans, setPlans] = useState<SharedPlan[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
@@ -46,7 +48,7 @@ export function PlanRatingSection({ refreshKey = 0, maxVisible = 2 }: PlanRating
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.heading}>How did it go?</Text>
+      <Text style={styles.heading}>{t("concierge.feedback.title")}</Text>
       {visible.map((plan) => (
         <PlanRatingPrompt
           key={plan.id}

@@ -13,6 +13,7 @@ import {
   Pressable,
 } from "react-native";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
 import {
@@ -22,6 +23,16 @@ import {
   type ReminderPrefs,
   type ReminderWhen,
 } from "@/lib/plannerReminders";
+
+const WHEN_LABEL_KEYS: Record<ReminderWhen, string> = {
+  at_time: "planner.atTimeOfEvent",
+  "5m": "planner.minutesBefore5",
+  "10m": "planner.minutesBefore10",
+  "15m": "planner.minutesBefore15",
+  "30m": "planner.minutesBefore30",
+  "1h": "planner.hourBefore",
+  "1d": "planner.dayBefore",
+};
 
 type EventReminderModalProps = {
   visible: boolean;
@@ -41,6 +52,7 @@ export function EventReminderModal({
   title,
   subtitle,
 }: EventReminderModalProps) {
+  const { t } = useTranslation();
   const [prefs, setPrefs] = useState<ReminderPrefs>({
     push: true,
     email: false,
@@ -80,7 +92,7 @@ export function EventReminderModal({
               <Ionicons name="notifications-outline" size={24} color={Colors.primaryViolet} />
             </View>
             <Text style={styles.headerTitle}>
-              {title ? `Reminders: ${title}` : "Reminders"}
+              {title ? t("planner.reminderModal.titleWith", { title }) : t("planner.reminders")}
             </Text>
             {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
             <TouchableOpacity
@@ -90,21 +102,21 @@ export function EventReminderModal({
               }}
               style={styles.closeBtn}
               hitSlop={12}
-              accessibilityLabel="Close"
+              accessibilityLabel={t("common.close")}
             >
               <Ionicons name="close" size={24} color={Colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
           {loading ? (
-            <Text style={styles.loading}>Loading…</Text>
+            <Text style={styles.loading}>{t("common.loading")}</Text>
           ) : (
             <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Notification channel</Text>
+                <Text style={styles.sectionTitle}>{t("planner.reminderModal.channel")}</Text>
                 <View style={styles.toggleRow}>
                   <Ionicons name="phone-portrait-outline" size={20} color={Colors.gray600} />
-                  <Text style={styles.toggleLabel}>Push notification</Text>
+                  <Text style={styles.toggleLabel}>{t("planner.pushNotification")}</Text>
                   <Switch
                     value={prefs.push}
                     onValueChange={(v) => update({ push: v })}
@@ -114,7 +126,7 @@ export function EventReminderModal({
                 </View>
                 <View style={styles.toggleRow}>
                   <Ionicons name="mail-outline" size={20} color={Colors.gray600} />
-                  <Text style={styles.toggleLabel}>Email reminder</Text>
+                  <Text style={styles.toggleLabel}>{t("planner.reminderModal.email")}</Text>
                   <Switch
                     value={prefs.email}
                     onValueChange={(v) => update({ email: v })}
@@ -122,13 +134,11 @@ export function EventReminderModal({
                     thumbColor={prefs.email ? Colors.primaryViolet : Colors.gray400}
                   />
                 </View>
-                <Text style={styles.toggleHint}>
-                  Get a reminder so you don&apos;t miss it. You can turn off reminders in Planner settings.
-                </Text>
+                <Text style={styles.toggleHint}>{t("planner.reminderModal.hint")}</Text>
               </View>
 
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>When to remind</Text>
+                <Text style={styles.sectionTitle}>{t("planner.reminderModal.when")}</Text>
                 {REMINDER_WHEN_OPTIONS.map((opt) => (
                   <TouchableOpacity
                     key={opt.value}
@@ -142,7 +152,7 @@ export function EventReminderModal({
                         prefs.when === opt.value && styles.optionLabelActive,
                       ]}
                     >
-                      {opt.label}
+                      {t(WHEN_LABEL_KEYS[opt.value] ?? opt.label)}
                     </Text>
                     {prefs.when === opt.value && (
                       <Ionicons name="checkmark-circle" size={22} color={Colors.primaryViolet} />
@@ -161,7 +171,7 @@ export function EventReminderModal({
             style={styles.doneBtn}
             activeOpacity={0.9}
           >
-            <Text style={styles.doneBtnText}>Done</Text>
+            <Text style={styles.doneBtnText}>{t("common.done")}</Text>
           </TouchableOpacity>
         </Pressable>
       </Pressable>

@@ -6,6 +6,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter, usePathname } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { getModeHubFromPathname, plannerRoutes } from "@/lib/navigation/modeHub";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -30,6 +31,7 @@ export function PlannerHeader({
   weeklySparkActive = false,
   onAIPress,
 }: PlannerHeaderProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const plannerHub = getModeHubFromPathname(usePathname() ?? "");
 
@@ -48,7 +50,7 @@ export function PlannerHeader({
         onPress={handleFilterPress}
         style={styles.iconBtn}
         activeOpacity={0.8}
-        accessibilityLabel="Planner filters"
+        accessibilityLabel={t("common.plannerFilters")}
       >
         <Ionicons name="filter" size={HEADER.iconSize} color={Colors.primaryViolet} />
       </TouchableOpacity>
@@ -65,7 +67,7 @@ export function PlannerHeader({
             style={[styles.iconBtn, weeklySparkActive && styles.iconBtnActive]}
             activeOpacity={0.8}
             accessibilityLabel={
-              weeklySparkActive ? "Hide this week's Sparks" : "Show this week's Sparks"
+              weeklySparkActive ? t("weeklySpark.hideA11y") : t("weeklySpark.showA11y")
             }
             accessibilityState={{ selected: weeklySparkActive }}
           >
@@ -82,7 +84,7 @@ export function PlannerHeader({
               onPress={onAIPress}
               size={HEADER.iconSize}
               style={styles.sparkBtn}
-              accessibilityLabel="Ask Winkly to plan something"
+              accessibilityLabel={t("planner.askWinklyA11y")}
             />
           </View>
         ) : onWeeklySparkPress == null ? (

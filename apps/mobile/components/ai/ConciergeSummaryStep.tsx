@@ -5,6 +5,7 @@
 
 import React, { useMemo } from "react";
 import { View, Text, StyleSheet } from "react-native";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
@@ -12,9 +13,11 @@ import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { Card, PrimaryButton, TextButton } from "@/components/ds";
 import type { ActivityDetails } from "@/lib/ai/conciergePlanningFlow";
 import { useNormalizedLocation } from "@/lib/location/useLocationDisplay";
+import { translateCatalogText } from "@/lib/ai/conciergeCatalogI18n";
+import { useAppLocaleTag } from "@/lib/i18n/appLocale";
 
-function dayKey(d: Date): string {
-  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+function dayKey(d: Date, locale: string): string {
+  return d.toLocaleDateString(locale, { weekday: "short", month: "short", day: "numeric" });
 }
 
 function sameCalendarDay(a: Date, b: Date): boolean {
@@ -44,29 +47,23 @@ export function ConciergeSummaryStep({
   loading = false,
   showInlineBack = true,
 }: ConciergeSummaryStepProps) {
+  const { t } = useTranslation();
+  const appLocale = useAppLocaleTag();
   const theme = useAppTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const locationDisplay = useNormalizedLocation(details.location);
   const dateStr =
     details.date && details.singleDay === false && details.dateEnd && !sameCalendarDay(details.date, details.dateEnd)
-      ? `${dayKey(details.date)} → ${dayKey(details.dateEnd)}`
+      ? t("concierge.summary.dateRange", { start: dayKey(details.date, appLocale), end: dayKey(details.dateEnd, appLocale) })
       : details.date
-        ? dayKey(details.date)
+        ? dayKey(details.date, appLocale)
         : "";
   const timeLabel =
     details.exactTimeHm && /^\d{2}:\d{2}$/.test(details.exactTimeHm)
       ? details.exactTimeHm
-      : details.timeOfDay === "any"
-        ? ""
-        : details.timeOfDay === "morning"
-          ? "Morning"
-          : details.timeOfDay === "lunch"
-            ? "Lunch"
-            : details.timeOfDay === "afternoon"
-              ? "Afternoon"
-              : details.timeOfDay === "evening"
-                ? "Evening"
-                : "";
+      : details.timeOfDay && details.timeOfDay !== "any"
+        ? t(`concierge.timeOfDay.${details.timeOfDay}`)
+        : "";
   const budgetStr =
     details.budgetAmount && details.budgetCurrency
       ? `${details.budgetCurrency} ${details.budgetAmount}`
@@ -78,15 +75,15 @@ export function ConciergeSummaryStep({
     <View style={styles.wrap}>
       {showInlineBack ? (
         <TextButton
-          title="Back"
+          title={t("common.back")}
           icon={<Ionicons name="arrow-back" size={20} color={theme.colors.primary} />}
           onPress={onBack}
           style={styles.backRow}
         />
       ) : null}
 
-      <Text style={styles.title}>Plan summary</Text>
-      <Text style={styles.subtitle}>Confirm and generate your plans</Text>
+      <Text style={styles.title}>{t("concierge.summary.title")}</Text>
+      <Text style={styles.subtitle}>{t("concierge.summary.subtitle")}</Text>
 
       <Card style={styles.card} elevation={1}>
         {dateStr ? (
@@ -107,13 +104,13 @@ export function ConciergeSummaryStep({
         {budgetStr ? (
           <View style={styles.row}>
             <Ionicons name="wallet-outline" size={20} color={theme.colors.textSecondary} />
-            <Text style={styles.cardText}>Budget {budgetStr}</Text>
+            <Text style={styles.cardText}>{t("concierge.summary.budget", { budget: budgetStr })}</Text>
           </View>
         ) : null}
         {details.cuisine ? (
           <View style={styles.row}>
             <Ionicons name="restaurant-outline" size={20} color={theme.colors.textSecondary} />
-            <Text style={styles.cardText}>{details.cuisine} cuisine</Text>
+            <Text style={styles.cardText}>{t("concierge.summary.cuisine", { cuisine: details.cuisine })}</Text>
           </View>
         ) : null}
         {whoLabel ? (
@@ -125,12 +122,12 @@ export function ConciergeSummaryStep({
         {activityLabel ? (
           <View style={[styles.row, styles.rowLast]}>
             <SparklesIcon size={20} color={theme.colors.primary} />
-            <Text style={[styles.cardText, styles.activityText]}>{activityLabel}</Text>
+            <Text style={[styles.cardText, styles.activityText]}>{translateCatalogText(t, activityLabel)}</Text>
           </View>
         ) : null}
       </Card>
 
-      <PrimaryButton title="Plan" onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onGenerate(); }} loading={loading} />
+      <PrimaryButton title={t("concierge.summary.plan")} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onGenerate(); }} loading={loading} />
     </View>
   );
 }

@@ -10,6 +10,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { useAppTheme } from "@/constants/design-system";
 import { SectionHeader } from "@/components/ds";
 import { CommunityPlanCard } from "@/components/ai/CommunityPlanCard";
@@ -34,6 +35,7 @@ export function CommunityPlansSection({
   limit = 2,
   onUsePlan,
 }: CommunityPlansSectionProps) {
+  const { t } = useTranslation();
   const [plans, setPlans] = useState<CommunityPlan[]>([]);
 
   const load = useCallback(async () => {
@@ -59,8 +61,8 @@ export function CommunityPlansSection({
   return (
     <View style={{ marginVertical: appTheme.spacing.md, gap: appTheme.spacing.sm }}>
       <SectionHeader
-        title="Plans people actually did"
-        subtitle={`Rated by Winkly members who ran them${city ? ` in ${city}` : ""}.`}
+        title={t("concierge.community.sectionTitle")}
+        subtitle={city ? t("concierge.community.sectionSubtitleCity", { city }) : t("concierge.community.sectionSubtitle")}
       />
       {plans.map((plan) => (
         <CommunityPlanCard key={plan.id} plan={plan} onUse={onUsePlan} />

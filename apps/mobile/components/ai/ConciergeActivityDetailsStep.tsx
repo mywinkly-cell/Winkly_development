@@ -45,6 +45,8 @@ import {
   BUDGET_QUICK_AMOUNTS,
   getCurrencySymbol,
 } from "@/lib/ai/conciergePlanningFlow";
+import { translateCatalogText } from "@/lib/ai/conciergeCatalogI18n";
+import { useAppLocaleTag } from "@/lib/i18n/appLocale";
 import type { Mode } from "@/types";
 import { supabase } from "@/lib/supabase";
 import {
@@ -82,20 +84,38 @@ function getNextSaturday(d: Date): Date {
   return x;
 }
 
-const DATE_PRESETS: { key: DatePreset; label: string }[] = [
-  { key: "today", label: "Today" },
-  { key: "tomorrow", label: "Tomorrow" },
-  { key: "weekend", label: "Weekend" },
-  { key: "custom", label: "Custom" },
-];
+// Labels: concierge.datePreset.<key>, concierge.timeOfDay.<key>.
+const DATE_PRESETS: DatePreset[] = ["today", "tomorrow", "weekend", "custom"];
+const TIME_OPTIONS: TimeOfDay[] = ["any", "morning", "lunch", "afternoon", "evening"];
 
-const TIME_OPTIONS: { key: TimeOfDay; label: string }[] = [
-  { key: "any", label: "Any time" },
-  { key: "morning", label: "Morning" },
-  { key: "lunch", label: "Lunch" },
-  { key: "afternoon", label: "Afternoon" },
-  { key: "evening", label: "Evening" },
-];
+/** Values stay English (they're sent to the AI); labels are translated for display. */
+const VIBE_OPTIONS = [
+  { id: "cozy", label: "Cozy" },
+  { id: "romantic", label: "Romantic" },
+  { id: "lively", label: "Lively" },
+  { id: "chic", label: "Chic" },
+  { id: "casual", label: "Casual" },
+] as const;
+const GOAL_OPTIONS = [
+  { id: "intro", label: "Quick intro" },
+  { id: "catchup", label: "Catch up" },
+  { id: "work", label: "Work chat" },
+  { id: "pitch", label: "Pitch / deal" },
+  { id: "network", label: "Network" },
+] as const;
+const CUISINE_OTHER = "Other…";
+const CUISINE_KEYS: Record<string, string> = {
+  Italian: "concierge.cuisine.italian",
+  Japanese: "concierge.cuisine.japanese",
+  Mexican: "concierge.cuisine.mexican",
+  Thai: "concierge.cuisine.thai",
+  Indian: "concierge.cuisine.indian",
+  French: "concierge.cuisine.french",
+  Greek: "concierge.cuisine.greek",
+  Korean: "concierge.cuisine.korean",
+  Spanish: "concierge.cuisine.spanish",
+  [CUISINE_OTHER]: "concierge.cuisine.other",
+};
 
 const COMMON_CURRENCIES = ["EUR", "GBP", "USD", "CHF", "PLN"];
 
@@ -170,8 +190,9 @@ export function ConciergeActivityDetailsStep({
   const requireCity = show("location");
   const theme = useAppTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
+  const appLocale = useAppLocaleTag();
   const [location, setLocation] = useState(() =>
     normalizeLocationDisplayString(initialDetails.location ?? "", appLanguage)
   );
@@ -518,15 +539,9 @@ export function ConciergeActivityDetailsStep({
     // Minimal but high-impact coverage: Dinner & drinks, Coffee meeting, Sport & activity, plus food-led categories.
     if (showFoodFields) {
       return {
-        title: "Vibe",
+        title: t("concierge.details.vibe"),
         subtitle: "",
-        options: [
-          { id: "cozy", label: "Cozy" },
-          { id: "romantic", label: "Romantic" },
-          { id: "lively", label: "Lively" },
-          { id: "chic", label: "Chic" },
-          { id: "casual", label: "Casual" },
-        ] as const,
+        options: VIBE_OPTIONS.map((o) => ({ ...o, display: t(`concierge.details.vibeOption.${o.id}`) })),
         selected: (categoryExtras?.atmosphere || "").trim(),
         onSelect: (label: string) => {
           Haptics.selectionAsync();
@@ -537,15 +552,9 @@ export function ConciergeActivityDetailsStep({
     }
     if (activityKey === "coffee_meeting" || activityKey === "lunch_meeting") {
       return {
-        title: "Goal",
-        subtitle: "What’s the goal?",
-        options: [
-          { id: "intro", label: "Quick intro" },
-          { id: "catchup", label: "Catch up" },
-          { id: "work", label: "Work chat" },
-          { id: "pitch", label: "Pitch / deal" },
-          { id: "network", label: "Network" },
-        ] as const,
+        title: t("concierge.details.goal"),
+        subtitle: t("concierge.details.goalQuestion"),
+        options: GOAL_OPTIONS.map((o) => ({ ...o, display: t(`concierge.details.goalOption.${o.id}`) })),
         selected: (categoryExtras?.meetingGoal || "").trim(),
         onSelect: (label: string) => {
           Haptics.selectionAsync();
@@ -558,9 +567,9 @@ export function ConciergeActivityDetailsStep({
       const fallback = ["Tennis / padel", "Bowling", "Cycling route", "Evening stroll", "Indoor climbing"];
       const list = (opts.length ? opts : fallback).slice(0, 6);
       return {
-        title: "Type",
-        subtitle: "What type of activity?",
-        options: list.map((label, idx) => ({ id: String(idx), label })),
+        title: t("concierge.details.type"),
+        subtitle: t("concierge.details.typeActivity"),
+        options: list.map((label, idx) => ({ id: String(idx), label, display: translateCatalogText(t, label) })),
         selected: (categoryExtras?.sportSubType || "").trim(),
         onSelect: (label: string) => {
           Haptics.selectionAsync();
@@ -572,9 +581,9 @@ export function ConciergeActivityDetailsStep({
       const opts = (activityCategory?.subActivities ?? []);
       const list = (opts.length ? opts : ["Museum / gallery", "Theatre / show", "Cinema", "Exhibition"]).slice(0, 6);
       return {
-        title: "Type",
-        subtitle: "What kind of culture?",
-        options: list.map((label, idx) => ({ id: String(idx), label })),
+        title: t("concierge.details.type"),
+        subtitle: t("concierge.details.typeCulture"),
+        options: list.map((label, idx) => ({ id: String(idx), label, display: translateCatalogText(t, label) })),
         selected: (categoryExtras?.artSubType || "").trim(),
         onSelect: (label: string) => {
           Haptics.selectionAsync();
@@ -583,39 +592,34 @@ export function ConciergeActivityDetailsStep({
       };
     }
     return null;
-  }, [activityKey, activityCategory?.subActivities, categoryExtras?.artSubType, categoryExtras?.atmosphere, categoryExtras?.meetingGoal, categoryExtras?.sportSubType, setExtra, showFoodFields]);
+  }, [activityKey, activityCategory?.subActivities, categoryExtras?.artSubType, categoryExtras?.atmosphere, categoryExtras?.meetingGoal, categoryExtras?.sportSubType, setExtra, showFoodFields, t]);
 
-  const cuisineChips = useMemo(
-    () => ["Italian", "Japanese", "Mexican", "Thai", "Indian", "French", "Greek", "Korean", "Spanish", "Other…"],
-    []
-  );
+  const cuisineChips = useMemo(() => Object.keys(CUISINE_KEYS), []);
 
   return (
     <GestureScrollView style={[styles.scroll, scrollStyle]} contentContainerStyle={styles.content}>
       {full && showInlineBack ? (
         <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
-          <Text style={styles.backText}>Back</Text>
+          <Text style={styles.backText}>{t("common.back")}</Text>
         </TouchableOpacity>
       ) : null}
 
       {!full ? null : showProfilePrompt ? (
         <View style={styles.customPromptBlock}>
-          <Text style={styles.customPromptLabel}>
-            Is there any specific idea or request on your mind? Please add for a better planning.
-          </Text>
+          <Text style={styles.customPromptLabel}>{t("concierge.details.customPromptLabel")}</Text>
           <TextInput
             style={styles.customPromptInput}
             value={customPromptExtra}
             onChangeText={setCustomPromptExtra}
-            placeholder="e.g. concert then café, group of 4, budget-friendly…"
+            placeholder={t("concierge.details.customPromptPlaceholder")}
             placeholderTextColor={theme.colors.textMuted}
             multiline
             textAlignVertical="top"
             maxLength={600}
           />
           <Text style={styles.customChipsLabel}>
-            {customChipsLoading ? "Building suggestions from your profile…" : "Suggestions for you"}
+            {customChipsLoading ? t("concierge.details.buildingSuggestions") : t("concierge.details.suggestionsForYou")}
           </Text>
           {customChipsLoading ? (
             <ActivityIndicator color={theme.colors.primary} style={{ marginVertical: 12 }} />
@@ -646,10 +650,14 @@ export function ConciergeActivityDetailsStep({
 
       {full && subTopicLabel?.trim() ? (
         <View style={styles.topicHero}>
-          <Text style={styles.topicHeroLabel}>Topic</Text>
-          <Text style={styles.topicHeroTitle} numberOfLines={1}>
-            {subTopicLabel.trim()}
-            {subActivityLabel?.trim() ? ` — ${subActivityLabel.trim()}` : ""}
+          <Text style={styles.topicHeroLabel}>{t("concierge.details.topic")}</Text>
+          <Text style={styles.topicHeroTitle} numberOfLines={2}>
+            {subActivityLabel?.trim()
+              ? t("concierge.details.topicWithSub", {
+                  topic: translateCatalogText(t, subTopicLabel.trim()),
+                  sub: translateCatalogText(t, subActivityLabel.trim()),
+                })
+              : translateCatalogText(t, subTopicLabel.trim())}
           </Text>
         </View>
       ) : null}
@@ -657,14 +665,14 @@ export function ConciergeActivityDetailsStep({
       {full ? (
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Who’s joining?</Text>
+          <Text style={styles.sectionTitle}>{t("concierge.details.whoJoining")}</Text>
         </View>
         <View style={styles.surfaceCard}>
           <View style={styles.whoGrid}>
             {([
-              { key: "just_me" as const, title: "Solo", sub: "Just for me", icon: "person-outline" as const },
-              { key: "share" as const, title: "With someone", sub: "Invite or share", icon: "people-outline" as const },
-              { key: "decide_later" as const, title: "Decide later", sub: "Keep it flexible", icon: "time-outline" as const },
+              { key: "just_me" as const, title: t("concierge.who.just_me"), sub: t("concierge.who.just_me.sub"), icon: "person-outline" as const },
+              { key: "share" as const, title: t("concierge.who.share"), sub: t("concierge.who.share.sub"), icon: "people-outline" as const },
+              { key: "decide_later" as const, title: t("concierge.who.decide_later"), sub: t("concierge.who.decide_later.sub"), icon: "time-outline" as const },
             ] as const).map((opt) => {
               const active = whoJoining === opt.key;
               return (
@@ -712,7 +720,7 @@ export function ConciergeActivityDetailsStep({
                     onPress={() => keyQuestion.onSelect(opt.label)}
                     activeOpacity={0.85}
                   >
-                    <Text style={[styles.keyChipText, active && styles.keyChipTextActive]}>{opt.label}</Text>
+                    <Text style={[styles.keyChipText, active && styles.keyChipTextActive]}>{opt.display}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -753,7 +761,7 @@ export function ConciergeActivityDetailsStep({
       {full && cityPart ? (
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Weather</Text>
+            <Text style={styles.sectionTitle}>{t("concierge.details.weather")}</Text>
           </View>
           <View style={styles.surfaceCard}>
             <View style={styles.weatherRow}>
@@ -767,7 +775,7 @@ export function ConciergeActivityDetailsStep({
                   </Text>
                 </>
               ) : (
-                <Text style={styles.weatherText}>Weather unavailable for this location.</Text>
+                <Text style={styles.weatherText}>{t("concierge.details.weatherUnavailable")}</Text>
               )}
             </View>
           </View>
@@ -777,14 +785,18 @@ export function ConciergeActivityDetailsStep({
                 <Ionicons name="rainy-outline" size={20} color={theme.colors.primary} />
                 <Text style={styles.advisoryText}>
                   {singleDay
-                    ? `Rain is forecast for this date in ${cityPart}. Consider an indoor plan or shift a day.`
-                    : `${weatherSnapshot?.rainy_days ?? 0} of ${weatherSnapshot?.total_days ?? 0} days may have rain in ${cityPart}. Consider indoor or flexible plans.`}
+                    ? t("concierge.details.rainSingle", { city: cityPart })
+                    : t("concierge.details.rainRange", {
+                        count: weatherSnapshot?.total_days ?? 0,
+                        rainy: weatherSnapshot?.rainy_days ?? 0,
+                        city: cityPart,
+                      })}
                 </Text>
               </View>
               <View style={styles.advisoryActions}>
                 {singleDay ? (
                   <TouchableOpacity onPress={handlePostponeDay} style={styles.advisoryBtn} activeOpacity={0.8}>
-                    <Text style={styles.advisoryBtnText}>Postpone a day</Text>
+                    <Text style={styles.advisoryBtnText}>{t("concierge.details.postponeDay")}</Text>
                   </TouchableOpacity>
                 ) : null}
                 <TouchableOpacity
@@ -793,7 +805,7 @@ export function ConciergeActivityDetailsStep({
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.advisoryBtnText, indoorOutdoor === "indoor" && styles.advisoryBtnTextActive]}>
-                    {indoorOutdoor === "indoor" ? "Indoor preferred ✓" : "Prefer indoor"}
+                    {indoorOutdoor === "indoor" ? t("concierge.details.indoorPreferred") : t("concierge.details.preferIndoor")}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -805,18 +817,18 @@ export function ConciergeActivityDetailsStep({
       {show("dateTime") ? (
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Date</Text>
+          <Text style={styles.sectionTitle}>{t("concierge.confirm.field.date")}</Text>
         </View>
         <View style={styles.surfaceCard}>
           <View style={[styles.chipsRow, { marginBottom: 0 }]}>
-            {DATE_PRESETS.map(({ key, label }) => (
+            {DATE_PRESETS.map((key) => (
               <TouchableOpacity
                 key={key}
                 style={[styles.chip, datePreset === key && styles.chipActive]}
                 onPress={() => applyDatePreset(key)}
                 activeOpacity={0.85}
               >
-                <Text style={[styles.chipText, datePreset === key && styles.chipTextActive]}>{label}</Text>
+                <Text style={[styles.chipText, datePreset === key && styles.chipTextActive]}>{t(`concierge.datePreset.${key}`)}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -825,14 +837,14 @@ export function ConciergeActivityDetailsStep({
               <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.85}>
                 <Ionicons name="calendar-outline" size={18} color={theme.colors.textSecondary} />
                 <Text style={styles.dateBtnText}>
-                  {date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                  {date.toLocaleDateString(appLocale, { weekday: "short", month: "short", day: "numeric" })}
                 </Text>
               </TouchableOpacity>
               {!singleDay && activityKey !== "trip" ? (
                 <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDateEndPicker(true)} activeOpacity={0.85}>
                   <Ionicons name="calendar-outline" size={18} color={theme.colors.textSecondary} />
                   <Text style={styles.dateBtnText}>
-                    To: {dateEnd.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                    {t("concierge.details.dateTo", { date: dateEnd.toLocaleDateString(appLocale, { weekday: "short", month: "short", day: "numeric" }) })}
                   </Text>
                 </TouchableOpacity>
               ) : null}
@@ -844,8 +856,8 @@ export function ConciergeActivityDetailsStep({
 
       {full && activityKey === "trip" && (
         <>
-          <Text style={styles.label}>Trip length</Text>
-          <Text style={styles.inlineHint}>Choose how many days — we’ll shape an itinerary for each day.</Text>
+          <Text style={styles.label}>{t("concierge.details.tripLength")}</Text>
+          <Text style={styles.inlineHint}>{t("concierge.details.tripLengthHint")}</Text>
           <View style={styles.chipsRow}>
             {[1, 2, 3, 4, 5, 6, 7].map((n) => (
               <TouchableOpacity
@@ -858,15 +870,14 @@ export function ConciergeActivityDetailsStep({
                 activeOpacity={0.8}
               >
                 <Text style={[styles.chipText, tripLengthDays === n && styles.chipTextActive]}>
-                  {n === 1 ? "1 day" : `${n} days`}
+                  {t("concierge.details.days", { count: n })}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
           {tripLengthDays > 1 ? (
             <Text style={styles.changeHint}>
-              Ends{" "}
-              {dateEnd.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+              {t("concierge.details.ends", { date: dateEnd.toLocaleDateString(appLocale, { weekday: "short", month: "short", day: "numeric" }) })}
             </Text>
           ) : null}
         </>
@@ -884,7 +895,7 @@ export function ConciergeActivityDetailsStep({
                   minimumDate={new Date()}
                 />
                 <TouchableOpacity onPress={() => setShowDatePicker(false)} style={styles.pickerDone}>
-                  <Text style={styles.pickerDoneText}>Done</Text>
+                  <Text style={styles.pickerDoneText}>{t("common.done")}</Text>
                 </TouchableOpacity>
               </Pressable>
             </Pressable>
@@ -914,7 +925,7 @@ export function ConciergeActivityDetailsStep({
                   minimumDate={date}
                 />
                 <TouchableOpacity onPress={() => setShowDateEndPicker(false)} style={styles.pickerDone}>
-                  <Text style={styles.pickerDoneText}>Done</Text>
+                  <Text style={styles.pickerDoneText}>{t("common.done")}</Text>
                 </TouchableOpacity>
               </Pressable>
             </Pressable>
@@ -944,7 +955,7 @@ export function ConciergeActivityDetailsStep({
                   minimumDate={isSameCalendarDay(date, new Date()) ? getMinimumPlanDateTime() : undefined}
                 />
                 <TouchableOpacity onPress={() => setShowExactTimePicker(false)} style={styles.pickerDone}>
-                  <Text style={styles.pickerDoneText}>Done</Text>
+                  <Text style={styles.pickerDoneText}>{t("common.done")}</Text>
                 </TouchableOpacity>
               </Pressable>
             </Pressable>
@@ -965,18 +976,18 @@ export function ConciergeActivityDetailsStep({
       {show("dateTime") && singleDay ? (
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Time</Text>
+            <Text style={styles.sectionTitle}>{t("concierge.confirm.field.time")}</Text>
           </View>
           <View style={styles.surfaceCard}>
           <View style={[styles.chipsRow, { marginBottom: 0 }]}>
-            {TIME_OPTIONS.map(({ key, label }) => (
+            {TIME_OPTIONS.map((key) => (
               <TouchableOpacity
                 key={key}
                 style={[styles.chip, timeOfDay === key && styles.chipActive]}
                 onPress={() => { Haptics.selectionAsync(); setTimeOfDay(key); }}
                 activeOpacity={0.85}
               >
-                <Text style={[styles.chipText, timeOfDay === key && styles.chipTextActive]}>{label}</Text>
+                <Text style={[styles.chipText, timeOfDay === key && styles.chipTextActive]}>{t(`concierge.timeOfDay.${key}`)}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -994,7 +1005,7 @@ export function ConciergeActivityDetailsStep({
               size={18}
               color={exactTimeEnabled ? theme.colors.primary : theme.colors.textSecondary}
             />
-            <Text style={styles.locatePillBtnText}>Set exact start time</Text>
+            <Text style={styles.locatePillBtnText}>{t("concierge.details.exactTime")}</Text>
           </TouchableOpacity>
 
           {exactTimeEnabled ? (
@@ -1016,7 +1027,7 @@ export function ConciergeActivityDetailsStep({
       {show("budget") ? (
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Budget</Text>
+          <Text style={styles.sectionTitle}>{t("concierge.details.budget")}</Text>
         </View>
         <View style={styles.surfaceCard}>
         <View style={[styles.chipsRow, { marginBottom: 12 }]}>
@@ -1052,14 +1063,14 @@ export function ConciergeActivityDetailsStep({
                 styles.chipTextActive,
             ]}
           >
-            Custom
+            {t("concierge.datePreset.custom")}
           </Text>
         </TouchableOpacity>
         </View>
         <View style={[styles.budgetRow, { marginBottom: 0 }]}>
         <TextInput
           style={styles.budgetInput}
-          placeholder="Or enter amount (optional)"
+          placeholder={t("concierge.details.budgetPlaceholder")}
           placeholderTextColor={theme.colors.textMuted}
           value={budgetAmount}
           onChangeText={(t) => setBudgetAmount(t.replace(/[^0-9.,]/g, ""))}
@@ -1080,7 +1091,7 @@ export function ConciergeActivityDetailsStep({
       <Modal visible={showCurrencyPicker} transparent animationType="fade">
         <Pressable style={styles.pickerOverlay} onPress={() => setShowCurrencyPicker(false)}>
           <View style={styles.pickerSheet}>
-            <Text style={styles.pickerTitle}>Currency</Text>
+            <Text style={styles.pickerTitle}>{t("concierge.details.currency")}</Text>
             {COMMON_CURRENCIES.map((c) => (
               <TouchableOpacity
                 key={c}
@@ -1097,19 +1108,19 @@ export function ConciergeActivityDetailsStep({
       {full && showFoodFields ? (
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Cuisine</Text>
+            <Text style={styles.sectionTitle}>{t("concierge.details.cuisine")}</Text>
           </View>
           <View style={styles.surfaceCard}>
             <View style={[styles.keyQuestionGrid, { marginBottom: 0 }]}>
               {cuisineChips.map((label) => {
-                const active = cuisine === label || (label === "Other…" && customCuisineOpen);
+                const active = cuisine === label || (label === CUISINE_OTHER && customCuisineOpen);
                 return (
                   <TouchableOpacity
                     key={label}
                     style={[styles.keyChip, active && styles.keyChipActive]}
                     onPress={() => {
                       Haptics.selectionAsync();
-                      if (label === "Other…") {
+                      if (label === CUISINE_OTHER) {
                         setCustomCuisineOpen(true);
                         setCuisine("");
                         return;
@@ -1120,7 +1131,7 @@ export function ConciergeActivityDetailsStep({
                     }}
                     activeOpacity={0.85}
                   >
-                    <Text style={[styles.keyChipText, active && styles.keyChipTextActive]}>{label}</Text>
+                    <Text style={[styles.keyChipText, active && styles.keyChipTextActive]}>{t(CUISINE_KEYS[label])}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -1129,7 +1140,7 @@ export function ConciergeActivityDetailsStep({
             {customCuisineOpen ? (
               <TextInput
                 style={[styles.textField, { marginTop: 12, marginBottom: 0 }]}
-                placeholder="Type cuisine (e.g. Japanese, Italian)"
+                placeholder={t("concierge.details.cuisinePlaceholder")}
                 placeholderTextColor={theme.colors.textMuted}
                 value={cuisine}
                 onChangeText={(t) => {
@@ -1145,7 +1156,7 @@ export function ConciergeActivityDetailsStep({
       {(full && showFoodFields) || onlyField === "indoorOutdoor" ? (
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Indoor / outdoor</Text>
+            <Text style={styles.sectionTitle}>{t("concierge.details.indoorOutdoor")}</Text>
           </View>
           <View style={styles.surfaceCard}>
             <View style={[styles.chipsRow, { marginBottom: 0 }]}>
@@ -1161,7 +1172,7 @@ export function ConciergeActivityDetailsStep({
                   activeOpacity={0.85}
                 >
                   <Text style={[styles.chipText, indoorOutdoor === key && styles.chipTextActive]}>
-                    {key === "any" ? "Any" : key === "indoor" ? "Indoor" : "Outdoor"}
+                    {t(`concierge.details.setting.${key}`)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -1173,12 +1184,12 @@ export function ConciergeActivityDetailsStep({
       {full ? (
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Notes</Text>
+          <Text style={styles.sectionTitle}>{t("concierge.details.notes")}</Text>
         </View>
         <View style={styles.surfaceCard}>
           <TextInput
             style={[styles.textField, { minHeight: 90, marginBottom: 0, textAlignVertical: "top" }]}
-            placeholder="Anything else the AI should know? (max 150)"
+            placeholder={t("concierge.details.notesPlaceholder", { max: 150 })}
             placeholderTextColor={theme.colors.textMuted}
             value={additionalInfo}
             onChangeText={setAdditionalInfo}
@@ -1196,10 +1207,10 @@ export function ConciergeActivityDetailsStep({
 
       {requireCity && !cityPart.trim() ? (
         <Text style={[theme.type.caption, { color: theme.colors.error, marginBottom: theme.spacing.sm, fontWeight: "600" }]}>
-          City is required to continue.
+          {t("concierge.details.cityRequired")}
         </Text>
       ) : null}
-      <PrimaryButton title={submitLabel ?? "Continue"} onPress={handleNext} disabled={requireCity && !cityPart.trim()} />
+      <PrimaryButton title={submitLabel ?? t("concierge.details.continue")} onPress={handleNext} disabled={requireCity && !cityPart.trim()} />
     </GestureScrollView>
   );
 }

@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { GestureDetector, Gesture } from "react-native-gesture-handler";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { useTranslation } from "react-i18next";
 import NetInfo from "@react-native-community/netinfo";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -59,15 +60,29 @@ const VALID_MODES: Mode[] = (["romance", "friends", "business", "events"] as Mod
 
 type ConciergeStep = "form" | "options" | "message_only" | "confirm";
 
-const REFINEMENT_CHIPS = ["Make it cheaper", "Earlier time", "More relaxed", "Different vibe"];
-const EMPTY_STATE_ACTIONS = [
-  { id: "date", label: "Change date", icon: "calendar-outline" as const },
-  { id: "location", label: "Change location", icon: "location-outline" as const },
-  { id: "simplify", label: "Simplify request", icon: "chatbubble-outline" as const },
+/** Refinement chips: the translated label is sent as free-text feedback; `structured` is the language-neutral flag. */
+const REFINEMENT_CHIPS = [
+  { id: "cheaper", labelKey: "concierge.refine.cheaper", structured: { cheaper: true as const } },
+  { id: "earlier", labelKey: "concierge.refine.earlier", structured: { earlier: true as const } },
+  { id: "relaxed", labelKey: "concierge.refine.relaxed", structured: { more_relaxed: true as const } },
+  { id: "vibe", labelKey: "concierge.refine.vibe", structured: { different_vibe: true as const } },
 ];
+const EMPTY_STATE_ACTIONS = [
+  { id: "date", labelKey: "concierge.adjust.date", icon: "calendar-outline" as const },
+  { id: "location", labelKey: "concierge.adjust.location", icon: "location-outline" as const },
+  { id: "simplify", labelKey: "concierge.adjust.simplify", icon: "chatbubble-outline" as const },
+];
+
+const ASSIST_CHIPS = [
+  { id: "opening", labelKey: "concierge.assist.opening" },
+  { id: "next", labelKey: "concierge.assist.next" },
+  { id: "icebreaker", labelKey: "concierge.assist.icebreaker" },
+  { id: "reconnect", labelKey: "concierge.assist.reconnect" },
+] as const;
 
 export default function ConciergeScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{
     source_screen?: string;
     mode?: string;
@@ -259,15 +274,15 @@ export default function ConciergeScreen() {
   const headerTitle =
     step === "form"
       ? source_screen === "chats"
-        ? "Winkly AI for Chats"
-        : "Ask Winkly AI"
+        ? t("concierge.header.chats")
+        : t("concierge.header.ask")
       : step === "message_only"
-        ? "Suggestions"
+        ? t("concierge.header.suggestions")
         : step === "options"
-          ? "Pick an option"
+          ? t("concierge.header.pickOption")
           : source_screen === "planner"
-            ? "Add to planner"
-            : "Use this suggestion";
+            ? t("planReveal.addToPlanner")
+            : t("concierge.useSuggestion");
 
   const backOrFallback = useCallback(
     (fallback: `/(modes)/${Mode}/chats` | `/(modes)/${Mode}/planner`) => {
@@ -415,16 +430,7 @@ export default function ConciergeScreen() {
     setSuggestions(null);
     setChosenIndex(null);
     setLastDate((context.date_from as string) ?? lastDate);
-    const refinement_structured =
-      refinementFeedback === "Make it cheaper"
-        ? { cheaper: true as const }
-        : refinementFeedback === "Earlier time"
-          ? { earlier: true as const }
-          : refinementFeedback === "More relaxed"
-            ? { more_relaxed: true as const }
-            : refinementFeedback === "Different vibe" || refinementFeedback === "Different cuisine"
-              ? { different_vibe: true as const }
-              : undefined;
+    const refinement_structured = REFINEMENT_CHIPS.find((c) => t(c.labelKey) === refinementFeedback)?.structured;
     const contextWithRefinement =
       refinementFeedback && previousOptions?.length
         ? { ...context, refinement_feedback: refinementFeedback, previous_options: previousOptions, refinement_structured }
@@ -478,7 +484,7 @@ export default function ConciergeScreen() {
       });
     } catch (e) {
       setLoading(false);
-      setError((e as Error).message || "Something went wrong.");
+      setError((e as Error).message || t("planIt.results.error"));
       setLastErrorCode("unknown");
     }
   };
@@ -507,7 +513,7 @@ export default function ConciergeScreen() {
       style={[styles.screen, { paddingTop: insets.top }]}
     >
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack} style={styles.headerBtn} accessibilityLabel="Back" hitSlop={8}>
+        <TouchableOpacity onPress={handleBack} style={styles.headerBtn} accessibilityLabel={t("common.back")} hitSlop={8}>
           <Ionicons name="chevron-back" size={22} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
@@ -519,15 +525,15 @@ export default function ConciergeScreen() {
             <Text style={styles.headerSub} numberOfLines={1}>
               {step === "options"
                 ? lastSubmittedContext.current?.presentation === "decisive"
-                  ? "Primary plan or backup"
-                  : "Choose one to continue"
+                  ? t("concierge.sub.primaryOrBackup")
+                  : t("concierge.sub.chooseOne")
                 : step === "message_only"
-                  ? "Try adjusting your request"
-                  : "Confirm or go back"}
+                  ? t("concierge.sub.tryAdjusting")
+                  : t("concierge.sub.confirmOrBack")}
             </Text>
           )}
         </View>
-        <TouchableOpacity onPress={() => handleClose()} style={styles.headerBtn} accessibilityLabel="Close" hitSlop={8}>
+        <TouchableOpacity onPress={() => handleClose()} style={styles.headerBtn} accessibilityLabel={t("common.close")} hitSlop={8}>
           <Ionicons name="close" size={22} color={theme.colors.textSecondary} />
         </TouchableOpacity>
       </View>
@@ -552,11 +558,11 @@ export default function ConciergeScreen() {
           <AIDisclosureNote style={styles.disclosure} />
           {savedIdeas.length > 0 && (
             <View style={styles.savedSection}>
-              <Text style={styles.savedSectionTitle}>Saved ideas</Text>
+              <Text style={styles.savedSectionTitle}>{t("concierge.savedIdeas")}</Text>
               {savedIdeas.slice(0, 5).map((saved) => (
                 <Card key={saved.id} style={styles.savedCard} elevation={0} padding="md">
                   <Text style={styles.savedCardTitle} numberOfLines={1}>
-                    {String(saved.option.option_name || saved.option.narrative || "Idea")}
+                    {String(saved.option.option_name || saved.option.narrative || t("concierge.ideaFallback"))}
                   </Text>
                   {saved.context?.city && (
                     <Text style={styles.savedCardMeta}>
@@ -567,7 +573,7 @@ export default function ConciergeScreen() {
                   <View style={styles.savedCardActions}>
                     <View style={styles.savedAddBtnWrap}>
                       <PrimaryButton
-                        title="Add to planner"
+                        title={t("planReveal.addToPlanner")}
                         onPress={() => {
                           setSuggestions([saved.option]);
                           setChosenIndex(0);
@@ -582,7 +588,7 @@ export default function ConciergeScreen() {
                         loadSaved();
                       }}
                       style={styles.savedRemoveBtn}
-                      accessibilityLabel="Remove saved idea"
+                      accessibilityLabel={t("concierge.removeSavedIdea")}
                       hitSlop={8}
                     >
                       <Ionicons name="trash-outline" size={18} color={theme.colors.textMuted} />
@@ -605,14 +611,14 @@ export default function ConciergeScreen() {
               >
                 <Pressable style={styles.chatModeSheet} onPress={(e) => e.stopPropagation()}>
                   <View style={styles.chatModeHeader}>
-                    <Text style={styles.chatModeTitle}>What do you want help with?</Text>
+                    <Text style={styles.chatModeTitle}>{t("concierge.chatMode.title")}</Text>
                     <TouchableOpacity
                       onPress={() => {
                         Haptics.selectionAsync();
                         setChatMode("assist");
                       }}
                       hitSlop={12}
-                      accessibilityLabel="Close"
+                      accessibilityLabel={t("common.close")}
                     >
                       <Ionicons name="close" size={22} color={theme.colors.textSecondary} />
                     </TouchableOpacity>
@@ -625,8 +631,8 @@ export default function ConciergeScreen() {
                     }}
                     activeOpacity={0.9}
                   >
-                    <Text style={styles.chatModeOptionTitle}>Plan something together</Text>
-                    <Text style={styles.chatModeOptionSub}>Card-based planning using their interests</Text>
+                    <Text style={styles.chatModeOptionTitle}>{t("concierge.chatMode.planTitle")}</Text>
+                    <Text style={styles.chatModeOptionSub}>{t("concierge.chatMode.planSub")}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.chatModeOption}
@@ -636,8 +642,8 @@ export default function ConciergeScreen() {
                     }}
                     activeOpacity={0.9}
                   >
-                    <Text style={styles.chatModeOptionTitle}>Help with the conversation</Text>
-                    <Text style={styles.chatModeOptionSub}>Quick templates to draft your next message</Text>
+                    <Text style={styles.chatModeOptionTitle}>{t("concierge.chatMode.assistTitle")}</Text>
+                    <Text style={styles.chatModeOptionSub}>{t("concierge.chatMode.assistSub")}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.chatModeCloseRow}
@@ -646,9 +652,9 @@ export default function ConciergeScreen() {
                       setChatMode("assist");
                     }}
                     activeOpacity={0.9}
-                    accessibilityLabel="Close without choosing"
+                    accessibilityLabel={t("concierge.chatMode.closeA11y")}
                   >
-                    <Text style={styles.chatModeCloseText}>Close</Text>
+                    <Text style={styles.chatModeCloseText}>{t("common.close")}</Text>
                   </TouchableOpacity>
                 </Pressable>
               </Pressable>
@@ -657,34 +663,22 @@ export default function ConciergeScreen() {
 
           {source_screen === "chats" && chatMode === "assist" ? (
             <View style={styles.chatAssistChipsWrap}>
-              <Text style={styles.chatAssistLabel}>Quick picks</Text>
+              <Text style={styles.chatAssistLabel}>{t("concierge.assist.label")}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chatAssistChipsRow}>
-                {[
-                  { id: "opening", label: "Opening move" },
-                  { id: "next", label: "Next move" },
-                  { id: "icebreaker", label: "Suggest an icebreaker" },
-                  { id: "reconnect", label: "Reconnect after silence" },
-                ].map((chip) => (
+                {ASSIST_CHIPS.map((chip) => (
                   <Chip
                     key={chip.id}
-                    label={chip.label}
+                    label={t(chip.labelKey)}
                     onPress={() => {
-                      const name = selectedPartner?.displayName?.trim() || "them";
+                      // The prompt is prefilled into the request field, so it's in the app language too.
+                      const name = selectedPartner?.displayName?.trim() || t("concierge.assist.them");
                       const interestSnippet =
                         partnerInterests.length > 0
-                          ? `Shared interests to consider: ${partnerInterests.slice(0, 3).join(", ")}.`
+                          ? t("concierge.assist.sharedInterests", { interests: partnerInterests.slice(0, 3).join(", ") })
                           : "";
-                      const baseRules =
-                        "Rules: Do NOT reference or assume any message history. Keep it natural, not cringe. 1–2 short messages max. End with one easy question.";
-                      const prompt =
-                        chip.id === "opening"
-                          ? `Write an opening message to ${name}.\n${interestSnippet}\n${baseRules}`
-                          : chip.id === "next"
-                            ? `Draft my next message to ${name} to move the conversation forward.\n${interestSnippet}\n${baseRules}`
-                            : chip.id === "icebreaker"
-                              ? `Suggest an icebreaker question for ${name}.\n${interestSnippet}\n${baseRules}`
-                              : `Write a friendly reconnection message to ${name} after a period of silence.\n${interestSnippet}\n${baseRules}`;
-                      setChatPrefillPrompt(prompt);
+                      const baseRules = t("concierge.assist.rules");
+                      const task = t(`concierge.assist.prompt.${chip.id}`, { name });
+                      setChatPrefillPrompt(`${task}\n${interestSnippet}\n${baseRules}`);
                     }}
                   />
                 ))}
@@ -718,7 +712,7 @@ export default function ConciergeScreen() {
           {isConnected === false && (
             <View style={styles.offlineBanner}>
               <Ionicons name="cloud-offline-outline" size={20} color={theme.colors.textInverse} />
-              <Text style={styles.offlineBannerText}>Check connection and try again.</Text>
+              <Text style={styles.offlineBannerText}>{t("concierge.error.offline")}</Text>
             </View>
           )}
           {lastErrorCode === "rate_limit" || lastErrorCode === "daily_quota" || lastErrorCode === "tier_required" ? (
@@ -757,7 +751,7 @@ export default function ConciergeScreen() {
               {lastSubmittedContext.current && (
                 <View style={styles.retryBtnWrap}>
                   <SecondaryButton
-                    title="Retry"
+                    title={t("concierge.retry")}
                     onPress={() => handleSubmit(lastSubmittedContext.current!)}
                     disabled={loading}
                   />
@@ -786,17 +780,17 @@ export default function ConciergeScreen() {
             {noOptionsReason ? (
               <Text style={styles.noOptionsReasonText}>{noOptionsReason}</Text>
             ) : null}
-            <Text style={styles.emptyStateLabel}>Try adjusting:</Text>
+            <Text style={styles.emptyStateLabel}>{t("concierge.adjust.label")}</Text>
             <View style={styles.emptyStateActions}>
               {EMPTY_STATE_ACTIONS.map((a) => (
                 <Chip
                   key={a.id}
-                  label={a.label}
+                  label={t(a.labelKey)}
                   onPress={() => setMessage(null)}
                 />
               ))}
             </View>
-            <PrimaryButton title="Get new suggestions" onPress={handleTryAgain} />
+            <PrimaryButton title={t("concierge.getNewSuggestions")} onPress={handleTryAgain} />
           </Card>
         </ScrollView>
       )}
@@ -826,12 +820,12 @@ export default function ConciergeScreen() {
                   {lastSubmittedContext.current?.presentation === "decisive" && (suggestions?.length ?? 0) >= 2 ? (
                     <View style={styles.dnaBadge}>
                       <Ionicons name="star" size={14} color={accentYellow} />
-                      <Text style={styles.dnaBadgeText}>{originalIndex === 0 ? "Primary pick" : "Backup"}</Text>
+                      <Text style={styles.dnaBadgeText}>{originalIndex === 0 ? t("concierge.primaryPick") : t("concierge.backup")}</Text>
                     </View>
                   ) : resolveFitReason(opt) ? (
                     <View style={styles.dnaBadge}>
                       <Ionicons name="heart" size={14} color={theme.colors.primary} />
-                      <Text style={styles.dnaBadgeText}>Picked for you</Text>
+                      <Text style={styles.dnaBadgeText}>{t("concierge.pickedForYou")}</Text>
                     </View>
                   ) : null}
                 </View>
@@ -844,7 +838,7 @@ export default function ConciergeScreen() {
                   activeOpacity={0.9}
                 >
                   <View style={styles.optionCardHeaderRow}>
-                    <Text style={styles.optionTitle}>{String(opt.option_name || opt.narrative || `Option ${originalIndex + 1}`)}</Text>
+                    <Text style={styles.optionTitle}>{String(opt.option_name || opt.narrative || t("concierge.optionNumber", { number: originalIndex + 1 }))}</Text>
                     <TouchableOpacity
                       style={[styles.compareChip, compareIndices.includes(originalIndex) && styles.compareChipActive]}
                       onPress={(e) => {
@@ -861,7 +855,7 @@ export default function ConciergeScreen() {
                       activeOpacity={0.8}
                     >
                       <Ionicons name="git-compare-outline" size={14} color={compareIndices.includes(originalIndex) ? theme.colors.onPrimary : theme.colors.primary} />
-                      <Text style={[styles.compareChipText, compareIndices.includes(originalIndex) && styles.compareChipTextActive]}>Compare</Text>
+                      <Text style={[styles.compareChipText, compareIndices.includes(originalIndex) && styles.compareChipTextActive]}>{t("concierge.compare")}</Text>
                     </TouchableOpacity>
                   </View>
                   <FitReasonLine reason={resolveFitReason(opt)} style={styles.optionFitReason} />
@@ -879,7 +873,7 @@ export default function ConciergeScreen() {
                       activeOpacity={0.8}
                     >
                       <Ionicons name="map-outline" size={16} color={theme.colors.primary} />
-                      <Text style={styles.viewOnMapText}>View on map</Text>
+                      <Text style={styles.viewOnMapText}>{t("concierge.viewOnMap")}</Text>
                     </TouchableOpacity>
                   ) : null}
                 </TouchableOpacity>
@@ -895,11 +889,11 @@ export default function ConciergeScreen() {
                     activeOpacity={0.8}
                   >
                     <Ionicons name="bookmark-outline" size={18} color={theme.colors.primary} />
-                    <Text style={styles.saveForLaterText}>Save for later</Text>
+                    <Text style={styles.saveForLaterText}>{t("concierge.saveForLater")}</Text>
                   </TouchableOpacity>
                   <View style={styles.choosePlanBtnWrap}>
                     <PrimaryButton
-                      title="Choose this plan"
+                      title={t("concierge.choosePlan")}
                       onPress={() => {
                         Haptics.selectionAsync();
                         setChosenIndex(originalIndex);
@@ -923,31 +917,31 @@ export default function ConciergeScreen() {
             );
             return (
               <Card style={styles.compareBlock} elevation={0}>
-                <Text style={styles.compareBlockTitle}>Compare</Text>
+                <Text style={styles.compareBlockTitle}>{t("concierge.compare")}</Text>
                 <View style={styles.compareTableHeader}>
                   <Text style={styles.compareTableHeaderText} />
-                  <Text style={styles.compareTableHeaderText}>A</Text>
-                  <Text style={styles.compareTableHeaderText}>B</Text>
+                  <Text style={styles.compareTableHeaderText}>{t("concierge.compareA")}</Text>
+                  <Text style={styles.compareTableHeaderText}>{t("concierge.compareB")}</Text>
                 </View>
-                {row("Price", (optA?.price_indicator as string) ?? (optA?.logistics as { estimated_cost?: string })?.estimated_cost ?? "", (optB?.price_indicator as string) ?? (optB?.logistics as { estimated_cost?: string })?.estimated_cost ?? "")}
-                {row("Vibe", (optA?.why_this_fits as string) ?? (optA?.logic_bridge as string) ?? "", (optB?.why_this_fits as string) ?? (optB?.logic_bridge as string) ?? "")}
-                {row("Distance", (optA?.logistics as { distance?: string })?.distance ?? "", (optB?.logistics as { distance?: string })?.distance ?? "")}
+                {row(t("concierge.compareRow.price"), (optA?.price_indicator as string) ?? (optA?.logistics as { estimated_cost?: string })?.estimated_cost ?? "", (optB?.price_indicator as string) ?? (optB?.logistics as { estimated_cost?: string })?.estimated_cost ?? "")}
+                {row(t("concierge.compareRow.vibe"), (optA?.why_this_fits as string) ?? (optA?.logic_bridge as string) ?? "", (optB?.why_this_fits as string) ?? (optB?.logic_bridge as string) ?? "")}
+                {row(t("concierge.compareRow.distance"), (optA?.logistics as { distance?: string })?.distance ?? "", (optB?.logistics as { distance?: string })?.distance ?? "")}
                 <View style={styles.compareActions}>
                   <View style={styles.compareChooseBtnWrap}>
-                    <PrimaryButton title="Choose A" onPress={() => { setChosenIndex(iA); setCompareIndices([]); }} />
+                    <PrimaryButton title={t("concierge.chooseA")} onPress={() => { setChosenIndex(iA); setCompareIndices([]); }} />
                   </View>
                   <View style={styles.compareChooseBtnWrap}>
-                    <PrimaryButton title="Choose B" onPress={() => { setChosenIndex(iB); setCompareIndices([]); }} />
+                    <PrimaryButton title={t("concierge.chooseB")} onPress={() => { setChosenIndex(iB); setCompareIndices([]); }} />
                   </View>
                 </View>
               </Card>
             );
           })()}
           <View style={styles.refinementFromOptionsWrap}>
-            <Text style={styles.refinementFromOptionsLabel}>Want something different?</Text>
+            <Text style={styles.refinementFromOptionsLabel}>{t("concierge.refine.label")}</Text>
             <View style={styles.refinementChipsRow}>
-              {REFINEMENT_CHIPS.map((label) => (
-                <Chip key={label} label={label} onPress={() => handleRefinementFromOptions(label)} />
+              {REFINEMENT_CHIPS.map((c) => (
+                <Chip key={c.id} label={t(c.labelKey)} onPress={() => handleRefinementFromOptions(t(c.labelKey))} />
               ))}
             </View>
           </View>
@@ -957,15 +951,15 @@ export default function ConciergeScreen() {
       {step === "confirm" && chosenOption && (
         <ScrollView style={styles.chatConfirmScroll} contentContainerStyle={styles.chatConfirmContent}>
           <TextButton
-            title="Back to options"
+            title={t("concierge.backToOptions")}
             icon={<Ionicons name="arrow-back" size={20} color={theme.colors.primary} />}
             onPress={() => setChosenIndex(null)}
             style={styles.backRow}
           />
           <Card style={styles.chatConfirmCard} elevation={1}>
-            <Text style={styles.chatConfirmTitle}>{String(chosenOption.option_name || chosenOption.narrative || "Suggestion")}</Text>
+            <Text style={styles.chatConfirmTitle}>{String(chosenOption.option_name || chosenOption.narrative || t("concierge.suggestionFallback"))}</Text>
             <FitReasonLine reason={resolveFitReason(chosenOption)} numberOfLines={3} style={styles.chatConfirmFitReason} />
-            <PrimaryButton title="Use this suggestion" onPress={() => chosenOption && setShowFeedbackFor(chosenOption)} />
+            <PrimaryButton title={t("concierge.useSuggestion")} onPress={() => chosenOption && setShowFeedbackFor(chosenOption)} />
           </Card>
         </ScrollView>
       )}
@@ -974,12 +968,12 @@ export default function ConciergeScreen() {
         <Pressable style={styles.feedbackModalBackdrop} onPress={() => { setShowFeedbackFor(null); handleClose(); }}>
           <Pressable onPress={(e) => e.stopPropagation()}>
           <Card style={styles.feedbackModalCard} elevation={2}>
-            <Text style={styles.feedbackModalTitle}>How did it go?</Text>
+            <Text style={styles.feedbackModalTitle}>{t("concierge.feedback.title")}</Text>
             <View style={styles.feedbackModalActions}>
               {(["went_well", "didnt_use", "not_quite_right"] as ConciergeFeedbackType[]).map((fb) => (
                 <SecondaryButton
                   key={fb}
-                  title={fb === "went_well" ? "Went well" : fb === "didnt_use" ? "Didn't use" : "Not quite right"}
+                  title={t(`concierge.feedback.${fb}`)}
                   onPress={async () => {
                     reportConciergeOutcome(lastRequestId, fb).catch(() => {});
                     if (showFeedbackFor) {
@@ -993,7 +987,7 @@ export default function ConciergeScreen() {
               ))}
             </View>
             <TouchableOpacity style={styles.feedbackModalSkip} onPress={() => { setShowFeedbackFor(null); handleClose(); }}>
-              <Text style={styles.feedbackModalSkipText}>Skip</Text>
+              <Text style={styles.feedbackModalSkipText}>{t("concierge.skip")}</Text>
             </TouchableOpacity>
           </Card>
           </Pressable>

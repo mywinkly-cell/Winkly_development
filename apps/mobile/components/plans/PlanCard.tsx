@@ -11,6 +11,7 @@ import React from "react";
 import { Pressable, Text, View, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 import { Card, PrimaryButton } from "@/components/ds";
 import { useAppTheme } from "@/constants/design-system";
 
@@ -221,7 +222,9 @@ export function PlanCardMeta({
   );
 }
 
-export function PlanCardMapLink({ label = "Open in Maps", onPress }: { label?: string; onPress: () => void }) {
+export function PlanCardMapLink({ label: labelProp, onPress }: { label?: string; onPress: () => void }) {
+  const { t } = useTranslation();
+  const label = labelProp ?? t("planner.openInMaps");
   const theme = useAppTheme();
   return (
     <Pressable

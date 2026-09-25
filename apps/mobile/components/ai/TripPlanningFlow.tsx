@@ -5,6 +5,7 @@
 
 import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { useTranslation } from "react-i18next";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -34,44 +35,23 @@ type TripCardId =
   | "must_haves"
   | "travel_radius";
 
-const SCOPE_OPTIONS: { id: TripScope; label: string; hint: string }[] = [
-  { id: "own_city", label: "My city / area", hint: "Stay local" },
-  { id: "nearby", label: "Nearby", hint: "Short hop away" },
-  { id: "new_destination", label: "New destination", hint: "Further afield" },
-];
-
-const VIBE_OPTIONS: { id: TripVibe; label: string }[] = [
-  { id: "culture", label: "Culture & history" },
-  { id: "food", label: "Food & dining" },
-  { id: "outdoors", label: "Outdoors & nature" },
-  { id: "entertainment", label: "Shopping & entertainment" },
-  { id: "mixed", label: "A bit of everything" },
-];
-
-const LEVEL_OPTIONS: { id: ActivityLevel; label: string }[] = [
-  { id: "easy", label: "Easy-going" },
-  { id: "moderate", label: "Moderate" },
-  { id: "intense", label: "Packed / intense" },
-];
-
-const RADIUS_OPTIONS: { id: TravelRadius; label: string }[] = [
-  { id: "1h", label: "Up to ~1 hour" },
-  { id: "2-3h", label: "~2–3 hours" },
-  { id: "3-5h", label: "~3–5 hours" },
-  { id: "5h+", label: "5+ hours / flights OK" },
-];
-
-const MUST_HAVE_CHIPS: string[] = [
-  "Great photo spots",
-  "Kid-friendly",
-  "Budget-conscious",
-  "Luxury touches",
-  "Walkable center",
-  "Nature / parks",
-  "Nightlife",
-  "Local markets",
-  "Museums",
-  "Wellness / spa",
+// Labels: concierge.trip.scope.<id> (+ .hint), concierge.trip.vibe.<id>, concierge.trip.level.<id>,
+// concierge.trip.radius.<id>, concierge.trip.mustHave.<id>.
+const SCOPE_OPTIONS: TripScope[] = ["own_city", "nearby", "new_destination"];
+const VIBE_OPTIONS: TripVibe[] = ["culture", "food", "outdoors", "entertainment", "mixed"];
+const LEVEL_OPTIONS: ActivityLevel[] = ["easy", "moderate", "intense"];
+const RADIUS_OPTIONS: TravelRadius[] = ["1h", "2-3h", "3-5h", "5h+"];
+const MUST_HAVE_IDS: string[] = [
+  "photo_spots",
+  "kid_friendly",
+  "budget",
+  "luxury",
+  "walkable",
+  "nature",
+  "nightlife",
+  "markets",
+  "museums",
+  "wellness",
 ];
 
 function visibleTripCards(a: Partial<TripPlanningAnswers>): TripCardId[] {
@@ -102,6 +82,7 @@ function buildCompleteAnswers(a: Partial<TripPlanningAnswers>): TripPlanningAnsw
 }
 
 export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPlanningFlowProps) {
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const [answers, setAnswers] = useState<Partial<TripPlanningAnswers>>({});
@@ -113,7 +94,7 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
   }, [visible.length]);
 
   const cardId = visible[stepIndex];
-  const progressLabel = `${stepIndex + 1} / ${visible.length}`;
+  const progressLabel = t("concierge.trip.progress", { step: stepIndex + 1, total: visible.length });
 
   const goNext = useCallback(() => {
     if (stepIndex >= visible.length - 1) {
@@ -149,18 +130,18 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
       case "scope":
         return (
           <>
-            <Text style={styles.cardTitle}>Where is this trip?</Text>
-            <Text style={styles.cardSubtitle}>Pick what best describes your plan</Text>
+            <Text style={styles.cardTitle}>{t("concierge.trip.scopeTitle")}</Text>
+            <Text style={styles.cardSubtitle}>{t("concierge.trip.scopeSubtitle")}</Text>
             <View style={styles.optionCol}>
-              {SCOPE_OPTIONS.map((o) => (
+              {SCOPE_OPTIONS.map((id) => (
                 <TouchableOpacity
-                  key={o.id}
-                  style={[styles.optionRow, answers.scope === o.id && styles.optionRowActive]}
+                  key={id}
+                  style={[styles.optionRow, answers.scope === id && styles.optionRowActive]}
                   onPress={() => {
                     Haptics.selectionAsync();
                     setAnswers((prev) => {
-                      const next = { ...prev, scope: o.id };
-                      if (o.id !== "new_destination") {
+                      const next = { ...prev, scope: id };
+                      if (id !== "new_destination") {
                         delete next.destinationDecided;
                         delete next.travelRadius;
                         next.mustHaves = [];
@@ -171,10 +152,10 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
                   activeOpacity={0.85}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.optionTitle, answers.scope === o.id && styles.optionTitleActive]}>{o.label}</Text>
-                    <Text style={styles.optionHint}>{o.hint}</Text>
+                    <Text style={[styles.optionTitle, answers.scope === id && styles.optionTitleActive]}>{t(`concierge.trip.scope.${id}`)}</Text>
+                    <Text style={styles.optionHint}>{t(`concierge.trip.scope.${id}.hint`)}</Text>
                   </View>
-                  {answers.scope === o.id ? (
+                  {answers.scope === id ? (
                     <Ionicons name="checkmark-circle" size={22} color={theme.colors.primary} />
                   ) : (
                     <Ionicons name="ellipse-outline" size={22} color={theme.colors.textMuted} />
@@ -187,14 +168,14 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
       case "vibe":
         return (
           <>
-            <Text style={styles.cardTitle}>What vibe are you after?</Text>
+            <Text style={styles.cardTitle}>{t("concierge.trip.vibeTitle")}</Text>
             <View style={styles.chipsWrap}>
-              {VIBE_OPTIONS.map((o) => (
+              {VIBE_OPTIONS.map((id) => (
                 <Chip
-                  key={o.id}
-                  label={o.label}
-                  selected={answers.vibe === o.id}
-                  onPress={() => setAnswers((prev) => ({ ...prev, vibe: o.id }))}
+                  key={id}
+                  label={t(`concierge.trip.vibe.${id}`)}
+                  selected={answers.vibe === id}
+                  onPress={() => setAnswers((prev) => ({ ...prev, vibe: id }))}
                 />
               ))}
             </View>
@@ -203,7 +184,7 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
       case "destination_decided":
         return (
           <>
-            <Text style={styles.cardTitle}>Do you already know where you’re going?</Text>
+            <Text style={styles.cardTitle}>{t("concierge.trip.destinationTitle")}</Text>
             <View style={styles.binaryRow}>
               <TouchableOpacity
                 style={[styles.binaryBtn, answers.destinationDecided === true && styles.binaryBtnActive]}
@@ -217,7 +198,7 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
                   }));
                 }}
               >
-                <Text style={[styles.binaryText, answers.destinationDecided === true && styles.binaryTextActive]}>Yes</Text>
+                <Text style={[styles.binaryText, answers.destinationDecided === true && styles.binaryTextActive]}>{t("common.yes")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.binaryBtn, answers.destinationDecided === false && styles.binaryBtnActive]}
@@ -226,7 +207,7 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
                   setAnswers((prev) => ({ ...prev, destinationDecided: false }));
                 }}
               >
-                <Text style={[styles.binaryText, answers.destinationDecided === false && styles.binaryTextActive]}>Not yet</Text>
+                <Text style={[styles.binaryText, answers.destinationDecided === false && styles.binaryTextActive]}>{t("concierge.trip.notYet")}</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -234,14 +215,14 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
       case "activity_level":
         return (
           <>
-            <Text style={styles.cardTitle}>How intense should days be?</Text>
+            <Text style={styles.cardTitle}>{t("concierge.trip.levelTitle")}</Text>
             <View style={styles.chipsWrap}>
-              {LEVEL_OPTIONS.map((o) => (
+              {LEVEL_OPTIONS.map((id) => (
                 <Chip
-                  key={o.id}
-                  label={o.label}
-                  selected={answers.activityLevel === o.id}
-                  onPress={() => setAnswers((prev) => ({ ...prev, activityLevel: o.id }))}
+                  key={id}
+                  label={t(`concierge.trip.level.${id}`)}
+                  selected={answers.activityLevel === id}
+                  onPress={() => setAnswers((prev) => ({ ...prev, activityLevel: id }))}
                 />
               ))}
             </View>
@@ -250,20 +231,20 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
       case "must_haves":
         return (
           <>
-            <Text style={styles.cardTitle}>Any must-haves?</Text>
-            <Text style={styles.cardSubtitle}>Select any that apply — optional</Text>
+            <Text style={styles.cardTitle}>{t("concierge.trip.mustHavesTitle")}</Text>
+            <Text style={styles.cardSubtitle}>{t("concierge.trip.mustHavesSubtitle")}</Text>
             <View style={styles.chipsWrap}>
-              {MUST_HAVE_CHIPS.map((label) => {
-                const selected = answers.mustHaves?.includes(label);
+              {MUST_HAVE_IDS.map((id) => {
+                const selected = answers.mustHaves?.includes(id);
                 return (
                   <Chip
-                    key={label}
-                    label={label}
+                    key={id}
+                    label={t(`concierge.trip.mustHave.${id}`)}
                     selected={selected}
                     onPress={() => {
                       setAnswers((prev) => {
                         const cur = prev.mustHaves ?? [];
-                        const next = selected ? cur.filter((x) => x !== label) : [...cur, label];
+                        const next = selected ? cur.filter((x) => x !== id) : [...cur, id];
                         return { ...prev, mustHaves: next };
                       });
                     }}
@@ -276,20 +257,20 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
       case "travel_radius":
         return (
           <>
-            <Text style={styles.cardTitle}>How far are you willing to travel?</Text>
+            <Text style={styles.cardTitle}>{t("concierge.trip.radiusTitle")}</Text>
             <View style={styles.optionCol}>
-              {RADIUS_OPTIONS.map((o) => (
+              {RADIUS_OPTIONS.map((id) => (
                 <TouchableOpacity
-                  key={o.id}
-                  style={[styles.optionRow, answers.travelRadius === o.id && styles.optionRowActive]}
+                  key={id}
+                  style={[styles.optionRow, answers.travelRadius === id && styles.optionRowActive]}
                   onPress={() => {
                     Haptics.selectionAsync();
-                    setAnswers((prev) => ({ ...prev, travelRadius: o.id }));
+                    setAnswers((prev) => ({ ...prev, travelRadius: id }));
                   }}
                   activeOpacity={0.85}
                 >
-                  <Text style={[styles.optionTitle, answers.travelRadius === o.id && styles.optionTitleActive]}>{o.label}</Text>
-                  {answers.travelRadius === o.id ? (
+                  <Text style={[styles.optionTitle, { flex: 1 }, answers.travelRadius === id && styles.optionTitleActive]}>{t(`concierge.trip.radius.${id}`)}</Text>
+                  {answers.travelRadius === id ? (
                     <Ionicons name="checkmark-circle" size={22} color={theme.colors.primary} />
                   ) : (
                     <Ionicons name="ellipse-outline" size={22} color={theme.colors.textMuted} />
@@ -307,19 +288,19 @@ export function TripPlanningFlow({ existingDetails, onComplete, onBack }: TripPl
   return (
     <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <TextButton
-        title="Back"
+        title={t("common.back")}
         icon={<Ionicons name="arrow-back" size={20} color={theme.colors.primary} />}
         onPress={onBack}
         style={styles.backRow}
       />
 
-      <Text style={styles.title}>Plan your trip</Text>
+      <Text style={styles.title}>{t("concierge.trip.title")}</Text>
       <Text style={styles.progress}>{progressLabel}</Text>
 
       <Card style={styles.card} elevation={1}>{renderCard()}</Card>
 
       <PrimaryButton
-        title={stepIndex >= visible.length - 1 ? "Continue to details" : "Next"}
+        title={stepIndex >= visible.length - 1 ? t("concierge.trip.continueToDetails") : t("common.next")}
         onPress={goNext}
         disabled={!canAdvance}
       />

@@ -8,6 +8,7 @@
 import React, { useMemo, useState } from "react";
 import { View, Text, TouchableOpacity, TextInput, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { Chip, PrimaryButton, TextButton } from "@/components/ds";
@@ -26,23 +27,17 @@ export type PostPlanReviewCardProps = {
   onDone: () => void;
 };
 
-const RATING_LABELS: Record<number, string> = {
-  1: "Not for me",
-  2: "Could be better",
-  3: "It was okay",
-  4: "Really good",
-  5: "Loved it",
-};
-
+// Labels: concierge.review.rating.<1–5>, concierge.review.toggle.<key>.
 type ToggleKey = "venueGood" | "timingGood" | "wouldRepeat";
 
-const TOGGLES: { key: ToggleKey; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { key: "venueGood", label: "Good venue", icon: "location-outline" },
-  { key: "timingGood", label: "Good timing", icon: "time-outline" },
-  { key: "wouldRepeat", label: "Would repeat", icon: "repeat-outline" },
+const TOGGLES: { key: ToggleKey; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: "venueGood", icon: "location-outline" },
+  { key: "timingGood", icon: "time-outline" },
+  { key: "wouldRepeat", icon: "repeat-outline" },
 ];
 
 export function PostPlanReviewCard({ visible, review, onDone }: PostPlanReviewCardProps) {
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const [rating, setRating] = useState(0);
@@ -100,8 +95,8 @@ export function PostPlanReviewCard({ visible, review, onDone }: PostPlanReviewCa
   return (
     <Modal visible={visible} onClose={() => void handleSkip()} variant="sheet">
       <View style={styles.headerRow}>
-        <Text style={styles.eyebrow}>How was it?</Text>
-        <TouchableOpacity onPress={() => void handleSkip()} hitSlop={10} accessibilityLabel="Skip review">
+        <Text style={styles.eyebrow}>{t("concierge.review.title")}</Text>
+        <TouchableOpacity onPress={() => void handleSkip()} hitSlop={10} accessibilityLabel={t("concierge.review.skipA11y")}>
           <Ionicons name="close" size={22} color={theme.colors.textMuted} />
         </TouchableOpacity>
       </View>
@@ -112,15 +107,15 @@ export function PostPlanReviewCard({ visible, review, onDone }: PostPlanReviewCa
       <View style={styles.starsRow}>
         <StarRating value={rating} onChange={setRating} size={34} />
       </View>
-      {rating > 0 ? <Text style={styles.ratingLabel}>{RATING_LABELS[rating]}</Text> : null}
+      {rating > 0 ? <Text style={styles.ratingLabel}>{t(`concierge.review.rating.${rating}`)}</Text> : null}
 
       <View style={styles.toggleRow}>
-        {TOGGLES.map(({ key, label, icon }) => {
+        {TOGGLES.map(({ key }) => {
           const active = toggles[key];
           return (
             <Chip
               key={key}
-              label={label}
+              label={t(`concierge.review.toggle.${key}`)}
               selected={active}
               onPress={() => setToggles((prev) => ({ ...prev, [key]: !prev[key] }))}
             />
@@ -130,7 +125,7 @@ export function PostPlanReviewCard({ visible, review, onDone }: PostPlanReviewCa
 
       <TextInput
         style={styles.noteInput}
-        placeholder="Anything else? (optional)"
+        placeholder={t("concierge.review.notePlaceholder")}
         placeholderTextColor={theme.colors.textMuted}
         value={note}
         onChangeText={setNote}
@@ -139,12 +134,12 @@ export function PostPlanReviewCard({ visible, review, onDone }: PostPlanReviewCa
       />
 
       <PrimaryButton
-        title="Submit review"
+        title={t("concierge.review.submit")}
         onPress={() => void handleSubmit()}
         disabled={rating === 0}
         loading={submitting}
       />
-      <TextButton title="Skip" onPress={() => void handleSkip()} disabled={submitting} style={styles.ghostBtn} />
+      <TextButton title={t("concierge.skip")} onPress={() => void handleSkip()} disabled={submitting} style={styles.ghostBtn} />
     </Modal>
   );
 }

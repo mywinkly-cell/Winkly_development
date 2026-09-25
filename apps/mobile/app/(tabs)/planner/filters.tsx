@@ -5,6 +5,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, ScrollView, Alert, Switch, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Card, Header, ListRow, TextButton } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
@@ -16,6 +17,7 @@ import {
 
 export default function PlannerFilters() {
   const router = useRouter();
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const styles = createStyles(theme);
 
@@ -44,7 +46,7 @@ export default function PlannerFilters() {
       await savePlannerPreferences({ onlyUpcoming, showCompleted, aiSuggestions });
       router.back();
     } catch {
-      Alert.alert("Couldn't save", "Please try again.");
+      Alert.alert(t("planner.prefs.saveFailed"), t("common.tryAgain"));
     } finally {
       setSaving(false);
     }
@@ -53,20 +55,20 @@ export default function PlannerFilters() {
   return (
     <View style={styles.screen}>
       <Header
-        title="Filters"
+        title={t("planner.prefs.headerTitle")}
         onBack={() => router.back()}
         trailing={
-          <TextButton title={saving ? "Saving…" : "Save"} onPress={() => void save()} disabled={saving} style={styles.saveBtn} />
+          <TextButton title={saving ? t("planner.saving") : t("common.save")} onPress={() => void save()} disabled={saving} style={styles.saveBtn} />
         }
       />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Card style={styles.card}>
-          <Text style={styles.title}>Planner preferences</Text>
-          <Text style={styles.subtitle}>These settings will affect what you see in planner lists.</Text>
+          <Text style={styles.title}>{t("planner.prefs.title")}</Text>
+          <Text style={styles.subtitle}>{t("planner.prefs.subtitle")}</Text>
 
           <ListRow
-            title="Only upcoming"
-            subtitle="Hide past items by default."
+            title={t("planner.prefs.onlyUpcoming")}
+            subtitle={t("planner.prefs.onlyUpcomingSub")}
             style={styles.row}
             trailing={
               <Switch
@@ -79,8 +81,8 @@ export default function PlannerFilters() {
           />
           <View style={styles.hr} />
           <ListRow
-            title="Show completed"
-            subtitle="Include finished items in lists."
+            title={t("planner.prefs.showCompleted")}
+            subtitle={t("planner.prefs.showCompletedSub")}
             style={styles.row}
             trailing={
               <Switch
@@ -93,8 +95,8 @@ export default function PlannerFilters() {
           />
           <View style={styles.hr} />
           <ListRow
-            title="AI suggestions"
-            subtitle="Show recommended times/places & follow-ups."
+            title={t("planner.prefs.aiSuggestions")}
+            subtitle={t("planner.prefs.aiSuggestionsSub")}
             style={styles.row}
             leading={<SparklesIcon size={16} color={theme.colors.primary} />}
             trailing={
@@ -108,7 +110,7 @@ export default function PlannerFilters() {
           />
         </Card>
 
-        <Text style={styles.note}>Saved on this device and applied to your planner lists.</Text>
+        <Text style={styles.note}>{t("planner.prefs.note")}</Text>
       </ScrollView>
     </View>
   );

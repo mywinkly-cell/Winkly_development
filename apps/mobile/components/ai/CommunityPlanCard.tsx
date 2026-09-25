@@ -8,6 +8,7 @@
 
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useAppTheme } from "@/constants/design-system";
@@ -33,7 +34,9 @@ type Skeleton = {
   duration_minutes?: number;
 };
 
-export function CommunityPlanCard({ plan, onUse, useLabel = "Use this plan" }: CommunityPlanCardProps) {
+export function CommunityPlanCard({ plan, onUse, useLabel: useLabelProp }: CommunityPlanCardProps) {
+  const { t } = useTranslation();
+  const useLabel = useLabelProp ?? t("concierge.community.useThisPlan");
   const theme = useAppTheme();
   const styles = makeStyles(theme);
   const [expanded, setExpanded] = useState(false);
@@ -69,10 +72,10 @@ export function CommunityPlanCard({ plan, onUse, useLabel = "Use this plan" }: C
       <View style={styles.badgeRow}>
         <View style={styles.badge}>
           <Ionicons name="people" size={12} color={theme.colors.primary} />
-          <Text style={styles.badgeText}>Tried by others</Text>
+          <Text style={styles.badgeText}>{t("concierge.community.triedByOthers")}</Text>
         </View>
         {plan.reuseCount > 0 ? (
-          <Text style={styles.reuse}>Used {plan.reuseCount}×</Text>
+          <Text style={styles.reuse}>{t("concierge.community.usedCount", { count: plan.reuseCount })}</Text>
         ) : null}
       </View>
 
@@ -102,7 +105,7 @@ export function CommunityPlanCard({ plan, onUse, useLabel = "Use this plan" }: C
         <Ionicons name="person-circle-outline" size={14} color={theme.colors.textSecondary} />
         <Text style={styles.meta}>{plan.authorLabel}</Text>
         {plan.numDays > 1 ? (
-          <Text style={styles.meta}>· {plan.numDays} days</Text>
+          <Text style={styles.meta}>· {t("concierge.details.days", { count: plan.numDays })}</Text>
         ) : null}
       </View>
 
@@ -123,13 +126,13 @@ export function CommunityPlanCard({ plan, onUse, useLabel = "Use this plan" }: C
             <ActivityIndicator size="small" color={theme.colors.primary} />
           ) : withComments.length > 0 ? (
             <View style={styles.reviews}>
-              <Text style={styles.reviewsTitle}>What people said</Text>
+              <Text style={styles.reviewsTitle}>{t("concierge.community.whatPeopleSaid")}</Text>
               {withComments.map((r) => (
                 <View key={r.id} style={styles.review}>
                   <StarRating value={r.stars} size={12} />
                   <Text style={styles.reviewText}>{r.comment}</Text>
                   {r.wasAdjusted ? (
-                    <Text style={styles.adjusted}>Adjusted before doing it</Text>
+                    <Text style={styles.adjusted}>{t("concierge.community.adjusted")}</Text>
                   ) : null}
                 </View>
               ))}
@@ -143,9 +146,9 @@ export function CommunityPlanCard({ plan, onUse, useLabel = "Use this plan" }: C
           onPress={toggle}
           style={styles.secondaryBtn}
           accessibilityRole="button"
-          accessibilityLabel={expanded ? "Hide plan details" : "Show plan details"}
+          accessibilityLabel={expanded ? t("concierge.community.hideDetails") : t("concierge.community.showDetails")}
         >
-          <Text style={styles.secondaryText}>{expanded ? "Less" : "Details"}</Text>
+          <Text style={styles.secondaryText}>{expanded ? t("concierge.community.less") : t("concierge.community.details")}</Text>
           <Ionicons
             name={expanded ? "chevron-up" : "chevron-down"}
             size={14}

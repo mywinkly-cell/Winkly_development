@@ -17,6 +17,7 @@ import {
   StyleSheet,
   Pressable,
 } from "react-native";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
@@ -60,11 +61,11 @@ function modeForInviteSource(choice: PickerChoice): SocialMode {
   return "friends"; // friends + contacts default to friends (user can change on confirm)
 }
 
-function pickerTitle(choice: PickerChoice | null): string {
-  if (choice === "matches") return "Choose a romance match";
-  if (choice === "friends") return "Choose a friend";
-  if (choice === "business") return "Choose a business contact";
-  return "Choose a contact";
+function pickerTitleKey(choice: PickerChoice | null): string {
+  if (choice === "matches") return "concierge.picker.match";
+  if (choice === "friends") return "concierge.picker.friend";
+  if (choice === "business") return "concierge.picker.business";
+  return "concierge.picker.contact";
 }
 
 function timeHmFromIso(iso: string | null): string | undefined {
@@ -82,6 +83,7 @@ export function SparkPlanConfirmModal({
   onPlanAdded,
   onClose,
 }: SparkPlanConfirmModalProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<"confirm" | "invite">(initialStep);
   const [partner, setPartner] = useState<{ id: string; displayName: string } | null>(null);
@@ -226,7 +228,7 @@ export function SparkPlanConfirmModal({
               onPress={(e) => e.stopPropagation()}
             >
               <View style={styles.pickerHeader}>
-                <Text style={styles.pickerTitle}>{pickerTitle(pickerChoice)}</Text>
+                <Text style={styles.pickerTitle}>{t(pickerTitleKey(pickerChoice))}</Text>
                 <TouchableOpacity onPress={() => setPickerChoice(null)} hitSlop={12}>
                   <Ionicons name="close" size={24} color={Colors.gray600} />
                 </TouchableOpacity>
@@ -238,7 +240,7 @@ export function SparkPlanConfirmModal({
                     style={styles.pickerSearchInput}
                     value={contactsQuery}
                     onChangeText={setContactsQuery}
-                    placeholder="Search Winkly users"
+                    placeholder={t("concierge.picker.searchPlaceholder")}
                     placeholderTextColor={Colors.gray500}
                     autoCorrect={false}
                     autoCapitalize="none"
@@ -248,9 +250,9 @@ export function SparkPlanConfirmModal({
               <GestureScrollView style={styles.pickerScroll} contentContainerStyle={styles.pickerScrollContent}>
                 {pickerChoice === "contacts" ? (
                   contactsLoading ? (
-                    <Text style={styles.pickerEmpty}>Searching…</Text>
+                    <Text style={styles.pickerEmpty}>{t("concierge.picker.searching")}</Text>
                   ) : contactsResults.length === 0 ? (
-                    <Text style={styles.pickerEmpty}>No users found</Text>
+                    <Text style={styles.pickerEmpty}>{t("concierge.picker.noUsers")}</Text>
                   ) : (
                     contactsResults.map((p) => (
                       <TouchableOpacity
@@ -266,7 +268,7 @@ export function SparkPlanConfirmModal({
                     ))
                   )
                 ) : partners.length === 0 ? (
-                  <Text style={styles.pickerEmpty}>No one to show yet</Text>
+                  <Text style={styles.pickerEmpty}>{t("concierge.picker.noOne")}</Text>
                 ) : (
                   partners.map((p) => (
                     <TouchableOpacity

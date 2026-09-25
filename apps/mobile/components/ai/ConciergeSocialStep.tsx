@@ -6,6 +6,7 @@
 
 import React, { useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
@@ -22,13 +23,14 @@ export type SuggestedPerson = {
   avatar_url?: string | null;
 };
 
-const OPTIONS: { key: WhoJoining; label: string; icon: string }[] = [
-  { key: "just_me", label: "Just me", icon: "person-outline" },
-  { key: "invite_match", label: "Invite a match", icon: "heart-outline" },
-  { key: "invite_friends", label: "Invite friends", icon: "people-outline" },
-  { key: "invite_business", label: "Invite business contact", icon: "briefcase-outline" },
-  { key: "invite_contacts", label: "Invite from contacts", icon: "call-outline" },
-  { key: "decide_later", label: "Decide later", icon: "time-outline" },
+// Labels: concierge.social.option.<key>.
+const OPTIONS: { key: WhoJoining; icon: string }[] = [
+  { key: "just_me", icon: "person-outline" },
+  { key: "invite_match", icon: "heart-outline" },
+  { key: "invite_friends", icon: "people-outline" },
+  { key: "invite_business", icon: "briefcase-outline" },
+  { key: "invite_contacts", icon: "call-outline" },
+  { key: "decide_later", icon: "time-outline" },
 ];
 
 export type ConciergeSocialStepProps = {
@@ -50,6 +52,7 @@ export function ConciergeSocialStep({
   onBack,
   showInlineBack = true,
 }: ConciergeSocialStepProps) {
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
 
@@ -61,27 +64,25 @@ export function ConciergeSocialStep({
     >
       {showInlineBack ? (
         <TextButton
-          title="Back"
+          title={t("common.back")}
           icon={<Ionicons name="arrow-back" size={20} color={theme.colors.primary} />}
           onPress={onBack}
           style={styles.backRow}
         />
       ) : null}
 
-      <Text style={styles.title}>Who is joining you?</Text>
-      <Text style={styles.subtitle}>
-        Add people to your plan or skip to generate
-      </Text>
+      <Text style={styles.title}>{t("concierge.social.title")}</Text>
+      <Text style={styles.subtitle}>{t("concierge.social.subtitle")}</Text>
 
       {suggestedPeople.length > 0 ? (
         <View style={styles.suggestedSection}>
-          <Text style={styles.suggestedLabel}>Suggested</Text>
+          <Text style={styles.suggestedLabel}>{t("concierge.social.suggested")}</Text>
           <Card elevation={0} padding="none">
             {suggestedPeople.slice(0, 2).map((p, i) => (
               <ListRow
                 key={p.id}
                 title={p.displayName}
-                subtitle={p.type === "match" ? "Recent match" : p.type === "business" ? "Business contact" : "Friend nearby"}
+                subtitle={t(`concierge.social.personType.${p.type}`)}
                 leading={<Avatar uri={p.avatar_url} size={40} />}
                 onPress={() => {
                   Haptics.selectionAsync();
@@ -101,7 +102,7 @@ export function ConciergeSocialStep({
         {OPTIONS.filter((opt) => isWhoJoiningAvailable(opt.key)).map((opt, i) => (
           <ListRow
             key={opt.key}
-            title={opt.label}
+            title={t(`concierge.social.option.${opt.key}`)}
             leading={
               <View style={styles.optionIconWrap}>
                 <Ionicons name={opt.icon as any} size={22} color={theme.colors.primary} />
