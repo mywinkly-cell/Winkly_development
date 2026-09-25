@@ -2,6 +2,7 @@ import React, { useCallback } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { useTranslation } from "react-i18next";
 import { Colors } from "@/constants/tokens";
 
 type Props = {
@@ -19,6 +20,7 @@ export function VoiceMessageBubble({
   pending = false,
   durationMs,
 }: Props) {
+  const { t } = useTranslation();
   const player = useAudioPlayer(audioUrl, { downloadFirst: !pending });
   const status = useAudioPlayerStatus(player);
 
@@ -39,13 +41,13 @@ export function VoiceMessageBubble({
   const pos = status.currentTime ?? 0;
   const label = pending
     ? durSec != null
-      ? `Sending · 0:${durSec.toString().padStart(2, "0")}`
-      : "Sending voice message…"
+      ? t("chat.voice.sendingDuration", { duration: `0:${durSec.toString().padStart(2, "0")}` })
+      : t("chat.voice.sending")
     : durSec != null
-      ? `${Math.floor(pos)}s / ${durSec}s`
+      ? t("chat.voice.progress", { position: Math.floor(pos), total: durSec })
       : status.isLoaded === false
-        ? "Loading…"
-        : "Voice message";
+        ? t("common.loading")
+        : t("chat.voiceMessage");
 
   return (
     <View
@@ -66,7 +68,7 @@ export function VoiceMessageBubble({
       <Pressable
         onPress={toggle}
         accessibilityLabel={
-          pending ? "Voice message sending" : status.playing ? "Pause voice message" : "Play voice message"
+          pending ? t("chat.voice.sendingA11y") : status.playing ? t("chat.voice.pause") : t("chat.voice.play")
         }
         style={{
           width: 40,

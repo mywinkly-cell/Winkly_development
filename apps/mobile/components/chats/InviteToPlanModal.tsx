@@ -4,7 +4,7 @@
  * "Let's do something": activity chips + optional AI "Get suggestion" (Concierge) to pre-fill place & time.
  */
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -27,22 +27,38 @@ import { canUseAIFeature } from "@/lib/ai/aiFeatureGate";
 import { useDefaultLocation } from "@/lib/ai/useDefaultCity";
 import { useTranslation } from "react-i18next";
 import { formatDefaultLocationDisplay } from "@/lib/location/countryDisplay";
+import { formatAppDate, getAppLocaleTag } from "@/lib/i18n/appLocale";
 import { callConcierge } from "@/lib/ai/conciergeClient";
 import type { ExperienceOption } from "@/lib/ai/conciergeClient";
 
-/** "Let's do something" activity set: Coffee, Wine, Tennis, Day trip, Concert, Dinner, Walk + mode-specific. */
-const ACTIVITIES: Record<Mode, string[]> = {
-  romance: ["Coffee / Café", "Wine / Drinks", "Tennis", "Day trip", "Concert", "Dinner", "Walk", "Movie", "Other"],
-  friends: ["Coffee / Café", "Wine / Drinks", "Brunch", "Tennis", "Day trip", "Concert", "Hiking", "Dinner", "Walk", "Other"],
-  business: ["Coffee", "Lunch", "Meeting", "Golf", "Other"],
-  events: ["Meet up", "Concert", "Other"],
-};
+/** Activity slugs; the label is `chat.invite.activity.<slug>` and the hint is sent to Concierge. */
+const ACTIVITY_HINTS = {
+  coffeeCafe: "coffee",
+  wineDrinks: "wine or drinks",
+  tennis: "tennis",
+  dayTrip: "day trip",
+  concert: "concert",
+  dinner: "dinner",
+  walk: "walk",
+  movie: "movie",
+  brunch: "brunch",
+  hiking: "hiking",
+  coffee: "coffee",
+  lunch: "lunch",
+  meeting: "meeting",
+  golf: "golf",
+  meetUp: "meet up",
+  other: "activity",
+} as const;
 
-const INVITE_LABEL: Record<Mode, string> = {
-  romance: "Invite on date",
-  friends: "Invite to meet-up",
-  business: "Suggest meeting",
-  events: "Invite to meet",
+type ActivitySlug = keyof typeof ACTIVITY_HINTS;
+
+/** "Let's do something" activity set: Coffee, Wine, Tennis, Day trip, Concert, Dinner, Walk + mode-specific. */
+const ACTIVITIES: Record<Mode, ActivitySlug[]> = {
+  romance: ["coffeeCafe", "wineDrinks", "tennis", "dayTrip", "concert", "dinner", "walk", "movie", "other"],
+  friends: ["coffeeCafe", "wineDrinks", "brunch", "tennis", "dayTrip", "concert", "hiking", "dinner", "walk", "other"],
+  business: ["coffee", "lunch", "meeting", "golf", "other"],
+  events: ["meetUp", "concert", "other"],
 };
 
 export type InviteFormValues = {
@@ -72,23 +88,11 @@ const defaultDate = () => {
   return d;
 };
 
-/** Map activity label to short hint for Concierge (e.g. "Coffee / Café" → "coffee"). */
-function activityToHint(activity: string): string {
-  const lower = activity.toLowerCase();
-  if (lower.includes("coffee") || lower.includes("café")) return "coffee";
-  if (lower.includes("wine") || lower.includes("drinks")) return "wine or drinks";
-  if (lower.includes("tennis")) return "tennis";
-  if (lower.includes("day trip")) return "day trip";
-  if (lower.includes("concert")) return "concert";
-  if (lower.includes("dinner")) return "dinner";
-  if (lower.includes("walk")) return "walk";
-  if (lower.includes("movie")) return "movie";
-  if (lower.includes("brunch")) return "brunch";
-  if (lower.includes("hiking")) return "hiking";
-  if (lower.includes("lunch")) return "lunch";
-  if (lower.includes("meeting")) return "meeting";
-  if (lower.includes("golf")) return "golf";
-  return lower.split(/[/,]/)[0]?.trim() || "activity";
+/** Short hint for Concierge: the slug's English hint, or the free-text label itself (e.g. a date idea). */
+function activityToHint(activity: string, labelToSlug: Map<string, ActivitySlug>): string {
+  const slug = labelToSlug.get(activity);
+  if (slug) return ACTIVITY_HINTS[slug];
+  return activity.toLowerCase().split(/[/,]/)[0]?.trim() || "activity";
 }
 
 /** Parse first Concierge option into place and time for pre-fill. */
@@ -134,18 +138,27 @@ function parseSuggestion(option: ExperienceOption, defaultStarts: Date): { place
 
 export function InviteToPlanModal({ visible, mode, onClose, onSubmit, partnerUserId, partnerDisplayName, initialActivity }: Props) {
   const { context: modeContext } = useModeContext();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
   const { city: defaultCity, country: defaultCountry } = useDefaultLocation();
   const tier = modeContext.subscription_tier ?? "free";
   const hasConcierge = canUseAIFeature(tier, "concierge");
 
+  const modeActivityLabels = useMemo(
+    () => ACTIVITIES[mode].map((slug) => t(`chat.invite.activity.${slug}`)),
+    [mode, t]
+  );
+  const labelToSlug = useMemo(
+    () => new Map(ACTIVITIES[mode].map((slug, i) => [modeActivityLabels[i], slug] as const)),
+    [mode, modeActivityLabels]
+  );
   const activityOptions =
-    initialActivity && !ACTIVITIES[mode].includes(initialActivity)
-      ? [initialActivity, ...ACTIVITIES[mode]]
-      : ACTIVITIES[mode];
+    initialActivity && !modeActivityLabels.includes(initialActivity)
+      ? [initialActivity, ...modeActivityLabels]
+      : modeActivityLabels;
+  const firstActivityLabel = modeActivityLabels[0];
 
-  const [activity, setActivity] = useState(initialActivity ?? ACTIVITIES[mode][0]);
+  const [activity, setActivity] = useState(initialActivity ?? firstActivityLabel);
   const [location, setLocation] = useState("");
   const [place, setPlace] = useState("");
   const [startsAt, setStartsAt] = useState(defaultDate());
@@ -164,8 +177,8 @@ export function InviteToPlanModal({ visible, mode, onClose, onSubmit, partnerUse
   // Pre-select the activity each time the sheet opens (e.g. from a date-idea tap).
   useEffect(() => {
     if (!visible) return;
-    setActivity(initialActivity ?? ACTIVITIES[mode][0]);
-  }, [visible, initialActivity, mode]);
+    setActivity(initialActivity ?? firstActivityLabel);
+  }, [visible, initialActivity, firstActivityLabel]);
 
   const _title =
     place.trim() ? `${activity} at ${place.trim()}` : activity;
@@ -183,7 +196,7 @@ export function InviteToPlanModal({ visible, mode, onClose, onSubmit, partnerUse
         task: "concierge",
         context: {
           mode,
-          activity_hint: activityToHint(activity),
+          activity_hint: activityToHint(activity, labelToSlug),
           partner_user_id: partnerUserId,
           date_from: dateFrom,
           date_to: dateTo,
@@ -195,24 +208,24 @@ export function InviteToPlanModal({ visible, mode, onClose, onSubmit, partnerUse
       });
 
       if (res.error) {
-        Alert.alert("Suggestion unavailable", res.error);
+        Alert.alert(t("chat.invite.suggestionUnavailable"), res.error);
         return;
       }
       const first = res.suggestions?.[0];
       if (!first) {
-        Alert.alert("No suggestion", "Try a different activity or pick place and time yourself.");
+        Alert.alert(t("chat.invite.noSuggestionTitle"), t("chat.invite.noSuggestionBody"));
         return;
       }
-      const { place: p, location: loc, startsAt: t } = parseSuggestion(first, defaultDate());
+      const { place: p, location: loc, startsAt: suggestedStart } = parseSuggestion(first, defaultDate());
       if (p) setPlace(p);
       if (loc) setLocation(loc);
-      setStartsAt(t);
+      setStartsAt(suggestedStart);
     } catch (e) {
-      Alert.alert("Error", (e as Error).message ?? "Could not get suggestion.");
+      Alert.alert(t("common.error"), (e as Error).message ?? t("chat.invite.suggestionFailed"));
     } finally {
       setSuggesting(false);
     }
-  }, [activity, mode, partnerUserId, partnerDisplayName, hasConcierge, defaultCity, defaultCountry]);
+  }, [activity, labelToSlug, mode, partnerUserId, partnerDisplayName, hasConcierge, defaultCity, defaultCountry, t]);
 
   const handleSubmit = async () => {
     setSending(true);
@@ -226,7 +239,7 @@ export function InviteToPlanModal({ visible, mode, onClose, onSubmit, partnerUse
       });
       onClose();
     } catch (e) {
-      Alert.alert("Error", (e as Error).message ?? "Could not send invite.");
+      Alert.alert(t("common.error"), (e as Error).message ?? t("chat.invite.sendFailed"));
     } finally {
       setSending(false);
     }
@@ -237,14 +250,14 @@ export function InviteToPlanModal({ visible, mode, onClose, onSubmit, partnerUse
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>{INVITE_LABEL[mode]}</Text>
-            <Pressable onPress={onClose} hitSlop={12}>
+            <Text style={styles.headerTitle}>{t(`chat.invite.title.${mode}`)}</Text>
+            <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={t("common.close")}>
               <Ionicons name="close" size={24} color={Colors.textPrimary} />
             </Pressable>
           </View>
 
           <ScrollView style={styles.formScroll} contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-            <Text style={styles.label}>Activity</Text>
+            <Text style={styles.label}>{t("chat.invite.activityLabel")}</Text>
             <View style={styles.activityRow}>
               {activityOptions.map((a) => (
                 <Pressable
@@ -268,40 +281,40 @@ export function InviteToPlanModal({ visible, mode, onClose, onSubmit, partnerUse
                 ) : (
                   <>
                     <SparklesIcon size={18} color={Colors.primaryViolet} />
-                    <Text style={styles.suggestBtnText}>Get suggestion (place & time)</Text>
+                    <Text style={styles.suggestBtnText}>{t("chat.invite.getSuggestion")}</Text>
                   </>
                 )}
               </Pressable>
             )}
 
-            <Text style={styles.label}>City / area (optional)</Text>
+            <Text style={styles.label}>{t("chat.invite.cityLabel")}</Text>
             <TextInput
               value={location}
               onChangeText={setLocation}
-              placeholder="e.g. Downtown"
+              placeholder={t("chat.invite.cityPlaceholder")}
               style={styles.input}
               placeholderTextColor={Colors.gray500}
             />
 
-            <Text style={styles.label}>Place (optional)</Text>
+            <Text style={styles.label}>{t("chat.invite.placeLabel")}</Text>
             <TextInput
               value={place}
               onChangeText={setPlace}
-              placeholder="e.g. Café Luna"
+              placeholder={t("chat.invite.placePlaceholder")}
               style={styles.input}
               placeholderTextColor={Colors.gray500}
             />
 
-            <Text style={styles.label}>Date & time</Text>
+            <Text style={styles.label}>{t("chat.invite.dateTimeLabel")}</Text>
             <View style={styles.dateTimeRow}>
               <Pressable style={styles.dateTimeBtn} onPress={() => setShowDatePicker(true)}>
                 <Text style={styles.dateTimeText}>
-                  {startsAt.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                  {formatAppDate(startsAt)}
                 </Text>
               </Pressable>
               <Pressable style={styles.dateTimeBtn} onPress={() => setShowTimePicker(true)}>
                 <Text style={styles.dateTimeText}>
-                  {startsAt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                  {startsAt.toLocaleTimeString(getAppLocaleTag(), { hour: "2-digit", minute: "2-digit" })}
                 </Text>
               </Pressable>
             </View>
@@ -338,7 +351,7 @@ export function InviteToPlanModal({ visible, mode, onClose, onSubmit, partnerUse
               {sending ? (
                 <ActivityIndicator color="#FFF" />
               ) : (
-                <Text style={styles.submitText}>Send invite</Text>
+                <Text style={styles.submitText}>{t("chat.invite.send")}</Text>
               )}
             </Pressable>
           </ScrollView>

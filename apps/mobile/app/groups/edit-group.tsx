@@ -2,11 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, Alert } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 type Styles = ReturnType<typeof createStyles>;
 
 export default function EditGroup() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -19,7 +21,7 @@ export default function EditGroup() {
 
   const onSave = () => {
     if (!name.trim()) {
-      Alert.alert("Missing name", "Group name cannot be empty.");
+      Alert.alert(t("groups.form.missingName"), t("groups.edit.missingNameBody"));
       return;
     }
 
@@ -33,46 +35,46 @@ export default function EditGroup() {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Header title="Edit group" onBack={() => router.back()} onSave={onSave} theme={theme} styles={styles} />
+        <Header title={t("groups.editGroup")} onBack={() => router.back()} onSave={onSave} theme={theme} styles={styles} />
 
         <View style={styles.card}>
-          <Text style={styles.title}>Update group</Text>
-          <Text style={styles.subtitle}>MVP screen (no persistence yet).</Text>
+          <Text style={styles.title}>{t("groups.edit.title")}</Text>
+          <Text style={styles.subtitle}>{t("groups.edit.subtitle")}</Text>
 
-          <Label text="Group name" styles={styles} />
+          <Label text={t("groups.form.name")} styles={styles} />
           <TextInput
             value={name}
             onChangeText={setName}
-            placeholder="Group name…"
+            placeholder={t("groups.edit.namePlaceholder")}
             placeholderTextColor={theme.colors.textMuted}
             style={styles.input}
           />
 
-          <Label text="Description (optional)" styles={styles} />
+          <Label text={t("groups.form.description")} styles={styles} />
           <TextInput
             value={description}
             onChangeText={setDescription}
-            placeholder="About the group…"
+            placeholder={t("groups.edit.descriptionPlaceholder")}
             placeholderTextColor={theme.colors.textMuted}
             style={[styles.input, { minHeight: 110, textAlignVertical: "top" }]}
             multiline
           />
 
-          <Label text="Location (optional)" styles={styles} />
+          <Label text={t("groups.edit.location")} styles={styles} />
           <TextInput
             value={location}
             onChangeText={setLocation}
-            placeholder="City…"
+            placeholder={t("groups.edit.locationPlaceholder")}
             placeholderTextColor={theme.colors.textMuted}
             style={styles.input}
           />
 
           <TouchableOpacity onPress={onSave} style={styles.primaryBtn} activeOpacity={0.9}>
-            <Text style={styles.primaryText}>Save changes</Text>
+            <Text style={styles.primaryText}>{t("groups.edit.saveChanges")}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => router.back()} style={styles.secondaryBtn} activeOpacity={0.9}>
-            <Text style={styles.secondaryText}>Cancel</Text>
+            <Text style={styles.secondaryText}>{t("common.cancel")}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -81,14 +83,15 @@ export default function EditGroup() {
 }
 
 function Header({ title, onBack, onSave, theme, styles }: { title: string; onBack: () => void; onSave: () => void; theme: AppTheme; styles: Styles }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.headerRow}>
-      <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
+      <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel={t("common.back")}>
         <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
       </TouchableOpacity>
       <Text style={styles.headerTitle}>{title}</Text>
       <TouchableOpacity onPress={onSave} style={styles.saveBtn} activeOpacity={0.9}>
-        <Text style={styles.saveText}>Save</Text>
+        <Text style={styles.saveText} numberOfLines={1} adjustsFontSizeToFit>{t("common.save")}</Text>
       </TouchableOpacity>
     </View>
   );

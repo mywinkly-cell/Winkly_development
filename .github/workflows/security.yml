@@ -28,6 +28,12 @@ permissions:
 jobs:
   codeql:
     name: CodeQL
+    # winkly-production is a private mirror of Winkly_development's main — same
+    # source, already scanned for real there (public repos get code scanning free;
+    # GitHub Advanced Security for a private repo needs a Team/Enterprise plan we
+    # don't have). Running it again here would just fail with "Code scanning is
+    # not enabled for this repository" with no actual coverage gap behind it.
+    if: github.repository != 'mywinkly-cell/winkly-production'
     runs-on: ubuntu-latest
     permissions:
       contents: read

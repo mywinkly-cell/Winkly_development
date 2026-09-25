@@ -2,10 +2,12 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Share, Alert, ActivityIndicator } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { getGroupDetails, ensureGroupInviteCode, type GroupDetails } from "@/lib/groups/groupsApi";
 
 export default function GroupDetailsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -36,7 +38,7 @@ export default function GroupDetailsScreen() {
     }, [load])
   );
 
-  const groupName = details?.name ?? String(name ?? "Group");
+  const groupName = details?.name ?? (name ? String(name) : t("groups.details.fallbackName"));
   const isFull = !!details && details.member_count >= details.max_members;
 
   const onShareInvite = async () => {
@@ -44,10 +46,10 @@ export default function GroupDetailsScreen() {
     try {
       const code = await ensureGroupInviteCode(groupId);
       await Share.share({
-        message: `Join my group "${groupName}" on Winkly: winkly://groups/join?code=${code}`,
+        message: t("groups.details.shareMessage", { name: groupName, link: `winkly://groups/join?code=${code}` }),
       });
     } catch (e) {
-      Alert.alert("Error", (e as Error).message ?? "Could not create an invite link.");
+      Alert.alert(t("common.error"), (e as Error).message ?? t("groups.details.linkFailed"));
     } finally {
       setSharing(false);
     }
@@ -57,17 +59,17 @@ export default function GroupDetailsScreen() {
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel={t("common.back")}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Group</Text>
+          <Text style={styles.headerTitle}>{t("groups.details.fallbackName")}</Text>
           {details?.is_admin ? (
             <TouchableOpacity
               onPress={() => router.push({ pathname: "/groups/edit-group", params: { id: groupId, name: groupName } })}
               style={styles.editBtn}
               activeOpacity={0.9}
             >
-              <Text style={styles.editText}>Edit</Text>
+              <Text style={styles.editText} numberOfLines={1} adjustsFontSizeToFit>{t("common.edit")}</Text>
             </TouchableOpacity>
           ) : (
             <View style={{ width: 70 }} />
@@ -81,8 +83,8 @@ export default function GroupDetailsScreen() {
             <Text style={styles.title}>{groupName}</Text>
             {details?.description ? <Text style={styles.subtitle}>{details.description}</Text> : null}
             <Text style={styles.metaRow}>
-              {details ? `${details.member_count} / ${details.max_members} members` : ""}
-              {isFull ? "  •  Full" : ""}
+              {details ? t("groups.memberCount", { count: details.member_count, max: details.max_members }) : ""}
+              {isFull ? t("groups.details.fullSuffix") : ""}
             </Text>
 
             <View style={styles.hr} />
@@ -93,7 +95,7 @@ export default function GroupDetailsScreen() {
               activeOpacity={0.9}
             >
               <Ionicons name="people-outline" size={18} color={theme.colors.textPrimary} />
-              <Text style={styles.secondaryText}>View members</Text>
+              <Text style={styles.secondaryText}>{t("groups.details.viewMembers")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -103,7 +105,7 @@ export default function GroupDetailsScreen() {
               disabled={isFull}
             >
               <Ionicons name="person-add-outline" size={18} color={theme.colors.textPrimary} />
-              <Text style={styles.secondaryText}>{isFull ? "Group is full" : "Invite people"}</Text>
+              <Text style={styles.secondaryText}>{isFull ? t("groups.details.full") : t("groups.details.invitePeople")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -113,7 +115,7 @@ export default function GroupDetailsScreen() {
               disabled={isFull || sharing}
             >
               <Ionicons name="link-outline" size={18} color={theme.colors.textPrimary} />
-              <Text style={styles.secondaryText}>{sharing ? "Preparing link…" : "Share invite link"}</Text>
+              <Text style={styles.secondaryText}>{sharing ? t("groups.details.preparingLink") : t("groups.details.shareLink")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -121,7 +123,7 @@ export default function GroupDetailsScreen() {
               style={styles.primaryBtn}
               activeOpacity={0.9}
             >
-              <Text style={styles.primaryText}>Open group chat</Text>
+              <Text style={styles.primaryText}>{t("groups.details.openChat")}</Text>
             </TouchableOpacity>
           </View>
         )}

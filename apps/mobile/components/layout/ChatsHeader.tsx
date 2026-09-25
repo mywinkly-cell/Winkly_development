@@ -4,6 +4,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter, usePathname } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { appModeToHub, chatRoutes, getModeHubFromPathname } from "@/lib/navigation/modeHub";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,6 +22,7 @@ const BUTTON_SIZE = 44;
 const ICON_SIZE = 24;
 
 export function ChatsHeader({ showBack = false, mode }: ChatsHeaderProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname() ?? "";
   const theme = useAppTheme();
@@ -59,7 +61,7 @@ export function ChatsHeader({ showBack = false, mode }: ChatsHeaderProps) {
             }}
             style={styles.iconBtn}
             activeOpacity={0.8}
-            accessibilityLabel="Back"
+            accessibilityLabel={t("common.back")}
           >
             <Ionicons name="arrow-back" size={ICON_SIZE} color={theme.colors.textPrimary} />
           </TouchableOpacity>
@@ -69,7 +71,7 @@ export function ChatsHeader({ showBack = false, mode }: ChatsHeaderProps) {
               onPress={handleAddPress}
               style={styles.addChatInner}
               activeOpacity={0.8}
-              accessibilityLabel="New conversation"
+              accessibilityLabel={t("chat.header.newConversation")}
             >
               <Ionicons name="chatbubble-outline" size={ICON_SIZE} color={theme.colors.primary} />
               <View style={styles.addChatPlusWrap}>
@@ -89,7 +91,7 @@ export function ChatsHeader({ showBack = false, mode }: ChatsHeaderProps) {
             onPress={handleAIPress}
             size={ICON_SIZE}
             style={styles.sparkBtn}
-            accessibilityLabel="Winkly AI"
+            accessibilityLabel={t("common.winklyAi")}
           />
         </View>
       </View>

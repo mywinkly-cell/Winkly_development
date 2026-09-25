@@ -54,9 +54,10 @@ function getLastMessagePreview(msg: Message | null, labels: {
 }
 
 function ModeBadgeIcon({ mode, styles }: { mode: ReturnType<typeof getChatModeDisplay>; styles: ReturnType<typeof createStyles> }) {
+  const { t } = useTranslation();
   if (!mode) return null;
   return (
-    <View style={styles.modeBadge} accessibilityLabel={`${mode.label} chat`}>
+    <View style={styles.modeBadge} accessibilityLabel={t("chat.preview.modeChatA11y", { mode: mode.label })}>
       {mode.useEventsImage ? (
         <Image
           source={EVENTS_ICON}
@@ -105,7 +106,7 @@ export function ChatPreviewCard({
   const unreadBadgeColor = modeDisplay?.primary ?? theme.colors.primary;
   const previewText =
     lastMessagePreview ??
-    (isPendingRomanceInvite ? "Sent you a chat invite" : getLastMessagePreview(lastMessage, previewLabels));
+    (isPendingRomanceInvite ? t("chat.preview.sentInvite") : getLastMessagePreview(lastMessage, previewLabels));
 
   const renderSingleAvatar = (entry: AvatarEntry) => (
     <View
@@ -126,7 +127,7 @@ export function ChatPreviewCard({
         </View>
       )}
       {modeDisplay && <ModeBadgeIcon mode={modeDisplay} styles={styles} />}
-      {isOnline && <View style={styles.onlineDot} accessibilityLabel="Online" />}
+      {isOnline && <View style={styles.onlineDot} accessibilityLabel={t("chat.preview.online")} />}
     </View>
   );
 
@@ -212,7 +213,7 @@ export function ChatPreviewCard({
             {isPendingRomanceInvite && (
               <View style={styles.inviteBadge}>
                 <Ionicons name="mail" size={11} color={theme.modeAccent("romance").primary} />
-                <Text style={styles.inviteBadgeText}>Invite</Text>
+                <Text style={styles.inviteBadgeText} numberOfLines={1}>{t("chat.preview.inviteBadge")}</Text>
               </View>
             )}
             {isPinned && (

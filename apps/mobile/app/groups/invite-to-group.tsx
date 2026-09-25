@@ -21,6 +21,7 @@ import {
 } from "react-native";
 import * as Contacts from "expo-contacts/legacy";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 import { hashContactIdentifiers } from "@/lib/contacts/matching";
@@ -32,6 +33,7 @@ import type { Mode } from "@/types";
 type Candidate = { id: string; displayName: string; avatar_url?: string | null; source: "connection" | "contact" };
 
 export default function InviteToGroup() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -45,7 +47,7 @@ export default function InviteToGroup() {
   const [loading, setLoading] = useState(true);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [groupName, setGroupName] = useState("group");
+  const [groupName, setGroupName] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -83,7 +85,7 @@ export default function InviteToGroup() {
     try {
       const perm = await Contacts.requestPermissionsAsync();
       if (perm.status !== "granted") {
-        Alert.alert("Contacts permission", "Allow contact access in settings to find friends already on Winkly.");
+        Alert.alert(t("groups.invite.permissionTitle"), t("groups.invite.permissionBody"));
         return;
       }
       const { data } = await Contacts.getContactsAsync({
@@ -107,7 +109,7 @@ export default function InviteToGroup() {
         (id) => !memberIds.has(id)
       );
       if (matchedIds.length === 0) {
-        Alert.alert("No new matches", "None of your contacts (outside this group) are on Winkly yet.");
+        Alert.alert(t("groups.invite.noMatchesTitle"), t("groups.invite.noMatchesBody"));
         return;
       }
       const { data: profiles } = await supabase
@@ -120,13 +122,13 @@ export default function InviteToGroup() {
         (profiles ?? []).forEach((p: Record<string, unknown>) => {
           const id = p.id as string;
           if (existing.has(id)) return;
-          const name = [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || "Contact";
+          const name = [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || t("groups.invite.contactFallback");
           next.push({ id, displayName: name, avatar_url: (p.main_photo_url as string) ?? null, source: "contact" });
         });
         return next;
       });
     } catch (e) {
-      Alert.alert("Couldn't load contacts", (e as Error)?.message ?? "Please try again.");
+      Alert.alert(t("groups.invite.contactsFailed"), (e as Error)?.message ?? t("common.tryAgain"));
     } finally {
       setContactsLoading(false);
     }
@@ -144,9 +146,14 @@ export default function InviteToGroup() {
   const onShareLink = async () => {
     try {
       const code = await ensureGroupInviteCode(gid);
-      await Share.share({ message: `Join "${groupName}" on Winkly: winkly://groups/join?code=${code}` });
+      const link = `winkly://groups/join?code=${code}`;
+      await Share.share({
+        message: groupName
+          ? t("groups.invite.shareMessage", { name: groupName, link })
+          : t("groups.invite.shareMessageNoName", { link }),
+      });
     } catch (e) {
-      Alert.alert("Error", (e as Error)?.message ?? "Could not create an invite link.");
+      Alert.alert(t("common.error"), (e as Error)?.message ?? t("groups.details.linkFailed"));
     }
   };
 
@@ -156,12 +163,14 @@ export default function InviteToGroup() {
     try {
       const { invited, skipped } = await inviteUsersToGroup(gid, [...selected]);
       Alert.alert(
-        "Invitations sent",
-        `${invited} ${invited === 1 ? "person" : "people"} invited.${skipped > 0 ? ` ${skipped} already invited or members.` : ""}`,
-        [{ text: "Done", onPress: () => router.back() }]
+        t("groups.invite.sentTitle"),
+        skipped > 0
+          ? `${t("groups.invite.invited", { count: invited })} ${t("groups.invite.skipped", { count: skipped })}`
+          : t("groups.invite.invited", { count: invited }),
+        [{ text: t("common.done"), onPress: () => router.back() }]
       );
     } catch (e) {
-      Alert.alert("Error", (e as Error)?.message ?? "Could not send invitations.");
+      Alert.alert(t("common.error"), (e as Error)?.message ?? t("groups.invite.sendFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -173,10 +182,10 @@ export default function InviteToGroup() {
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel={t("common.back")}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Invite people</Text>
+          <Text style={styles.headerTitle}>{t("groups.details.invitePeople")}</Text>
           <View style={{ width: 44 }} />
         </View>
 
@@ -186,7 +195,7 @@ export default function InviteToGroup() {
           ) : (
             <>
               <Ionicons name="people-outline" size={18} color={theme.colors.primary} />
-              <Text style={styles.contactsText}>Find friends from contacts</Text>
+              <Text style={styles.contactsText}>{t("groups.invite.findFromContacts")}</Text>
             </>
           )}
         </TouchableOpacity>
@@ -194,7 +203,7 @@ export default function InviteToGroup() {
         {loading ? (
           <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 24 }} />
         ) : sorted.length === 0 ? (
-          <Text style={styles.empty}>No connections to invite yet. Share an invite link instead.</Text>
+          <Text style={styles.empty}>{t("groups.invite.empty")}</Text>
         ) : (
           sorted.map((c) => (
             <Pressable
@@ -211,7 +220,7 @@ export default function InviteToGroup() {
               )}
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={styles.name} numberOfLines={1}>{c.displayName}</Text>
-                {c.source === "contact" ? <Text style={styles.tag}>From contacts</Text> : null}
+                {c.source === "contact" ? <Text style={styles.tag}>{t("groups.invite.fromContacts")}</Text> : null}
               </View>
               <View style={[styles.checkbox, selected.has(c.id) && styles.checkboxChecked]}>
                 {selected.has(c.id) ? <Ionicons name="checkmark" size={16} color={theme.colors.onPrimary} /> : null}
@@ -229,13 +238,13 @@ export default function InviteToGroup() {
           {submitting ? (
             <ActivityIndicator size="small" color={theme.colors.onPrimary} />
           ) : (
-            <Text style={styles.primaryText}>{selected.size > 0 ? `Invite ${selected.size}` : "Select people to invite"}</Text>
+            <Text style={styles.primaryText}>{selected.size > 0 ? t("groups.invite.inviteN", { count: selected.size }) : t("groups.invite.selectPeople")}</Text>
           )}
         </TouchableOpacity>
 
         <TouchableOpacity onPress={onShareLink} style={styles.secondaryBtn} activeOpacity={0.9}>
           <Ionicons name="link-outline" size={18} color={theme.colors.textPrimary} />
-          <Text style={styles.secondaryText}>Share invite link</Text>
+          <Text style={styles.secondaryText}>{t("groups.details.shareLink")}</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>

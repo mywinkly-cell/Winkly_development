@@ -11,6 +11,8 @@ import { Header, Input, ListRow } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
+import i18n from "i18next";
 import { chatRoutes, useModeHub } from "@/lib/navigation/modeHub";
 import { supabase } from "@/lib/supabase";
 import { createDirectChat } from "@/lib/chats";
@@ -35,7 +37,7 @@ function formatName(u: UserMini) {
   const fn = (u.first_name ?? "").trim();
   const ln = (u.last_name ?? "").trim();
   const full = `${fn} ${ln}`.trim();
-  return full || "Unknown";
+  return full || i18n.t("chat.unknown");
 }
 
 function useDebouncedValue<T>(value: T, delayMs: number) {
@@ -76,6 +78,7 @@ async function loadRomanceMatches(userId: string): Promise<UserMini[]> {
 }
 
 export default function NewChat() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const chatHub = useModeHub();
@@ -138,7 +141,7 @@ export default function NewChat() {
       const list = (data ?? []) as UserMini[];
       setUsers(list);
     } catch (e: any) {
-      setError(e?.message ?? "Failed to load users.");
+      setError(e?.message ?? t("chat.newChatScreen.loadUsersFailed"));
       setUsers([]);
     } finally {
       setLoading(false);
@@ -153,14 +156,14 @@ export default function NewChat() {
       loadRomanceMatches(meId)
         .then(setUsers)
         .catch((e) => {
-          setError(e instanceof Error ? e.message : "Failed to load matches.");
+          setError(e instanceof Error ? e.message : t("chat.newChatScreen.loadMatchesFailed"));
           setUsers([]);
         })
         .finally(() => setLoading(false));
     } else {
       loadUsers(debouncedQ);
     }
-  }, [meId, isRomance, debouncedQ]);
+  }, [meId, isRomance, debouncedQ, t]);
 
   const filtered = useMemo(() => {
     // We still filter out self locally
@@ -169,7 +172,7 @@ export default function NewChat() {
 
   async function handleCreateDirectChat(user: UserMini) {
     if (!meId) {
-      setError("You are not signed in.");
+      setError(t("chat.newChatScreen.notSignedIn"));
       return;
     }
     if (creating) return;
@@ -191,7 +194,7 @@ export default function NewChat() {
         }) as Parameters<typeof router.replace>[0]
       );
     } catch (e: any) {
-      setError(e?.message ?? "Failed to create chat.");
+      setError(e?.message ?? t("chat.newChatScreen.createFailed"));
     } finally {
       setCreating(false);
     }
@@ -202,22 +205,22 @@ export default function NewChat() {
   return (
     <SafeScreenView style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <Header
-        title={isRomance ? "Message a match" : "New chat"}
+        title={isRomance ? t("chat.newChatScreen.romanceTitle") : t("chat.newChat")}
         onBack={() => router.back()}
       />
       <Text style={styles.subtitle}>
         {isRomance
-          ? "Romance is 1:1 only — pick someone you have already matched with."
-          : `Start a 1:1 chat or create a group — ${mode}`}
+          ? t("chat.newChatScreen.romanceSubtitle")
+          : t("chat.newChatScreen.subtitle", { mode: t(`modes.${mode}`) })}
       </Text>
 
       <View style={styles.content}>
-        {error ? <Text style={styles.errorText}>Error: {error}</Text> : null}
+        {error ? <Text style={styles.errorText}>{t("chat.errorWithMessage", { message: error })}</Text> : null}
 
         {!isRomance && (
           <ListRow
-            title="Create group chat"
-            subtitle="Invite matches & contacts — planning made easy"
+            title={t("chat.newChatScreen.createGroup")}
+            subtitle={t("chat.newChatScreen.createGroupSubtitle")}
             onPress={() => router.replace("/groups/create-group")}
             style={styles.groupRow}
             leading={<Ionicons name="people" size={24} color={theme.colors.primary} />}
@@ -228,18 +231,18 @@ export default function NewChat() {
           <Input
             value={q}
             onChangeText={setQ}
-            placeholder="Search by name or city…"
+            placeholder={t("chat.newChatScreen.searchPlaceholder")}
             autoCorrect={false}
             autoCapitalize="none"
           />
         )}
 
-        {creating ? <Text style={styles.creatingText}>Creating chat…</Text> : null}
+        {creating ? <Text style={styles.creatingText}>{t("chat.newChatScreen.creating")}</Text> : null}
 
         {loading ? (
           <View style={{ flex: 1, justifyContent: "center" }}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Loading…</Text>
+            <Text style={styles.loadingText}>{t("common.loading")}</Text>
           </View>
         ) : (
           <FlatList
@@ -259,10 +262,10 @@ export default function NewChat() {
             ListEmptyComponent={
               <Text style={styles.emptyText}>
                 {isRomance
-                  ? "No matches yet. Discover people and let the spark happen."
+                  ? t("chat.newChatScreen.emptyRomance")
                   : q.trim()
-                  ? "No users found."
-                  : "Start typing to search, or pick someone from the list."}
+                  ? t("chat.newChatScreen.noUsers")
+                  : t("chat.newChatScreen.emptyHint")}
               </Text>
             }
           />

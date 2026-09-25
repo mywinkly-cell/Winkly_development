@@ -5,11 +5,13 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { ensureGroupConversation } from "@/lib/groups/groupChat";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 export default function GroupChatEntry() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -19,7 +21,7 @@ export default function GroupChatEntry() {
   useEffect(() => {
     const id = typeof groupId === "string" ? groupId : "";
     if (!id) {
-      setError("Missing group id");
+      setError(t("groups.chat.missingId"));
       return;
     }
 
@@ -34,7 +36,7 @@ export default function GroupChatEntry() {
         });
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Could not open group chat");
+          setError(e instanceof Error ? e.message : t("groups.chat.openFailed"));
         }
       }
     })();
@@ -42,15 +44,21 @@ export default function GroupChatEntry() {
     return () => {
       cancelled = true;
     };
-  }, [groupId, router]);
+  }, [groupId, router, t]);
 
   return (
     <View style={styles.screen}>
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          activeOpacity={0.9}
+          accessibilityRole="button"
+          accessibilityLabel={t("common.back")}
+        >
           <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Group chat</Text>
+        <Text style={styles.headerTitle}>{t("groups.groupChat")}</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -58,13 +66,13 @@ export default function GroupChatEntry() {
         <View style={styles.center}>
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity onPress={() => router.back()} style={styles.retryBtn}>
-            <Text style={styles.retryText}>Go back</Text>
+            <Text style={styles.retryText}>{t("groups.chat.goBack")}</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={styles.loadingText}>Opening group chat…</Text>
+          <Text style={styles.loadingText}>{t("groups.chat.opening")}</Text>
         </View>
       )}
     </View>

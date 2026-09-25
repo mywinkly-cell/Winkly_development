@@ -14,6 +14,7 @@ import {
 import { useRouter } from "expo-router";
 import { chatRoutes, useModeHub } from "@/lib/navigation/modeHub";
 import { useTranslation } from "react-i18next";
+import i18next from "i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeScreenView } from "@/components/SafeScreenView";
@@ -37,7 +38,7 @@ type UserMini = {
 function formatName(u: UserMini) {
   const fn = (u.first_name ?? "").trim();
   const ln = (u.last_name ?? "").trim();
-  return `${fn} ${ln}`.trim() || "Unknown";
+  return `${fn} ${ln}`.trim() || i18next.t("chat.unknown");
 }
 
 function useDebouncedValue<T>(value: T, delayMs: number) {
@@ -87,7 +88,7 @@ async function loadWinklyContacts(userId: string, search: string): Promise<UserM
 }
 
 export default function StartChat() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const chatHub = useModeHub();
   const theme = useAppTheme();
@@ -126,12 +127,12 @@ export default function StartChat() {
       const list = await loadWinklyContacts(uid, search);
       setUsers(list);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load contacts.");
+      setError(e instanceof Error ? e.message : t("chat.start.loadFailed"));
       setUsers([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!meId) return;
@@ -160,7 +161,7 @@ export default function StartChat() {
           }) as Parameters<typeof router.replace>[0]
         );
       })
-      .catch((e) => setError(e?.message ?? "Failed to start chat."))
+      .catch((e) => setError(e?.message ?? t("chat.start.startFailed")))
       .finally(() => setCreating(false));
   };
 
@@ -177,7 +178,7 @@ export default function StartChat() {
   return (
     <SafeScreenView style={styles.screen}>
       <Header
-        title="New conversation"
+        title={t("chat.header.newConversation")}
         onBack={() => {
           Haptics.selectionAsync();
           router.back();
@@ -191,8 +192,8 @@ export default function StartChat() {
               <View style={styles.optionIconWrap}>
                 <Ionicons name="chatbubble-outline" size={26} color={theme.colors.primary} />
               </View>
-              <Text style={styles.optionTitle}>New chat</Text>
-              <Text style={styles.optionSub}>Start a 1:1 chat</Text>
+              <Text style={styles.optionTitle}>{t("chat.newChat")}</Text>
+              <Text style={styles.optionSub}>{t("chat.start.newChatSub")}</Text>
             </Pressable>
           </Card>
           <Card padding="md" style={styles.optionCard}>
@@ -200,20 +201,20 @@ export default function StartChat() {
               <View style={styles.optionIconWrap}>
                 <Ionicons name="people-outline" size={26} color={theme.colors.primary} />
               </View>
-              <Text style={styles.optionTitle}>Group chat</Text>
-              <Text style={styles.optionSub}>Create a group</Text>
+              <Text style={styles.optionTitle}>{t("chat.groupChatTitle")}</Text>
+              <Text style={styles.optionSub}>{t("chat.start.groupChatSub")}</Text>
             </Pressable>
           </Card>
         </View>
         <ListRow
-          title="Group invitations"
+          title={t("chat.start.groupInvitations")}
           onPress={() => { Haptics.selectionAsync(); router.push("/groups/invitations"); }}
           style={styles.linkRow}
           leading={<Ionicons name="mail-outline" size={20} color={theme.colors.primary} />}
           showChevron={false}
         />
         <ListRow
-          title="Friends connection requests"
+          title={t("chat.start.friendRequests")}
           onPress={() => {
             Haptics.selectionAsync();
             router.push("/(modes)/friends/friend-requests");
@@ -226,20 +227,20 @@ export default function StartChat() {
         <Input
           value={q}
           onChangeText={setQ}
-          placeholder="Search by name or number…"
+          placeholder={t("chat.start.searchPlaceholder")}
           autoCorrect={false}
           autoCapitalize="none"
         />
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        {creating ? <Text style={styles.creatingText}>Starting chat…</Text> : null}
+        {creating ? <Text style={styles.creatingText}>{t("chat.start.starting")}</Text> : null}
 
-        <Text style={styles.sectionTitle}>Contacts on Winkly</Text>
+        <Text style={styles.sectionTitle}>{t("chat.start.contactsOnWinkly")}</Text>
 
         {loading ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Loading…</Text>
+            <Text style={styles.loadingText}>{t("common.loading")}</Text>
           </View>
         ) : (
           <FlatList
@@ -264,16 +265,16 @@ export default function StartChat() {
             ListEmptyComponent={
               <Text style={styles.emptyText}>
                 {q.trim()
-                  ? "No contacts found. Try another search or invite them to Winkly."
-                  : "No contacts yet. Use search or invite people to Winkly."}
+                  ? t("chat.start.noContactsFound")
+                  : t("chat.start.noContacts")}
               </Text>
             }
           />
         )}
 
         <ListRow
-          title="Invite to Winkly"
-          subtitle="Add a contact who isn't on Winkly yet"
+          title={t("chat.start.inviteToWinkly")}
+          subtitle={t("chat.start.inviteToWinklySub")}
           onPress={handleInviteToWinkly}
           style={styles.inviteRow}
           leading={<Ionicons name="person-add-outline" size={24} color={theme.colors.primary} />}
@@ -316,8 +317,8 @@ function createStyles(theme: AppTheme) {
       justifyContent: "center",
       marginBottom: theme.spacing.sm,
     },
-    optionTitle: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily, color: theme.colors.textPrimary },
-    optionSub: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.xxs },
+    optionTitle: { ...theme.type.bodyMedium, fontFamily: theme.type.bodyMedium.fontFamily, color: theme.colors.textPrimary, textAlign: "center" },
+    optionSub: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.xxs, textAlign: "center" },
     linkRow: { paddingHorizontal: theme.spacing.xxs, marginBottom: theme.spacing.xs },
     errorText: { color: theme.colors.error, marginBottom: theme.spacing.sm },
     creatingText: { color: theme.colors.textSecondary, marginBottom: theme.spacing.sm },

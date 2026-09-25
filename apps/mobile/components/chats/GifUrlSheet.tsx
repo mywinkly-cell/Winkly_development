@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, Pressable, Modal, KeyboardAvoidingView, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography } from "@/constants/tokens";
 
 type Props = {
@@ -11,6 +12,7 @@ type Props = {
 
 /** Attach a GIF by pasting a direct image URL (e.g. from Giphy/Tenor “Copy link” to media). */
 export function GifUrlSheet({ visible, onClose, onAttach }: Props) {
+  const { t } = useTranslation();
   const [url, setUrl] = useState("");
 
   const submit = () => {
@@ -38,17 +40,18 @@ export function GifUrlSheet({ visible, onClose, onAttach }: Props) {
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <Text style={{ ...Typography.h3, fontSize: 17 }}>Send a GIF</Text>
-            <Pressable onPress={onClose} hitSlop={10}>
+            <Text style={{ ...Typography.h3, fontSize: 17, flexShrink: 1 }}>{t("chat.gif.title")}</Text>
+            <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel={t("common.close")}>
               <Ionicons name="close" size={26} color={Colors.gray600} />
             </Pressable>
           </View>
           <Text style={{ fontSize: 13, color: Colors.gray600, marginBottom: 10 }}>
-            Paste a direct GIF or image URL (HTTPS). Many apps offer a “copy GIF link” or media URL.
+            {t("chat.gif.hint")}
           </Text>
           <TextInput
             value={url}
             onChangeText={setUrl}
+            // eslint-disable-next-line winkly/no-literal-string -- URL scheme example, not translatable
             placeholder="https://…"
             placeholderTextColor={Colors.gray500}
             autoCapitalize="none"
@@ -74,7 +77,7 @@ export function GifUrlSheet({ visible, onClose, onAttach }: Props) {
               alignItems: "center",
             }}
           >
-            <Text style={{ color: Colors.white, fontWeight: "700", fontSize: 16 }}>Attach GIF</Text>
+            <Text style={{ color: Colors.white, fontWeight: "700", fontSize: 16, textAlign: "center" }}>{t("chat.gif.attach")}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>

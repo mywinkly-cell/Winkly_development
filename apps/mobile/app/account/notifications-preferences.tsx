@@ -91,7 +91,7 @@ export default function NotificationsPreferences() {
         <Card padding="none" style={styles.card}>
           <ListRow
             title={t("notifications.language")}
-            subtitle={SUPPORTED_LANGUAGES.find((l) => l.code === normalizeLanguageCode(i18n.language))?.name ?? "English"}
+            subtitle={SUPPORTED_LANGUAGES.find((l) => l.code === normalizeLanguageCode(i18n.language))?.name ?? SUPPORTED_LANGUAGES.find((l) => l.code === "en")?.name}
             onPress={() => {
               Haptics.selectionAsync();
               router.push("/account/language" as any);

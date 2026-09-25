@@ -6,6 +6,7 @@
 import React from "react";
 import { Text, View, Share } from "react-native";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 import { TextButton } from "@/components/ds";
 import { useAppTheme } from "@/constants/design-system";
 import { PlanCard, PlanCardBadge, PlanCardIconAction } from "@/components/plans/PlanCard";
@@ -25,6 +26,7 @@ export function ChatExperienceSuggestionCard({
   onPlanDate,
   onSuggestAnother,
 }: ChatExperienceSuggestionCardProps) {
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const accent = theme.modeAccent(mode).primary;
 
@@ -33,7 +35,7 @@ export function ChatExperienceSuggestionCard({
     const text = [
       suggestion.title,
       ...suggestion.itinerary.map((i) => `${i.time ?? ""} ${i.time ? " " : ""}${i.activity}`.trim()),
-      `Est. ${suggestion.estimatedDuration}`,
+      t("chat.suggestion.estShort", { duration: suggestion.estimatedDuration }),
     ]
       .filter(Boolean)
       .join("\n");
@@ -49,14 +51,19 @@ export function ChatExperienceSuggestionCard({
       style={{ marginHorizontal: theme.spacing.md, marginBottom: theme.spacing.md }}
       accentColor={accent}
       title={suggestion.title}
-      badges={<PlanCardBadge label="Winkly suggestion" icon="sparkles-outline" tone="primary" color={accent} />}
+      badges={<PlanCardBadge label={t("chat.suggestion.badge")} icon="sparkles-outline" tone="primary" color={accent} />}
       primaryAction={{
-        label: mode === "romance" ? "Plan date" : mode === "business" ? "Schedule meeting" : "Add to planner",
+        label:
+          mode === "romance"
+            ? t("chat.suggestion.planDate")
+            : mode === "business"
+              ? t("chat.suggestion.scheduleMeeting")
+              : t("chat.suggestion.addToPlanner"),
         onPress: onPlanDate,
         tone: accent,
       }}
       secondaryActions={
-        <PlanCardIconAction icon="share-outline" accessibilityLabel="Share" tone="muted" onPress={handleShare} />
+        <PlanCardIconAction icon="share-outline" accessibilityLabel={t("events.share")} tone="muted" onPress={handleShare} />
       }
     >
       {suggestion.subtitle ? (
@@ -102,11 +109,11 @@ export function ChatExperienceSuggestionCard({
           { color: theme.colors.textMuted, fontFamily: theme.type.caption.fontFamily, marginBottom: theme.spacing.sm },
         ]}
       >
-        Estimated duration {suggestion.estimatedDuration}
+        {t("chat.suggestion.estimatedDuration", { duration: suggestion.estimatedDuration })}
       </Text>
 
       <TextButton
-        title="Suggest another plan"
+        title={t("chat.suggestion.another")}
         onPress={() => {
           Haptics.selectionAsync();
           onSuggestAnother();

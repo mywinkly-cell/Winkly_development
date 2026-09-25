@@ -196,9 +196,9 @@ export function formatChatInboxTimestamp(ts: string | null | undefined): string 
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
   if (diffMins < 1) return i18n.t("chat.now");
-  if (diffMins < 60) return `${diffMins}m`;
-  if (diffHours < 24) return `${diffHours}h`;
+  if (diffMins < 60) return i18n.t("chat.time.minutesShort", { count: diffMins });
+  if (diffHours < 24) return i18n.t("chat.time.hoursShort", { count: diffHours });
   if (diffDays === 1) return i18n.t("chat.yesterday");
-  if (diffDays < 7) return `${diffDays}d`;
+  if (diffDays < 7) return i18n.t("chat.time.daysShort", { count: diffDays });
   return d.toLocaleDateString(getAppLocaleTag(), { month: "short", day: "numeric" });
 }

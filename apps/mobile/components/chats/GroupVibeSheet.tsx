@@ -1,18 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { View, Text, Modal, Pressable, TextInput, StyleSheet, TouchableOpacity } from "react-native";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import type { GroupVibeMood } from "@/lib/groups/groupsApi";
 
 type VibePick = { mood: GroupVibeMood; energy?: number | null; note?: string | null };
 
-const MOODS: { key: GroupVibeMood; emoji: string; label: string }[] = [
-  { key: "chill", emoji: "🧘", label: "Chill" },
-  { key: "active", emoji: "🏃", label: "Active" },
-  { key: "foodie", emoji: "🍜", label: "Foodie" },
-  { key: "social", emoji: "🎉", label: "Social" },
-  { key: "budget", emoji: "💸", label: "Budget" },
-  { key: "fancy", emoji: "✨", label: "Treat" },
+const MOODS: { key: GroupVibeMood; emoji: string }[] = [
+  { key: "chill", emoji: "🧘" },
+  { key: "active", emoji: "🏃" },
+  { key: "foodie", emoji: "🍜" },
+  { key: "social", emoji: "🎉" },
+  { key: "budget", emoji: "💸" },
+  { key: "fancy", emoji: "✨" },
 ];
 
 /**
@@ -30,6 +31,7 @@ export function GroupVibeSheet({
   onSubmit: (pick: VibePick) => void;
   onSkip: () => void;
 }) {
+  const { t } = useTranslation();
   const [mood, setMood] = useState<GroupVibeMood | null>(null);
   const [note, setNote] = useState("");
 
@@ -43,9 +45,9 @@ export function GroupVibeSheet({
       <Pressable style={styles.backdrop} onPress={onClose} />
       <View style={styles.sheet}>
         <View style={styles.handle} />
-        <Text style={styles.title}>What&apos;s the vibe?</Text>
+        <Text style={styles.title}>{t("groups.vibe.title")}</Text>
         <Text style={styles.subtitle}>
-          Pick a mood so Winkly can tailor the plan. Everyone in the group can add theirs.
+          {t("groups.vibe.subtitle")}
         </Text>
 
         <View style={styles.moodGrid}>
@@ -59,7 +61,7 @@ export function GroupVibeSheet({
                 activeOpacity={0.85}
               >
                 <Text style={styles.moodEmoji}>{m.emoji}</Text>
-                <Text style={[styles.moodLabel, active && styles.moodLabelActive]}>{m.label}</Text>
+                <Text style={[styles.moodLabel, active && styles.moodLabelActive]}>{t(`groups.vibe.mood.${m.key}`)}</Text>
               </TouchableOpacity>
             );
           })}
@@ -68,7 +70,7 @@ export function GroupVibeSheet({
         <TextInput
           value={note}
           onChangeText={setNote}
-          placeholder="Optional note (e.g. nothing too far from the S-Bahn)"
+          placeholder={t("groups.vibe.notePlaceholder")}
           placeholderTextColor={Colors.gray500}
           style={styles.note}
           maxLength={140}
@@ -86,7 +88,7 @@ export function GroupVibeSheet({
           activeOpacity={0.9}
         >
           <Ionicons name="sparkles-outline" size={18} color="#FFF" />
-          <Text style={styles.primaryText}>Set vibe & plan</Text>
+          <Text style={styles.primaryText}>{t("groups.vibe.submit")}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -97,7 +99,7 @@ export function GroupVibeSheet({
           style={styles.skipBtn}
           activeOpacity={0.9}
         >
-          <Text style={styles.skipText}>Skip & plan now</Text>
+          <Text style={styles.skipText}>{t("groups.vibe.skip")}</Text>
         </TouchableOpacity>
       </View>
     </Modal>

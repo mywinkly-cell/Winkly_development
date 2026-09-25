@@ -9,6 +9,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 import { joinGroupByCode } from "@/lib/groups/groupsApi";
@@ -17,18 +18,19 @@ import { ensureGroupConversation } from "@/lib/groups/groupChat";
 const PENDING_KEY = "winkly_pending_group_invite_code";
 
 export default function JoinGroupByCode() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
   const { code } = useLocalSearchParams<{ code?: string }>();
   const [state, setState] = useState<"loading" | "needs_auth" | "error">("loading");
-  const [message, setMessage] = useState<string>("Joining group…");
+  const [message, setMessage] = useState<string>(() => t("groups.join.joining"));
 
   const run = useCallback(async () => {
     const c = typeof code === "string" ? code.trim() : "";
     if (!c) {
       setState("error");
-      setMessage("This invite link is invalid.");
+      setMessage(t("groups.join.invalidLink"));
       return;
     }
     const { data: auth } = await supabase.auth.getUser();
@@ -44,9 +46,9 @@ export default function JoinGroupByCode() {
       router.replace({ pathname: "/chats/[conversationId]", params: { conversationId: convId } });
     } catch (e) {
       setState("error");
-      setMessage((e as Error)?.message ?? "Could not join this group.");
+      setMessage((e as Error)?.message ?? t("groups.join.failed"));
     }
-  }, [code, router]);
+  }, [code, router, t]);
 
   useEffect(() => {
     run();
@@ -61,18 +63,18 @@ export default function JoinGroupByCode() {
         </>
       ) : state === "needs_auth" ? (
         <>
-          <Text style={styles.title}>Sign in to join</Text>
-          <Text style={styles.text}>Create an account or sign in, then re-open the invite link to join the group.</Text>
+          <Text style={styles.title}>{t("groups.join.signInTitle")}</Text>
+          <Text style={styles.text}>{t("groups.join.signInBody")}</Text>
           <TouchableOpacity onPress={() => router.replace("/(auth)/signin")} style={styles.btn} activeOpacity={0.9}>
-            <Text style={styles.btnText}>Get started</Text>
+            <Text style={styles.btnText}>{t("groups.join.getStarted")}</Text>
           </TouchableOpacity>
         </>
       ) : (
         <>
-          <Text style={styles.title}>Can&apos;t join</Text>
+          <Text style={styles.title}>{t("groups.join.cantJoin")}</Text>
           <Text style={styles.text}>{message}</Text>
           <TouchableOpacity onPress={() => router.replace("/")} style={styles.btn} activeOpacity={0.9}>
-            <Text style={styles.btnText}>Go home</Text>
+            <Text style={styles.btnText}>{t("groups.join.goHome")}</Text>
           </TouchableOpacity>
         </>
       )}
