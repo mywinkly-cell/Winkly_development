@@ -16,7 +16,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import coverage from "./lib/i18nCoverage.js";
 
-const { computeCoverage } = coverage;
+const { computeCoverage, isStale, NEEDS_TRANSLATION, TRANSLATED } = coverage;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appDir = path.join(__dirname, "..");
@@ -83,10 +83,17 @@ for (const r of rows) {
     `  ${r.locale.padEnd(4)}  ${String(r.tier).padEnd(4)}  ${`${r.percent}%`.padStart(4)} ${bar} ${`${r.covered}/${r.total}`.padStart(8)}  ${min.padEnd(4)} ${belowMin ? "✗ below min" : ""}`
   );
 }
-const pending = Object.entries(status)
+const records = Object.entries(status)
   .filter(([k]) => !k.startsWith("_"))
-  .reduce((n, [, s]) => n + Object.keys(s).length, 0);
-console.log(`\n${pending} English placeholder(s) recorded in lib/i18n/translation-status.json.`);
+  .flatMap(([, s]) => Object.entries(s));
+const count = (fn) => records.filter(([key, e]) => fn(e, key)).length;
+const pending = count((e) => e.status === NEEDS_TRANSLATION);
+const machine = count((e) => e.status === TRANSLATED && e.method === "machine" && !e.reviewed);
+const legacy = count((e) => e.status === TRANSLATED && e.method === "legacy" && !e.reviewed);
+const reviewed = count((e) => e.status === TRANSLATED && e.reviewed);
+const stale = count((e, key) => isStale(key, e, en));
+console.log(`\n${pending} English placeholder(s), ${stale} stale translation(s) (English changed) — \`npm run translate-i18n\` fixes both.`);
+console.log(`Review: ${reviewed} reviewed, ${machine} machine and ${legacy} legacy translation(s) not yet reviewed (docs/I18N.md).`);
 
 if (below.length) {
   failed = true;

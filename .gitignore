@@ -69,3 +69,7 @@ supabase/.branches/
 # Agent / AI coding artifacts (local only — never commit)
 .claude/
 memory/
+
+# i18n pipeline (docs/I18N.md): translation cache and review CSVs; keys live in apps/mobile/.env.translate (covered by .env.*)
+apps/mobile/.cache/
+apps/mobile/i18n-review/
