@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { Animated, View, StyleSheet } from "react-native";
+import { useTranslation } from "react-i18next";
 import { Colors } from "@/constants/tokens";
 
 const BAR_COUNT = 16;
@@ -10,6 +11,7 @@ type Props = {
 };
 
 export function RecordingWaveform({ active, accentColor = Colors.errorRed }: Props) {
+  const { t } = useTranslation();
   const bars = useMemo(
     () => Array.from({ length: BAR_COUNT }).map(() => new Animated.Value(0.25)),
     [],
@@ -39,7 +41,7 @@ export function RecordingWaveform({ active, accentColor = Colors.errorRed }: Pro
   }, [active, bars]);
 
   return (
-    <View style={styles.track} accessibilityLabel="Recording waveform">
+    <View style={styles.track} accessibilityLabel={t("chat.voice.waveformA11y")}>
       {bars.map((bar, i) => (
         <Animated.View
           key={i}

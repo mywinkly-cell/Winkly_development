@@ -9,6 +9,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import type { DateIdea } from "@/lib/dates/dateIdeas";
@@ -23,6 +24,7 @@ export type DateIdeasSuggestionsProps = {
 };
 
 export function DateIdeasSuggestions({ ideas, accent, onPick, onDismiss }: DateIdeasSuggestionsProps) {
+  const { t } = useTranslation();
   if (!ideas.length) return null;
   const anyShared = ideas.some((i) => i.shared);
 
@@ -31,10 +33,10 @@ export function DateIdeasSuggestions({ ideas, accent, onPick, onDismiss }: DateI
       <View style={styles.headerRow}>
         <Ionicons name="heart-circle-outline" size={16} color={accent} />
         <Text style={[styles.headerText, { color: accent }]} numberOfLines={1}>
-          {anyShared ? "Date ideas you both might like" : "Break the ice with a plan"}
+          {anyShared ? t("chat.dateIdeas.shared") : t("chat.dateIdeas.breakIce")}
         </Text>
         {onDismiss ? (
-          <TouchableOpacity onPress={onDismiss} hitSlop={10} accessibilityLabel="Dismiss date ideas">
+          <TouchableOpacity onPress={onDismiss} hitSlop={10} accessibilityLabel={t("chat.dateIdeas.dismiss")}>
             <Ionicons name="close" size={16} color={Colors.gray500} />
           </TouchableOpacity>
         ) : null}
@@ -57,7 +59,7 @@ export function DateIdeasSuggestions({ ideas, accent, onPick, onDismiss }: DateI
             style={[styles.chip, { borderColor: accent + "55", backgroundColor: accent + "0F" }]}
           >
             <Ionicons name={idea.icon as keyof typeof Ionicons.glyphMap} size={18} color={accent} />
-            <Text style={styles.chipText} numberOfLines={1}>{idea.activity}</Text>
+            <Text style={styles.chipText} numberOfLines={1}>{t(`chat.dateIdeas.activity.${idea.key}`)}</Text>
             {idea.shared ? <View style={[styles.sharedDot, { backgroundColor: accent }]} /> : null}
           </TouchableOpacity>
         ))}

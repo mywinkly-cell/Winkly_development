@@ -15,6 +15,7 @@ import {
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import {
   AudioModule,
@@ -49,6 +50,7 @@ function VoiceDraftPlayer({
   accentColor: string;
   durationMs: number;
 }) {
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const styles = createStyles(theme);
   const player = useAudioPlayer(uri);
@@ -73,7 +75,7 @@ function VoiceDraftPlayer({
         style={[styles.previewPlayBtn, { backgroundColor: accentColor + "22" }]}
         hitSlop={hitSlopForSize(40)}
         accessibilityRole="button"
-        accessibilityLabel={status.playing ? "Pause preview" : "Play preview"}
+        accessibilityLabel={status.playing ? t("chat.composer.pausePreview") : t("chat.composer.playPreview")}
       >
         {status.isBuffering ? (
           <ActivityIndicator size="small" color={accentColor} />
@@ -118,6 +120,7 @@ export function ChatComposer({
   onAttachPress,
   inputRef,
 }: ChatComposerProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -154,12 +157,12 @@ export function ChatComposer({
       await recorder.stop();
       const uri = recorder.uri ?? recordUriRef.current;
       if (!uri || durMs < 400) {
-        Alert.alert("Voice message", "Recording was too short. Try again.");
+        Alert.alert(t("chat.voiceMessage"), t("chat.composer.tooShort"));
         setVoicePhase("idle");
         return;
       }
       if (durMs > (MAX_VOICE_SECONDS + 1) * 1000) {
-        Alert.alert("Voice message", `Please keep voice messages under ${MAX_VOICE_SECONDS} seconds.`);
+        Alert.alert(t("chat.voiceMessage"), t("chat.composer.tooLong", { count: MAX_VOICE_SECONDS }));
         setVoicePhase("idle");
         return;
       }
@@ -169,9 +172,9 @@ export function ChatComposer({
       setVoicePhase("preview");
     } catch {
       setVoicePhase("idle");
-      Alert.alert("Voice message", "Could not save the recording. Try again.");
+      Alert.alert(t("chat.voiceMessage"), t("chat.composer.saveFailed"));
     }
-  }, [recorder, recorderState.durationMillis]);
+  }, [recorder, recorderState.durationMillis, t]);
 
   useEffect(() => {
     if (!isRecording) return;
@@ -188,7 +191,7 @@ export function ChatComposer({
     if (busy || isPreview) return;
     const perm = await AudioModule.requestRecordingPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("Microphone", "Permission is required to record a voice message.");
+      Alert.alert(t("chat.microphonePermission"), t("chat.composer.micPermission"));
       return;
     }
     discardVoiceDraft();
@@ -200,9 +203,9 @@ export function ChatComposer({
       setVoicePhase("recording");
     } catch {
       setVoicePhase("idle");
-      Alert.alert("Voice message", "Could not start recording.");
+      Alert.alert(t("chat.voiceMessage"), t("chat.composer.startFailed"));
     }
-  }, [busy, isPreview, discardVoiceDraft, recorder]);
+  }, [busy, isPreview, discardVoiceDraft, recorder, t]);
 
   const handleMicPress = useCallback(() => {
     if (isRecording) void stopRecordingToPreview();
@@ -239,13 +242,13 @@ export function ChatComposer({
         <View style={styles.replyStrip}>
           <View style={[styles.replyAccent, { backgroundColor: accentColor }]} />
           <Text style={styles.replyText} numberOfLines={1}>
-            Replying to: {replyPreview}
+            {t("chat.composer.replyingTo", { preview: replyPreview })}
           </Text>
           <Pressable
             onPress={onClearReply}
             hitSlop={hitSlopForSize(22)}
             accessibilityRole="button"
-            accessibilityLabel="Cancel reply"
+            accessibilityLabel={t("chat.composer.cancelReply")}
           >
             <Ionicons name="close-circle" size={22} color={theme.colors.textMuted} />
           </Pressable>
@@ -259,7 +262,7 @@ export function ChatComposer({
           disabled={busy || isRecording}
           hitSlop={hitSlopForSize(42)}
           accessibilityRole="button"
-          accessibilityLabel="More actions"
+          accessibilityLabel={t("chat.composer.moreActions")}
           accessibilityState={{ disabled: busy || isRecording }}
         >
           <Ionicons name="add" size={26} color={theme.colors.primary} />
@@ -276,7 +279,7 @@ export function ChatComposer({
                 style={styles.recordingStopBtn}
                 hitSlop={hitSlopForSize(36)}
                 accessibilityRole="button"
-                accessibilityLabel="Stop recording"
+                accessibilityLabel={t("chat.composer.stopRecording")}
               >
                 <Ionicons name="stop" size={18} color="#FFF" />
               </Pressable>
@@ -289,7 +292,7 @@ export function ChatComposer({
                 style={styles.discardBtn}
                 hitSlop={hitSlopForSize(40)}
                 accessibilityRole="button"
-                accessibilityLabel="Delete voice message"
+                accessibilityLabel={t("chat.composer.deleteVoice")}
               >
                 <Ionicons name="trash-outline" size={22} color={theme.colors.error} />
               </Pressable>
@@ -302,7 +305,7 @@ export function ChatComposer({
                 onChangeText={onChangeDraft}
                 onFocus={onFocus}
                 onBlur={onBlur}
-                placeholder="Message"
+                placeholder={t("chat.message")}
                 placeholderTextColor={theme.colors.textMuted}
                 multiline
                 maxLength={4000}
@@ -315,7 +318,7 @@ export function ChatComposer({
                   style={styles.micInlineBtn}
                   hitSlop={hitSlopForSize(36)}
                   accessibilityRole="button"
-                  accessibilityLabel={isRecording ? "Stop recording" : "Record voice message"}
+                  accessibilityLabel={isRecording ? t("chat.composer.stopRecording") : t("chat.composer.recordVoice")}
                 >
                   <Ionicons name="mic-outline" size={22} color={theme.colors.textSecondary} />
                 </Pressable>
@@ -334,21 +337,21 @@ export function ChatComposer({
           ]}
           hitSlop={hitSlopForSize(44)}
           accessibilityRole="button"
-          accessibilityLabel="Send message"
+          accessibilityLabel={t("chat.composer.sendMessage")}
           accessibilityState={{ disabled: !canSend || busy, busy }}
         >
           {busy ? (
             <ActivityIndicator size="small" color="#FFF" />
           ) : (
-            <Text style={styles.sendLabel}>Send</Text>
+            <Text style={styles.sendLabel} numberOfLines={1} adjustsFontSizeToFit>{t("chat.composer.send")}</Text>
           )}
         </Pressable>
       </View>
 
       {isPreview ? (
-        <Text style={styles.hint}>Listen to your message, then Send or delete it.</Text>
+        <Text style={styles.hint}>{t("chat.voiceReviewHint")}</Text>
       ) : isRecording ? (
-        <Text style={styles.hint}>Tap stop when you are done — you can review before sending.</Text>
+        <Text style={styles.hint}>{t("chat.composer.recordingHint")}</Text>
       ) : null}
     </View>
   );

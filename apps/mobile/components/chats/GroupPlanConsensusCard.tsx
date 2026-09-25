@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { View, Text, Pressable, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import { Colors, Typography } from "@/constants/tokens";
 import { FitReasonLine, resolveFitReason } from "@/components/ai/FitReasonLine";
@@ -44,6 +45,7 @@ export function GroupPlanConsensusCard({
   isHost: boolean;
   hostName?: string;
 }) {
+  const { t } = useTranslation();
   const [state, setState] = useState<PendingPlanReactionState>({ counts: {}, mine: {} });
   const [status, setStatus] = useState<"open" | "confirming" | "confirmed">("open");
   const [loading, setLoading] = useState(true);
@@ -105,13 +107,13 @@ export function GroupPlanConsensusCard({
       setStatus(r.all_participants_confirmed || r.planner_item_id ? "confirmed" : "open");
     } catch (e) {
       setStatus("open");
-      Alert.alert("Couldn't confirm", (e as Error)?.message ?? "Please try again.");
+      Alert.alert(t("groups.consensus.confirmFailed"), (e as Error)?.message ?? t("common.tryAgain"));
     }
   };
 
   return (
     <View style={styles.card}>
-      <Text style={styles.kicker}>Group plan — vote & confirm</Text>
+      <Text style={styles.kicker}>{t("groups.consensus.kicker")}</Text>
 
       {options.slice(0, 2).map((opt, idx) => {
         const optionId = (opt.option_id ?? (idx === 0 ? "A" : "B")).toUpperCase();
@@ -121,11 +123,12 @@ export function GroupPlanConsensusCard({
         return (
           <View key={optionId} style={styles.option}>
             <Text style={styles.optionLabel}>
-              Option {optionId}
-              {opt.character_label ? ` · ${opt.character_label}` : ""}
+              {opt.character_label
+                ? t("groups.consensus.optionWithLabel", { id: optionId, label: opt.character_label })
+                : t("groups.consensus.option", { id: optionId })}
             </Text>
             <Text style={styles.optionTitle} numberOfLines={2}>
-              {opt.title ?? "Plan"}
+              {opt.title ?? t("groups.consensus.planFallback")}
             </Text>
             {opt.venue?.name ? <Text style={styles.optionVenue} numberOfLines={1}>{opt.venue.name}</Text> : null}
 
@@ -167,7 +170,11 @@ export function GroupPlanConsensusCard({
                 style={[styles.confirmBtn, (!hasConsensus || status === "confirming") && styles.confirmBtnDisabled]}
               >
                 <Text style={styles.confirmText}>
-                  {status === "confirming" ? "Confirming…" : hasConsensus ? `Confirm Option ${optionId}` : "Needs more 👍"}
+                  {status === "confirming"
+                    ? t("groups.consensus.confirming")
+                    : hasConsensus
+                      ? t("groups.consensus.confirmOption", { id: optionId })
+                      : t("groups.consensus.needsMore")}
                 </Text>
               </Pressable>
             ) : null}
@@ -180,11 +187,11 @@ export function GroupPlanConsensusCard({
       {status === "confirmed" ? (
         <View style={styles.confirmedRow}>
           <Ionicons name="checkmark-circle" size={16} color={Colors.successGreen} />
-          <Text style={styles.confirmedText}>Locked in — saved to everyone&apos;s Planner.</Text>
+          <Text style={styles.confirmedText}>{t("groups.consensus.lockedIn")}</Text>
         </View>
       ) : !isHost ? (
         <Text style={styles.waitingText}>
-          {`Waiting for ${hostName ?? "the host"} to confirm.`}
+          {hostName ? t("groups.consensus.waitingFor", { name: hostName }) : t("groups.consensus.waitingForHost")}
         </Text>
       ) : null}
     </View>

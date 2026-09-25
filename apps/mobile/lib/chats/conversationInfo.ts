@@ -1,3 +1,4 @@
+import i18n from "i18next";
 import { supabase } from "@/lib/supabase";
 import { getReadReceiptsPreference } from "@/lib/chats/api";
 
@@ -25,14 +26,14 @@ export type ConversationDetails = {
   meId: string;
 };
 
-function memberDisplayName(firstName: string | null, lastName: string | null, fallback = "Member") {
+function memberDisplayName(firstName: string | null, lastName: string | null) {
   const name = `${firstName ?? ""} ${lastName ?? ""}`.trim();
-  return name || fallback;
+  return name || i18n.t("chat.role.member");
 }
 
 export function formatConversationMemberName(member: ConversationMemberInfo, meId?: string | null) {
   const base = memberDisplayName(member.firstName, member.lastName);
-  if (meId && member.userId === meId) return `${base} (You)`;
+  if (meId && member.userId === meId) return i18n.t("chat.info.nameYou", { name: base });
   return base;
 }
 

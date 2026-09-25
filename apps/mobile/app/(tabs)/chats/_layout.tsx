@@ -1,4 +1,5 @@
 import { Stack } from "expo-router";
+import { useTranslation } from "react-i18next";
 import {
   TAB_HUB_SCREEN_NAMES,
   premiumHubStackScreenOptions,
@@ -6,6 +7,7 @@ import {
 } from "@/lib/navigation/screenOptions";
 
 export default function ChatsLayout() {
+  const { t } = useTranslation();
   return (
     <Stack
       screenOptions={{
@@ -20,13 +22,13 @@ export default function ChatsLayout() {
           options={{
             ...premiumHubStackScreenOptions(),
             headerShown: false,
-            ...(name === "filters" ? { title: "Chat filters" } : {}),
+            ...(name === "filters" ? { title: t("chat.filters.title") } : {}),
           }}
         />
       ))}
-      <Stack.Screen name="new-chat" options={{ title: "New chat" }} />
-      <Stack.Screen name="[conversationId]" options={{ title: "Chat" }} />
-      <Stack.Screen name="conversation-info" options={{ title: "Group info" }} />
+      <Stack.Screen name="new-chat" options={{ title: t("chat.newChat") }} />
+      <Stack.Screen name="[conversationId]" options={{ title: t("chat.title") }} />
+      <Stack.Screen name="conversation-info" options={{ title: t("chat.groupInfo") }} />
     </Stack>
   );
 }

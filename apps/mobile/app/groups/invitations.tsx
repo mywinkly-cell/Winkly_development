@@ -16,6 +16,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { Trans, useTranslation } from "react-i18next";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import {
   getMyPendingGroupInvitations,
@@ -25,6 +26,7 @@ import {
 } from "@/lib/groupInvitations";
 
 export default function GroupInvitationsScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -62,10 +64,15 @@ export default function GroupInvitationsScreen() {
     try {
       await acceptGroupInvite(inv.id);
       setList((prev) => prev.filter((i) => i.id !== inv.id));
-      Alert.alert("Joined", `You joined "${inv.group_name ?? "the group"}".`);
+      Alert.alert(
+        t("groups.invitations.joinedTitle"),
+        inv.group_name
+          ? t("groups.invitations.joinedNamed", { name: inv.group_name })
+          : t("groups.invitations.joined")
+      );
       router.replace({ pathname: "/groups/group-chat", params: { groupId: inv.group_id } });
     } catch (e) {
-      Alert.alert("Error", (e as Error).message ?? "Could not accept.");
+      Alert.alert(t("common.error"), (e as Error).message ?? t("groups.invitations.acceptFailed"));
     } finally {
       setActingId(null);
     }
@@ -77,7 +84,7 @@ export default function GroupInvitationsScreen() {
       await declineGroupInvite(inv.id);
       setList((prev) => prev.filter((i) => i.id !== inv.id));
     } catch (e) {
-      Alert.alert("Error", (e as Error).message ?? "Could not decline.");
+      Alert.alert(t("common.error"), (e as Error).message ?? t("groups.invitations.declineFailed"));
     } finally {
       setActingId(null);
     }
@@ -86,10 +93,10 @@ export default function GroupInvitationsScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel={t("common.back")}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Group invitations</Text>
+        <Text style={styles.headerTitle}>{t("chat.start.groupInvitations")}</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -99,7 +106,7 @@ export default function GroupInvitationsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.colors.primary]} />}
       >
         <Text style={styles.subtitle}>
-          You have been invited to join these groups. Accept to join the group chat, or decline.
+          {t("groups.invitations.subtitle")}
         </Text>
 
         {loading ? (
@@ -107,16 +114,21 @@ export default function GroupInvitationsScreen() {
         ) : list.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="mail-open-outline" size={48} color={theme.colors.textMuted} />
-            <Text style={styles.emptyText}>No pending invitations</Text>
+            <Text style={styles.emptyText}>{t("groups.invitations.empty")}</Text>
           </View>
         ) : (
           list.map((inv) => (
             <View key={inv.id} style={styles.card}>
-              <Text style={styles.groupName}>{inv.group_name ?? "Group"}</Text>
+              <Text style={styles.groupName}>{inv.group_name ?? t("groups.details.fallbackName")}</Text>
               <Text style={styles.inviterLine}>
-                You have been invited to join the group chat{" "}
-                <Text style={styles.bold}>{`"${inv.group_name ?? "Group"}"`}</Text> created by{" "}
-                <Text style={styles.bold}>{inv.inviter_display_name ?? "Someone"}</Text>.
+                <Trans
+                  i18nKey="groups.invitations.invitedBy"
+                  values={{
+                    group: inv.group_name ?? t("groups.details.fallbackName"),
+                    inviter: inv.inviter_display_name ?? t("groups.invitations.someone"),
+                  }}
+                  components={{ bold: <Text style={styles.bold} /> }}
+                />
               </Text>
               <View style={styles.actions}>
                 <TouchableOpacity
@@ -128,7 +140,7 @@ export default function GroupInvitationsScreen() {
                   {actingId === inv.id ? (
                     <ActivityIndicator size="small" color={theme.colors.onPrimary} />
                   ) : (
-                    <Text style={styles.acceptBtnText}>Accept</Text>
+                    <Text style={styles.acceptBtnText} numberOfLines={1} adjustsFontSizeToFit>{t("planner.accept")}</Text>
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -137,7 +149,7 @@ export default function GroupInvitationsScreen() {
                   disabled={actingId !== null}
                   activeOpacity={0.9}
                 >
-                  <Text style={styles.declineBtnText}>Decline</Text>
+                  <Text style={styles.declineBtnText} numberOfLines={1} adjustsFontSizeToFit>{t("planner.decline")}</Text>
                 </TouchableOpacity>
               </View>
             </View>

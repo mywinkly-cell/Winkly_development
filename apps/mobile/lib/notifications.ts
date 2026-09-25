@@ -4,6 +4,7 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
+import i18n from "i18next";
 import { supabase } from "@/lib/supabase";
 
 export type NotificationPermissionStatus = "undetermined" | "denied" | "granted" | "unavailable";
@@ -127,7 +128,7 @@ export async function ensureAndroidNotificationChannelAsync(): Promise<void> {
   const mod = await tryImportExpoNotifications();
   if (!mod || Platform.OS !== "android") return;
   await mod.setNotificationChannelAsync("default", {
-    name: "Default",
+    name: i18n.t("notifications.channelDefault"),
     importance: mod.AndroidImportance.MAX,
     vibrationPattern: [0, 250],
     lightColor: "#7C3AED",

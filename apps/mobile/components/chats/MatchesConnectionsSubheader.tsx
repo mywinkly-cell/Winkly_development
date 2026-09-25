@@ -30,6 +30,7 @@ import {
   sameLocality,
 } from "@/lib/location/countryDisplay";
 import { useTranslation } from "react-i18next";
+import i18n from "i18next";
 
 export type MatchConnectionItem = {
   id: string;
@@ -45,13 +46,7 @@ export type MatchConnectionItem = {
   main_photo_url?: string | null;
 };
 
-const BLOCK_REASONS = [
-  "Not interested anymore",
-  "Wrong person",
-  "Met elsewhere",
-  "Harassment or abuse",
-  "Other",
-] as const;
+const BLOCK_REASONS = ["notInterested", "wrongPerson", "metElsewhere", "harassment", "other"] as const;
 
 function getPhotoUrl(m: MatchConnectionItem): string | null {
   return (
@@ -68,7 +63,7 @@ function getDisplayName(m: MatchConnectionItem): string {
   if (m.display_name?.trim()) return m.display_name.trim();
   const fn = (m.first_name ?? "").trim();
   const ln = (m.last_name ?? "").trim();
-  return `${fn} ${ln}`.trim() || "Match";
+  return `${fn} ${ln}`.trim() || i18n.t("chat.matches.fallbackName");
 }
 
 function getLocationLine(
@@ -80,7 +75,7 @@ function getLocationLine(
   const country = (m.country ?? "").trim();
   const line = formatDefaultLocationDisplay(city, country || undefined, language);
   const mine = (myCity ?? "").trim();
-  if (mine && line && sameLocality(line, mine)) return "Same city";
+  if (mine && line && sameLocality(line, mine)) return i18n.t("common.sameCity");
   if (line) return line;
   if (city.includes(",")) return normalizeLocationDisplayString(city, language);
   if (city) return city;
@@ -120,8 +115,8 @@ export function MatchesConnectionsSubheader({
   myCity = null,
   chatHub: chatHubProp,
 }: MatchesConnectionsSubheaderProps) {
-  const { i18n } = useTranslation();
-  const appLanguage = i18n?.language ?? "en";
+  const { t, i18n: i18nInstance } = useTranslation();
+  const appLanguage = i18nInstance?.language ?? "en";
   const router = useRouter();
   const chatHub =
     chatHubProp ??
@@ -145,7 +140,7 @@ export function MatchesConnectionsSubheader({
         : Colors.business.primary;
 
   const label =
-    isRomance ? "Matches" : isFriends ? "Connections" : isBusiness ? "Connections" : "";
+    isRomance ? t("modes.matches") : isFriends || isBusiness ? t("modes.connections") : "";
 
   const showGroupOption = isFriends || isBusiness;
 
@@ -158,11 +153,11 @@ export function MatchesConnectionsSubheader({
   const handleAvatarPress = (item: MatchConnectionItem) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const name = getDisplayName(item);
-    const profileLabel = `See ${name}'s profile`;
+    const profileLabel = t("chat.seeProfile", { name });
 
     const options: { text: string; onPress?: () => void; style?: "cancel" | "default" }[] = [
       {
-        text: "Start chat",
+        text: t("chat.startChat"),
         onPress: async () => {
           try {
             const { data: userData } = await supabase.auth.getUser();
@@ -177,7 +172,7 @@ export function MatchesConnectionsSubheader({
               chatRoutes.conversation(chatHub, chatId) as Parameters<typeof router.push>[0]
             );
           } catch {
-            Alert.alert("Error", "Could not start chat.");
+            Alert.alert(t("common.error"), t("chat.subheader.startChatFailed"));
           }
         },
       },
@@ -186,24 +181,24 @@ export function MatchesConnectionsSubheader({
         onPress: () => goToProfile(item),
       },
       {
-        text: "Unmatch",
+        text: t("chat.unmatch"),
         onPress: () => confirmUnmatch(item),
       },
       {
-        text: "Block",
+        text: t("chat.block"),
         onPress: () => showBlockReasons(item),
       },
-      { text: "Cancel", style: "cancel" as const },
+      { text: t("common.cancel"), style: "cancel" as const },
     ];
 
     if (showGroupOption) {
       options.splice(2, 0, {
-        text: "Start group chat",
+        text: t("chat.startGroupChat"),
         onPress: () => router.push("/groups/create-group"),
       });
     }
 
-    Alert.alert(name, "Choose an action", options);
+    Alert.alert(name, t("chat.subheader.chooseAction"), options);
   };
 
   const confirmUnmatch = (item: MatchConnectionItem) => {
@@ -226,20 +221,20 @@ export function MatchesConnectionsSubheader({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onRefresh();
     } catch {
-      Alert.alert("Error", "Could not update. Please try again.");
+      Alert.alert(t("common.error"), t("chat.subheader.updateFailed"));
     }
   };
 
   const showBlockReasons = (item: MatchConnectionItem) => {
     Alert.alert(
-      "Block",
-      "Why are you blocking this person?",
+      t("chat.block"),
+      t("chat.subheader.blockWhy"),
       [
         ...BLOCK_REASONS.map((reason) => ({
-          text: reason,
+          text: t(`chat.subheader.blockReason.${reason}`),
           onPress: () => applyBlock(item),
         })),
-        { text: "Back", style: "cancel" },
+        { text: t("common.back"), style: "cancel" },
       ]
     );
   };
@@ -254,7 +249,7 @@ export function MatchesConnectionsSubheader({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onRefresh();
     } catch {
-      Alert.alert("Error", "Could not block. Please try again.");
+      Alert.alert(t("common.error"), t("chat.subheader.blockFailed"));
     }
   };
 
@@ -266,11 +261,11 @@ export function MatchesConnectionsSubheader({
       {loading ? (
         <View style={styles.loadingRow}>
           <ActivityIndicator size="small" color={accentColor} />
-          <Text style={styles.loadingText}>Loading…</Text>
+          <Text style={styles.loadingText}>{t("common.loading")}</Text>
         </View>
       ) : list.length === 0 ? (
         <Text style={[styles.emptyHint, { color: accentColor }]}>
-          {isRomance ? "No matches yet" : "No connections yet"}
+          {isRomance ? t("chat.subheader.noMatches") : t("chat.subheader.noConnections")}
         </Text>
       ) : (
         <ScrollView

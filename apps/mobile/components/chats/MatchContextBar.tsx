@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 import { Avatar } from "@/components/ui/Avatar";
 
@@ -20,11 +21,10 @@ export function MatchContextBar({
   sharedInterestCount,
   distanceLabel,
 }: Props) {
-  const parts = ["It's a match!"];
+  const { t } = useTranslation();
+  const parts = [t("chat.matchContext.itsAMatch")];
   if (sharedInterestCount > 0) {
-    parts.push(
-      `${sharedInterestCount} shared interest${sharedInterestCount === 1 ? "" : "s"}`
-    );
+    parts.push(t("chat.matchContext.sharedInterests", { count: sharedInterestCount }));
   }
   if (distanceLabel) parts.push(distanceLabel);
 

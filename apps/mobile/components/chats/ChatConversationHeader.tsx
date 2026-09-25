@@ -5,6 +5,7 @@
 import React from "react";
 import { View, Text, Pressable, Image, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
@@ -86,6 +87,7 @@ export function ChatConversationHeader({
   onPress,
   accessibilityLabel,
 }: ChatConversationHeaderProps) {
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const styles = createStyles(theme);
 
@@ -94,7 +96,7 @@ export function ChatConversationHeader({
       style={styles.container}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? `${displayName} details`}
+      accessibilityLabel={accessibilityLabel ?? t("chat.header.detailsA11y", { name: displayName })}
     >
       {isGroup ? (
         <GroupAvatarStack
