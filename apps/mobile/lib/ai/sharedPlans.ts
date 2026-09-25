@@ -11,6 +11,7 @@
 //
 // Requires migration 20260726120000_wishlist_places_and_shared_plans.sql.
 
+import i18n from "i18next";
 import { supabase } from "@/lib/supabase";
 import type { AppMode } from "@/types/database";
 
@@ -343,8 +344,8 @@ function authorLabel(row: {
   author_handle?: string | null;
 }): string {
   if (row.author_display === "handle" && row.author_handle) return `@${row.author_handle}`;
-  if (row.author_display === "first_name") return "A Winkly member";
-  return "Anonymous";
+  if (row.author_display === "first_name") return i18n.t("concierge.community.authorMember");
+  return i18n.t("concierge.community.authorAnonymous");
 }
 
 /**

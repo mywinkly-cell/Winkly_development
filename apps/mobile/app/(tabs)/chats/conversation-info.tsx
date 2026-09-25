@@ -12,6 +12,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
+import i18n from "i18next";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { Avatar } from "@/components/ui/Avatar";
 import { Card, Header, ListRow } from "@/components/ds";
@@ -33,10 +35,10 @@ import { chatRoutes, useModeHub } from "@/lib/navigation/modeHub";
 export const unstable_settings = { href: null };
 
 function roleLabel(role: string) {
-  if (role === "owner") return "Owner";
-  if (role === "admin") return "Administrator";
-  if (role === "moderator") return "Moderator";
-  return "Member";
+  if (role === "owner") return i18n.t("chat.role.owner");
+  if (role === "admin") return i18n.t("chat.role.admin");
+  if (role === "moderator") return i18n.t("chat.role.moderator");
+  return i18n.t("chat.role.member");
 }
 
 function memberInitials(member: ConversationMemberInfo) {
@@ -48,6 +50,7 @@ function memberInitials(member: ConversationMemberInfo) {
 }
 
 export default function ConversationInfoScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -68,20 +71,20 @@ export default function ConversationInfoScreen() {
       const data = await loadConversationDetails(convId);
       setDetails(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load conversation");
+      setError(e instanceof Error ? e.message : t("chat.info.loadFailed"));
     } finally {
       setLoading(false);
     }
-  }, [convId]);
+  }, [convId, t]);
 
   useEffect(() => {
     reload();
   }, [reload]);
 
   const displayName = useMemo(() => {
-    if (!details) return "Chat";
-    return details.groupName?.trim() || details.conversationName?.trim() || "Group chat";
-  }, [details]);
+    if (!details) return t("chat.title");
+    return details.groupName?.trim() || details.conversationName?.trim() || t("chat.groupChatTitle");
+  }, [details, t]);
 
   const ownerOrAdmin = useMemo(() => {
     if (!details) return null;
@@ -111,9 +114,9 @@ export default function ConversationInfoScreen() {
       setDetails({ ...details, muted: next });
       Haptics.selectionAsync();
     } catch {
-      Alert.alert("Could not update", "Mute setting could not be saved.");
+      Alert.alert(t("chat.couldNotUpdate"), t("chat.info.muteFailed"));
     }
-  }, [details]);
+  }, [details, t]);
 
   const handleToggleReadReceipts = useCallback(async () => {
     if (!details) return;
@@ -123,19 +126,19 @@ export default function ConversationInfoScreen() {
       setDetails({ ...details, readReceiptsOn: next });
       Haptics.selectionAsync();
     } catch {
-      Alert.alert("Could not update", "Read receipts setting could not be saved.");
+      Alert.alert(t("chat.couldNotUpdate"), t("chat.info.readReceiptsFailed"));
     }
-  }, [details]);
+  }, [details, t]);
 
   const handleLeave = useCallback(() => {
     if (!details) return;
     Alert.alert(
-      "Leave group",
-      `Leave "${displayName}"? You will stop receiving messages from this group.`,
+      t("chat.info.leaveGroup"),
+      t("chat.info.leaveConfirm", { name: displayName }),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Leave",
+          text: t("chat.info.leave"),
           style: "destructive",
           onPress: async () => {
             setLeaving(true);
@@ -143,7 +146,7 @@ export default function ConversationInfoScreen() {
               await leaveConversation(details.conversationId);
               router.replace(chatRoutes.index(chatHub) as Parameters<typeof router.replace>[0]);
             } catch {
-              Alert.alert("Could not leave", "Please try again.");
+              Alert.alert(t("chat.info.leaveFailed"), t("common.tryAgain"));
             } finally {
               setLeaving(false);
             }
@@ -151,7 +154,7 @@ export default function ConversationInfoScreen() {
         },
       ]
     );
-  }, [details, displayName, router, chatHub]);
+  }, [details, displayName, router, chatHub, t]);
 
   const handleEditGroup = useCallback(() => {
     if (!details?.groupId) return;
@@ -179,12 +182,12 @@ export default function ConversationInfoScreen() {
   return (
     <SafeScreenView style={styles.screen}>
       <Header
-        title="Group info"
+        title={t("chat.groupInfo")}
         onBack={() => router.back()}
         trailing={
           canEditGroup ? (
-            <Pressable onPress={handleEditGroup} style={styles.editBtn} accessibilityLabel="Edit group">
-              <Text style={styles.editText}>Edit</Text>
+            <Pressable onPress={handleEditGroup} style={styles.editBtn} accessibilityLabel={t("groups.editGroup")}>
+              <Text style={styles.editText}>{t("common.edit")}</Text>
             </Pressable>
           ) : undefined
         }
@@ -198,7 +201,7 @@ export default function ConversationInfoScreen() {
         <View style={styles.centered}>
           <Text style={styles.errorText}>{error}</Text>
           <Pressable onPress={reload} style={styles.retryBtn}>
-            <Text style={styles.retryText}>Retry</Text>
+            <Text style={styles.retryText}>{t("chat.retry")}</Text>
           </Pressable>
         </View>
       ) : details ? (
@@ -213,17 +216,19 @@ export default function ConversationInfoScreen() {
             {details.groupDescription?.trim() ? (
               <Text style={styles.heroDescription}>{details.groupDescription.trim()}</Text>
             ) : (
-              <Text style={styles.heroDescriptionMuted}>No description yet.</Text>
+              <Text style={styles.heroDescriptionMuted}>{t("chat.info.noDescription")}</Text>
             )}
             <Text style={styles.heroMeta}>
-              {details.mode} • {details.members.length}{" "}
-              {details.members.length === 1 ? "member" : "members"}
+              {t("chat.info.modeMembers", {
+                mode: details.mode ? t(`modes.${details.mode}`) : "",
+                count: details.members.length,
+              })}
             </Text>
           </Card>
 
           {ownerOrAdmin ? (
             <Card padding="md" style={styles.sectionCard}>
-              <Text style={styles.sectionLabel}>Owner / Administrator</Text>
+              <Text style={styles.sectionLabel}>{t("chat.info.ownerAdmin")}</Text>
               <ListRow
                 title={formatConversationMemberName(ownerOrAdmin, details.meId)}
                 subtitle={roleLabel(ownerOrAdmin.role)}
@@ -239,7 +244,7 @@ export default function ConversationInfoScreen() {
           ) : null}
 
           <Card padding="md" style={styles.sectionCard}>
-            <Text style={styles.sectionLabel}>Participants</Text>
+            <Text style={styles.sectionLabel}>{t("chat.info.participants")}</Text>
             {details.members.map((member) => (
               <ListRow
                 key={member.userId}
@@ -253,11 +258,11 @@ export default function ConversationInfoScreen() {
           </Card>
 
           <Card padding="md" style={styles.sectionCard}>
-            <Text style={styles.sectionLabel}>Chat settings</Text>
+            <Text style={styles.sectionLabel}>{t("chat.info.chatSettings")}</Text>
 
             <ListRow
-              title="Mute notifications"
-              subtitle="Stop push alerts for this chat"
+              title={t("chat.info.muteTitle")}
+              subtitle={t("chat.info.muteSub")}
               style={styles.settingRow}
               trailing={
                 <Switch
@@ -269,8 +274,8 @@ export default function ConversationInfoScreen() {
               }
             />
             <ListRow
-              title="Read receipts"
-              subtitle="Let others see when you have read messages"
+              title={t("chat.info.readReceiptsTitle")}
+              subtitle={t("chat.info.readReceiptsSub")}
               style={{ ...styles.settingRow, ...styles.settingRowBorder }}
               trailing={
                 <Switch
@@ -293,7 +298,7 @@ export default function ConversationInfoScreen() {
             ) : (
               <>
                 <Ionicons name="exit-outline" size={20} color={theme.colors.error} />
-                <Text style={styles.leaveText}>Leave group</Text>
+                <Text style={styles.leaveText}>{t("chat.info.leaveGroup")}</Text>
               </>
             )}
           </Pressable>

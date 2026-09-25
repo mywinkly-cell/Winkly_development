@@ -5,6 +5,7 @@
 
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography } from "@/constants/tokens";
@@ -32,6 +33,7 @@ export function StarRating({
   showValue = false,
   label,
 }: StarRatingProps) {
+  const { t } = useTranslation();
   const readOnly = !onChange;
   const rounded = Math.round(value);
 
@@ -49,8 +51,10 @@ export function StarRating({
         accessibilityRole={readOnly ? "text" : "adjustable"}
         accessibilityLabel={
           readOnly
-            ? `Rated ${value.toFixed(1)} out of 5${count ? `, ${count} ratings` : ""}`
-            : `Rate this plan, currently ${rounded} of 5 stars`
+            ? count
+              ? t("planner.stars.ratedWithCount", { value: value.toFixed(1), count })
+              : t("planner.stars.rated", { value: value.toFixed(1) })
+            : t("planner.stars.rateA11y", { value: rounded })
         }
         accessibilityValue={readOnly ? undefined : { min: 1, max: 5, now: rounded }}
       >
@@ -73,7 +77,7 @@ export function StarRating({
               hitSlop={6}
               style={styles.star}
               accessibilityRole="button"
-              accessibilityLabel={`${n} star${n > 1 ? "s" : ""}`}
+              accessibilityLabel={t("planner.stars.star", { count: n })}
               accessibilityState={{ selected: filled }}
             >
               {star}

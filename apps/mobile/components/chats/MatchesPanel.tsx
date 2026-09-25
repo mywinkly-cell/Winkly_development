@@ -15,6 +15,8 @@ import {
   StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
+import i18n from "i18next";
 import { appModeToHub, chatRoutes } from "@/lib/navigation/modeHub";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -34,7 +36,7 @@ export type MatchItem = {
 function formatName(m: MatchItem): string {
   const fn = (m.first_name ?? "").trim();
   const ln = (m.last_name ?? "").trim();
-  return `${fn} ${ln}`.trim() || "Match";
+  return `${fn} ${ln}`.trim() || i18n.t("chat.matches.fallbackName");
 }
 
 type MatchesPanelProps = {
@@ -52,6 +54,7 @@ export function MatchesPanel({
   onChatStart,
   onViewAll,
 }: MatchesPanelProps) {
+  const { t } = useTranslation();
   const router = useRouter();
 
   const handleAvatarPress = async (match: MatchItem) => {
@@ -83,10 +86,10 @@ export function MatchesPanel({
 
   const label =
     mode === "romance"
-      ? "Your matches"
+      ? t("chat.matches.romanceTitle")
       : mode === "friends"
-        ? "Friends to chat with"
-        : "Connections";
+        ? t("chat.matches.friendsTitle")
+        : t("chat.matches.businessTitle");
 
   if (loading) {
     return (
@@ -94,7 +97,7 @@ export function MatchesPanel({
         <Text style={[styles.label, { color: accentColor }]}>{label}</Text>
         <View style={styles.loadingRow}>
           <ActivityIndicator size="small" color={accentColor} />
-          <Text style={styles.loadingText}>Loading matches…</Text>
+          <Text style={styles.loadingText}>{t("chat.matches.loading")}</Text>
         </View>
       </View>
     );
@@ -114,7 +117,7 @@ export function MatchesPanel({
             }}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={[styles.viewAll, { color: accentColor }]}>View all</Text>
+            <Text style={[styles.viewAll, { color: accentColor }]}>{t("chat.matches.viewAll")}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -160,8 +163,8 @@ export function MatchesPanel({
               </Text>
               <View style={styles.chatHint}>
                 <Ionicons name="chatbubble" size={12} color={accentColor} />
-                <Text style={[styles.chatHintText, { color: accentColor }]}>
-                  Chat
+                <Text style={[styles.chatHintText, { color: accentColor }]} numberOfLines={1}>
+                  {t("chat.matches.chatHint")}
                 </Text>
               </View>
             </TouchableOpacity>

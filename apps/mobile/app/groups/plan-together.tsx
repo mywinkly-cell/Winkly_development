@@ -21,6 +21,7 @@ import {
   Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { getPartnersForConcierge, type ConciergePartner } from "@/lib/ai/conciergePartners";
 import {
@@ -29,15 +30,14 @@ import {
   type PlanTogetherMode,
 } from "@/lib/groups/groupPlanTogether";
 
-const MODES: { key: PlanTogetherMode; label: string }[] = [
-  { key: "friends", label: "Friends" },
-  { key: "business", label: "Business" },
-];
+/** Plan modes; labels come from `modes.<key>`. */
+const MODES: PlanTogetherMode[] = ["friends", "business"];
 
 /** Max OTHER people (group includes the requester). */
 const MAX_OTHERS = MAX_PLAN_TOGETHER_GROUP_SIZE - 1;
 
 export default function PlanTogether() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -82,7 +82,7 @@ export default function PlanTogether() {
         next.delete(id);
       } else {
         if (next.size >= MAX_OTHERS) {
-          Alert.alert("That's plenty", `You can plan with up to ${MAX_OTHERS} people at once.`);
+          Alert.alert(t("groups.planTogether.plentyTitle"), t("groups.planTogether.plentyBody", { count: MAX_OTHERS }));
           return prev;
         }
         next.add(id);
@@ -103,7 +103,7 @@ export default function PlanTogether() {
       // so Back returns to Groups, not this picker.
       router.replace({ pathname: "/chats/[conversationId]", params: { conversationId } });
     } catch (e) {
-      Alert.alert("Couldn't draft a plan", (e as Error)?.message ?? "Please try again.");
+      Alert.alert(t("groups.planTogether.draftFailed"), (e as Error)?.message ?? t("common.tryAgain"));
       setGenerating(false);
     }
   };
@@ -113,44 +113,45 @@ export default function PlanTogether() {
   return (
     <View style={styles.screen}>
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel={t("common.back")}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Plan together</Text>
+        <Text style={styles.headerTitle}>{t("chat.view.planTogether")}</Text>
         <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
-          <Text style={styles.title}>Plan something for us</Text>
+          <Text style={styles.title}>{t("groups.index.planTitle")}</Text>
           <Text style={styles.subtitle}>
-            Pick a few people and Winkly drafts plan options for the group — no need to set up a
-            chat first. Everyone can vote, and you lock in the favorite.
+            {t("groups.planTogether.subtitle")}
           </Text>
 
           <View style={styles.modeRow}>
             {MODES.map((m) => (
               <TouchableOpacity
-                key={m.key}
-                onPress={() => setMode(m.key)}
-                style={[styles.modeChip, mode === m.key && styles.modeChipActive]}
+                key={m}
+                onPress={() => setMode(m)}
+                style={[styles.modeChip, mode === m && styles.modeChipActive]}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.modeChipText, mode === m.key && styles.modeChipTextActive]}>{m.label}</Text>
+                <Text style={[styles.modeChipText, mode === m && styles.modeChipTextActive]}>{t(`modes.${m}`)}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
           <Text style={styles.label}>
-            {`Who's in?${count > 0 ? ` · ${count}/${MAX_OTHERS}` : ""}`}
+            {count > 0
+              ? t("groups.planTogether.whoIsInCount", { count, max: MAX_OTHERS })
+              : t("groups.planTogether.whoIsIn")}
           </Text>
-          <Text style={styles.hint}>Pick 1–{MAX_OTHERS} people to plan with.</Text>
+          <Text style={styles.hint}>{t("groups.planTogether.pickHint", { max: MAX_OTHERS })}</Text>
 
           {loadingPartners ? (
             <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginVertical: 16 }} />
           ) : partners.length === 0 ? (
             <Text style={styles.emptyHint}>
-              No connections yet in this mode. Connect with people first, then come back to plan together.
+              {t("groups.planTogether.empty")}
             </Text>
           ) : (
             <View style={styles.partnerList}>
@@ -192,12 +193,12 @@ export default function PlanTogether() {
             <ActivityIndicator size="small" color={theme.colors.onPrimary} />
           ) : (
             <Text style={styles.primaryText}>
-              {count > 1 ? `Get plan options for ${count + 1} of us` : "Get plan options"}
+              {count > 1 ? t("groups.planTogether.getOptionsFor", { count: count + 1 }) : t("groups.planTogether.getOptions")}
             </Text>
           )}
         </TouchableOpacity>
         {generating ? (
-          <Text style={styles.generatingHint}>Drafting plans everyone will like…</Text>
+          <Text style={styles.generatingHint}>{t("groups.planTogether.generating")}</Text>
         ) : null}
       </View>
     </View>

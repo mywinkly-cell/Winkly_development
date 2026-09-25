@@ -24,6 +24,8 @@ import {
 import { Avatar } from "@/components/ui/Avatar";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
+import i18n from "i18next";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import { ChatAttachmentSheet } from "@/components/chats/ChatAttachmentSheet";
 import { ChatComposer } from "@/components/chats/ChatComposer";
@@ -95,6 +97,7 @@ import {
 import { recordPairBehaviorSignal } from "@/lib/matching/behaviorSignals";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
+import { formatAppDateTime, getAppLocaleTag } from "@/lib/i18n/appLocale";
 import { chatRoutes, useModeHub } from "@/lib/navigation/modeHub";
 import { openPeerProfile } from "@/lib/chats/peerProfileNavigation";
 import {
@@ -143,7 +146,7 @@ type Props = {
   matchBridge?: string;
 };
 
-function formatName(u?: UserMini | null, fallback = "Chat") {
+function formatName(u?: UserMini | null, fallback = i18n.t("chat.title")) {
   if (!u) return fallback;
   const fn = (u.first_name ?? "").trim();
   const ln = (u.last_name ?? "").trim();
@@ -185,13 +188,8 @@ function inferOptimisticType(attachments: MessageAttachment[]): MessageType {
   return "file";
 }
 
-const REPORT_REASONS: { key: string; label: string }[] = [
-  { key: "spam", label: "Spam" },
-  { key: "harassment", label: "Harassment" },
-  { key: "inappropriate", label: "Inappropriate content" },
-  { key: "fake", label: "Fake profile" },
-  { key: "other", label: "Other" },
-];
+/** Report reason keys; labels are `chat.report.reason.<key>`. */
+const REPORT_REASONS = ["spam", "harassment", "inappropriate", "fake", "other"] as const;
 
 export default function ChatView({
   conversationId,
@@ -200,6 +198,7 @@ export default function ChatView({
   partnerPhotoUrl: partnerPhotoUrlParam,
   matchBridge: matchBridgeProp,
 }: Props) {
+  const { t } = useTranslation();
   const router = useRouter();
   const chatHub = useModeHub();
   const { matchBridge: matchBridgeQuery } = useLocalSearchParams<{ matchBridge?: string }>();
@@ -301,8 +300,8 @@ export default function ChatView({
 
   const isGroup = conversation?.type === "group";
   const peerDisplayName = isGroup
-    ? (conversation?.name?.trim() || "Group chat")
-    : formatName(otherUser, partnerNameParam?.trim() || "Chat");
+    ? (conversation?.name?.trim() || t("chat.groupChatTitle"))
+    : formatName(otherUser, partnerNameParam?.trim() || t("chat.title"));
   const peerAvatarUri = peerPhotoUrl(otherUser, conversation?.mode, partnerPhotoUrlParam);
   const groupParticipantAvatars = useMemo(() => {
     if (!isGroup) return [];
@@ -316,11 +315,11 @@ export default function ChatView({
   }, [isGroup, participants, meId, conversation?.mode]);
   const headerSubtitle =
     typingUserIds.size > 0
-      ? "typing…"
+      ? t("chat.view.typing")
       : conversation
         ? isGroup
-          ? `${conversation.mode} • group • ${participants.length} members`
-          : `${conversation.mode} • direct`
+          ? t("chat.view.subtitleGroup", { mode: t(`modes.${conversation.mode}`), count: participants.length })
+          : t("chat.view.subtitleDirect", { mode: t(`modes.${conversation.mode}`) })
         : "";
   const isRomance = conversation?.mode === "romance";
   const accentColor = isRomance ? theme.modeAccent("romance").primary : theme.colors.primary;
@@ -500,9 +499,9 @@ export default function ChatView({
   }, [isRomanceDm, meId, otherUser?.id, conversation?.dm_source]);
 
   const onPickDateIdea = useCallback((idea: DateIdea) => {
-    setInviteInitialActivity(idea.activity);
+    setInviteInitialActivity(t(`chat.dateIdeas.activity.${idea.key}`));
     setShowInviteModal(true);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     (async () => {
@@ -884,20 +883,20 @@ export default function ChatView({
           }
         }
         const priorAsSwap: RomanceFirstDateOption = {
-          title: p.title ?? "Date",
+          title: p.title ?? t("chat.cta.dateFallback"),
           place: p.place ?? null,
           location: p.location ?? null,
           starts_at: p.starts_at ?? new Date().toISOString(),
           ends_at: p.ends_at ?? null,
-          activity: p.activity ?? "Date",
+          activity: p.activity ?? t("chat.cta.dateFallback"),
           why: p.why ?? "",
         };
         await postFirstDateProposal([alt, priorAsSwap]);
       } catch (e) {
-        Alert.alert("Swap", e instanceof Error ? e.message : "Could not swap — try again.");
+        Alert.alert(t("chat.cta.swap"), e instanceof Error ? e.message : t("chat.cta.swapFailed"));
       }
     },
-    [meId, otherUser, convId, invitationStatusMap, postFirstDateProposal]
+    [meId, otherUser, convId, invitationStatusMap, postFirstDateProposal, t]
   );
 
   // Combine the live vibe snapshot with the city note for the prompt.
@@ -953,11 +952,11 @@ export default function ChatView({
       setStrategicTopics(topics);
     } catch (e) {
       setStrategicTopics([]);
-      Alert.alert("Winkly AI", e instanceof Error ? e.message : "Could not load suggestions");
+      Alert.alert(t("common.winklyAi"), e instanceof Error ? e.message : t("chat.host.loadFailed"));
     } finally {
       setStrategicLoading(false);
     }
-  }, [meId, conversation, participants, conversationMode, convId, resolvePlanningCity, composedGroupVibe]);
+  }, [meId, conversation, participants, conversationMode, convId, resolvePlanningCity, composedGroupVibe, t]);
 
   const loadStructuredPlansForTopic = useCallback(async (topic: StrategicHostTopic) => {
     if (!meId || !conversation) return;
@@ -978,11 +977,11 @@ export default function ChatView({
       });
       setStrategicPlanOptions(plans.slice(0, 2));
     } catch (e) {
-      Alert.alert("Winkly AI", e instanceof Error ? e.message : "Could not draft a plan");
+      Alert.alert(t("common.winklyAi"), e instanceof Error ? e.message : t("chat.host.draftFailed"));
     } finally {
       setStrategicLoading(false);
     }
-  }, [meId, conversation, conversationMode, participants, convId, resolvePlanningCity, composedGroupVibe]);
+  }, [meId, conversation, conversationMode, participants, convId, resolvePlanningCity, composedGroupVibe, t]);
 
   const draftPendingPlanFromStructuredOption = useCallback(async (opt: PlannerThemePlanOption) => {
     if (!meId || !conversation) return;
@@ -1014,18 +1013,18 @@ export default function ChatView({
       setStrategicSelectedTopic(null);
       setStrategicPlanOptions(null);
     } catch (e) {
-      Alert.alert("Winkly AI", e instanceof Error ? e.message : "Could not draft a pending plan");
+      Alert.alert(t("common.winklyAi"), e instanceof Error ? e.message : t("chat.host.draftPendingFailed"));
     } finally {
       setStrategicLoading(false);
     }
-  }, [meId, conversation, conversationMode, participants, convId, mergeIncomingMessage, resolvePlanningCity, composedGroupVibe]);
+  }, [meId, conversation, conversationMode, participants, convId, mergeIncomingMessage, resolvePlanningCity, composedGroupVibe, t]);
 
   const openConciergeStaleNudge = useCallback(() => {
     if (!otherUser) return;
     const hint = staleNudgeHint;
     const prefill = hint
-      ? `We have not messaged in a while. We share an interest in ${hint}. Suggest a quiet place for a short sync — respect dietary and noise preferences for both of us. Include OpenTable-style discovery, not a confirmed booking.`
-      : "We have not messaged in 48+ hours. Suggest a quiet café or coworking spot for a short sync; respect both users' preferences; use calendar-friendly times.";
+      ? t("chat.nudge.prefillWithHint", { hint })
+      : t("chat.nudge.prefill");
     router.push({
       pathname: "/concierge",
       params: {
@@ -1037,7 +1036,7 @@ export default function ChatView({
       },
     });
     setStaleNudgeVisible(false);
-  }, [otherUser, conversationMode, router, staleNudgeHint]);
+  }, [otherUser, conversationMode, router, staleNudgeHint, t]);
 
   const onRunMatchAgent = useCallback(async () => {
     if (!meId || !otherUser) return;
@@ -1051,16 +1050,16 @@ export default function ChatView({
         mode: conversationMode,
       });
       if (!res.ok) {
-        Alert.alert("Match Agent", res.error);
+        Alert.alert(t("chat.matchAgent.title"), res.error);
         return;
       }
       mergeIncomingMessage(res.inserted);
     } catch (e) {
-      Alert.alert("Match Agent", e instanceof Error ? e.message : "Try again");
+      Alert.alert(t("chat.matchAgent.title"), e instanceof Error ? e.message : t("chat.tryAgain"));
     } finally {
       setMatchAgentLoading(false);
     }
-  }, [meId, otherUser, convId, conversationMode, mergeIncomingMessage]);
+  }, [meId, otherUser, convId, conversationMode, mergeIncomingMessage, t]);
 
   const onMatchAgentApprove = useCallback(async (proposalId: string) => {
     const r = await recordMatchAgentApproval(proposalId);
@@ -1079,8 +1078,8 @@ export default function ChatView({
       setMatchAgentApprovalStage((prev) => ({ ...prev, [proposalId]: "waiting_other" }));
       return;
     }
-    Alert.alert("Could not update", r.error);
-  }, []);
+    Alert.alert(t("chat.couldNotUpdate"), r.error);
+  }, [t]);
 
   useEffect(() => {
     if (!isDm || !meId || !otherUser || !convId) return;
@@ -1257,7 +1256,7 @@ export default function ChatView({
         void recordDmFirstOutreachIfNeeded(hadMineBeforeSend);
       } catch (e: unknown) {
         markOptimisticFailed(clientId);
-        setError(e instanceof Error ? e.message : "Failed to send");
+        setError(e instanceof Error ? e.message : t("chat.view.sendFailed"));
       } finally {
         setSending(false);
       }
@@ -1273,6 +1272,7 @@ export default function ChatView({
       markOptimisticFailed,
       messages,
       recordDmFirstOutreachIfNeeded,
+      t,
     ]
   );
 
@@ -1300,10 +1300,10 @@ export default function ChatView({
         mergeIncomingMessage(inserted);
       } catch (e: unknown) {
         markOptimisticFailed(clientId);
-        setError(e instanceof Error ? e.message : "Failed to send");
+        setError(e instanceof Error ? e.message : t("chat.view.sendFailed"));
       }
     },
-    [convId, meId, addOptimisticMessage, removeOptimisticMessage, markOptimisticFailed, mergeIncomingMessage]
+    [convId, meId, addOptimisticMessage, removeOptimisticMessage, markOptimisticFailed, mergeIncomingMessage, t]
   );
 
   const onSendText = useCallback(() => {
@@ -1328,7 +1328,7 @@ export default function ChatView({
       addOptimisticMessage({
         clientId,
         senderId: meId,
-        content: "Voice message",
+        content: t("chat.voiceMessage"),
         messageType: "audio",
         attachments: [{ type: "audio", url: uri, name: String(durationMs) }],
         replyToId,
@@ -1348,7 +1348,7 @@ export default function ChatView({
         void recordDmFirstOutreachIfNeeded(hadMineBeforeSend);
       } catch (e: unknown) {
         markOptimisticFailed(clientId);
-        setError(e instanceof Error ? e.message : "Voice send failed");
+        setError(e instanceof Error ? e.message : t("chat.view.voiceSendFailed"));
       }
     },
     [
@@ -1362,6 +1362,7 @@ export default function ChatView({
       removeOptimisticMessage,
       markOptimisticFailed,
       recordDmFirstOutreachIfNeeded,
+      t,
     ]
   );
 
@@ -1401,50 +1402,50 @@ export default function ChatView({
       setMuted(!muted);
       setShowMenu(false);
     } catch {
-      setError("Could not update mute");
+      setError(t("chat.view.muteFailed"));
     }
-  }, [convId, muted]);
+  }, [convId, muted, t]);
 
   const handleBlock = useCallback(() => {
     if (!otherUser) return;
-    Alert.alert("Block user", `Block ${formatName(otherUser)}? You won't see their messages.`, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("chat.view.blockUser"), t("chat.view.blockConfirm", { name: formatName(otherUser) }), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Block",
+        text: t("chat.block"),
         style: "destructive",
         onPress: async () => {
           try {
             await blockUser(otherUser.id);
             backToModeChats();
           } catch {
-            setError("Could not block");
+            setError(t("chat.view.blockFailed"));
           }
         },
       },
     ]);
     setShowMenu(false);
-  }, [otherUser, backToModeChats]);
+  }, [otherUser, backToModeChats, t]);
 
   const handleReportMessage = useCallback(
     (messageId: string) => {
-      Alert.alert("Report message", "Select a reason:", [
-        ...REPORT_REASONS.map((r) => ({
-          text: r.label,
+      Alert.alert(t("chat.report.title"), t("chat.report.selectReason"), [
+        ...REPORT_REASONS.map((reason) => ({
+          text: t(`chat.report.reason.${reason}`),
           onPress: async () => {
             try {
-              await reportMessage(messageId, r.key, "User reported");
+              await reportMessage(messageId, reason, "User reported");
               refetch();
               showReportReceivedNotice("Report: message");
             } catch {
-              setError("Could not report");
+              setError(t("chat.report.failed"));
             }
           },
         })),
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
       ]);
       setShowMenu(false);
     },
-    [refetch]
+    [refetch, t]
   );
 
   const onSendIcebreaker = useCallback(async () => {
@@ -1460,11 +1461,11 @@ export default function ChatView({
       mergeIncomingMessage(inserted);
       void recordDmFirstOutreachIfNeeded(hadMineBeforeSend);
     } catch {
-      setError("Could not send icebreaker");
+      setError(t("chat.view.icebreakerFailed"));
     } finally {
       setSending(false);
     }
-  }, [convId, meId, messages, mergeIncomingMessage, recordDmFirstOutreachIfNeeded]);
+  }, [convId, meId, messages, mergeIncomingMessage, recordDmFirstOutreachIfNeeded, t]);
 
   const onVideoCall = useCallback(async () => {
     if (!convId) return;
@@ -1473,11 +1474,11 @@ export default function ChatView({
       const session = await startVideoCallForConversation(convId);
       await openVideoCallRoom(session);
     } catch (e) {
-      Alert.alert("Video call", e instanceof Error ? e.message : "Could not start call");
+      Alert.alert(t("chat.view.videoCall"), e instanceof Error ? e.message : t("chat.view.videoCallFailed"));
     } finally {
       setVideoCallLoading(false);
     }
-  }, [convId]);
+  }, [convId, t]);
 
   const onConfirmMatchBridge = useCallback(
     async (p: {
@@ -1490,19 +1491,21 @@ export default function ChatView({
     }) => {
       if (!meId || !otherUser || !convId) return;
       if (!p.starts_at || typeof p.starts_at !== "string") {
-        Alert.alert("Missing time", "This suggestion could not be confirmed. Try inviting from the menu instead.");
+        Alert.alert(t("chat.bridge.missingTimeTitle"), t("chat.bridge.missingTimeBody"));
         return;
       }
       try {
         const inviteTitle = p.place?.trim()
-          ? `${p.activity_theme === "coffee" ? "Coffee" : "Date"} at ${p.place.trim()}`
+          ? p.activity_theme === "coffee"
+            ? t("chat.bridge.coffeeAt", { place: p.place.trim() })
+            : t("chat.bridge.dateAt", { place: p.place.trim() })
           : p.title;
         const { planner_item_id, planner_invitation_id } = await createPlannerInvite(meId, otherUser.id, convId, {
           title: inviteTitle,
           source_mode: "romance",
           starts_at: p.starts_at,
           ends_at: p.ends_at ?? undefined,
-          activity: p.activity_theme ?? "Date",
+          activity: p.activity_theme ?? t("chat.cta.dateFallback"),
           location: p.location || undefined,
           place: p.place || undefined,
         });
@@ -1511,7 +1514,7 @@ export default function ChatView({
           planner_item_id,
           planner_invitation_id,
           title: inviteTitle,
-          activity: p.activity_theme ?? "Date",
+          activity: p.activity_theme ?? t("chat.cta.dateFallback"),
           location: p.location,
           place: p.place,
           starts_at: p.starts_at,
@@ -1522,10 +1525,10 @@ export default function ChatView({
         mergeIncomingMessage(inserted);
         setInvitationStatusMap((prev) => ({ ...prev, [planner_invitation_id]: "pending" }));
       } catch (e) {
-        Alert.alert("Could not create invite", e instanceof Error ? e.message : "Try again");
+        Alert.alert(t("chat.bridge.createInviteFailed"), e instanceof Error ? e.message : t("chat.tryAgain"));
       }
     },
-    [meId, otherUser, convId, mergeIncomingMessage]
+    [meId, otherUser, convId, mergeIncomingMessage, t]
   );
 
   const renderMessage = useCallback(
@@ -1578,7 +1581,7 @@ export default function ChatView({
               }}
             >
               <Text style={{ fontSize: 13, color: theme.colors.textSecondary, fontStyle: "italic" }}>
-                You deleted this message
+                {t("chat.view.youDeleted")}
               </Text>
             </View>
           ) : deletedForEveryone ? (
@@ -1591,7 +1594,7 @@ export default function ChatView({
               }}
             >
               <Text style={{ fontSize: 13, color: theme.colors.textSecondary, fontStyle: "italic" }}>
-                This message was deleted
+                {t("chat.view.deletedForEveryone")}
               </Text>
             </View>
           ) : (
@@ -1614,7 +1617,7 @@ export default function ChatView({
                       >
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
                           <SparklesIcon size={16} color={accent} />
-                          <Text style={{ fontSize: 12, fontWeight: "800", color: accent }}>AI Bridge</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "800", color: accent }}>{t("chat.bridge.label")}</Text>
                         </View>
                         <Text style={{ fontSize: 15, lineHeight: 22, marginBottom: 8 }}>{p.bridge_message}</Text>
                         {p.disclaimer ? (
@@ -1623,7 +1626,7 @@ export default function ChatView({
                         <Pressable
                           onPress={() => {
                             onConfirmMatchBridge({
-                              title: typeof p.title === "string" ? p.title : "Date",
+                              title: typeof p.title === "string" ? p.title : t("chat.cta.dateFallback"),
                               place: typeof p.place === "string" ? p.place : null,
                               location: typeof p.location === "string" ? p.location : null,
                               starts_at: p.starts_at,
@@ -1638,7 +1641,7 @@ export default function ChatView({
                             borderRadius: 10,
                           }}
                         >
-                          <Text style={{ fontSize: 14, fontWeight: "700", color: "#FFFFFF" }}>Tap to confirm</Text>
+                          <Text style={{ fontSize: 14, fontWeight: "700", color: "#FFFFFF", textAlign: "center" }}>{t("chat.bridge.tapToConfirm")}</Text>
                         </Pressable>
                       </View>
                     );
@@ -1658,7 +1661,7 @@ export default function ChatView({
                         <Text style={{ fontSize: 15, lineHeight: 22, color: theme.colors.textPrimary }}>
                           {typeof p.body === "string"
                             ? p.body
-                            : "Unfortunately, they declined your chat invite."}
+                            : t("chat.cta.inviteDeclined")}
                         </Text>
                       </View>
                     );
@@ -1698,7 +1701,7 @@ export default function ChatView({
                       >
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
                           <SparklesIcon size={16} color={accentMa} />
-                          <Text style={{ fontSize: 12, fontWeight: "800", color: accentMa }}>Match Agent</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "800", color: accentMa }}>{t("chat.matchAgent.title")}</Text>
                         </View>
                         <Text style={{ fontSize: 15, lineHeight: 22, marginBottom: 8 }}>{pma.agent_message}</Text>
                         {venue ? (
@@ -1717,12 +1720,12 @@ export default function ChatView({
                         ) : null}
                         {proposalId && stage === "confirmed" ? (
                           <Text style={{ fontSize: 13, fontWeight: "600", color: theme.colors.success }}>
-                            Both confirmed — plan saved in Winkly.
+                            {t("chat.matchAgent.bothConfirmed")}
                           </Text>
                         ) : null}
                         {proposalId && stage === "waiting_other" ? (
                           <Text style={{ fontSize: 13, color: theme.colors.textSecondary, textAlign: "center" }}>
-                            Waiting for the other person to confirm.
+                            {t("chat.matchAgent.waitingOther")}
                           </Text>
                         ) : null}
                         {proposalId && !stage ? (
@@ -1735,12 +1738,12 @@ export default function ChatView({
                               borderRadius: 10,
                             }}
                           >
-                            <Text style={{ fontSize: 14, fontWeight: "700", color: "#FFFFFF" }}>I&apos;m in</Text>
+                            <Text style={{ fontSize: 14, fontWeight: "700", color: "#FFFFFF", textAlign: "center" }}>{t("chat.matchAgent.imIn")}</Text>
                           </Pressable>
                         ) : null}
                         {!proposalId ? (
                           <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 4 }}>
-                            Draft only — run the flow again after migration if proposals are not saving.
+                            {t("chat.matchAgent.draftOnly")}
                           </Text>
                         ) : null}
                       </View>
@@ -1763,13 +1766,7 @@ export default function ChatView({
                     }
                     const dateStr =
                       typeof p.date_time === "string" && p.date_time
-                        ? new Date(p.date_time).toLocaleString(undefined, {
-                            weekday: "short",
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
+                        ? formatAppDateTime(new Date(p.date_time))
                         : "";
                     const loc = p.location_details?.name
                       ? String(p.location_details.name)
@@ -1788,10 +1785,10 @@ export default function ChatView({
                         }}
                       >
                         <Text style={{ fontSize: 12, fontWeight: "800", color: theme.colors.primary, marginBottom: 6 }}>
-                          Winkly plan (needs confirmation)
+                          {t("chat.pendingPlan.label")}
                         </Text>
                         <Text style={{ fontWeight: "700", fontSize: 15, marginBottom: 4 }}>
-                          {String(p.topic ?? "Plan")}
+                          {String(p.topic ?? t("groups.consensus.planFallback"))}
                         </Text>
                         {dateStr ? <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginBottom: 2 }}>{dateStr}</Text> : null}
                         {loc ? <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginBottom: 10 }}>{loc}</Text> : null}
@@ -1809,7 +1806,7 @@ export default function ChatView({
                                 })
                                 .catch((e) => {
                                   setPendingPlanStatusMap((prev) => ({ ...prev, [pendingPlanId]: "error" }));
-                                  Alert.alert("Couldn't confirm", (e as Error)?.message ?? "Please try again.");
+                                  Alert.alert(t("groups.consensus.confirmFailed"), (e as Error)?.message ?? t("common.tryAgain"));
                                 });
                             }}
                             style={{
@@ -1821,18 +1818,18 @@ export default function ChatView({
                             }}
                           >
                             <Text style={{ fontSize: 14, fontWeight: "700", color: "#FFFFFF" }}>
-                              {status === "confirming" ? "Confirming..." : "Confirm"}
+                              {status === "confirming" ? t("groups.consensus.confirming") : t("chat.pendingPlan.confirm")}
                             </Text>
                           </Pressable>
                         ) : null}
                         {pendingPlanId && imInvitee && status === "waiting_other" ? (
                           <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 8, textAlign: "center" }}>
-                            Confirmed — waiting for the other person.
+                            {t("chat.pendingPlan.waitingOther")}
                           </Text>
                         ) : null}
                         {pendingPlanId && status === "confirmed" ? (
                           <Text style={{ fontSize: 12, color: theme.colors.success, marginTop: 8, textAlign: "center" }}>
-                            Both confirmed — saved in Planner.
+                            {t("chat.pendingPlan.bothConfirmed")}
                           </Text>
                         ) : null}
                       </View>
@@ -1848,13 +1845,7 @@ export default function ChatView({
                     const whyLine =
                       typeof p.why === "string" && p.why.trim() ? p.why.trim() : resolveFitReason(p);
                     const dateStr = p.starts_at
-                      ? new Date(p.starts_at).toLocaleString(undefined, {
-                          weekday: "short",
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
+                      ? formatAppDateTime(new Date(p.starts_at))
                       : "";
                     const locationLine =
                       [p.place, p.location ? fmtLocationLine(String(p.location)) : ""].filter(Boolean).join(" • ") || null;
@@ -1886,7 +1877,7 @@ export default function ChatView({
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
                             <SparklesIcon size={14} color={accentColor} />
                             <Text style={{ fontSize: 11, fontWeight: "800", color: accentColor }}>
-                              Your ready date
+                              {t("chat.cta.readyDate")}
                             </Text>
                           </View>
                         ) : null}
@@ -1906,13 +1897,13 @@ export default function ChatView({
                               onPress={() => onSwapProposal(p)}
                               style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: theme.colors.backgroundMuted, borderRadius: 10 }}
                             >
-                              <Text style={{ fontSize: 13, fontWeight: "600" }}>Swap</Text>
+                              <Text style={{ fontSize: 13, fontWeight: "600", textAlign: "center" }}>{t("chat.cta.swap")}</Text>
                             </Pressable>
                             <Pressable
                               onPress={acceptInvite}
                               style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: accentColor, borderRadius: 10 }}
                             >
-                              <Text style={{ fontSize: 13, fontWeight: "600", color: "#FFFFFF" }}>Accept</Text>
+                              <Text style={{ fontSize: 13, fontWeight: "600", color: "#FFFFFF", textAlign: "center" }}>{t("planner.accept")}</Text>
                             </Pressable>
                           </View>
                         )}
@@ -1927,7 +1918,7 @@ export default function ChatView({
                               }}
                               style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: theme.colors.backgroundMuted, borderRadius: 10 }}
                             >
-                              <Text style={{ fontSize: 13, fontWeight: "600" }}>Decline</Text>
+                              <Text style={{ fontSize: 13, fontWeight: "600", textAlign: "center" }}>{t("planner.decline")}</Text>
                             </Pressable>
                             <Pressable
                               onPress={() => {
@@ -1938,29 +1929,29 @@ export default function ChatView({
                               }}
                               style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: theme.colors.backgroundMuted, borderRadius: 10 }}
                             >
-                              <Text style={{ fontSize: 13, fontWeight: "600" }}>Reschedule</Text>
+                              <Text style={{ fontSize: 13, fontWeight: "600", textAlign: "center" }}>{t("chat.cta.reschedule")}</Text>
                             </Pressable>
                             <Pressable
                               onPress={acceptInvite}
                               style={{ flex: 1, paddingVertical: 8, alignItems: "center", backgroundColor: accentColor, borderRadius: 10 }}
                             >
-                              <Text style={{ fontSize: 13, fontWeight: "600", color: "#FFFFFF" }}>Accept</Text>
+                              <Text style={{ fontSize: 13, fontWeight: "600", color: "#FFFFFF", textAlign: "center" }}>{t("planner.accept")}</Text>
                             </Pressable>
                           </View>
                         )}
                         {!imInvitee && isProactive && !status ? (
                           <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>
-                            Sent — they can Accept or Swap.
+                            {t("chat.cta.sentAcceptOrSwap")}
                           </Text>
                         ) : null}
                         {imInvitee && status === "accepted" && (
-                          <Text style={{ fontSize: 12, color: theme.colors.success, marginTop: 4 }}>You accepted</Text>
+                          <Text style={{ fontSize: 12, color: theme.colors.success, marginTop: 4 }}>{t("chat.cta.youAccepted")}</Text>
                         )}
                         {imInvitee && status === "declined" && (
-                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>You declined</Text>
+                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>{t("chat.cta.youDeclined")}</Text>
                         )}
                         {imInvitee && status === "reschedule" && (
-                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>You asked to reschedule</Text>
+                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>{t("chat.cta.youRescheduled")}</Text>
                         )}
                       </View>
                     );
@@ -1989,7 +1980,7 @@ export default function ChatView({
                       }}
                     >
                       <Text style={{ fontSize: 11, fontWeight: "800", color: theme.colors.primary, marginBottom: 6 }}>
-                        Icebreaker
+                        {t("chat.icebreaker.label")}
                       </Text>
                       <Text style={{ fontSize: 15, lineHeight: 22 }}>{prompt}</Text>
                     </View>
@@ -2016,7 +2007,7 @@ export default function ChatView({
                   }}
                 >
                   <Text numberOfLines={1} style={{ fontSize: 12, color: theme.colors.textSecondary }}>
-                    Reply to message
+                    {t("chat.view.replyToMessage")}
                   </Text>
                 </View>
               ) : null}
@@ -2035,7 +2026,7 @@ export default function ChatView({
                     }
                   />
                 ) : (
-                  <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>Voice message unavailable</Text>
+                  <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>{t("chat.view.voiceUnavailable")}</Text>
                 )
               ) : item.message_type !== "cta" && item.message_type !== "icebreaker" && (item.message_type === "image" || item.message_type === "gif") ? (
                 <View style={{ borderRadius: 14, overflow: "hidden" }}>
@@ -2066,16 +2057,16 @@ export default function ChatView({
 
               <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4, gap: 8 }}>
                 <Text style={{ fontSize: 11, color: theme.colors.textMuted }}>
-                  {new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  {new Date(item.created_at).toLocaleTimeString(getAppLocaleTag(), { hour: "2-digit", minute: "2-digit" })}
                 </Text>
                 {mine && item.pending ? (
                   <Text style={{ fontSize: 11, fontWeight: "600", color: theme.colors.textMuted }}>
-                    {item.message_type === "audio" ? "Sending…" : "Sending…"}
+                    {t("chat.view.sending")}
                   </Text>
                 ) : mine && item.failed ? (
                   <Pressable onPress={() => handleRetrySend(item)} hitSlop={6}>
                     <Text style={{ fontSize: 11, fontWeight: "700", color: theme.colors.error }}>
-                      Not delivered · Tap to retry
+                      {t("chat.view.notDelivered")}
                     </Text>
                   </Pressable>
                 ) : mine && item.message_type !== "cta" && item.message_type !== "system" && !item.pending ? (
@@ -2086,7 +2077,7 @@ export default function ChatView({
                       color: ownStatus === "seen" ? accentColor : theme.colors.textMuted,
                     }}
                   >
-                    {ownStatus === "seen" ? "Seen" : ownStatus === "delivered" ? "Delivered" : "Sent"}
+                    {ownStatus === "seen" ? t("chat.view.seen") : ownStatus === "delivered" ? t("chat.view.delivered") : t("common.sent")}
                   </Text>
                 ) : null}
                 {reactions.length > 0 && (
@@ -2166,6 +2157,7 @@ export default function ChatView({
       handleRetrySend,
       isGroup,
       onSwapProposal,
+      t,
     ]
   );
 
@@ -2173,7 +2165,7 @@ export default function ChatView({
     return (
       <SafeScreenView style={{ flex: 1, padding: 16, justifyContent: "center" }}>
         <ActivityIndicator size="large" color={accentColor} />
-        <Text style={{ textAlign: "center", marginTop: 8 }}>Loading chat…</Text>
+        <Text style={{ textAlign: "center", marginTop: 8 }}>{t("chat.view.loading")}</Text>
       </SafeScreenView>
     );
   }
@@ -2194,6 +2186,8 @@ export default function ChatView({
       >
         <Pressable
           onPress={backToModeChats}
+          accessibilityRole="button"
+          accessibilityLabel={t("common.back")}
           style={{
             width: 44,
             height: 44,
@@ -2216,7 +2210,9 @@ export default function ChatView({
           participantAvatars={groupParticipantAvatars}
           onPress={handleHeaderPress}
           accessibilityLabel={
-            isGroup ? `${peerDisplayName} group details` : `${peerDisplayName} profile`
+            isGroup
+              ? t("chat.view.groupDetailsA11y", { name: peerDisplayName })
+              : t("chat.view.profileA11y", { name: peerDisplayName })
           }
         />
 
@@ -2233,17 +2229,19 @@ export default function ChatView({
               backgroundColor: theme.colors.primary + "18",
               maxWidth: 130,
             }}
-            accessibilityLabel="Plan together"
+            accessibilityLabel={t("chat.view.planTogether")}
           >
             <Ionicons name="calendar-outline" size={18} color={theme.colors.primary} />
-            <Text style={{ fontWeight: "700", fontSize: 12, color: theme.colors.primary }} numberOfLines={1}>
-              Plan together
+            <Text style={{ fontWeight: "700", fontSize: 12, color: theme.colors.primary, flexShrink: 1 }} numberOfLines={1} adjustsFontSizeToFit>
+              {t("chat.view.planTogether")}
             </Text>
           </Pressable>
         ) : null}
 
         <Pressable
           onPress={() => setShowMenu(!showMenu)}
+          accessibilityRole="button"
+          accessibilityLabel={t("chat.view.menuA11y")}
           style={{
             width: 44,
             height: 44,
@@ -2260,7 +2258,7 @@ export default function ChatView({
       {showMatchContextBar && matchContext && otherUser ? (
         <MatchContextBar
           myPhotoUrl={peerPhotoUrl(meUser, "romance")}
-          myInitials={nameInitials(formatName(meUser, "You"))}
+          myInitials={nameInitials(formatName(meUser, t("chat.view.you")))}
           partnerPhotoUrl={peerAvatarUri}
           partnerInitials={nameInitials(peerDisplayName)}
           sharedInterestCount={matchContext.sharedInterestCount}
@@ -2282,12 +2280,12 @@ export default function ChatView({
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
             <SparklesIcon size={18} color={theme.colors.primary} />
-            <Text style={{ fontWeight: "800", fontSize: 13, color: theme.colors.primary }}>Concierge nudge</Text>
+            <Text style={{ fontWeight: "800", fontSize: 13, color: theme.colors.primary, flexShrink: 1 }}>{t("chat.nudge.title")}</Text>
           </View>
           <Text style={{ fontSize: 14, color: theme.colors.textPrimary, marginBottom: 10, lineHeight: 20 }}>
             {staleNudgeHint
-              ? `You have not messaged in a while — you both care about ${staleNudgeHint}. Want Winkly to suggest a spot for a quick sync?`
-              : "It has been quiet here — want Winkly to suggest a time and place that fits both of you?"}
+              ? t("chat.nudge.bodyWithHint", { hint: staleNudgeHint })
+              : t("chat.nudge.body")}
           </Text>
           <View style={{ flexDirection: "row", gap: 10 }}>
             <Pressable
@@ -2302,7 +2300,7 @@ export default function ChatView({
                 borderRadius: 10,
               }}
             >
-              <Text style={{ fontWeight: "700", color: theme.colors.onPrimary }}>Find a spot</Text>
+              <Text style={{ fontWeight: "700", color: theme.colors.onPrimary, textAlign: "center" }}>{t("chat.nudge.findSpot")}</Text>
             </Pressable>
             <Pressable
               onPress={() => {
@@ -2317,7 +2315,7 @@ export default function ChatView({
                 borderRadius: 10,
               }}
             >
-              <Text style={{ fontWeight: "600", color: theme.colors.textSecondary }}>Later</Text>
+              <Text style={{ fontWeight: "600", color: theme.colors.textSecondary }}>{t("chat.nudge.later")}</Text>
             </Pressable>
           </View>
         </View>
@@ -2339,7 +2337,7 @@ export default function ChatView({
         >
           <Pressable onPress={toggleReadReceipts} style={{ padding: 12, flexDirection: "row", alignItems: "center" }}>
             <Ionicons name={readReceiptsOn ? "checkmark-circle" : "checkmark-circle-outline"} size={20} color={theme.colors.textPrimary} />
-            <Text style={{ marginLeft: 8 }}>Read receipts {readReceiptsOn ? "On" : "Off"}</Text>
+            <Text style={{ marginLeft: 8, flexShrink: 1 }}>{readReceiptsOn ? t("chat.menu.readReceiptsOn") : t("chat.menu.readReceiptsOff")}</Text>
           </Pressable>
           {isDm && otherUser && (
             <Pressable
@@ -2347,14 +2345,14 @@ export default function ChatView({
               style={{ padding: 12, flexDirection: "row", alignItems: "center" }}
             >
               <Ionicons name="calendar-outline" size={20} color={theme.colors.primary} />
-              <Text style={{ marginLeft: 8, color: theme.colors.primary }}>
-                {conversationMode === "romance" ? "Invite on date" : conversationMode === "friends" ? "Invite to meet-up" : conversationMode === "business" ? "Suggest meeting" : "Invite to meet"}
+              <Text style={{ marginLeft: 8, color: theme.colors.primary, flexShrink: 1 }}>
+                {t(`chat.invite.title.${conversationMode}`)}
               </Text>
             </Pressable>
           )}
           <Pressable onPress={handleMute} style={{ padding: 12, flexDirection: "row", alignItems: "center" }}>
             <Ionicons name={muted ? "notifications-off" : "notifications-outline"} size={20} color={theme.colors.textPrimary} />
-            <Text style={{ marginLeft: 8 }}>{muted ? "Unmute chat" : "Mute chat"}</Text>
+            <Text style={{ marginLeft: 8, flexShrink: 1 }}>{muted ? t("chat.menu.unmute") : t("chat.menu.mute")}</Text>
           </Pressable>
           {isGroup ? (
             <Pressable
@@ -2365,17 +2363,17 @@ export default function ChatView({
               style={{ padding: 12, flexDirection: "row", alignItems: "center" }}
             >
               <Ionicons name="people-outline" size={20} color={theme.colors.textPrimary} />
-              <Text style={{ marginLeft: 8 }}>Group info</Text>
+              <Text style={{ marginLeft: 8, flexShrink: 1 }}>{t("chat.groupInfo")}</Text>
             </Pressable>
           ) : null}
           {isDm && otherUser ? (
             <Pressable onPress={handleBlock} style={{ padding: 12, flexDirection: "row", alignItems: "center" }}>
               <Ionicons name="remove-circle-outline" size={20} color={theme.colors.error} />
-              <Text style={{ marginLeft: 8, color: theme.colors.error }}>Block user</Text>
+              <Text style={{ marginLeft: 8, color: theme.colors.error, flexShrink: 1 }}>{t("chat.view.blockUser")}</Text>
             </Pressable>
           ) : null}
           <Pressable onPress={() => setShowMenu(false)} style={{ padding: 12 }}>
-            <Text style={{ color: theme.colors.textSecondary }}>Close</Text>
+            <Text style={{ color: theme.colors.textSecondary }}>{t("common.close")}</Text>
           </Pressable>
         </View>
       )}
@@ -2391,8 +2389,10 @@ export default function ChatView({
         partnerUserId={otherUser?.id}
         partnerDisplayName={otherUser ? formatName(otherUser) : undefined}
         onSubmit={async (values: InviteFormValues) => {
-          if (!meId || !otherUser) throw new Error("Missing user");
-          const title = values.place.trim() ? `${values.activity} at ${values.place.trim()}` : values.activity;
+          if (!meId || !otherUser) throw new Error(t("chat.view.missingUser"));
+          const title = values.place.trim()
+            ? t("chat.invite.activityAtPlace", { activity: values.activity, place: values.place.trim() })
+            : values.activity;
           const startsAtIso = values.starts_at.toISOString();
           const { planner_item_id, planner_invitation_id } = await createPlannerInvite(
             meId,
@@ -2439,7 +2439,7 @@ export default function ChatView({
             mergeIncomingMessage(insertedGif);
             setReplyTo(null);
           } catch (e: unknown) {
-            setError(e instanceof Error ? e.message : "Could not send GIF");
+            setError(e instanceof Error ? e.message : t("chat.gif.sendFailed"));
           } finally {
             setSending(false);
           }
@@ -2464,10 +2464,10 @@ export default function ChatView({
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <SparklesIcon size={18} color={theme.colors.primary} />
                 <Text style={{ fontWeight: "900", fontSize: 14, color: theme.colors.textPrimary }}>
-                  Strategic Host topics
+                  {t("chat.host.title")}
                 </Text>
               </View>
-              <Pressable onPress={() => setShowStrategicHost(false)} hitSlop={10}>
+              <Pressable onPress={() => setShowStrategicHost(false)} hitSlop={10} accessibilityRole="button" accessibilityLabel={t("common.close")}>
                 <Ionicons name="close" size={22} color={theme.colors.textMuted} />
               </Pressable>
             </View>
@@ -2475,7 +2475,7 @@ export default function ChatView({
             {strategicLoading ? (
               <View style={{ paddingVertical: 18, alignItems: "center" }}>
                 <ActivityIndicator color={theme.colors.primary} />
-                <Text style={{ marginTop: 8, color: theme.colors.textSecondary }}>Finding your sweet spot…</Text>
+                <Text style={{ marginTop: 8, color: theme.colors.textSecondary }}>{t("chat.host.loading")}</Text>
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false}>
@@ -2486,11 +2486,11 @@ export default function ChatView({
                       style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 }}
                     >
                       <Ionicons name="arrow-back" size={18} color={theme.colors.primary} />
-                      <Text style={{ fontSize: 13, fontWeight: "700", color: theme.colors.primary }}>Back to topics</Text>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: theme.colors.primary }}>{t("chat.host.backToTopics")}</Text>
                     </Pressable>
                     {strategicSelectedTopic ? (
                       <View style={{ marginBottom: 10 }}>
-                        <Text style={{ fontSize: 12, color: theme.colors.textMuted, fontWeight: "700" }}>Topic</Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.textMuted, fontWeight: "700" }}>{t("chat.host.topic")}</Text>
                         <Text style={{ fontSize: 14, fontWeight: "900", color: theme.colors.textPrimary }}>{strategicSelectedTopic.title}</Text>
                       </View>
                     ) : null}
@@ -2508,7 +2508,7 @@ export default function ChatView({
                         }}
                       >
                         <Text style={{ fontSize: 11, fontWeight: "800", color: theme.colors.primary, marginBottom: 6 }}>
-                          Plan option {idx + 1}
+                          {t("chat.host.planOption", { number: idx + 1 })}
                         </Text>
                         <Text style={{ fontSize: 14, fontWeight: "900", color: theme.colors.textPrimary, marginBottom: 4 }}>
                           {p.title}
@@ -2518,17 +2518,17 @@ export default function ChatView({
                         </Text>
                         <FitReasonLine reason={resolveFitReason(p)} />
                         <Text style={{ marginTop: 10, fontSize: 12, fontWeight: "800", color: theme.colors.primary }}>
-                          Draft pending plan →
+                          {t("chat.host.draftPending")}
                         </Text>
                       </Pressable>
                     ))}
                   </>
                 ) : (
                   <>
-                    {(strategicTopics ?? []).map((t, idx) => (
+                    {(strategicTopics ?? []).map((topic, idx) => (
                       <Pressable
-                        key={`${t.title}-${idx}`}
-                        onPress={() => loadStructuredPlansForTopic(t)}
+                        key={`${topic.title}-${idx}`}
+                        onPress={() => loadStructuredPlansForTopic(topic)}
                         style={{
                           padding: 12,
                           borderRadius: 14,
@@ -2541,26 +2541,26 @@ export default function ChatView({
                         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                           <View style={{ flex: 1 }}>
                             <Text style={{ fontSize: 14, fontWeight: "800", color: theme.colors.textPrimary, marginBottom: 4 }}>
-                              {t.title}
+                              {topic.title}
                             </Text>
                             <Text style={{ fontSize: 12, color: theme.colors.textSecondary, lineHeight: 17 }}>
-                              {t.pitch}
+                              {topic.pitch}
                             </Text>
                           </View>
                           <View style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: theme.colors.primary + "12" }}>
                             <Text style={{ fontSize: 11, fontWeight: "800", color: theme.colors.primary }}>
-                              {t.type}
+                              {topic.type}
                             </Text>
                           </View>
                         </View>
                         <Text style={{ marginTop: 10, fontSize: 12, fontWeight: "700", color: theme.colors.primary }}>
-                          See 2 plan options →
+                          {t("chat.host.seeOptions", { count: 2 })}
                         </Text>
                       </Pressable>
                     ))}
                     {(strategicTopics ?? []).length === 0 ? (
                       <Text style={{ color: theme.colors.textSecondary, textAlign: "center", paddingVertical: 14 }}>
-                        No topics found. Try again in a moment.
+                        {t("chat.host.noTopics")}
                       </Text>
                     ) : null}
                   </>
@@ -2604,7 +2604,7 @@ export default function ChatView({
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 12 }}>
                   <ActivityIndicator size="small" color={theme.modeAccent("romance").primary} />
                   <Text style={{ fontSize: 13, color: theme.colors.textMuted }}>
-                    Getting your first date idea ready…
+                    {t("chat.view.firstDateLoading")}
                   </Text>
                 </View>
               ) : null
@@ -2612,7 +2612,7 @@ export default function ChatView({
             ListEmptyComponent={
               !messagesLoadError ? (
                 <Text style={styles.emptyHistory}>
-                  There is no history yet. Start a chat.
+                  {t("chat.view.emptyHistory")}
                 </Text>
               ) : null
             }
@@ -2632,7 +2632,7 @@ export default function ChatView({
           {showChatExperienceCard && (loadingExperienceSuggestion ? (
             <View style={{ paddingHorizontal: 14, paddingVertical: 12, alignItems: "center" }}>
               <ActivityIndicator size="small" color={accentColor} />
-              <Text style={{ fontSize: 13, color: theme.colors.textMuted, marginTop: 6 }}>Winkly is preparing a suggestion…</Text>
+              <Text style={{ fontSize: 13, color: theme.colors.textMuted, marginTop: 6 }}>{t("chat.view.preparingSuggestion")}</Text>
             </View>
           ) : chatExperienceSuggestion ? (
             <ChatExperienceSuggestionCard
@@ -2668,7 +2668,7 @@ export default function ChatView({
           visible={showAttachMenu && showRomanceInviteComposer}
           onClose={() => setShowAttachMenu(false)}
         >
-          <Text style={styles.attachSheetTitle}>Add to chat</Text>
+          <Text style={styles.attachSheetTitle}>{t("chat.attach.title")}</Text>
           <View style={styles.attachGrid}>
             <Pressable
               style={styles.attachItem}
@@ -2678,7 +2678,7 @@ export default function ChatView({
               }}
             >
               <Ionicons name="image-outline" size={26} color={theme.colors.primary} />
-              <Text style={styles.attachLabel}>Photo</Text>
+              <Text style={styles.attachLabel}>{t("chat.photo")}</Text>
             </Pressable>
             <Pressable
               style={styles.attachItem}
@@ -2688,7 +2688,7 @@ export default function ChatView({
               }}
             >
               <Ionicons name="happy-outline" size={26} color={theme.colors.primary} />
-              <Text style={styles.attachLabel}>GIF</Text>
+              <Text style={styles.attachLabel}>{t("chat.attach.gif")}</Text>
             </Pressable>
             {isDm && otherUser ? (
               <Pressable
@@ -2700,7 +2700,7 @@ export default function ChatView({
                 }}
               >
                 <Ionicons name="calendar-outline" size={26} color={theme.colors.primary} />
-                <Text style={styles.attachLabel}>Plan</Text>
+                <Text style={styles.attachLabel}>{t("chat.attach.plan")}</Text>
               </Pressable>
             ) : null}
             {isDm && otherUser ? (
@@ -2712,7 +2712,7 @@ export default function ChatView({
                 }}
               >
                 <Ionicons name="videocam-outline" size={26} color={theme.colors.primary} />
-                <Text style={styles.attachLabel}>Video</Text>
+                <Text style={styles.attachLabel}>{t("chat.attach.video")}</Text>
               </Pressable>
             ) : null}
             {isDm && otherUser ? (
@@ -2724,7 +2724,7 @@ export default function ChatView({
                 }}
               >
                 <Ionicons name="game-controller-outline" size={26} color={theme.colors.primary} />
-                <Text style={styles.attachLabel}>Icebreaker</Text>
+                <Text style={styles.attachLabel}>{t("chat.icebreaker.label")}</Text>
               </Pressable>
             ) : null}
             {showMatchAgentButton ? (
@@ -2736,7 +2736,7 @@ export default function ChatView({
                 }}
               >
                 <SparklesIcon size={26} color={theme.colors.primary} />
-                <Text style={styles.attachLabel}>Match AI</Text>
+                <Text style={styles.attachLabel}>{t("chat.attach.matchAi")}</Text>
               </Pressable>
             ) : null}
             {showChatExperienceCard ? (
@@ -2748,7 +2748,7 @@ export default function ChatView({
                 }}
               >
                 <Ionicons name="star-outline" size={26} color={theme.colors.primary} />
-                <Text style={styles.attachLabel}>Topics</Text>
+                <Text style={styles.attachLabel}>{t("chat.attach.topics")}</Text>
               </Pressable>
             ) : null}
             {showGroupPlanningCard ? (
@@ -2760,7 +2760,7 @@ export default function ChatView({
                 }}
               >
                 <Ionicons name="people-circle-outline" size={26} color={theme.colors.primary} />
-                <Text style={styles.attachLabel}>Plan with group</Text>
+                <Text style={styles.attachLabel}>{t("chat.attach.planWithGroup")}</Text>
               </Pressable>
             ) : null}
           </View>
@@ -2769,7 +2769,7 @@ export default function ChatView({
         ) : isPendingRomanceInvite && !isRomanceInviteRecipient ? (
           <View style={{ padding: 16, alignItems: "center" }}>
             <Text style={{ textAlign: "center", color: theme.colors.textSecondary, fontSize: 14 }}>
-              Waiting for them to accept your chat invite…
+              {t("chat.view.waitingInviteAccept")}
             </Text>
           </View>
         ) : null}

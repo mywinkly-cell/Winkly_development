@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { View, Text, Pressable, ActivityIndicator, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography } from "@/constants/tokens";
 import {
   acceptRomanceChatInvite,
@@ -23,6 +24,7 @@ export function RomanceChatInviteBanner({
   onAccepted,
   onDeclined,
 }: RomanceChatInviteBannerProps) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState<"accept" | "decline" | null>(null);
 
   const handleAccept = async () => {
@@ -53,14 +55,14 @@ export function RomanceChatInviteBanner({
     <View style={styles.wrap}>
       <View style={styles.iconRow}>
         <Ionicons name="mail" size={22} color={Colors.romance.primary} />
-        <Text style={styles.title}>Chat invite from {partnerName}</Text>
+        <Text style={styles.title}>{t("chat.romanceInvite.title", { name: partnerName })}</Text>
       </View>
       <Text style={styles.body}>
         {previewMessage?.trim()
-          ? `"${previewMessage.trim()}"`
-          : `${partnerName} wants to start a conversation with you.`}
+          ? t("chat.romanceInvite.quoted", { message: previewMessage.trim() })
+          : t("chat.romanceInvite.body", { name: partnerName })}
       </Text>
-      <Text style={styles.hint}>Accept to match and keep chatting, or decline to remove this chat.</Text>
+      <Text style={styles.hint}>{t("chat.romanceInvite.hint")}</Text>
       <View style={styles.actions}>
         <Pressable
           onPress={handleDecline}
@@ -70,7 +72,7 @@ export function RomanceChatInviteBanner({
           {busy === "decline" ? (
             <ActivityIndicator color={Colors.gray700} />
           ) : (
-            <Text style={styles.declineText}>Decline</Text>
+            <Text style={styles.declineText} numberOfLines={1} adjustsFontSizeToFit>{t("planner.decline")}</Text>
           )}
         </Pressable>
         <Pressable
@@ -81,7 +83,7 @@ export function RomanceChatInviteBanner({
           {busy === "accept" ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.acceptText}>Accept</Text>
+            <Text style={styles.acceptText} numberOfLines={1} adjustsFontSizeToFit>{t("planner.accept")}</Text>
           )}
         </Pressable>
       </View>

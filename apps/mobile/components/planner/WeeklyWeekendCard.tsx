@@ -5,6 +5,7 @@
 
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
@@ -25,6 +26,7 @@ export function WeeklyWeekendCard({
   onDismiss,
   highlighted = false,
 }: WeeklyWeekendCardProps) {
+  const { t } = useTranslation();
   return (
     <View style={[styles.card, highlighted && styles.cardHighlighted]}>
       <View style={styles.header}>
@@ -36,7 +38,7 @@ export function WeeklyWeekendCard({
           onPress={() => { Haptics.selectionAsync(); onDismiss(); }}
           hitSlop={12}
           style={styles.dismissBtn}
-          accessibilityLabel="Dismiss"
+          accessibilityLabel={t("weeklySpark.dismissA11y")}
         >
           <Ionicons name="close" size={22} color={Colors.gray500} />
         </TouchableOpacity>
@@ -54,7 +56,7 @@ export function WeeklyWeekendCard({
         onPress={() => { Haptics.selectionAsync(); onViewPlans(); }}
         activeOpacity={0.9}
       >
-        <Text style={styles.ctaText}>Get weekend plans</Text>
+        <Text style={styles.ctaText}>{t("weeklyWeekend.getPlans")}</Text>
         <Ionicons name="arrow-forward" size={20} color={Colors.white} />
       </TouchableOpacity>
     </View>

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography, Layout } from "@/constants/tokens";
 
 type InterestSelectProps = {
@@ -16,8 +17,9 @@ export function InterestSelect({
   selected,
   onChange,
   max,
-  placeholder = "Add your own interest…",
+  placeholder,
 }: InterestSelectProps) {
+  const { t } = useTranslation();
   const [customInput, setCustomInput] = useState("");
 
   const toggle = (v: string) => {
@@ -49,7 +51,7 @@ export function InterestSelect({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionLabel}>Popular</Text>
+      <Text style={styles.sectionLabel}>{t("onboarding.interests.popular")}</Text>
       <View style={styles.chipRow}>
         {options.map((o) => {
           const isSelected = items.includes(o);
@@ -65,12 +67,12 @@ export function InterestSelect({
         })}
       </View>
 
-      <Text style={styles.sectionLabel}>Or add your own</Text>
+      <Text style={styles.sectionLabel}>{t("onboarding.interests.addOwn")}</Text>
       <View style={styles.addRow}>
         <TextInput
           value={customInput}
           onChangeText={setCustomInput}
-          placeholder={placeholder}
+          placeholder={placeholder ?? t("onboarding.interests.addOwnPlaceholder")}
           placeholderTextColor={Colors.gray500}
           onSubmitEditing={addCustom}
           returnKeyType="done"
@@ -80,6 +82,8 @@ export function InterestSelect({
           onPress={addCustom}
           disabled={!customInput.trim() || items.length >= max}
           style={[styles.addBtn, (!customInput.trim() || items.length >= max) && styles.addBtnDisabled]}
+          accessibilityRole="button"
+          accessibilityLabel={t("common.add")}
         >
           <Ionicons name="add" size={22} color={Colors.white} />
         </TouchableOpacity>
@@ -87,7 +91,9 @@ export function InterestSelect({
 
       {items.length > 0 && (
         <>
-          <Text style={styles.sectionLabel}>Selected ({items.length}/{max})</Text>
+          <Text style={styles.sectionLabel}>
+            {t("onboarding.interests.selectedCount", { selected: items.length, max })}
+          </Text>
           <View style={styles.chipRow}>
             {items.map((s) => (
               <TouchableOpacity key={s} onPress={() => toggle(s)} style={[styles.chip, styles.chipSelected]}>

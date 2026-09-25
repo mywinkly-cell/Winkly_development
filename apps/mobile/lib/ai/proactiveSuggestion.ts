@@ -3,6 +3,7 @@
  * Heuristic "Winkly suggestion" cards were removed — Planner uses structured Weekly Sparks only.
  */
 
+import i18n from "i18next";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { notifications } from "@/lib/notifications";
 
@@ -85,8 +86,8 @@ export async function scheduleSaturdayPlannerNudgeIfNeeded(): Promise<void> {
     if (prev === weekKey) return;
 
     await notifications.scheduleLocal({
-      title: "Plan something this weekend",
-      body: "Open Winkly Planner for a personalized Saturday idea.",
+      title: i18n.t("planner.weekendNudge.title"),
+      body: i18n.t("planner.weekendNudge.body"),
       data: { kind: "proactive_weekend_planner" },
       triggerAt: when,
     });

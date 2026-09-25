@@ -36,6 +36,7 @@ export function Chip({ label, selected, onPress, mode, disabled, style, textStyl
       style={[
         {
           borderRadius: theme.radii.pill,
+          maxWidth: "100%",
           paddingHorizontal: theme.spacing.md,
           paddingVertical: theme.spacing.sm,
           borderWidth: 1,

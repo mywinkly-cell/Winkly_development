@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -41,6 +42,7 @@ import { recordBusinessAnalyticsEvent } from "@/lib/business/analyticsStore";
 import { PlanRecommendationFeedback } from "@/components/planner/PlanRecommendationFeedback";
 import { sparkVenueFullAddressLine } from "@/lib/ai/weeklySpark";
 import { parseClockTimeFromText } from "@/lib/ai/planTimeValidation";
+import { getAppLocaleTag } from "@/lib/i18n/appLocale";
 
 type PlannerItemRow = { id: string; title: string; starts_at: string; ends_at: string | null };
 
@@ -146,7 +148,7 @@ function dateToHm(d: Date): string {
 }
 
 function formatDateLabel(d: Date): string {
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString(getAppLocaleTag(), {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -155,7 +157,7 @@ function formatDateLabel(d: Date): string {
 }
 
 function formatTimeLabel(d: Date): string {
-  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString(getAppLocaleTag(), { hour: "2-digit", minute: "2-digit" });
 }
 
 function parseTimeFromOption(option: ExperienceOption): { hour: number; minute: number } {
@@ -238,7 +240,18 @@ export type ConciergeConfirmStepProps = {
   showInlineBack?: boolean;
 };
 
-const REFINEMENT_SUGGESTIONS = ["Make it cheaper", "Earlier time", "More relaxed", "Different cuisine"];
+const REFINEMENT_SUGGESTION_KEYS = [
+  "concierge.refine.cheaper",
+  "concierge.refine.earlier",
+  "concierge.refine.relaxed",
+  "concierge.refine.cuisine",
+];
+
+const INVITE_MODE_LABEL_KEYS: Record<string, string> = {
+  romance: "modes.romance",
+  friends: "modes.friends",
+  business: "modes.business",
+};
 
 export function ConciergeConfirmStep({
   chosenOption,
@@ -264,6 +277,7 @@ export function ConciergeConfirmStep({
   onAddedToPlanner,
   showInlineBack = true,
 }: ConciergeConfirmStepProps) {
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const styles = React.useMemo(() => makeStyles(theme), [theme]);
   const router = useRouter();
@@ -297,7 +311,7 @@ export function ConciergeConfirmStep({
     structuredPlan?.title ||
     (chosenOption?.option_name as string) ||
     (chosenOption?.narrative as string) ||
-    "Plan";
+    t("planner.untitledPlan");
 
   // Primitive deps only: parents rebuild `structuredPlan` on every render, so depending on the
   // object would reset the user's confirmed edits whenever the parent re-renders.
@@ -335,10 +349,10 @@ export function ConciergeConfirmStep({
   const schedule =
     tripDays?.length
       ? tripDays.flatMap((d) => [
-          `Day ${d.day} · ${d.date}`,
-          `Morning — ${d.morning.summary}`,
-          `Afternoon — ${d.afternoon.summary}`,
-          ...(d.evening ? [`Evening — ${d.evening.summary}`] : []),
+          t("concierge.trip.dayLine", { day: d.day, date: d.date }),
+          t("concierge.trip.morning", { summary: d.morning.summary }),
+          t("concierge.trip.afternoon", { summary: d.afternoon.summary }),
+          ...(d.evening ? [t("concierge.trip.evening", { summary: d.evening.summary })] : []),
         ])
       : structuredPlan
         ? structuredItinerary.length
@@ -430,7 +444,7 @@ export function ConciergeConfirmStep({
     if (!editingField) return;
     if (editingField === "title") {
       if (!draftText.trim()) {
-        setFieldError("Give your plan a title.");
+        setFieldError(t("concierge.confirm.titleRequired"));
         return;
       }
       setEditTitle(draftText.trim());
@@ -478,7 +492,7 @@ export function ConciergeConfirmStep({
     try {
       const { data: auth } = await supabase.auth.getUser();
       const meId = auth.user?.id;
-      if (!meId) throw new Error("Not signed in");
+      if (!meId) throw new Error(t("concierge.error.notSignedIn"));
 
       let starts_at: string;
       let ends_at: string;
@@ -495,12 +509,12 @@ export function ConciergeConfirmStep({
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         const invited = opts?.kind === "invited";
         const body = invited
-          ? "Your invite is on its way — it'll show in your planner once they respond."
+          ? t("concierge.confirm.inviteSentBody")
           : opts?.movedForward
-            ? "That time had already passed today, so we scheduled it for the next matching day instead."
-            : "Your plan is on the calendar.";
-        Alert.alert(invited ? "Invite sent" : "Added to your planner", body, [
-          { text: "View planner", onPress: () => onDone(itemId) },
+            ? t("concierge.confirm.movedForwardBody")
+            : t("concierge.confirm.addedBody");
+        Alert.alert(invited ? t("concierge.confirm.inviteSentTitle") : t("concierge.confirm.addedTitle"), body, [
+          { text: t("concierge.confirm.viewPlanner"), onPress: () => onDone(itemId) },
         ]);
       };
       // Days to shift a trip's first day forward so it isn't past-dated (see daysUntilFutureFromIso).
@@ -589,14 +603,14 @@ export function ConciergeConfirmStep({
           const dayStart = new Date(`${dayDate}T09:00:00`);
           const dayEnd = new Date(`${dayDate}T21:00:00`);
           const description = [
-            `Morning: ${d.morning.summary}`,
-            `Afternoon: ${d.afternoon.summary}`,
-            d.evening ? `Evening: ${d.evening.summary}` : "",
+            t("concierge.trip.morning", { summary: d.morning.summary }),
+            t("concierge.trip.afternoon", { summary: d.afternoon.summary }),
+            d.evening ? t("concierge.trip.evening", { summary: d.evening.summary }) : "",
           ]
             .filter(Boolean)
             .join("\n");
           const dayItemId = await createPlannerItemForSelf(meId, {
-            title: `${baseTitle} · Day ${d.day}`,
+            title: t("concierge.trip.itemTitle", { title: baseTitle, day: d.day }),
             description,
             source_mode: mode,
             starts_at: dayStart.toISOString(),
@@ -766,7 +780,7 @@ export function ConciergeConfirmStep({
       // Surface the real Postgres/Supabase message (e.g. the future-plan-time or RLS check that
       // rejected the insert) rather than a generic failure — both to the console for debugging
       // and to the UI so the user isn't left guessing why "Add to planner" didn't work.
-      const message = e instanceof Error && e.message ? e.message : "Something went wrong.";
+      const message = e instanceof Error && e.message ? e.message : t("concierge.error.generic");
       console.error("[ConciergeConfirmStep] Add to planner failed:", e);
       setError(message);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -854,7 +868,7 @@ export function ConciergeConfirmStep({
               activeOpacity={0.7}
             >
               <Text style={styles.detailPickAgain}>
-                {row.field === "date" ? "Pick another date" : "Pick another time"}
+                {row.field === "date" ? t("concierge.confirm.pickAnotherDate") : t("concierge.confirm.pickAnotherTime")}
               </Text>
             </TouchableOpacity>
           ) : null}
@@ -871,7 +885,7 @@ export function ConciergeConfirmStep({
                 hitSlop={8}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel={`Discard ${row.label.toLowerCase()} change`}
+                accessibilityLabel={t("concierge.confirm.discardA11y", { field: row.label })}
               >
                 <Ionicons name="close" size={18} color={theme.colors.textSecondary} />
               </TouchableOpacity>
@@ -881,7 +895,7 @@ export function ConciergeConfirmStep({
                 hitSlop={8}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel={`Apply ${row.label.toLowerCase()}`}
+                accessibilityLabel={t("concierge.confirm.applyA11y", { field: row.label })}
               >
                 <Ionicons name="checkmark" size={19} color={theme.colors.onPrimary} />
               </TouchableOpacity>
@@ -894,7 +908,7 @@ export function ConciergeConfirmStep({
               hitSlop={8}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel={`Edit ${row.label.toLowerCase()}`}
+              accessibilityLabel={t("concierge.confirm.editA11y", { field: row.label })}
             >
               <Ionicons
                 name="pencil"
@@ -913,24 +927,22 @@ export function ConciergeConfirmStep({
       {showInlineBack ? (
         <TouchableOpacity onPress={onBack} style={styles.backRow} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={22} color={theme.colors.primary} />
-          <Text style={styles.backText}>{allowEditDetails ? "Close" : "Back to options"}</Text>
+          <Text style={styles.backText}>{allowEditDetails ? t("common.close") : t("concierge.backToOptions")}</Text>
         </TouchableOpacity>
       ) : null}
 
       <Text style={[theme.type.h2, { color: theme.colors.textPrimary, fontFamily: theme.type.h2.fontFamily, marginBottom: theme.spacing.sm }]}>
-        {allowEditDetails ? "Plan details" : title}
+        {allowEditDetails ? t("concierge.confirm.planDetails") : title}
       </Text>
       {allowEditDetails ? (
         <View style={styles.editBlock}>
-          <Text style={styles.editIntro}>
-            Everything is set — tap a pencil to adjust, then the check to apply.
-          </Text>
+          <Text style={styles.editIntro}>{t("concierge.confirm.editIntro")}</Text>
 
           {retimeRequested && conflictingItems.length > 0 ? (
             <View style={styles.retimeBanner}>
               <Ionicons name="time-outline" size={18} color={theme.colors.primary} />
               <Text style={styles.retimeBannerText}>
-                {`“${conflictingItems[0].title}” is already in your Planner then. Adjust the date or time below.`}
+                {t("concierge.confirm.retimeBanner", { title: conflictingItems[0].title })}
               </Text>
             </View>
           ) : null}
@@ -939,40 +951,40 @@ export function ConciergeConfirmStep({
             {renderDetailRow({
               field: "title",
               icon: "sparkles-outline",
-              label: "Plan",
+              label: t("concierge.confirm.field.plan"),
               value: editTitle,
-              placeholder: "Add a title",
+              placeholder: t("concierge.confirm.placeholder.title"),
               first: true,
             })}
             {renderDetailRow({
               field: "date",
               icon: "calendar-outline",
-              label: "Date",
+              label: t("concierge.confirm.field.date"),
               value: formatDateLabel(editDate),
-              placeholder: "Pick a date",
+              placeholder: t("planner.pickDate"),
               flagged: needsRetime,
             })}
             {renderDetailRow({
               field: "time",
               icon: "time-outline",
-              label: "Time",
+              label: t("concierge.confirm.field.time"),
               value: editTimeHm ? formatTimeLabel(hmToDate(editDate, editTimeHm)) : "",
-              placeholder: "Pick a time",
+              placeholder: t("concierge.confirm.placeholder.time"),
               flagged: needsRetime,
             })}
             {renderDetailRow({
               field: "venue",
               icon: "storefront-outline",
-              label: "Venue",
+              label: t("concierge.confirm.field.venue"),
               value: editPlace,
-              placeholder: "Add a venue",
+              placeholder: t("concierge.confirm.placeholder.venue"),
             })}
             {renderDetailRow({
               field: "address",
               icon: "location-outline",
-              label: "Address",
+              label: t("concierge.confirm.field.address"),
               value: editAddress,
-              placeholder: "Street + number, PLZ, City, Country",
+              placeholder: t("concierge.confirm.placeholder.address"),
               multiline: true,
             })}
           </Card>
@@ -1013,7 +1025,7 @@ export function ConciergeConfirmStep({
           </View>
           {structuredPlan.venue.google_maps_link ? (
             <PlanCardMapLink
-              label="Maps"
+              label={t("planner.maps")}
               onPress={() => void Linking.openURL(structuredPlan.venue.google_maps_link).catch(() => {})}
             />
           ) : null}
@@ -1024,12 +1036,10 @@ export function ConciergeConfirmStep({
         <View style={styles.tripTimeline}>
           {tripDays.map((d) => (
             <View key={`${d.day}-${d.date}`} style={styles.tripDayCard}>
-              <Text style={styles.tripDayTitle}>
-                Day {d.day} · {d.date}
-              </Text>
-              <Text style={styles.tripSlot}>Morning — {d.morning.summary}</Text>
-              <Text style={styles.tripSlot}>Afternoon — {d.afternoon.summary}</Text>
-              {d.evening ? <Text style={styles.tripSlot}>Evening — {d.evening.summary}</Text> : null}
+              <Text style={styles.tripDayTitle}>{t("concierge.trip.dayLine", { day: d.day, date: d.date })}</Text>
+              <Text style={styles.tripSlot}>{t("concierge.trip.morning", { summary: d.morning.summary })}</Text>
+              <Text style={styles.tripSlot}>{t("concierge.trip.afternoon", { summary: d.afternoon.summary })}</Text>
+              {d.evening ? <Text style={styles.tripSlot}>{t("concierge.trip.evening", { summary: d.evening.summary })}</Text> : null}
             </View>
           ))}
         </View>
@@ -1045,14 +1055,14 @@ export function ConciergeConfirmStep({
         planSummary={title}
         mode={mode}
         aiRequestId={aiRequestId}
-        label="Did this match what you had in mind?"
+        label={t("concierge.confirm.feedbackLabel")}
       />
 
       <TouchableOpacity
         style={styles.sharePlanBtn}
         onPress={() => {
           Haptics.selectionAsync();
-          const dateStr = effectiveDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+          const dateStr = effectiveDate.toLocaleDateString(getAppLocaleTag(), { weekday: "short", month: "short", day: "numeric", year: "numeric" });
           const placeLine =
             (allowEditDetails ? editPlace : structuredPlan?.venue?.name) ||
             (chosenOption as { place?: string } | undefined)?.place ||
@@ -1065,19 +1075,19 @@ export function ConciergeConfirmStep({
             "";
           const msg = [
             title,
-            addressLine ? `Location: ${addressLine}` : "",
+            addressLine ? t("concierge.share.location", { address: addressLine }) : "",
             dateStr,
             schedule.length ? schedule.join(" · ") : "",
-            placeLine ? `Venue: ${placeLine}` : "",
+            placeLine ? t("concierge.share.venue", { venue: placeLine }) : "",
           ]
             .filter(Boolean)
             .join("\n");
-          Share.share({ message: msg, title: "Plan" }).catch(() => {});
+          Share.share({ message: msg, title: t("planner.untitledPlan") }).catch(() => {});
         }}
         activeOpacity={0.8}
       >
         <Ionicons name="share-outline" size={20} color={theme.colors.primary} />
-        <Text style={styles.sharePlanBtnText}>Share this plan</Text>
+        <Text style={styles.sharePlanBtnText}>{t("concierge.share.button")}</Text>
       </TouchableOpacity>
 
       {partner && (
@@ -1092,7 +1102,7 @@ export function ConciergeConfirmStep({
               size={24}
               color={inviteToo ? theme.colors.primary : theme.colors.textMuted}
             />
-            <Text style={styles.inviteToggleText}>Invite {partner.displayName} to this plan</Text>
+            <Text style={styles.inviteToggleText}>{t("concierge.confirm.invitePartner", { name: partner.displayName })}</Text>
           </TouchableOpacity>
 
           {onChangeInvitee ? (
@@ -1101,20 +1111,17 @@ export function ConciergeConfirmStep({
               onPress={() => { Haptics.selectionAsync(); onChangeInvitee(); }}
               activeOpacity={0.85}
             >
-              <Text style={styles.changeInviteeText}>Choose someone else</Text>
+              <Text style={styles.changeInviteeText}>{t("concierge.confirm.chooseSomeoneElse")}</Text>
             </TouchableOpacity>
           ) : null}
 
           {inviteToo && inviteModeOptions && inviteModeOptions.length > 0 && onInviteModeChange ? (
             <View style={styles.inviteModeSection}>
-              <Text style={styles.inviteModeLabel}>Send as</Text>
-              <Text style={styles.inviteModeHint}>
-                Pick the mode for the chat and planner tab — independent of how this plan was suggested.
-              </Text>
+              <Text style={styles.inviteModeLabel}>{t("concierge.confirm.sendAs")}</Text>
+              <Text style={styles.inviteModeHint}>{t("concierge.confirm.sendAsHint")}</Text>
               <View style={styles.inviteModeRow}>
                 {inviteModeOptions.map((m) => {
-                  const label =
-                    m === "romance" ? "Romance" : m === "friends" ? "Friends" : "Business";
+                  const label = t(INVITE_MODE_LABEL_KEYS[m] ?? "modes.business");
                   const active = inviteMode === m;
                   return (
                     <TouchableOpacity
@@ -1143,28 +1150,28 @@ export function ConciergeConfirmStep({
           accessibilityRole="button"
         >
           <Ionicons name="person-add-outline" size={20} color={theme.colors.primary} />
-          <Text style={styles.inviteSomeoneBtnText}>Invite someone</Text>
+          <Text style={styles.inviteSomeoneBtnText}>{t("planReveal.inviteSomeone")}</Text>
           <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
         </TouchableOpacity>
       ) : null}
 
       {!partner && !tripDays?.length ? (
         <View style={styles.recurrenceSection}>
-          <Text style={styles.recurrenceLabel}>Add to planner</Text>
+          <Text style={styles.recurrenceLabel}>{t("planReveal.addToPlanner")}</Text>
           <View style={styles.recurrenceRow}>
             <TouchableOpacity
               style={[styles.recurrenceChip, addRecurrence === "once" && styles.recurrenceChipActive]}
               onPress={() => { Haptics.selectionAsync(); setAddRecurrence("once"); }}
               activeOpacity={0.8}
             >
-              <Text style={[styles.recurrenceChipText, addRecurrence === "once" && styles.recurrenceChipTextActive]}>Just this time</Text>
+              <Text style={[styles.recurrenceChipText, addRecurrence === "once" && styles.recurrenceChipTextActive]}>{t("concierge.confirm.justThisTime")}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.recurrenceChip, addRecurrence === "weekly" && styles.recurrenceChipActive]}
               onPress={() => { Haptics.selectionAsync(); setAddRecurrence("weekly"); }}
               activeOpacity={0.8}
             >
-              <Text style={[styles.recurrenceChipText, addRecurrence === "weekly" && styles.recurrenceChipTextActive]}>Repeat weekly</Text>
+              <Text style={[styles.recurrenceChipText, addRecurrence === "weekly" && styles.recurrenceChipTextActive]}>{t("concierge.confirm.repeatWeekly")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1172,9 +1179,7 @@ export function ConciergeConfirmStep({
 
       {conflictChecked && conflictingItems.length > 0 && (
         <View style={styles.conflictSection}>
-          <Text style={styles.conflictText}>
-            You have {conflictingItems[0].title} at that time.
-          </Text>
+          <Text style={styles.conflictText}>{t("concierge.confirm.conflict", { title: conflictingItems[0].title })}</Text>
           <View style={styles.conflictActions}>
             <TouchableOpacity
               style={styles.conflictSecondaryBtn}
@@ -1182,15 +1187,15 @@ export function ConciergeConfirmStep({
               activeOpacity={0.8}
             >
               <Text style={styles.conflictSecondaryText}>
-                {allowEditDetails ? "Change date or time" : "Pick another time"}
+                {allowEditDetails ? t("concierge.confirm.changeDateTime") : t("concierge.confirm.pickAnotherTime")}
               </Text>
             </TouchableOpacity>
             <View style={{ flex: 1 }}>
-              <PrimaryButton title="Add anyway" onPress={handleAddToPlanner} loading={saving} />
+              <PrimaryButton title={t("concierge.confirm.addAnyway")} onPress={handleAddToPlanner} loading={saving} />
             </View>
           </View>
           <TouchableOpacity onPress={handleReviewPlanner} activeOpacity={0.7} style={styles.conflictLinkBtn}>
-            <Text style={styles.conflictLinkText}>Review my Planner</Text>
+            <Text style={styles.conflictLinkText}>{t("concierge.confirm.reviewPlanner")}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1199,18 +1204,16 @@ export function ConciergeConfirmStep({
         <View style={styles.tightGapSection}>
           <View style={styles.tightGapHeader}>
             <Ionicons name="alert-circle-outline" size={18} color={theme.colors.primary} />
-            <Text style={styles.tightGapTitle}>Tight schedule</Text>
+            <Text style={styles.tightGapTitle}>{t("concierge.confirm.tightTitle")}</Text>
           </View>
           {nearbyItems.slice(0, 2).map((n) => (
             <Text key={`${n.item.id}-${n.position}`} style={styles.tightGapText}>
               {n.position === "before"
-                ? `“${n.item.title}” ends only ${n.gapMinutes} min before this plan starts.`
-                : `“${n.item.title}” starts only ${n.gapMinutes} min after this plan ends.`}
+                ? t("concierge.confirm.tightBefore", { title: n.item.title, count: n.gapMinutes })
+                : t("concierge.confirm.tightAfter", { title: n.item.title, count: n.gapMinutes })}
             </Text>
           ))}
-          <Text style={styles.tightGapText}>
-            Allow for travel time, or move one of them so you can enjoy both.
-          </Text>
+          <Text style={styles.tightGapText}>{t("concierge.confirm.tightHint")}</Text>
           <View style={styles.tightGapActions}>
             {allowEditDetails ? (
               <TouchableOpacity
@@ -1218,7 +1221,7 @@ export function ConciergeConfirmStep({
                 onPress={handlePickAnotherTime}
                 activeOpacity={0.8}
               >
-                <Text style={styles.conflictSecondaryText}>Change date or time</Text>
+                <Text style={styles.conflictSecondaryText}>{t("concierge.confirm.changeDateTime")}</Text>
               </TouchableOpacity>
             ) : null}
             <TouchableOpacity
@@ -1226,7 +1229,7 @@ export function ConciergeConfirmStep({
               onPress={handleReviewPlanner}
               activeOpacity={0.8}
             >
-              <Text style={styles.conflictSecondaryText}>Review my Planner</Text>
+              <Text style={styles.conflictSecondaryText}>{t("concierge.confirm.reviewPlanner")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1236,26 +1239,26 @@ export function ConciergeConfirmStep({
 
       {onCorrectDetails ? (
         <View style={styles.correctDetailsSection}>
-          <Text style={styles.correctDetailsLabel}>Correct details</Text>
+          <Text style={styles.correctDetailsLabel}>{t("concierge.confirm.correctDetails")}</Text>
           <View style={styles.refinementRow}>
-            {REFINEMENT_SUGGESTIONS.map((s) => (
+            {REFINEMENT_SUGGESTION_KEYS.map((key) => (
               <TouchableOpacity
-                key={s}
+                key={key}
                 onPress={() => {
                   Haptics.selectionAsync();
-                  onCorrectDetails(s);
+                  onCorrectDetails(t(key));
                 }}
                 style={styles.refinementChip}
                 activeOpacity={0.8}
               >
-                <Text style={styles.refinementChipText}>{s}</Text>
+                <Text style={styles.refinementChipText}>{t(key)}</Text>
               </TouchableOpacity>
             ))}
           </View>
           <View style={styles.refinementCustomRow}>
             <TextInput
               style={styles.refinementInput}
-              placeholder="Or type your own (e.g. quieter place)"
+              placeholder={t("concierge.confirm.refinePlaceholder")}
               placeholderTextColor={theme.colors.textMuted}
               value={refinementCustom}
               onChangeText={setRefinementCustom}
@@ -1275,7 +1278,7 @@ export function ConciergeConfirmStep({
               style={[styles.refinementSubmitBtn, !refinementCustom.trim() && styles.refinementSubmitBtnDisabled]}
               disabled={!refinementCustom.trim()}
             >
-              <Text style={styles.refinementSubmitText}>Send</Text>
+              <Text style={styles.refinementSubmitText}>{t("concierge.confirm.send")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1284,13 +1287,13 @@ export function ConciergeConfirmStep({
       {!(conflictChecked && conflictingItems.length > 0) && (
         <>
           <PrimaryButton
-            title={inviteToo && partner ? `Send selection & invite ${partner.displayName}` : "Add to planner"}
+            title={inviteToo && partner ? t("concierge.confirm.sendAndInvite", { name: partner.displayName }) : t("planReveal.addToPlanner")}
             onPress={handleAddToPlanner}
             loading={saving}
             disabled={editingField !== null}
           />
           {editingField !== null ? (
-            <Text style={styles.pendingEditHint}>Apply your change with the check to continue.</Text>
+            <Text style={styles.pendingEditHint}>{t("concierge.confirm.pendingEditHint")}</Text>
           ) : null}
         </>
       )}

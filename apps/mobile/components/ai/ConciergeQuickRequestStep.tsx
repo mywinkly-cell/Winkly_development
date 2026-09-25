@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from "react-native";
+import { useTranslation } from "react-i18next";
 import { GestureScrollView } from "@/components/ui/GestureScrollView";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -33,11 +34,7 @@ export type ConciergeQuickRequestStepProps = {
   generating?: boolean;
 };
 
-const EXAMPLES = [
-  "Relaxing massage nearby",
-  "Good coffee for a quiet laptop afternoon",
-  "Casual dinner tonight under €40",
-];
+const EXAMPLE_KEYS = ["concierge.quick.example.1", "concierge.quick.example.2", "concierge.quick.example.3"];
 
 export function ConciergeQuickRequestStep({
   initialQuery = "",
@@ -49,6 +46,7 @@ export function ConciergeQuickRequestStep({
   showInlineBack = true,
   generating = false,
 }: ConciergeQuickRequestStepProps) {
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const [query, setQuery] = useState(initialQuery);
@@ -69,7 +67,7 @@ export function ConciergeQuickRequestStep({
     <GestureScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {showInlineBack ? (
         <TextButton
-          title="Back"
+          title={t("common.back")}
           icon={<Ionicons name="arrow-back" size={20} color={theme.colors.primary} />}
           onPress={onBack}
           style={styles.backRow}
@@ -78,13 +76,14 @@ export function ConciergeQuickRequestStep({
 
       <View style={styles.pill}>
         <Ionicons name="flash" size={16} color={theme.colors.primary} />
-        <Text style={styles.pillText}>Quick plan</Text>
+        <Text style={styles.pillText}>{t("concierge.catalog.quick_plan")}</Text>
       </View>
 
-      <Text style={styles.title}>What do you want to do?</Text>
+      <Text style={styles.title}>{t("concierge.quick.title")}</Text>
       <Text style={styles.subtitle}>
-        Type it like a search — we&apos;ll suggest real places in your chosen city
-        {location.searchRadiusKm ? ` within ${location.searchRadiusKm} km` : ""}.
+        {location.searchRadiusKm
+          ? t("concierge.quick.subtitleRadius", { km: location.searchRadiusKm })
+          : t("concierge.quick.subtitle")}
       </Text>
 
       <PlanningLocationFields
@@ -98,16 +97,16 @@ export function ConciergeQuickRequestStep({
         style={styles.input}
         value={query}
         onChangeText={setQuery}
-        placeholder="e.g. relaxing massage nearby"
+        placeholder={t("concierge.quick.placeholder")}
         placeholderTextColor={theme.colors.textMuted}
         multiline
         textAlignVertical="top"
         editable={!generating}
-        accessibilityLabel="Quick plan request"
+        accessibilityLabel={t("concierge.quick.inputA11y")}
       />
 
       <View style={styles.examples}>
-        {EXAMPLES.map((ex) => (
+        {EXAMPLE_KEYS.map((key) => t(key)).map((ex) => (
           <TouchableOpacity
             key={ex}
             style={styles.exampleChip}
@@ -124,11 +123,11 @@ export function ConciergeQuickRequestStep({
       </View>
 
       {!cityReady ? (
-        <Text style={styles.needCity}>Set a city to search.</Text>
+        <Text style={styles.needCity}>{t("concierge.quick.needCity")}</Text>
       ) : null}
 
       <PrimaryButton
-        title="Find options"
+        title={t("concierge.quick.findOptions")}
         onPress={submit}
         loading={generating}
         disabled={!query.trim() || !cityReady}

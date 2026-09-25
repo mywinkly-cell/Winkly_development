@@ -8,7 +8,7 @@ import i18n from "i18next";
 import type { InitOptions } from "i18next";
 import { initReactI18next } from "react-i18next";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { fillMissingPluralForms, pluralCategoriesFor } from "./i18n/pluralFallback";
+import { fillMissingPluralForms } from "./i18n/pluralForms";
 
 const STORAGE_KEY = "winkly_app_language";
 /** Set when the user picks a language (onboarding globe or Settings). */
@@ -151,7 +151,7 @@ function addLanguageBundle(code: string): void {
   if (loadedLanguages.has(code)) return;
   const loader = localeLoaders[code as SupportedLanguageCode];
   if (!loader) return;
-  const bundle = fillMissingPluralForms(resolveTranslation(loader()), pluralCategoriesFor(code));
+  const bundle = fillMissingPluralForms(resolveTranslation(loader()), code);
   i18n.addResourceBundle(code, "translation", bundle, true, true);
   loadedLanguages.add(code);
 }

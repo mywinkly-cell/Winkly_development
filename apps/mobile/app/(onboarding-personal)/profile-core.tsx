@@ -89,13 +89,14 @@ import {
 } from "@/lib/profile/profileAutosave";
 import { useProfileAutosave } from "@/lib/profile/useProfileAutosave";
 
-const EDUCATION_OPTIONS = [
-  "High school graduate",
-  "Bachelor’s degree",
-  "Master’s degree",
-  "Doctorate / PhD",
-  "Other",
-];
+import {
+  EDUCATION_OPTIONS,
+  GENDER_OPTIONS,
+  educationLabelKey,
+  genderLabelKey,
+  optionLabel,
+} from "@/lib/profile/coreOptionLabels";
+import { getAppLocaleTag } from "@/lib/i18n/appLocale";
 
 const PROFILE_LANGS = PROFILE_LANGUAGE_OPTIONS.filter((l) => l !== "Any");
 
@@ -146,7 +147,7 @@ function describeSaveError(context: string, err: any): string {
 }
 
 export default function ProfileCore() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const appLanguage = i18n?.language ?? "en";
   const router = useRouter();
   const { edit } = useLocalSearchParams<{ edit?: string }>();
@@ -802,11 +803,11 @@ export default function ProfileCore() {
 
         if (existing === "denied") {
           Alert.alert(
-            "Location access",
-            "To set your city from GPS, enable location access for Winkly in your device settings.",
+            t("onboarding.location.accessTitle"),
+            t("onboarding.location.accessMessage"),
             [
-              { text: "Cancel", style: "cancel" },
-              { text: "Open settings", onPress: () => Linking.openSettings() },
+              { text: t("common.cancel"), style: "cancel" },
+              { text: t("onboarding.location.openSettings"), onPress: () => Linking.openSettings() },
             ]
           );
           return;
@@ -831,12 +832,12 @@ export default function ProfileCore() {
         if (locationPromptShown) return;
         setLocationPromptShown(true);
         Alert.alert(
-          "Use your location?",
-          "Winkly can use your location to suggest your city for better recommendations and nearby matches.",
+          t("onboarding.location.promptTitle"),
+          t("onboarding.location.promptMessage"),
           [
-            { text: "Not now", style: "cancel" },
+            { text: t("onboarding.location.notNow"), style: "cancel" },
             {
-              text: "Allow",
+              text: t("onboarding.location.allow"),
               onPress: async () => {
                 try {
                   const { status } = await Location.requestForegroundPermissionsAsync();
@@ -867,7 +868,7 @@ export default function ProfileCore() {
         setLocationLoading(false);
       }
     })();
-  }, [locationPromptShown, applyLocationToCity]);
+  }, [locationPromptShown, applyLocationToCity, t]);
 
   const toggleMulti = (arr: string[], val: string, setter: (v: string[]) => void, max: number) => {
     const has = arr.includes(val);
@@ -909,7 +910,7 @@ export default function ProfileCore() {
     Haptics.selectionAsync();
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("Permission needed", "Please allow photo access to upload your pictures.");
+      Alert.alert(t("onboarding.photos.permissionTitle"), t("onboarding.photos.permissionMessage"));
       return;
     }
 
@@ -928,7 +929,16 @@ export default function ProfileCore() {
     const sizeCheck = await validatePickerAsset(asset, "image");
     if (!sizeCheck.ok) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert("Photo not allowed", sizeCheck.reason ?? "Please pick a different photo.");
+      Alert.alert(
+        t("onboarding.photos.notAllowed"),
+        t(
+          sizeCheck.code === "too_large"
+            ? "onboarding.photos.tooLarge"
+            : sizeCheck.code === "unsupported_type"
+              ? "onboarding.photos.unsupportedType"
+              : "onboarding.photos.pickDifferent"
+        )
+      );
       return;
     }
 
@@ -939,8 +949,8 @@ export default function ProfileCore() {
     if (w && h && Math.min(w, h) < MIN_PHOTO_DIMENSION) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       Alert.alert(
-        "Photo quality too low",
-        `For a sharp, clear profile, please pick a photo at least ${MIN_PHOTO_DIMENSION}×${MIN_PHOTO_DIMENSION}px. This one is ${w}×${h}px.`
+        t("onboarding.photos.lowQualityTitle"),
+        t("onboarding.photos.lowQuality", { min: MIN_PHOTO_DIMENSION, width: w, height: h })
       );
       return;
     }
@@ -1020,20 +1030,20 @@ export default function ProfileCore() {
   const openCorePhotoOptions = (index: number) => {
     Haptics.selectionAsync();
     const options: { text: string; onPress?: () => void; style?: "cancel" | "destructive" }[] = [];
-    if (index !== 0) options.push({ text: "Make main photo", onPress: () => setMainCorePhoto(index) });
-    if (index > 0) options.push({ text: "Move left", onPress: () => moveCorePhoto(index, -1) });
-    if (index < corePhotos.length - 1) options.push({ text: "Move right", onPress: () => moveCorePhoto(index, 1) });
-    options.push({ text: "Replace photo", onPress: () => pickImage("core", index) });
-    options.push({ text: "Remove photo", style: "destructive", onPress: () => removeCorePhoto(index) });
-    options.push({ text: "Cancel", style: "cancel" });
-    Alert.alert("Edit photo", index === 0 ? "This is your main photo." : undefined, options);
+    if (index !== 0) options.push({ text: t("onboarding.photos.makeMain"), onPress: () => setMainCorePhoto(index) });
+    if (index > 0) options.push({ text: t("onboarding.photos.moveLeft"), onPress: () => moveCorePhoto(index, -1) });
+    if (index < corePhotos.length - 1) options.push({ text: t("onboarding.photos.moveRight"), onPress: () => moveCorePhoto(index, 1) });
+    options.push({ text: t("onboarding.photos.replace"), onPress: () => pickImage("core", index) });
+    options.push({ text: t("onboarding.photos.remove"), style: "destructive", onPress: () => removeCorePhoto(index) });
+    options.push({ text: t("common.cancel"), style: "cancel" });
+    Alert.alert(t("onboarding.photos.editTitle"), index === 0 ? t("onboarding.photos.isMain") : undefined, options);
   };
 
   const MAX_VIDEO_SEC = 10;
   const pickVideo = async (type: "romance" | "friends" | "business") => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert("Permission needed", "Please allow photo access to pick videos.");
+      Alert.alert(t("onboarding.photos.permissionTitle"), t("onboarding.photos.videoPermissionMessage"));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -1045,7 +1055,7 @@ export default function ProfileCore() {
     const asset = result.assets[0];
     const durationMs = asset.duration ?? 0;
     if (durationMs > MAX_VIDEO_SEC * 1000) {
-      Alert.alert("Too long", `Video must be ${MAX_VIDEO_SEC} seconds or shorter.`);
+      Alert.alert(t("onboarding.video.tooLongTitle"), t("onboarding.video.tooLong", { count: MAX_VIDEO_SEC }));
       return;
     }
     let uri = asset.uri;
@@ -1072,12 +1082,14 @@ export default function ProfileCore() {
       corePhotoCount: corePhotos.length,
     });
     if (!validation.ok) {
-      Alert.alert(validation.title, validation.message);
+      Alert.alert(t(validation.titleKey), t(validation.messageKey, validation.params));
       return;
     }
     if (!birthday) return;
 
     setSaveError(null);
+    // Set when too few photos upload — shown instead of the generic save error.
+    let photoShortfall: { uploaded: number; total: number } | null = null;
     try {
       setSaving(true);
       // Land any pending autosave first; the full write below then supersedes it. A failed flush
@@ -1088,9 +1100,9 @@ export default function ProfileCore() {
       if (userErr) {
         if (isAuthSessionMissing(userErr)) {
           Alert.alert(
-            "Session missing",
-            "Please sign in again so Winkly can securely continue.",
-            [{ text: "Go to Sign in", onPress: () => router.replace("/(auth)/signin") }]
+            t("onboarding.session.missingTitle"),
+            t("onboarding.session.missing"),
+            [{ text: t("onboarding.session.goToSignIn"), onPress: () => router.replace("/(auth)/signin") }]
           );
           return;
         }
@@ -1100,9 +1112,9 @@ export default function ProfileCore() {
       const authUser = data?.user;
       if (!authUser?.id) {
         Alert.alert(
-          "Session expired",
-          "Please sign in again to continue.",
-          [{ text: "Go to Sign in", onPress: () => router.replace("/(auth)/signin") }]
+          t("auth.sessionExpired"),
+          t("onboarding.session.expired"),
+          [{ text: t("onboarding.session.goToSignIn"), onPress: () => router.replace("/(auth)/signin") }]
         );
         return;
       }
@@ -1129,6 +1141,7 @@ export default function ProfileCore() {
       }
       setPhotoReviewTick((n) => n + 1);
       if (uploadedCorePhotos.length + heldCorePhotos < MIN_CORE_PHOTOS) {
+        photoShortfall = { uploaded: uploadedCorePhotos.length, total: corePhotos.length };
         throw new Error(
           `Only ${uploadedCorePhotos.length} of ${corePhotos.length} photo(s) uploaded successfully. Please check your connection and try again.`
         );
@@ -1302,9 +1315,13 @@ export default function ProfileCore() {
         router.push("/(onboarding-personal)/winkly-world?variant=personal");
       }
     } catch (err: any) {
-      const message = describeSaveError("profile save", err);
+      // describeSaveError logs the full (English, technical) diagnostic; users get a localized message.
+      describeSaveError("profile save", err);
+      const message = photoShortfall
+        ? t("onboarding.profile.photoShortfall", { count: photoShortfall.total, uploaded: photoShortfall.uploaded })
+        : t("onboarding.profile.saveFailed");
       setSaveError(message);
-      Alert.alert("Save failed", message);
+      Alert.alert(t("onboarding.profile.saveFailedTitle"), message);
     } finally {
       setSaving(false);
     }
@@ -1331,7 +1348,7 @@ export default function ProfileCore() {
       business: { bio: bioBusiness, photos: businessPhotos, networkingGoals: networkingGoalsBusiness },
     });
     if (!stepValidation.ok) {
-      Alert.alert(stepValidation.title, stepValidation.message);
+      Alert.alert(t(stepValidation.titleKey), t(stepValidation.messageKey, stepValidation.params));
       return;
     }
     await autoSave();
@@ -1418,7 +1435,7 @@ export default function ProfileCore() {
   const inputFocused = { borderColor: theme.colors.primary, ...theme.elevation(1) };
 
   const birthdayLabel = birthday
-    ? `${birthday.getDate()}.${birthday.getMonth() + 1}.${birthday.getFullYear()}`
+    ? birthday.toLocaleDateString(getAppLocaleTag(), { day: "numeric", month: "numeric", year: "numeric" })
     : "";
 
   function renderWizardStepBody(): React.ReactNode {
@@ -1614,7 +1631,7 @@ export default function ProfileCore() {
         lastName={lastName}
         birthdayLabel={birthdayLabel}
         city={city}
-        gender={gender}
+        gender={gender ? optionLabel(t, genderLabelKey, gender) : ""}
         corePhotos={corePhotos}
         enabledModes={enabledModes}
         onEditMode={(mode) => jumpToStep((s) => s.kind === "mode" && s.mode === mode && s.id === "photosBio")}
@@ -1644,7 +1661,7 @@ export default function ProfileCore() {
             <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <View style={{ flex: 1, alignItems: "center" }}>
-            <Text style={{ ...theme.type.h2, color: theme.colors.textPrimary, fontFamily: theme.type.h2.fontFamily }}>Your Profile</Text>
+            <Text style={{ ...theme.type.h2, color: theme.colors.textPrimary, fontFamily: theme.type.h2.fontFamily }}>{t("onboarding.profile.title")}</Text>
           </View>
           <TouchableOpacity
             onPress={async () => {
@@ -1656,7 +1673,7 @@ export default function ProfileCore() {
             }}
             style={styles.headerBtn}
             activeOpacity={0.9}
-            accessibilityLabel="Preview how your card looks to others"
+            accessibilityLabel={t("onboarding.profile.previewA11y")}
           >
             <Ionicons name="eye-outline" size={22} color={theme.colors.textPrimary} />
           </TouchableOpacity>
@@ -1673,7 +1690,7 @@ export default function ProfileCore() {
             {/* Progress — matches mode selection formula (bio, photos, interests per sub-profile) */}
             <View style={{ marginBottom: 20 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
-                <Text style={{ ...theme.type.body, color: theme.colors.textSecondary }}>Profile completion</Text>
+                <Text style={{ ...theme.type.body, color: theme.colors.textSecondary }}>{t("onboarding.profile.completion")}</Text>
                 <Text style={{ ...theme.type.button, color: theme.colors.primary }}>{overallProgress}%</Text>
               </View>
               <View style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.border, overflow: "hidden" }}>
@@ -1683,12 +1700,12 @@ export default function ProfileCore() {
 
             <View style={[styles.sectionCard, { marginBottom: 20 }]}>
               <Text style={{ ...theme.type.h3, color: theme.colors.textSecondary, marginBottom: 16, fontFamily: theme.type.h3.fontFamily }}>
-                About you 💫
+                {t("onboarding.profile.aboutTitle")}
               </Text>
 
-              <Text style={styles.label}>Photos <Text style={styles.requiredMark}>*</Text></Text>
+              <Text style={styles.label}>{t("profile.photos")} <Text style={styles.requiredMark}>*</Text></Text>
               <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary, marginBottom: 12 }}>
-                Add {MIN_CORE_PHOTOS}–{MAX_CORE_PHOTOS} photos. Your first photo is your main one — tap any photo to reorder or remove it. ({corePhotos.length}/{MAX_CORE_PHOTOS})
+                {t("onboarding.profile.photosHint", { min: MIN_CORE_PHOTOS, max: MAX_CORE_PHOTOS, current: corePhotos.length })}
               </Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -6 }}>
                 {corePhotos.map((uri, i) => (
@@ -1701,14 +1718,14 @@ export default function ProfileCore() {
                       <Image source={{ uri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
                       {i === 0 && (
                         <View style={styles.mainBadge}>
-                          <Text style={styles.mainBadgeText}>Main</Text>
+                          <Text style={styles.mainBadgeText}>{t("onboarding.photos.main")}</Text>
                         </View>
                       )}
                       <TouchableOpacity
                         onPress={() => removeCorePhoto(i)}
                         style={styles.removeBadge}
                         hitSlop={8}
-                        accessibilityLabel="Remove photo"
+                        accessibilityLabel={t("onboarding.photos.remove")}
                       >
                         <Ionicons name="close" size={14} color="#FFFFFF" />
                       </TouchableOpacity>
@@ -1720,10 +1737,10 @@ export default function ProfileCore() {
                     <TouchableOpacity
                       onPress={() => pickImage("core", corePhotos.length)}
                       style={styles.corePhotoAddTile}
-                      accessibilityLabel="Add photo"
+                      accessibilityLabel={t("onboarding.photos.add")}
                     >
                       <Ionicons name="add" size={30} color={theme.colors.primary} />
-                      <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 4 }}>Add</Text>
+                      <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 4 }}>{t("common.add")}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -1731,17 +1748,17 @@ export default function ProfileCore() {
               <PhotosInReview userId={meId} mode="core" refreshKey={photoReviewTick} />
               {corePhotos.length < MIN_CORE_PHOTOS ? (
                 <Text style={{ ...theme.type.caption, color: theme.colors.error, marginTop: 6, marginBottom: 18 }}>
-                  Add at least {MIN_CORE_PHOTOS} photos to start matching.
+                  {t("onboarding.profile.minPhotosShort", { count: MIN_CORE_PHOTOS })}
                 </Text>
               ) : (
                 <Text style={{ ...theme.type.caption, color: theme.colors.textMuted, marginTop: 6, marginBottom: 18 }}>
-                  Tip: clear, well-lit photos of your face get more matches.
+                  {t("onboarding.profile.photoTip")}
                 </Text>
               )}
 
-              <Text style={styles.label}>First name <Text style={styles.requiredMark}>*</Text></Text>
+              <Text style={styles.label}>{t("profile.firstName")} <Text style={styles.requiredMark}>*</Text></Text>
               <TextInput
-                placeholder="First name"
+                placeholder={t("profile.firstName")}
                 placeholderTextColor={theme.colors.textMuted}
                 value={firstName}
                 onChangeText={setFirstName}
@@ -1749,9 +1766,9 @@ export default function ProfileCore() {
                 onBlur={() => setFocusedField(null)}
                 style={[inputBase, focusedField === "firstName" && inputFocused]}
               />
-              <Text style={styles.label}>Last name <Text style={styles.requiredMark}>*</Text></Text>
+              <Text style={styles.label}>{t("profile.lastName")} <Text style={styles.requiredMark}>*</Text></Text>
               <TextInput
-                placeholder="Last name"
+                placeholder={t("profile.lastName")}
                 placeholderTextColor={theme.colors.textMuted}
                 value={lastName}
                 onChangeText={setLastName}
@@ -1760,15 +1777,13 @@ export default function ProfileCore() {
                 style={[inputBase, focusedField === "lastName" && inputFocused]}
               />
 
-              <Text style={styles.label}>Birth date <Text style={styles.requiredMark}>*</Text></Text>
+              <Text style={styles.label}>{t("onboarding.general.birthDate")} <Text style={styles.requiredMark}>*</Text></Text>
               <TouchableOpacity
                 onPress={() => { Haptics.selectionAsync(); setShowDatePicker(true); }}
                 style={[inputBase, { justifyContent: "center" }]}
               >
                 <Text style={{ ...theme.type.body, color: birthday ? theme.colors.textPrimary : theme.colors.textMuted }}>
-                  {birthday
-                    ? `${birthday.getDate()}.${birthday.getMonth() + 1}.${birthday.getFullYear()}`
-                    : "Select your birth date"}
+                  {birthday ? birthdayLabel : t("onboarding.general.selectBirthDate")}
                 </Text>
               </TouchableOpacity>
 
@@ -1786,7 +1801,7 @@ export default function ProfileCore() {
         )}
 
         <Text style={{ ...theme.type.caption, color: theme.colors.textMuted, marginBottom: 16 }}>
-          Your birthday will remain private — only your age will be visible.
+          {t("onboarding.general.birthdayPrivate")}
         </Text>
 
         <View
@@ -1804,10 +1819,8 @@ export default function ProfileCore() {
           }}
         >
           <View style={{ flex: 1, paddingRight: 12 }}>
-            <Text style={[styles.label, { marginBottom: 2 }]}>Show my full name in Romance &amp; Friends</Text>
-            <Text style={{ ...theme.type.caption, color: theme.colors.textMuted }}>
-              Off by default — others see only your first name on cards and your profile. Business networking always shows your full name.
-            </Text>
+            <Text style={[styles.label, { marginBottom: 2 }]}>{t("onboarding.fullName.title")}</Text>
+            <Text style={{ ...theme.type.caption, color: theme.colors.textMuted }}>{t("onboarding.fullName.body")}</Text>
           </View>
           <Switch
             value={showFullName}
@@ -1817,9 +1830,9 @@ export default function ProfileCore() {
           />
         </View>
 
-        <Text style={[styles.label, { marginBottom: 8 }]}>Gender <Text style={styles.requiredMark}>*</Text></Text>
+        <Text style={[styles.label, { marginBottom: 8 }]}>{t("profile.gender")} <Text style={styles.requiredMark}>*</Text></Text>
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 16 }}>
-          {["Female", "Male", "Other"].map((g) => (
+          {GENDER_OPTIONS.map((g) => (
             <TouchableOpacity
               key={g}
               onPress={() => { Haptics.selectionAsync(); setGender(g); }}
@@ -1831,18 +1844,26 @@ export default function ProfileCore() {
                 borderColor: gender === g ? theme.colors.primary : theme.colors.border,
                 borderRadius: theme.radii.md,
                 paddingVertical: 12,
+                paddingHorizontal: 4,
                 alignItems: "center",
               }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: gender === g }}
             >
-              <Text style={{ ...theme.type.body, color: gender === g ? theme.colors.onPrimary : theme.colors.textPrimary }}>
-                {g}
+              <Text
+                style={{ ...theme.type.body, color: gender === g ? theme.colors.onPrimary : theme.colors.textPrimary, textAlign: "center" }}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
+                {optionLabel(t, genderLabelKey, g)}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-          <Text style={[styles.label, { marginBottom: 0 }]}>City <Text style={styles.requiredMark}>*</Text></Text>
+          <Text style={[styles.label, { marginBottom: 0 }]}>{t("profile.city")} <Text style={styles.requiredMark}>*</Text></Text>
           <TouchableOpacity
             onPress={() => { Haptics.selectionAsync(); requestLocationForCity(); }}
             disabled={locationLoading}
@@ -1862,19 +1883,19 @@ export default function ProfileCore() {
             }}
           >
             {locationLoading ? (
-              <Text style={{ ...theme.type.caption, fontWeight: "600", color: theme.colors.textSecondary, marginRight: 6 }}>Getting location…</Text>
+              <Text style={{ ...theme.type.caption, fontWeight: "600", color: theme.colors.textSecondary, marginRight: 6 }}>{t("onboarding.location.getting")}</Text>
             ) : (
               <>
                 <Ionicons name="locate" size={16} color={locationPermissionStatus === "granted" ? theme.colors.primary : theme.colors.textMuted} style={{ marginRight: 6 }} />
                 <Text style={{ ...theme.type.caption, fontWeight: "600", color: locationPermissionStatus === "granted" ? theme.colors.primary : theme.colors.textSecondary }}>
-                  {locationPermissionStatus === "denied" ? "Enable location" : "Use my location"}
+                  {locationPermissionStatus === "denied" ? t("onboarding.location.enable") : t("onboarding.location.useMine")}
                 </Text>
               </>
             )}
           </TouchableOpacity>
         </View>
         <TextInput
-          placeholder="e.g. Berlin, London"
+          placeholder={t("onboarding.location.cityPlaceholder")}
           placeholderTextColor={theme.colors.textMuted}
           value={city}
           onChangeText={onCityChange}
@@ -1902,9 +1923,9 @@ export default function ProfileCore() {
           </View>
 
           <View style={[styles.sectionCard, { marginBottom: 20 }]}>
-            <Text style={{ ...theme.type.h3, color: theme.colors.textSecondary, marginBottom: 16, fontFamily: theme.type.h3.fontFamily }}>More about you</Text>
+            <Text style={{ ...theme.type.h3, color: theme.colors.textSecondary, marginBottom: 16, fontFamily: theme.type.h3.fontFamily }}>{t("onboarding.profile.moreAboutYou")}</Text>
 
-        <Text style={styles.label}>Education</Text>
+        <Text style={styles.label}>{t("profile.education")}</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -1924,15 +1945,15 @@ export default function ProfileCore() {
               }}
             >
               <Text style={{ ...theme.type.caption, color: education === e ? theme.colors.onPrimary : theme.colors.textPrimary }}>
-                {e}
+                {optionLabel(t, educationLabelKey, e)}
               </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        <Text style={styles.label}>Occupation</Text>
+        <Text style={styles.label}>{t("profile.occupation")}</Text>
         <TextInput
-          placeholder="What do you do?"
+          placeholder={t("onboarding.about.occupationPlaceholder")}
           placeholderTextColor={theme.colors.textMuted}
           value={occupation}
           onChangeText={setOccupation}
@@ -1941,7 +1962,7 @@ export default function ProfileCore() {
           style={[inputBase, focusedField === "occupation" && inputFocused]}
         />
 
-        <Text style={styles.label}>Languages</Text>
+        <Text style={styles.label}>{t("profile.languages")}</Text>
         <Pressable
           onPress={() => {
             Haptics.selectionAsync();
@@ -1962,7 +1983,7 @@ export default function ProfileCore() {
           }}
         >
           <Text style={{ ...theme.type.body, color: theme.colors.textPrimary, flex: 1 }} numberOfLines={1}>
-            {languages.length === 0 ? "Choose languages" : languages.join(", ")}
+            {languages.length === 0 ? t("onboarding.languages.choose") : languages.join(", ")}
           </Text>
           <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary} />
         </Pressable>
@@ -1976,9 +1997,15 @@ export default function ProfileCore() {
           <Pressable style={{ flex: 1, backgroundColor: theme.colors.overlay, justifyContent: "center", alignItems: "center", padding: 20 }} onPress={() => setLanguageModalVisible(false)}>
             <Pressable style={{ width: "100%", maxWidth: 400, maxHeight: "80%", backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, overflow: "hidden", ...theme.elevation(3) }} onPress={(e) => e.stopPropagation()}>
               <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
-                <Text style={{ ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textSecondary, marginBottom: 4 }}>Choose languages</Text>
-                <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary, marginBottom: 8 }}>Your selections appear first in the list.</Text>
-                <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setLanguageModalVisible(false); }} style={{ position: "absolute", top: 16, right: 16, padding: 4 }} hitSlop={12}>
+                <Text style={{ ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textSecondary, marginBottom: 4 }}>{t("onboarding.languages.choose")}</Text>
+                <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary, marginBottom: 8 }}>{t("onboarding.languages.hint")}</Text>
+                <TouchableOpacity
+                  onPress={() => { Haptics.selectionAsync(); setLanguageModalVisible(false); }}
+                  style={{ position: "absolute", top: 16, right: 16, padding: 4 }}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("common.close")}
+                >
                   <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
                 </TouchableOpacity>
               </View>
@@ -2002,7 +2029,7 @@ export default function ProfileCore() {
               </ScrollView>
               <View style={{ padding: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
                 <Pressable onPress={() => { Haptics.selectionAsync(); setLanguageModalVisible(false); }} style={{ backgroundColor: theme.colors.primary, paddingVertical: 14, borderRadius: theme.radii.md, alignItems: "center" }}>
-                  <Text style={{ ...theme.type.button, color: theme.colors.onPrimary, fontFamily: theme.type.button.fontFamily }}>Done</Text>
+                  <Text style={{ ...theme.type.button, color: theme.colors.onPrimary, fontFamily: theme.type.button.fontFamily }}>{t("common.done")}</Text>
                 </Pressable>
               </View>
             </Pressable>
@@ -2011,10 +2038,10 @@ export default function ProfileCore() {
 
         <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
           <Image source={require("@/assets/icons/Instagram_icon.png")} style={{ width: 16, height: 16, marginRight: 8 }} resizeMode="contain" />
-          <Text style={[styles.label, { marginBottom: 0 }]}>Instagram</Text>
+          <Text style={[styles.label, { marginBottom: 0 }]}>{t("profile.instagram")}</Text>
         </View>
         <TextInput
-          placeholder="@username or instagram.com/username"
+          placeholder={t("onboarding.instagramPlaceholder")}
           placeholderTextColor={theme.colors.textMuted}
           value={instagram}
           onChangeText={setInstagram}
@@ -2026,11 +2053,11 @@ export default function ProfileCore() {
         />
 
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-          <Text style={[styles.label, { marginBottom: 0 }]}>Interests</Text>
+          <Text style={[styles.label, { marginBottom: 0 }]}>{t("onboarding.interests.label")}</Text>
           <Text style={{ ...theme.type.caption, color: theme.colors.textMuted }}>{interests.length}/{GENERAL_INTERESTS_MAX}</Text>
         </View>
         <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary, marginBottom: 10 }}>
-          Shared across Romance & Friends — pick what you love.
+          {t("onboarding.interests.sharedHint")}
         </Text>
         <TouchableOpacity
           onPress={() => { Haptics.selectionAsync(); setInterestsModalVisible(true); }}
@@ -2046,11 +2073,11 @@ export default function ProfileCore() {
             marginBottom: interests.length > 0 ? 12 : 4,
           }}
           accessibilityRole="button"
-          accessibilityLabel="Choose interests"
+          accessibilityLabel={t("onboarding.interests.choose")}
         >
           <Ionicons name="add-circle-outline" size={18} color={theme.colors.primary} style={{ marginRight: 6 }} />
           <Text style={{ ...theme.type.button, color: theme.colors.primary }}>
-            {interests.length > 0 ? "Edit interests" : "Choose interests"}
+            {interests.length > 0 ? t("onboarding.interests.edit") : t("onboarding.interests.choose")}
           </Text>
         </TouchableOpacity>
         {interests.length > 0 && (
@@ -2081,7 +2108,7 @@ export default function ProfileCore() {
           </View>
 
           <View style={[styles.sectionCard, { marginBottom: 8 }]}>
-            <Text style={{ ...theme.type.h3, color: theme.colors.textSecondary, marginBottom: 16, fontFamily: theme.type.h3.fontFamily }}>Mode profiles</Text>
+            <Text style={{ ...theme.type.h3, color: theme.colors.textSecondary, marginBottom: 16, fontFamily: theme.type.h3.fontFamily }}>{t("onboarding.profile.modeProfiles")}</Text>
         <RomanceSubProfile
           enabled={romanceEnabled}
           toggle={() => setRomanceEnabled(!romanceEnabled)}
@@ -2189,7 +2216,7 @@ export default function ProfileCore() {
             }}
           >
             <Text style={{ ...theme.type.body, color: theme.colors.error, fontWeight: "600" as const }}>
-              Couldn&apos;t save your profile
+              {t("onboarding.wizard.saveFailedTitle")}
             </Text>
             <Text style={{ ...theme.type.caption, color: theme.colors.error, marginTop: 4 }}>
               {saveError}
@@ -2200,7 +2227,7 @@ export default function ProfileCore() {
               style={{ marginTop: 10, alignSelf: "flex-start" }}
             >
               <Text style={{ ...theme.type.button, color: theme.colors.error, fontWeight: "700" as const }}>
-                {saving ? "Retrying…" : "Tap to retry"}
+                {saving ? t("onboarding.wizard.retrying") : t("onboarding.wizard.tapToRetry")}
               </Text>
             </TouchableOpacity>
           </View>
@@ -2221,7 +2248,7 @@ export default function ProfileCore() {
           }}
         >
           <Text style={{ ...theme.type.button, color: theme.colors.onPrimary, fontFamily: theme.type.button.fontFamily }}>
-            {saving ? "Saving..." : "Save"}
+            {saving ? t("onboarding.autosave.saving") : t("common.save")}
           </Text>
         </TouchableOpacity>
               </>
@@ -2229,11 +2256,11 @@ export default function ProfileCore() {
               <WizardShell
                 currentStep={currentStepIndex + 1}
                 totalSteps={wizardSteps.length}
-                stepLabel={wizardStepLabel(currentWizardStep)}
+                stepLabel={wizardStepLabel(currentWizardStep, t)}
                 subProgress={currentWizardStep.kind === "general" && currentWizardStep.id === "photos" ? photoStepSubProgress : undefined}
                 onBack={handleHeaderBack}
                 onNext={() => { void handleStepContinue(); }}
-                nextLabel={currentWizardStep.kind === "review" ? "Finish profile" : "Continue"}
+                nextLabel={currentWizardStep.kind === "review" ? t("onboarding.wizard.finish") : t("common.continue")}
                 saving={saving}
                 saveError={saveError}
                 onRetry={() => { void handleStepContinue(); }}

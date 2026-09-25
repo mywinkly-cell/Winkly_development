@@ -17,6 +17,7 @@ import {
   Pressable,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { createGroupWithInvites } from "@/lib/groupInvitations";
 import { getPartnersForConcierge } from "@/lib/ai/conciergePartners";
@@ -25,12 +26,11 @@ import type { Mode } from "@/types";
 
 type Styles = ReturnType<typeof createStyles>;
 
-const MODES: { key: Mode; label: string }[] = [
-  { key: "friends", label: "Friends" },
-  { key: "business", label: "Business" },
-];
+/** Group types; labels come from `modes.<key>`. */
+const MODES: Mode[] = ["friends", "business"];
 
 export default function CreateGroup() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -82,7 +82,7 @@ export default function CreateGroup() {
 
   const onCreate = async () => {
     if (!name.trim()) {
-      Alert.alert("Missing name", "Please enter a group name.");
+      Alert.alert(t("groups.form.missingName"), t("groups.create.missingNameBody"));
       return;
     }
     setSubmitting(true);
@@ -94,13 +94,13 @@ export default function CreateGroup() {
         inviteeUserIds: [...selectedIds],
       });
       Alert.alert(
-        "Group created",
+        t("groups.create.createdTitle"),
         selectedIds.size > 0
-          ? `Invitations sent to ${selectedIds.size} ${selectedIds.size === 1 ? "person" : "people"}. They can accept or decline.`
-          : "You can invite people from the group details.",
+          ? t("groups.create.invitationsSent", { count: selectedIds.size })
+          : t("groups.create.inviteLater"),
         [
           {
-            text: "Details",
+            text: t("groups.create.details"),
             onPress: () =>
               router.replace({
                 pathname: "/groups/group-details",
@@ -108,14 +108,14 @@ export default function CreateGroup() {
               }),
           },
           {
-            text: "Open chat",
+            text: t("groups.create.openChat"),
             onPress: () =>
               router.replace({ pathname: "/groups/group-chat", params: { groupId } }),
           },
         ]
       );
     } catch (e) {
-      Alert.alert("Error", (e as Error).message ?? "Could not create group.");
+      Alert.alert(t("common.error"), (e as Error).message ?? t("groups.create.failed"));
     } finally {
       setSubmitting(false);
     }
@@ -124,53 +124,53 @@ export default function CreateGroup() {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Header title="Create group" onBack={() => router.back()} theme={theme} styles={styles} />
+        <Header title={t("groups.createGroup")} onBack={() => router.back()} theme={theme} styles={styles} />
 
         <View style={styles.card}>
-          <Text style={styles.title}>New community</Text>
+          <Text style={styles.title}>{t("groups.create.title")}</Text>
           <Text style={styles.subtitle}>
-            Create a group for meetups, business circles, or shared interests. Invited people will receive a request and can Accept or Decline.
+            {t("groups.create.subtitle")}
           </Text>
 
-          <Label text="Group name" styles={styles} />
+          <Label text={t("groups.form.name")} styles={styles} />
           <TextInput
             value={name}
             onChangeText={setName}
-            placeholder="e.g. Munich Latte Lovers"
+            placeholder={t("groups.create.namePlaceholder")}
             placeholderTextColor={theme.colors.textMuted}
             style={styles.input}
           />
 
-          <Label text="Type" styles={styles} />
+          <Label text={t("groups.create.type")} styles={styles} />
           <View style={styles.modeRow}>
             {MODES.map((m) => (
               <TouchableOpacity
-                key={m.key}
-                onPress={() => setMode(m.key)}
-                style={[styles.modeChip, mode === m.key && styles.modeChipActive]}
+                key={m}
+                onPress={() => setMode(m)}
+                style={[styles.modeChip, mode === m && styles.modeChipActive]}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.modeChipText, mode === m.key && styles.modeChipTextActive]}>{m.label}</Text>
+                <Text style={[styles.modeChipText, mode === m && styles.modeChipTextActive]}>{t(`modes.${m}`)}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Label text="Description (optional)" styles={styles} />
+          <Label text={t("groups.form.description")} styles={styles} />
           <TextInput
             value={description}
             onChangeText={setDescription}
-            placeholder="What is this group about?"
+            placeholder={t("groups.create.descriptionPlaceholder")}
             placeholderTextColor={theme.colors.textMuted}
             style={[styles.input, { minHeight: 80, textAlignVertical: "top" }]}
             multiline
           />
 
-          <Label text="Invite people (optional)" styles={styles} />
-          <Text style={styles.hint}>Select connections to invite. They will receive a group invitation and must accept to join.</Text>
+          <Label text={t("groups.create.invitePeople")} styles={styles} />
+          <Text style={styles.hint}>{t("groups.create.inviteHint")}</Text>
           {loadingPartners ? (
             <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginVertical: 12 }} />
           ) : partners.length === 0 ? (
-            <Text style={styles.emptyHint}>No connections yet in this mode. Create the group and invite later from group details.</Text>
+            <Text style={styles.emptyHint}>{t("groups.create.noConnections")}</Text>
           ) : (
             <View style={styles.partnerList}>
               {partners.map((p) => (
@@ -204,12 +204,12 @@ export default function CreateGroup() {
             {submitting ? (
               <ActivityIndicator size="small" color={theme.colors.onPrimary} />
             ) : (
-              <Text style={styles.primaryText}>Create group & send invitations</Text>
+              <Text style={styles.primaryText}>{t("groups.create.submit")}</Text>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => router.back()} style={styles.secondaryBtn} activeOpacity={0.9}>
-            <Text style={styles.secondaryText}>Cancel</Text>
+            <Text style={styles.secondaryText}>{t("common.cancel")}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -218,9 +218,10 @@ export default function CreateGroup() {
 }
 
 function Header({ title, onBack, theme, styles }: { title: string; onBack: () => void; theme: AppTheme; styles: Styles }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.headerRow}>
-      <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
+      <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel={t("common.back")}>
         <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
       </TouchableOpacity>
       <Text style={styles.headerTitle}>{title}</Text>

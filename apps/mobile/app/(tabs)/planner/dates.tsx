@@ -14,6 +14,8 @@ import {
   type LayoutChangeEvent,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { useTranslation } from "react-i18next";
+import i18n from "i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { Card, Header, Input, PrimaryButton, SecondaryButton } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
@@ -25,6 +27,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { chatRoutes } from "@/lib/navigation/modeHub";
 import { modeDisplayName } from "@/lib/profile/otherUserCore";
+import { useAppLocaleTag } from "@/lib/i18n/appLocale";
 
 const RECENT_PAST_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -136,7 +139,7 @@ async function loadPlannedDates(
   return rows.map((row) => {
     const partnerId = row.proposer_id === userId ? row.invitee_id : row.proposer_id;
     const profile = profileById.get(partnerId);
-    const activity = (row.activity ?? row.title ?? "Date").trim();
+    const activity = (row.activity ?? row.title ?? i18n.t("planner.datesScreen.fallbackActivity")).trim();
     const venue = (row.place ?? row.location ?? row.title ?? "").trim();
     const linkedCheckin = checkinByPlannerItem.get(row.id);
 
@@ -150,11 +153,11 @@ async function loadPlannedDates(
           show_full_name: profile?.show_full_name as boolean | null | undefined,
         },
         "romance",
-        "Someone",
+        i18n.t("planner.datesScreen.fallbackName"),
       ),
       partnerPhotoUrl: firstPhotoUrl(profile),
       activity,
-      venue: venue || "Location TBD",
+      venue: venue || i18n.t("planner.datesScreen.locationTbd"),
       startsAt: row.starts_at,
       status: row.status,
       conversationId: conversationMap.get(partnerId) ?? null,
@@ -165,6 +168,9 @@ async function loadPlannedDates(
 
 export default function PlannerDates() {
   const router = useRouter();
+  const { t } = useTranslation();
+  const appLocale = useAppLocaleTag();
+  const statusLabel = (status: string) => t(`planner.status.${status}`, { defaultValue: status });
   const theme = useAppTheme();
   const styles = createStyles(theme);
   const scrollRef = useRef<ScrollView>(null);
@@ -263,30 +269,30 @@ export default function PlannerDates() {
       await respondDateCheckin(id, "ok");
       load();
     } catch (e) {
-      Alert.alert("Error", e instanceof Error ? e.message : "Could not update");
+      Alert.alert(t("common.error"), e instanceof Error ? e.message : t("planner.couldNotUpdate"));
     }
   };
 
   const onHelp = async (id: string) => {
-    Alert.alert("Safety", "If you are in immediate danger, contact local emergency services.", [
+    Alert.alert(t("planner.datesScreen.safetyTitle"), t("planner.datesScreen.safetyMessage"), [
       {
-        text: "Mark as needs help",
+        text: t("planner.datesScreen.markNeedsHelp"),
         style: "destructive",
         onPress: async () => {
           try {
             await respondDateCheckin(id, "needs_help");
             load();
           } catch (e) {
-            Alert.alert("Error", e instanceof Error ? e.message : "Could not update");
+            Alert.alert(t("common.error"), e instanceof Error ? e.message : t("planner.couldNotUpdate"));
           }
         },
       },
-      { text: "Cancel", style: "cancel" },
+      { text: t("common.cancel"), style: "cancel" },
     ]);
   };
 
   const formatDateTime = (iso: string) =>
-    new Date(iso).toLocaleString(undefined, {
+    new Date(iso).toLocaleString(appLocale, {
       weekday: "short",
       month: "short",
       day: "numeric",
@@ -299,7 +305,7 @@ export default function PlannerDates() {
 
   return (
     <View style={styles.screen}>
-      <Header title="Dates" onBack={() => router.back()} />
+      <Header title={t("planner.dates")} onBack={() => router.back()} />
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={styles.scroll}
@@ -315,16 +321,13 @@ export default function PlannerDates() {
         }
       >
         <Card style={styles.card}>
-          <Text style={styles.title}>Upcoming dates & safety</Text>
-          <Text style={styles.subtitle}>
-            Confirmed plans with matches (accepted in chat). Pending date invites stay in your
-            match conversations until someone accepts.
-          </Text>
+          <Text style={styles.title}>{t("planner.datesScreen.title")}</Text>
+          <Text style={styles.subtitle}>{t("planner.datesScreen.subtitle")}</Text>
 
           <Input
             value={query}
             onChangeText={setQuery}
-            placeholder="Search by name, activity, or venue…"
+            placeholder={t("planner.datesScreen.searchPlaceholder")}
             containerStyle={styles.searchContainer}
           />
         </Card>
@@ -333,23 +336,17 @@ export default function PlannerDates() {
           <ActivityIndicator style={{ marginTop: theme.spacing.xxl }} color={theme.colors.primary} />
         ) : (
           <>
-            <Text style={styles.sectionTitle}>Confirmed dates</Text>
-            <Text style={styles.sectionHint}>
-              Only shows dates you&apos;ve accepted (or sent and the other person accepted). Proposals
-              waiting on a reply appear in chat, not here.
-            </Text>
+            <Text style={styles.sectionTitle}>{t("planner.datesScreen.confirmedTitle")}</Text>
+            <Text style={styles.sectionHint}>{t("planner.datesScreen.confirmedHint")}</Text>
 
             {showPlannedEmpty ? (
               <View style={styles.emptyState}>
                 <Ionicons name="calendar-outline" size={40} color={theme.colors.textMuted} />
-                <Text style={styles.emptyTitle}>No confirmed dates yet</Text>
-                <Text style={styles.emptySubtitle}>
-                  When you or a match accepts a date invite in chat, it will show up here. Open a
-                  match conversation to propose or respond to plans.
-                </Text>
+                <Text style={styles.emptyTitle}>{t("planner.datesScreen.emptyTitle")}</Text>
+                <Text style={styles.emptySubtitle}>{t("planner.datesScreen.emptySubtitle")}</Text>
               </View>
             ) : showSearchEmpty ? (
-              <Text style={styles.searchEmpty}>No matches for your search.</Text>
+              <Text style={styles.searchEmpty}>{t("planner.datesScreen.searchEmpty")}</Text>
             ) : (
               filteredDates.map((date) => (
                 <Card key={date.id} style={styles.itemCard}>
@@ -367,7 +364,7 @@ export default function PlannerDates() {
                       <Text style={styles.itemSub}>{date.venue}</Text>
                       <Text style={styles.itemSub}>{formatDateTime(date.startsAt)}</Text>
                     </View>
-                    <Text style={styles.badge}>{date.status}</Text>
+                    <Text style={styles.badge}>{statusLabel(date.status)}</Text>
                   </View>
 
                   <View style={styles.linkRow}>
@@ -383,10 +380,10 @@ export default function PlannerDates() {
                         style={styles.linkBtn}
                         activeOpacity={0.9}
                         accessibilityRole="button"
-                        accessibilityLabel={`Open chat with ${date.partnerName}`}
+                        accessibilityLabel={t("planner.datesScreen.openChatWith", { name: date.partnerName })}
                       >
                         <Ionicons name="chatbubble-outline" size={16} color={theme.modeAccent("romance").primary} />
-                        <Text style={styles.linkText}>Chat</Text>
+                        <Text style={styles.linkText}>{t("planner.datesScreen.chat")}</Text>
                       </TouchableOpacity>
                     ) : null}
                     {date.checkinId ? (
@@ -395,10 +392,10 @@ export default function PlannerDates() {
                         style={styles.linkBtn}
                         activeOpacity={0.9}
                         accessibilityRole="button"
-                        accessibilityLabel="View safety check-in"
+                        accessibilityLabel={t("planner.datesScreen.viewCheckin")}
                       >
                         <Ionicons name="shield-checkmark-outline" size={16} color={theme.colors.primary} />
-                        <Text style={{ ...styles.linkText, color: theme.colors.primary }}>Safety check-in</Text>
+                        <Text style={{ ...styles.linkText, color: theme.colors.primary }}>{t("planner.datesScreen.checkin")}</Text>
                       </TouchableOpacity>
                     ) : null}
                   </View>
@@ -406,13 +403,13 @@ export default function PlannerDates() {
               ))
             )}
 
-            <Text style={styles.sectionTitle}>Safety check-ins</Text>
+            <Text style={styles.sectionTitle}>{t("planner.datesScreen.checkinsTitle")}</Text>
 
             {filteredCheckins.length === 0 ? (
               <Text style={styles.note}>
                 {query.trim()
-                  ? "No safety check-ins match your search."
-                  : "No safety check-ins scheduled yet."}
+                  ? t("planner.datesScreen.checkinsSearchEmpty")
+                  : t("planner.datesScreen.checkinsEmpty")}
               </Text>
             ) : (
               filteredCheckins.map((it) => {
@@ -437,8 +434,12 @@ export default function PlannerDates() {
                     accessibilityRole="button"
                     accessibilityLabel={
                       canOpenChat
-                        ? `Open chat with ${it.partner_first_name ?? "partner"}`
-                        : `Safety check-in${it.partner_first_name ? ` with ${it.partner_first_name}` : ""}`
+                        ? it.partner_first_name
+                          ? t("planner.datesScreen.openChatWith", { name: it.partner_first_name })
+                          : t("planner.datesScreen.openChat")
+                        : it.partner_first_name
+                          ? t("planner.datesScreen.checkinWith", { name: it.partner_first_name })
+                          : t("planner.datesScreen.checkin")
                     }
                   >
                     {it.partner_photo_url ? (
@@ -450,17 +451,17 @@ export default function PlannerDates() {
                     )}
                     <View style={styles.plannedBody}>
                       <Text style={styles.itemTitle}>
-                        {it.partner_first_name ?? "Safety check-in"}
+                        {it.partner_first_name ?? t("planner.datesScreen.checkin")}
                       </Text>
                       <Text style={styles.itemSub}>{formatDateTime(it.scheduled_at)}</Text>
                     </View>
-                    <Text style={styles.badge}>{it.status}</Text>
+                    <Text style={styles.badge}>{statusLabel(it.status)}</Text>
                   </TouchableOpacity>
                   {it.status === "scheduled" ? (
                     <View style={styles.rowActions}>
-                      <SecondaryButton title="I'm OK" onPress={() => onOk(it.id)} style={styles.rowActionBtn} />
+                      <SecondaryButton title={t("planner.datesScreen.imOk")} onPress={() => onOk(it.id)} style={styles.rowActionBtn} />
                       <PrimaryButton
-                        title="Need help"
+                        title={t("planner.datesScreen.needHelp")}
                         onPress={() => onHelp(it.id)}
                         style={{ ...styles.rowActionBtn, backgroundColor: theme.colors.errorBg }}
                         textStyle={{ color: theme.colors.error }}

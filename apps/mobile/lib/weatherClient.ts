@@ -1,5 +1,6 @@
 // Client-side weather for Concierge (Open-Meteo, no API key).
 
+import i18n from "i18next";
 import { expandCountryForDisplay, normalizeLocationDisplayString } from "@/lib/location/countryDisplay";
 // Use to show weather for selected date/location and pass weather_snapshot to AI.
 // Cache: weather by (lat,lng,date) or (city,date) TTL 5 min for repeat/refined requests.
@@ -309,34 +310,80 @@ export async function getWeatherForCityAndDate(
   return out;
 }
 
-/** Human-readable weather line for concierge forms (single day or range). */
+/** English weather-code summaries (weatherCodeToSummary) → display keys. The snapshot keeps English for the AI. */
+const WEATHER_SUMMARY_KEYS: Record<string, string> = {
+  Clear: "concierge.weather.clear",
+  "Partly cloudy": "concierge.weather.partlyCloudy",
+  Foggy: "concierge.weather.foggy",
+  Drizzle: "concierge.weather.drizzle",
+  Rain: "concierge.weather.rain",
+  Snow: "concierge.weather.snow",
+  "Rain showers": "concierge.weather.rainShowers",
+  "Snow showers": "concierge.weather.snowShowers",
+  Thunderstorm: "concierge.weather.thunderstorm",
+  Unknown: "concierge.weather.unknown",
+};
+
+function translateWeatherSummary(summary: string | undefined): string {
+  if (!summary) return "";
+  const key = WEATHER_SUMMARY_KEYS[summary];
+  return key ? i18n.t(key) : summary;
+}
+
+/** Rebuild the (English) range period summary from getWeatherForCityAndDateRange in the app language. */
+function translatePeriodSummary(period: string): string {
+  let rest = period.trim();
+  const parts: string[] = [];
+  if (rest.startsWith("Mostly sunny. ")) {
+    parts.push(i18n.t("concierge.weather.mostlySunny"));
+    rest = rest.slice("Mostly sunny. ".length);
+  } else if (rest.startsWith("Mixed skies. ")) {
+    parts.push(i18n.t("concierge.weather.mixedSkies"));
+    rest = rest.slice("Mixed skies. ".length);
+  }
+  const some = /^(\d+) of (\d+) days with rain\.$/.exec(rest);
+  if (rest === "No rain expected.") parts.push(i18n.t("concierge.weather.noRain"));
+  else if (rest === "Rain likely throughout.") parts.push(i18n.t("concierge.weather.rainThroughout"));
+  else if (some) parts.push(i18n.t("concierge.weather.someRainyDays", { rainy: Number(some[1]), count: Number(some[2]) }));
+  else if (rest) parts.push(rest);
+  return parts.join(" ");
+}
+
+/** Human-readable weather line for concierge forms (single day or range), in the app language. */
 export function formatWeatherDisplayText(
   w: WeatherSnapshot,
   opts: { singleDay: boolean; dateLabel?: string }
 ): string {
   if (!opts.singleDay) {
-    const period = w.period_summary ?? "";
-    const avg =
-      w.avg_temp_min != null && w.avg_temp_max != null
-        ? ` · Avg ${w.avg_temp_min}–${w.avg_temp_max}°C`
-        : "";
-    const rainy =
-      w.rainy_days != null && w.total_days != null
-        ? ` · ${w.rainy_days} of ${w.total_days} days rainy`
-        : "";
-    return `${period}${avg}${rainy}`.trim();
+    const parts = [translatePeriodSummary(w.period_summary ?? "")];
+    if (w.avg_temp_min != null && w.avg_temp_max != null) {
+      parts.push(i18n.t("concierge.weather.avgTemp", { min: w.avg_temp_min, max: w.avg_temp_max }));
+    }
+    if (w.rainy_days != null && w.total_days != null) {
+      parts.push(i18n.t("concierge.weather.rainyDays", { rainy: w.rainy_days, count: w.total_days }));
+    }
+    return parts.filter(Boolean).join(" · ");
   }
   const datePart = opts.dateLabel ?? w.date ?? "";
-  const dayRange =
-    w.temp_min != null && w.temp_max != null ? ` · Day ${w.temp_min}–${w.temp_max}°C` : "";
-  if (w.forecast_hour && w.temp_at_time != null) {
-    const precip =
-      w.precipitation != null && w.precipitation > 0.1 ? ` · ${w.precipitation} mm rain` : "";
-    return `${datePart} · ${w.forecast_hour}: ${w.summary ?? ""} · ${Math.round(w.temp_at_time)}°C${dayRange}${precip}`.trim();
+  const summary = translateWeatherSummary(w.summary);
+  const tail: string[] = [];
+  if (w.temp_min != null && w.temp_max != null) {
+    tail.push(i18n.t("concierge.weather.dayTemp", { min: w.temp_min, max: w.temp_max }));
   }
-  const precip =
-    w.precipitation != null && w.precipitation > 0 ? ` · ${w.precipitation} mm rain` : "";
-  return `${datePart}: ${w.summary ?? ""}${dayRange}${precip}`.trim();
+  if (w.forecast_hour && w.temp_at_time != null) {
+    if (w.precipitation != null && w.precipitation > 0.1) {
+      tail.push(i18n.t("concierge.weather.rainMm", { mm: w.precipitation }));
+    }
+    return [
+      i18n.t("concierge.weather.atHour", { date: datePart, hour: w.forecast_hour, summary }),
+      i18n.t("concierge.weather.temp", { temp: Math.round(w.temp_at_time) }),
+      ...tail,
+    ].join(" · ");
+  }
+  if (w.precipitation != null && w.precipitation > 0) {
+    tail.push(i18n.t("concierge.weather.rainMm", { mm: w.precipitation }));
+  }
+  return [i18n.t("concierge.weather.onDate", { date: datePart, summary }), ...tail].join(" · ");
 }
 
 export function weatherSnapshotToConciergePayload(w: WeatherSnapshot) {

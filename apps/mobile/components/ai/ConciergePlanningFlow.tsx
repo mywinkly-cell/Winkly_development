@@ -82,6 +82,7 @@ import {
   type RankInput,
   FOOD_AND_DRINKS_FORMAT_PROMPTS,
 } from "@/lib/ai/conciergePlanningFlow";
+import { translateCatalogText } from "@/lib/ai/conciergeCatalogI18n";
 import { buildPlanRequestText, inclusivePlanDayCount } from "@/lib/ai/buildPlanRequestText";
 import {
   clampTimeOfDayToFutureIfToday,
@@ -741,7 +742,7 @@ export function ConciergePlanningFlow({
       if (providerFallback) {
         setLoading(false);
         setStructuredPlans([]);
-        setError("We couldn't build real venue suggestions. Please wait a moment and try again.");
+        setError(t("concierge.flow.noRealVenues"));
         return;
       }
 
@@ -787,8 +788,8 @@ export function ConciergePlanningFlow({
       if (!futurePlans.length) {
         setMessage(
           activityKey === "quick"
-            ? "No venue options returned. Try a clearer request or a nearby city."
-            : "No plan options returned. Try changing the theme, date/time, or location and retry."
+            ? t("concierge.flow.noVenueOptions")
+            : t("concierge.flow.noPlanOptions")
         );
       } else {
         setMessage(null);
@@ -797,7 +798,7 @@ export function ConciergePlanningFlow({
     } catch (e) {
       if (genId !== genAttemptRef.current) return;
       setLoading(false);
-      const msg = (e as Error).message ?? "Something went wrong.";
+      const msg = (e as Error).message ?? t("concierge.error.generic");
       trace("generate:error", {
         message: msg,
         stack: e instanceof Error ? e.stack : undefined,
@@ -807,7 +808,7 @@ export function ConciergePlanningFlow({
       }
       setError(msg);
     }
-  }, [trace, effectiveMode, buildContext, source_screen, source_planner_tab, activityKey, activityLabel, partnerId, details, appLanguage, structuredPlans]);
+  }, [trace, effectiveMode, buildContext, source_screen, source_planner_tab, activityKey, activityLabel, partnerId, details, appLanguage, structuredPlans, t]);
 
   /**
    * Plan-it: one winkly_plan call from the one-line request (+ default city, partner, mode,
@@ -1187,14 +1188,14 @@ export function ConciergePlanningFlow({
     flowStep === "trip_planning" ||
     flowStep === "quick_request" ||
     flowStep === "activity"
-      ? "Winkly AI Planner"
+      ? t("concierge.flow.header.planner")
       : flowStep === "summary"
-        ? "Summary"
+        ? t("concierge.flow.header.summary")
         : flowStep === "suggestions"
-          ? "Your plans"
+          ? t("concierge.flow.header.plans")
           : flowStep === "invite"
-            ? "Invite"
-            : "Add to planner";
+            ? t("concierge.flow.header.invite")
+            : t("planReveal.addToPlanner");
 
   return (
     <View style={styles.container}>
@@ -1210,7 +1211,7 @@ export function ConciergePlanningFlow({
                   onClose();
                 }}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                accessibilityLabel="Close"
+                accessibilityLabel={t("common.close")}
                 accessibilityRole="button"
               >
                 <Ionicons name="close" size={22} color={theme.colors.textSecondary} />
@@ -1337,7 +1338,7 @@ export function ConciergePlanningFlow({
           initialQuery={
             planItActive
               ? planItText
-              : details.intentNotes ?? (activityLabel && activityLabel !== "Quick plan" ? activityLabel : "")
+              : details.intentNotes ?? (activityLabel && activityLabel !== "Quick plan" ? translateCatalogText(t, activityLabel) : "")
           }
           location={{
             location: details.location ?? "",
@@ -1382,18 +1383,25 @@ export function ConciergePlanningFlow({
                 selectedCategory.key === "food_drinks" ||
                 selectedCategory.key === "dinner_drinks"
               ) {
+                // Lands in the editable request field, so it's written in the app language.
                 const prompt = FOOD_AND_DRINKS_FORMAT_PROMPTS[subLabel];
+                const format = translateCatalogText(t, subLabel);
                 const intentNotes = prompt
-                  ? `Food & drinks format: ${subLabel}. ${prompt}`
-                  : `Food & drinks format: ${subLabel}.`;
+                  ? t("concierge.flow.foodFormatWithPrompt", { format, prompt: translateCatalogText(t, prompt) })
+                  : t("concierge.flow.foodFormat", { format });
                 return { ...prev, intentNotes };
               }
               return {
                 ...prev,
                 intentNotes:
                   subKey !== "any"
-                    ? `${activityLabel ?? selectedCategory.label}: ${subLabel}`
-                    : activityLabel ?? undefined,
+                    ? t("concierge.flow.activityWithSub", {
+                        activity: translateCatalogText(t, activityLabel ?? selectedCategory.label),
+                        sub: translateCatalogText(t, subLabel),
+                      })
+                    : activityLabel
+                      ? translateCatalogText(t, activityLabel)
+                      : undefined,
               };
             });
             setFlowStep("activity");
@@ -1445,9 +1453,9 @@ export function ConciergePlanningFlow({
           details={details}
           whoLabel={
             whoJoining === "just_me"
-              ? "Just me"
+              ? t("concierge.flow.justMe")
               : whoJoining === "decide_later"
-                ? "Decide later"
+                ? t("concierge.who.decide_later")
                 : partnerDisplayName
                   ? partnerDisplayName
                   : undefined
@@ -1489,7 +1497,7 @@ export function ConciergePlanningFlow({
             <GestureScrollView contentContainerStyle={styles.errorContent}>
               <Text style={styles.errorText}>{error}</Text>
               <TouchableOpacity style={styles.retryBtn} onPress={retryGenerate} activeOpacity={0.9}>
-                <Text style={styles.retryBtnText}>Retry</Text>
+                <Text style={styles.retryBtnText}>{t("concierge.retry")}</Text>
               </TouchableOpacity>
             </GestureScrollView>
           ) : message && !suggestions?.length && !structuredPlans?.length ? (
@@ -1497,20 +1505,20 @@ export function ConciergePlanningFlow({
               <Text style={styles.messageText}>{message}</Text>
               {noOptionsReason && <Text style={styles.noOptionsReason}>{noOptionsReason}</Text>}
               <TouchableOpacity style={styles.tryAgainBtn} onPress={() => setFlowStep(editRequestStep)} activeOpacity={0.9}>
-                <Text style={styles.tryAgainBtnText}>{editRequestStep === "quick_request" ? "Edit request" : "Change details"}</Text>
+                <Text style={styles.tryAgainBtnText}>{editRequestStep === "quick_request" ? t("concierge.flow.editRequest") : t("concierge.flow.changeDetails")}</Text>
               </TouchableOpacity>
             </GestureScrollView>
           ) : !suggestions?.length && !structuredPlans?.length ? (
             <GestureScrollView contentContainerStyle={styles.emptyContent}>
               <Text style={styles.messageText}>
-                {noOptionsReason || "No plans generated. Check your details or try again."}
+                {noOptionsReason || t("concierge.flow.noPlansGenerated")}
               </Text>
               <View style={styles.emptyActionsRow}>
                 <TouchableOpacity style={styles.tryAgainBtn} onPress={() => setFlowStep(editRequestStep)} activeOpacity={0.9}>
-                  <Text style={styles.tryAgainBtnText}>{editRequestStep === "quick_request" ? "Edit request" : "Change details"}</Text>
+                  <Text style={styles.tryAgainBtnText}>{editRequestStep === "quick_request" ? t("concierge.flow.editRequest") : t("concierge.flow.changeDetails")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.retryBtn} onPress={retryGenerate} activeOpacity={0.9}>
-                  <Text style={styles.retryBtnText}>Retry</Text>
+                  <Text style={styles.retryBtnText}>{t("concierge.retry")}</Text>
                 </TouchableOpacity>
               </View>
             </GestureScrollView>
@@ -1549,7 +1557,7 @@ export function ConciergePlanningFlow({
               ) : null}
               <View style={styles.optionsHeaderRow}>
                 <Text style={styles.optionsIntro}>
-                  {planItActive ? t("planIt.results.title") : isQuickPlan ? "Nearby options" : "Two options"}
+                  {planItActive ? t("planIt.results.title") : isQuickPlan ? t("concierge.flow.nearbyOptions") : t("concierge.flow.twoOptions")}
                 </Text>
                 <TouchableOpacity
                   style={styles.tryDifferentBtn}
@@ -1561,7 +1569,7 @@ export function ConciergePlanningFlow({
                   activeOpacity={0.9}
                 >
                   <Text style={styles.tryDifferentBtnText}>
-                    {planItActive ? t("planIt.results.tryDifferent") : isQuickPlan ? "Load more" : "Try different options"}
+                    {planItActive ? t("planIt.results.tryDifferent") : isQuickPlan ? t("concierge.flow.loadMore") : t("concierge.flow.tryDifferent")}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1661,9 +1669,8 @@ export function ConciergePlanningFlow({
                           numberOfLines={5}
                           style={[theme.type.caption, { color: theme.colors.textSecondary, fontFamily: theme.type.caption.fontFamily, marginBottom: theme.spacing.xs }]}
                         >
-                          <Text style={{ fontFamily: theme.type.bodyMedium.fontFamily, fontWeight: "600" }}>{`D${d.day} `}</Text>
-                          {d.date}: {d.morning.summary} · {d.afternoon.summary}
-                          {d.evening ? ` · ${d.evening.summary}` : ""}
+                          <Text style={{ fontFamily: theme.type.bodyMedium.fontFamily, fontWeight: "600" }}>{`${t("concierge.trip.dayShort", { day: d.day })} `}</Text>
+                          {t("concierge.trip.dayCompact", { date: d.date, summary: [d.morning.summary, d.afternoon.summary, d.evening?.summary].filter(Boolean).join(" · ") })}
                         </Text>
                       ))
                     ) : (p.itinerary ?? []).length > 0 ? (
@@ -1702,13 +1709,11 @@ export function ConciergePlanningFlow({
                 <View style={styles.conciergeUpsellHeader}>
                   <Ionicons name="sparkles-outline" size={16} color={theme.colors.primary} />
                   <Text style={styles.conciergeUpsellTitle}>
-                    {hasFullConcierge ? "Want even more depth?" : "Unlock the full Experience Menu"}
+                    {hasFullConcierge ? t("concierge.flow.upsell.moreDepthTitle") : t("concierge.flow.upsell.unlockTitle")}
                   </Text>
                 </View>
                 <Text style={styles.conciergeUpsellBody}>
-                  {hasFullConcierge
-                    ? "Open Winkly AI inside any chat for the full 3-option concierge — deeper tips and logistics."
-                    : "Premium gives you 3 curated options with concierge tips and logistics. Ask Winkly AI in any chat."}
+                  {hasFullConcierge ? t("concierge.flow.upsell.moreDepthBody") : t("concierge.flow.upsell.unlockBody")}
                 </Text>
                 {!hasFullConcierge ? (
                   <TouchableOpacity
@@ -1716,7 +1721,7 @@ export function ConciergePlanningFlow({
                     onPress={() => { Haptics.selectionAsync(); router.push("/account/subscription"); }}
                     activeOpacity={0.9}
                   >
-                    <Text style={styles.conciergeUpsellBtnText}>See Premium</Text>
+                    <Text style={styles.conciergeUpsellBtnText}>{t("concierge.flow.upsell.cta")}</Text>
                     <Ionicons name="arrow-forward" size={16} color={theme.colors.onPrimary} />
                   </TouchableOpacity>
                 ) : null}
@@ -1742,8 +1747,8 @@ export function ConciergePlanningFlow({
                   <PlanCard
                     key={idx}
                     onPress={() => setChosenIndex(idx)}
-                    title={String(opt.option_name ?? opt.narrative ?? `Option ${idx + 1}`)}
-                    badges={opt.why_this_fits ? <PlanCardBadge label="Picked for you" icon="star" tone="primary" /> : undefined}
+                    title={String(opt.option_name ?? opt.narrative ?? t("concierge.optionNumber", { number: idx + 1 }))}
+                    badges={opt.why_this_fits ? <PlanCardBadge label={t("concierge.pickedForYou")} icon="star" tone="primary" /> : undefined}
                     meta={
                       <>
                         {timeStr ? <PlanCardMeta icon="time-outline">{timeStr}</PlanCardMeta> : null}
@@ -1758,7 +1763,7 @@ export function ConciergePlanningFlow({
                       ) : undefined
                     }
                     primaryAction={{
-                      label: "Add to planner",
+                      label: t("planReveal.addToPlanner"),
                       onPress: () => {
                         setChosenIndex(idx);
                         setFlowStep(showInviteStepBeforePlanner ? "invite" : "add_to_planner");
@@ -1768,7 +1773,7 @@ export function ConciergePlanningFlow({
                       <>
                         <PlanCardIconAction
                           icon="person-add-outline"
-                          accessibilityLabel="Invite someone"
+                          accessibilityLabel={t("planReveal.inviteSomeone")}
                           onPress={() => {
                             setChosenIndex(idx);
                             setFlowStep("invite");
@@ -1776,12 +1781,12 @@ export function ConciergePlanningFlow({
                         />
                         <PlanCardIconAction
                           icon="share-outline"
-                          accessibilityLabel="Share this plan"
+                          accessibilityLabel={t("concierge.share.button")}
                           onPress={() => {
-                            const dateStr = details.date ? details.date.toLocaleDateString() : "";
+                            const dateStr = details.date ? details.date.toLocaleDateString(appLanguage) : "";
                             Share.share({
                               message: [opt.option_name ?? opt.narrative, locationLineDisplay, dateStr].filter(Boolean).join("\n"),
-                              title: String(opt.option_name ?? "Plan"),
+                              title: String(opt.option_name ?? t("planner.untitledPlan")),
                             }).catch(() => {});
                           }}
                         />
@@ -1790,13 +1795,13 @@ export function ConciergePlanningFlow({
                   >
                     {Array.isArray(itinerarySteps) && itinerarySteps.length > 0
                       ? itinerarySteps.slice(0, 3).map((step, i) => {
-                          const t = (step as { time?: string }).time ?? "";
+                          const stepTime = (step as { time?: string }).time ?? "";
                           const a = (step as { activity?: string }).activity ?? String(step);
                           return (
                             <View key={i} style={{ flexDirection: "row", gap: theme.spacing.xs, marginBottom: theme.spacing.xxs }}>
-                              {t ? (
+                              {stepTime ? (
                                 <Text style={[theme.type.caption, { color: theme.colors.textSecondary, fontFamily: theme.type.bodyMedium.fontFamily, fontWeight: "600" }]}>
-                                  {t}
+                                  {stepTime}
                                 </Text>
                               ) : null}
                               <Text
@@ -1893,12 +1898,12 @@ export function ConciergePlanningFlow({
             <View style={styles.pickerHeader}>
               <Text style={styles.pickerTitle}>
                 {invitePickerChoice === "matches"
-                  ? "Choose a romance match"
+                  ? t("concierge.picker.match")
                   : invitePickerChoice === "friends"
-                    ? "Choose a friend"
+                    ? t("concierge.picker.friend")
                     : invitePickerChoice === "business"
-                      ? "Choose a business contact"
-                      : "Choose a contact"}
+                      ? t("concierge.picker.business")
+                      : t("concierge.picker.contact")}
               </Text>
               <TouchableOpacity onPress={() => setInvitePickerChoice(null)} hitSlop={12}>
                 <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
@@ -1911,7 +1916,7 @@ export function ConciergePlanningFlow({
                   style={styles.pickerSearchInput}
                   value={contactsQuery}
                   onChangeText={setContactsQuery}
-                  placeholder="Search Winkly users"
+                  placeholder={t("concierge.picker.searchPlaceholder")}
                   placeholderTextColor={theme.colors.textMuted}
                   autoCorrect={false}
                   autoCapitalize="none"
@@ -1921,9 +1926,9 @@ export function ConciergePlanningFlow({
             <GestureScrollView style={styles.pickerScroll} contentContainerStyle={styles.pickerScrollContent}>
               {invitePickerChoice === "contacts" ? (
                 contactsLoading ? (
-                  <Text style={styles.pickerEmpty}>Searching…</Text>
+                  <Text style={styles.pickerEmpty}>{t("concierge.picker.searching")}</Text>
                 ) : contactsResults.length === 0 ? (
-                  <Text style={styles.pickerEmpty}>No users found</Text>
+                  <Text style={styles.pickerEmpty}>{t("concierge.picker.noUsers")}</Text>
                 ) : (
                   contactsResults.map((p) => (
                     <TouchableOpacity
@@ -1947,7 +1952,7 @@ export function ConciergePlanningFlow({
                   ))
                 )
               ) : partners.length === 0 ? (
-                <Text style={styles.pickerEmpty}>No one to show yet</Text>
+                <Text style={styles.pickerEmpty}>{t("concierge.picker.noOne")}</Text>
               ) : (
                 partners.map((p) => (
                   <TouchableOpacity

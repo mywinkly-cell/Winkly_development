@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 import { Colors, Typography, Layout, FontFamily } from "@/constants/tokens";
 import {
   INTEREST_CATEGORIES,
@@ -37,8 +38,9 @@ export function InterestPickerModal({
   onChange,
   onClose,
   max = GENERAL_INTERESTS_MAX,
-  title = "Your interests",
+  title,
 }: InterestPickerModalProps) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
   const items = selected ?? [];
   const atMax = items.length >= max;
@@ -96,12 +98,12 @@ export function InterestPickerModal({
         <View style={styles.sheet}>
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>{title}</Text>
+              <Text style={styles.title}>{title ?? t("onboarding.interests.title")}</Text>
               <Text style={styles.subtitle}>
-                Pick up to {max} — {items.length}/{max} selected
+                {t("onboarding.interests.pickUpTo", { count: max, selected: items.length })}
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} hitSlop={12} style={styles.closeBtn} accessibilityLabel="Close">
+            <TouchableOpacity onPress={onClose} hitSlop={12} style={styles.closeBtn} accessibilityLabel={t("common.close")}>
               <Ionicons name="close" size={24} color={Colors.gray600} />
             </TouchableOpacity>
           </View>
@@ -111,7 +113,7 @@ export function InterestPickerModal({
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Search interests…"
+              placeholder={t("onboarding.interests.search")}
               placeholderTextColor={Colors.gray500}
               style={styles.searchInput}
               autoCorrect={false}
@@ -138,13 +140,13 @@ export function InterestPickerModal({
               </View>
             ))}
             {categories.length === 0 && (
-              <Text style={styles.empty}>No interests match “{query}”.</Text>
+              <Text style={styles.empty}>{t("onboarding.interests.noMatch", { query })}</Text>
             )}
           </ScrollView>
 
           <View style={styles.footer}>
             <TouchableOpacity onPress={onClose} style={styles.doneBtn} accessibilityRole="button">
-              <Text style={styles.doneText}>Done</Text>
+              <Text style={styles.doneText}>{t("common.done")}</Text>
             </TouchableOpacity>
           </View>
         </View>

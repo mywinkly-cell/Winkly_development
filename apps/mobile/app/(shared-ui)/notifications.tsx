@@ -3,6 +3,7 @@ import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
+import { formatAppDateTime } from "@/lib/i18n/appLocale";
 
 type NotificationItem = {
   id: string;
@@ -73,7 +74,7 @@ export default function Notifications() {
                 <Text style={{ color: theme.colors.textPrimary, fontWeight: "900" }}>{n.title}</Text>
                 <Text style={{ color: theme.colors.textPrimary, marginTop: 6 }}>{n.body}</Text>
                 <Text style={{ color: theme.colors.textSecondary, marginTop: 8, fontSize: 12 }}>
-                  {new Date(n.created_at).toLocaleString()}
+                  {formatAppDateTime(new Date(n.created_at))}
                 </Text>
               </View>
             ))}

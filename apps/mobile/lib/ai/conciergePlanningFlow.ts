@@ -3,6 +3,7 @@
  * Step 1 Intent → 2 Activity Details → 3 Social → 4 Summary → 5 AI Suggestions → 6 Invite/Share → 7 Add to Planner
  */
 
+import i18n from "i18next";
 import type { Mode } from "@/types";
 import { categoriesForInterest } from "@/lib/ai/categoriesForInterest";
 
@@ -30,6 +31,7 @@ export interface TripPlanningAnswers {
   scope: TripScope;
   vibe: TripVibe;
   activityLevel: ActivityLevel;
+  /** Must-have ids (TripPlanningFlow MUST_HAVE_IDS), e.g. "photo_spots". */
   mustHaves: string[];
   /** Only meaningful when scope === "new_destination". */
   destinationDecided: boolean;
@@ -421,6 +423,85 @@ export const ALL_ACTIVITY_CATEGORIES: ActivityCategory[] = [
   },
 ];
 
+/** Icon + one-line hint per sub-activity label (Step 1b grid). Hints are translated for display via conciergeCatalogI18n. */
+export const SUB_ACTIVITY_META: Record<string, { icon: string; hint?: string }> = {
+  "Dinner / Brunch": { icon: "restaurant-outline", hint: "Sit-down meal occasion" },
+  "Drinks & bar": { icon: "wine-outline", hint: "Bar, wine bar or pub" },
+  Coffee: { icon: "cafe-outline", hint: "Relaxed café meet" },
+  "Street food or market": { icon: "storefront-outline", hint: "Markets & food halls" },
+  "Theatre / show": { icon: "ticket-outline", hint: "Live performance" },
+  "Museum / gallery": { icon: "images-outline", hint: "Explore exhibits" },
+  Cinema: { icon: "film-outline", hint: "Movie outing" },
+  Exhibition: { icon: "easel-outline", hint: "Special show or fair" },
+  "Opera / classical": { icon: "musical-notes-outline", hint: "Classical performance" },
+  "Tennis / padel": { icon: "tennisball-outline", hint: "Court sport" },
+  Bowling: { icon: "bowling-ball-outline", hint: "Lanes & friendly competition" },
+  "Cycling route": { icon: "bicycle-outline", hint: "Scenic ride together" },
+  "Evening stroll": { icon: "walk-outline", hint: "Relaxed walk at dusk" },
+  "Indoor climbing": { icon: "trending-up-outline", hint: "Bouldering or climbing gym" },
+  "Social dance / class": { icon: "body-outline", hint: "Learn steps together" },
+  "Live jazz bar": { icon: "musical-note-outline", hint: "Intimate live music" },
+  "Acoustic set": { icon: "mic-outline", hint: "Small venue performance" },
+  "Salsa / latin night": { icon: "flame-outline", hint: "Latin dance night" },
+  "Cooking class": { icon: "restaurant-outline", hint: "Hands-on kitchen session" },
+  "Tasting flight": { icon: "wine-outline", hint: "Curated tasting experience" },
+  "Boat / mini-excursion": { icon: "boat-outline", hint: "Short scenic trip" },
+  "Photography walk": { icon: "camera-outline", hint: "Explore with your camera" },
+  "Spa / massage": { icon: "flower-outline", hint: "Relax and recharge" },
+  "Sauna / bath": { icon: "water-outline", hint: "Thermal or sauna session" },
+  "Meditation / breathwork": { icon: "leaf-outline", hint: "Calm, mindful session" },
+  "Thermal day pass": { icon: "sunny-outline", hint: "Full-day wellness venue" },
+  "Creative workshop": { icon: "brush-outline", hint: "Team creative session" },
+  "Strategy day space": { icon: "bulb-outline", hint: "Focused offsite room" },
+  "Retreat-style venue": { icon: "home-outline", hint: "Away-from-office setting" },
+  "Team rituals block": { icon: "people-outline", hint: "Structured team time" },
+  Hike: { icon: "trail-sign-outline", hint: "Trail or nature walk" },
+  Picnic: { icon: "basket-outline", hint: "Outdoor food & blankets" },
+  "Beach or waterfront": { icon: "water-outline", hint: "Coastal hangout" },
+  "Park stroll": { icon: "leaf-outline", hint: "Easy walk in the park" },
+  "Scenic viewpoint": { icon: "eye-outline", hint: "Photo-worthy lookout" },
+  "Board-game café": { icon: "dice-outline", hint: "Games over drinks" },
+  Arcade: { icon: "game-controller-outline", hint: "Classic arcade fun" },
+  "Escape room": { icon: "key-outline", hint: "Puzzle adventure" },
+  "Mini golf": { icon: "golf-outline", hint: "Light-hearted competition" },
+  "Watch a match": { icon: "tv-outline", hint: "Live sport viewing" },
+  "Casual padel / hoops": { icon: "basketball-outline", hint: "Pick-up sport" },
+  "Running buddy laps": { icon: "footsteps-outline", hint: "Run together" },
+  "Ice skating": { icon: "snow-outline", hint: "Rink session" },
+  "Live gig": { icon: "musical-notes-outline", hint: "Concert or live set" },
+  "DJ night": { icon: "disc-outline", hint: "Club or dance floor" },
+  "Karaoke room": { icon: "mic-outline", hint: "Private karaoke session" },
+  "Late bites after show": { icon: "fast-food-outline", hint: "Post-show food run" },
+  "Gym buddy slot": { icon: "barbell-outline", hint: "Work out together" },
+  "Yoga / pilates": { icon: "body-outline", hint: "Studio class" },
+  "HIIT class": { icon: "flash-outline", hint: "High-intensity session" },
+  "Recovery stretch / sauna": { icon: "fitness-outline", hint: "Active recovery" },
+  "Quick espresso": { icon: "cafe-outline", hint: "Short focused meet" },
+  "Long catch-up": { icon: "chatbubbles-outline", hint: "Unhurried conversation" },
+  "Quiet laptop-friendly café": { icon: "laptop-outline", hint: "Work-friendly setting" },
+  "Specialty tasting flight": { icon: "wine-outline", hint: "Curated coffee or tea" },
+  "Business lunch restaurant": { icon: "restaurant-outline", hint: "Sit-down business lunch" },
+  "Casual counter-order": { icon: "fast-food-outline", hint: "Quick casual lunch" },
+  "Outdoor terrace lunch": { icon: "sunny-outline", hint: "Al fresco dining" },
+  "Full round": { icon: "golf-outline", hint: "18-hole round" },
+  "Driving range session": { icon: "golf-outline", hint: "Practice at the range" },
+  "Clubhouse drinks round": { icon: "beer-outline", hint: "Post-game drinks" },
+  "Short lesson + range": { icon: "school-outline", hint: "Coaching plus practice" },
+  "Conference / summit": { icon: "podium-outline", hint: "Large industry event" },
+  "Meetup talk": { icon: "megaphone-outline", hint: "Community talk or panel" },
+  "Trade fair floor": { icon: "storefront-outline", hint: "Expo or trade show" },
+  "Afterparty networking": { icon: "people-outline", hint: "Post-event mingle" },
+  "Park loop agenda": { icon: "walk-outline", hint: "Walking meeting loop" },
+  "Waterfront stride": { icon: "water-outline", hint: "Scenic walking route" },
+  "Coffee-to-stroll": { icon: "cafe-outline", hint: "Coffee then a walk" },
+  "Standing walking meeting": { icon: "footsteps-outline", hint: "Walk while you talk" },
+  "Client dinner": { icon: "restaurant-outline", hint: "Formal client meal" },
+  "Team celebration": { icon: "sparkles-outline", hint: "Celebrate together" },
+  "Quiet steakhouse": { icon: "restaurant-outline", hint: "Low-key upscale dinner" },
+  "Chef's table style": { icon: "star-outline", hint: "Premium dining experience" },
+  Any: { icon: "ellipse-outline", hint: "Open to anything" },
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Intent card catalogue (new routing + UI model)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -732,7 +813,12 @@ export const GENERIC_TAIL: ActivityCardDef[] = [
 export type RankedCard = ActivityCardDef & {
   boosted: boolean;
   boostReason?: string;
+  /** Shared interest behind `boostReason` (e.g. "food drink"), for a translated "Both love …" line. */
+  boostInterest?: string;
 };
+
+/** Section headings from getIntentCards (English values; translated for display via conciergeCatalogI18n). */
+export const INTENT_SECTION_LABELS = ["Dates & romance", "Meet-ups & friends", "Professional", "More options"] as const;
 
 export type IntentSection = {
   key: string;
@@ -780,10 +866,12 @@ export function getIntentCards(
 
     if (selfMatch && partnerMatch) {
       const shared = card.interestTags.find((t) => selfCats.has(t) && partnerCats?.has(t));
+      const boostInterest = (shared ?? "this").replace(/_/g, " ");
       return {
         ...card,
         boosted: true,
-        boostReason: `Both love ${(shared ?? "this").replace(/_/g, " ")}`,
+        boostReason: `Both love ${boostInterest}`,
+        boostInterest,
       };
     }
     if (selfMatch) return { ...card, boosted: true };
@@ -999,43 +1087,44 @@ export function getCurrencySymbol(currency: string): string {
   return map[currency] ?? currency + " ";
 }
 
-/** Inline AI hint for a field (short, subtle). */
-/** Merge trip questionnaire answers into Step 2 fields used by `buildPlanRequestText`. */
+/** Inline hints returned by getInlineHint (English values; translated for display via conciergeCatalogI18n). */
+export const INLINE_HINT_TEXTS = [
+  "Using your current location",
+  "Popular choice for this activity",
+  "Typical range for this category",
+] as const;
+
+/**
+ * Merge trip questionnaire answers into Step 2 fields used by `buildPlanRequestText`.
+ * The notes land in the (editable) request field, so they're written in the app language —
+ * the AI reads any language.
+ */
 export function tripAnswersToActivityDetails(
   answers: TripPlanningAnswers,
   existingDetails: Partial<ActivityDetails>
 ): Partial<ActivityDetails> {
-  const vibeMap: Record<TripVibe, string> = {
-    culture: "culture and history",
-    food: "food and local dining",
-    outdoors: "outdoor activities and nature",
-    entertainment: "shopping and entertainment",
-    mixed: "a mixed day out",
-  };
-  const scopeMap: Record<TripScope, string> = {
-    own_city: "day trip in my own city/area",
-    nearby: "nearby getaway (short travel)",
-    new_destination: "travel to a new destination",
-  };
+  const tr = (key: string, opts?: Record<string, unknown>) => i18n.t(`concierge.tripNotes.${key}`, opts);
   const destNote =
     answers.scope === "new_destination"
       ? answers.destinationDecided
-        ? "Destination is decided."
-        : `Still deciding on destination.${answers.travelRadius ? ` Travel radius: ${answers.travelRadius}.` : ""}`
+        ? tr("destinationDecided")
+        : answers.travelRadius
+          ? tr("destinationUndecidedRadius", { radius: i18n.t(`concierge.trip.radius.${answers.travelRadius}`) })
+          : tr("destinationUndecided")
       : "";
   const mustHaveStr = answers.mustHaves.length
-    ? `Must-haves: ${answers.mustHaves.join(", ")}.`
+    ? tr("mustHaves", { list: answers.mustHaves.map((id) => i18n.t(`concierge.trip.mustHave.${id}`)).join(", ") })
     : "";
   const radiusStr =
     answers.travelRadius && answers.scope === "new_destination" && !answers.destinationDecided
-      ? `Willing to travel: ${answers.travelRadius}.`
+      ? tr("willingToTravel", { radius: i18n.t(`concierge.trip.radius.${answers.travelRadius}`) })
       : "";
 
   return {
     ...existingDetails,
     intentNotes: [
-      `Trip scope: ${scopeMap[answers.scope]}.`,
-      `Trip vibe: ${vibeMap[answers.vibe]}. Activity level: ${answers.activityLevel}.`,
+      tr("scope", { scope: tr(`scopeValue.${answers.scope}`) }),
+      tr("vibe", { vibe: tr(`vibeValue.${answers.vibe}`), level: tr(`levelValue.${answers.activityLevel}`) }),
       destNote,
     ]
       .filter(Boolean)

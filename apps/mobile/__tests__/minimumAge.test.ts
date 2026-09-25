@@ -80,7 +80,7 @@ describe("meetsMinimumAge", () => {
 describe("validateProfileCoreSubmit — age gate", () => {
   it("blocks submission for an under-18 birthday", () => {
     const result = validateProfileCoreSubmit({ ...validInput, birthday: birthdayFor(15) });
-    expect(result).toMatchObject({ ok: false, title: "You must be 18 or older" });
+    expect(result).toMatchObject({ ok: false, titleKey: "onboarding.profile.minAgeTitle", params: { age: 18 } });
   });
 
   it("still accepts an adult profile", () => {
@@ -91,7 +91,7 @@ describe("validateProfileCoreSubmit — age gate", () => {
     // Order matters: an empty form should say "Incomplete", not accuse the user
     // of being underage.
     expect(validateProfileCoreSubmit({ ...validInput, birthday: null })).toMatchObject({
-      title: "Incomplete",
+      titleKey: "auth.incomplete",
     });
   });
 });

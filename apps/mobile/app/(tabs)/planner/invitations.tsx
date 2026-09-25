@@ -14,6 +14,7 @@ import {
   Pressable,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Card, Header, PrimaryButton, SecondaryButton } from "@/components/ds";
@@ -27,16 +28,19 @@ import {
 } from "@/lib/plannerInvitations";
 import type { PlannerInvitationWithItem } from "@/lib/plannerInvitations";
 import { requestDateSafetyPrompt } from "@/lib/safety/dateCheckinPrompt";
+import { useAppLocaleTag } from "@/lib/i18n/appLocale";
 
-const SOURCE_LABEL: Record<string, string> = {
-  romance: "Date",
-  friends: "Meet-up",
-  business: "Meeting",
-  events: "Event",
+const SOURCE_LABEL_KEYS: Record<string, string> = {
+  romance: "planner.source.romance",
+  friends: "planner.source.friends",
+  business: "planner.source.business",
+  events: "planner.source.events",
 };
 
 export default function PlannerInvitations() {
   const router = useRouter();
+  const { t } = useTranslation();
+  const appLocale = useAppLocaleTag();
   const theme = useAppTheme();
   const styles = createStyles(theme);
   const [reminderForId, setReminderForId] = useState<string | null>(null);
@@ -74,20 +78,20 @@ export default function PlannerInvitations() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         await load();
       } catch (e) {
-        Alert.alert("Error", (e as Error).message ?? "Could not accept.");
+        Alert.alert(t("common.error"), (e as Error).message ?? t("planner.invites.acceptFailed"));
       } finally {
         setActingId(null);
       }
     },
-    [load]
+    [load, t]
   );
 
   const handleDecline = useCallback(
     async (invitationId: string) => {
-      Alert.alert("Decline invitation?", "The sender will be notified.", [
-        { text: "Cancel", style: "cancel" },
+      Alert.alert(t("planner.invites.declineTitle"), t("planner.invites.declineMessage"), [
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Decline",
+          text: t("planner.decline"),
           style: "destructive",
           onPress: async () => {
             setActingId(invitationId);
@@ -96,7 +100,7 @@ export default function PlannerInvitations() {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               await load();
             } catch (e) {
-              Alert.alert("Error", (e as Error).message ?? "Could not decline.");
+              Alert.alert(t("common.error"), (e as Error).message ?? t("planner.invites.declineFailed"));
             } finally {
               setActingId(null);
             }
@@ -104,7 +108,7 @@ export default function PlannerInvitations() {
         },
       ]);
     },
-    [load]
+    [load, t]
   );
 
   const handleReschedule = useCallback(
@@ -113,19 +117,15 @@ export default function PlannerInvitations() {
       try {
         await reschedulePlannerInvite(invitationId);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert(
-          "Propose different",
-          "You asked to reschedule. You can suggest another time or place in the chat.",
-          [{ text: "OK" }]
-        );
+        Alert.alert(t("planner.proposeDifferent"), t("planner.invites.rescheduleSent"), [{ text: t("common.ok") }]);
         await load();
       } catch (e) {
-        Alert.alert("Error", (e as Error).message ?? "Could not update.");
+        Alert.alert(t("common.error"), (e as Error).message ?? t("planner.couldNotUpdate"));
       } finally {
         setActingId(null);
       }
     },
-    [load]
+    [load, t]
   );
 
   const reminderInvite = reminderForId ? items.find((i) => i.id === reminderForId) : null;
@@ -133,29 +133,29 @@ export default function PlannerInvitations() {
 
   return (
     <View style={styles.screen}>
-      <Header title="Invitations" onBack={() => router.back()} />
+      <Header title={t("planner.invitations")} onBack={() => router.back()} />
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Card style={styles.card}>
-          <Text style={styles.title}>Requests & RSVPs</Text>
-          <Text style={styles.subtitle}>
-            Accept, decline, or propose a different option. Set a reminder so you don&apos;t forget to respond.
-          </Text>
+          <Text style={styles.title}>{t("planner.invites.title")}</Text>
+          <Text style={styles.subtitle}>{t("planner.invites.subtitle")}</Text>
         </Card>
 
         {loading ? (
           <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginVertical: theme.spacing.xxl }} />
         ) : pendingFirst.length === 0 ? (
-          <Text style={styles.empty}>No invitations yet.</Text>
+          <Text style={styles.empty}>{t("planner.invites.empty")}</Text>
         ) : (
           pendingFirst.map((it) => {
             const meta = [
-              SOURCE_LABEL[it.planner_item?.source_mode ?? ""] ?? it.planner_item?.source_mode,
+              SOURCE_LABEL_KEYS[it.planner_item?.source_mode ?? ""]
+                ? t(SOURCE_LABEL_KEYS[it.planner_item?.source_mode ?? ""])
+                : it.planner_item?.source_mode,
               it.planner_item?.starts_at
-                ? new Date(it.planner_item.starts_at).toLocaleString(undefined, {
+                ? new Date(it.planner_item.starts_at).toLocaleString(appLocale, {
                     weekday: "short",
                     month: "short",
                     day: "numeric",
@@ -172,7 +172,7 @@ export default function PlannerInvitations() {
             return (
               <Card key={it.id} style={styles.itemCard}>
                 <View style={styles.itemCardHeader}>
-                  <Text style={styles.itemTitle}>{it.planner_item?.title ?? "Invitation"}</Text>
+                  <Text style={styles.itemTitle}>{it.planner_item?.title ?? t("planner.invites.fallbackTitle")}</Text>
                   <Pressable
                     onPress={() => {
                       Haptics.selectionAsync();
@@ -180,37 +180,41 @@ export default function PlannerInvitations() {
                     }}
                     style={styles.bellBtn}
                     hitSlop={12}
-                    accessibilityLabel="Set reminder"
+                    accessibilityLabel={t("planner.invites.setReminder")}
                   >
                     <Ionicons name="notifications-outline" size={22} color={theme.colors.primary} />
                   </Pressable>
                 </View>
                 <Text style={styles.itemMeta}>{meta}</Text>
                 {it.inviter?.first_name && (
-                  <Text style={styles.inviter}>From {it.inviter.first_name}</Text>
+                  <Text style={styles.inviter}>{t("planner.invites.from", { name: it.inviter.first_name })}</Text>
                 )}
                 {it.status !== "pending" && (
                   <Text style={{ ...styles.statusBadge, ...(it.status === "accepted" ? styles.statusAccepted : null) }}>
-                    {it.status === "accepted" ? "Accepted" : it.status === "declined" ? "Declined" : "Reschedule requested"}
+                    {it.status === "accepted"
+                      ? t("planner.invites.statusAccepted")
+                      : it.status === "declined"
+                        ? t("planner.invites.statusDeclined")
+                        : t("planner.invites.statusReschedule")}
                   </Text>
                 )}
 
                 {isPending && (
                   <View style={styles.rowActions}>
                     <SecondaryButton
-                      title={isActing ? "…" : "Decline"}
+                      title={isActing ? "…" : t("planner.decline")}
                       onPress={() => handleDecline(it.id)}
                       disabled={isActing}
                       style={styles.rowActionBtn}
                     />
                     <SecondaryButton
-                      title={isActing ? "…" : "Propose different"}
+                      title={isActing ? "…" : t("planner.proposeDifferent")}
                       onPress={() => handleReschedule(it.id)}
                       disabled={isActing}
                       style={styles.rowActionBtn}
                     />
                     <PrimaryButton
-                      title={isActing ? "…" : "Accept"}
+                      title={isActing ? "…" : t("planner.accept")}
                       onPress={() => handleAccept(it.id)}
                       disabled={isActing}
                       style={styles.rowActionBtn}
@@ -229,7 +233,7 @@ export default function PlannerInvitations() {
           onClose={() => setReminderForId(null)}
           itemId={reminderInvite.id}
           title={reminderInvite.planner_item?.title ?? reminderInvite.id}
-          subtitle="Remind me to respond"
+          subtitle={t("planner.remindMeToRespond")}
         />
       )}
     </View>
@@ -260,6 +264,6 @@ function createStyles(theme: AppTheme) {
     statusBadge: { ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textSecondary, marginTop: theme.spacing.sm, fontStyle: "italic" },
     statusAccepted: { color: theme.colors.success },
     rowActions: { flexDirection: "row", gap: theme.spacing.sm, marginTop: theme.spacing.md },
-    rowActionBtn: { flex: 1 },
+    rowActionBtn: { flex: 1, paddingHorizontal: theme.spacing.sm },
   });
 }

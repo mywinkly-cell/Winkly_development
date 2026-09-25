@@ -14,6 +14,7 @@ import {
 import { SafeScreenView } from "@/components/SafeScreenView";
 import * as Haptics from "expo-haptics";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { Card, ListRow, PrimaryButton } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
@@ -25,6 +26,7 @@ type Variant = "personal" | "business";
 
 export default function WinklyWorld() {
   const router = useRouter();
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const styles = createStyles(theme);
   const params = useLocalSearchParams<{ variant?: string }>();
@@ -47,45 +49,49 @@ export default function WinklyWorld() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Welcome to your Winkly world</Text>
+        <Text style={styles.title}>{t("onboarding.winklyWorld.title")}</Text>
 
-        <Text style={styles.paragraph}>
-          You don&apos;t have just one profile. You have modes — each with its own profile, visibility, and intention.
-        </Text>
+        <Text style={styles.paragraph}>{t("onboarding.winklyWorld.body1")}</Text>
 
-        <Text style={styles.paragraph}>
-          Switch modes anytime and control who sees you and how. Winkly is built around clarity, intention, and quality.
-        </Text>
+        <Text style={styles.paragraph}>{t("onboarding.winklyWorld.body2")}</Text>
 
         <Card padding="lg" style={styles.card}>
-          <Text style={styles.cardTitle}>Your modes</Text>
+          <Text style={styles.cardTitle}>{t("onboarding.winklyWorld.yourModes")}</Text>
 
           {isPersonal ? (
             <>
-              <ModeRow icon="heart" label="Romance" theme={theme} />
-              <ModeRow icon="people" label="Friends" theme={theme} />
-              <ModeRow icon="briefcase" label="Business" sublabel="Available for personal users" theme={theme} />
-              <ModeRow icon="calendar" label="Events" theme={theme} />
+              <ModeRow icon="heart" label={t("modes.romance")} theme={theme} />
+              <ModeRow icon="people" label={t("modes.friends")} theme={theme} />
+              <ModeRow
+                icon="briefcase"
+                label={t("modes.business")}
+                sublabel={t("onboarding.winklyWorld.businessForPersonal")}
+                theme={theme}
+              />
+              <ModeRow icon="calendar" label={t("modes.events")} theme={theme} />
             </>
           ) : (
             <>
-              <ModeRow icon="briefcase" label="Business" theme={theme} />
-              <ModeRow icon="calendar" label="Events" theme={theme} />
-              <ModeRow icon="people" label="People" sublabel="Discover relevant connections" theme={theme} />
+              <ModeRow icon="briefcase" label={t("modes.business")} theme={theme} />
+              <ModeRow icon="calendar" label={t("modes.events")} theme={theme} />
+              <ModeRow
+                icon="people"
+                label={t("onboarding.winklyWorld.people")}
+                sublabel={t("onboarding.winklyWorld.peopleSub")}
+                theme={theme}
+              />
             </>
           )}
         </Card>
 
         <Card padding="lg" style={{ ...styles.card, ...styles.plannerCard }}>
-          <Text style={styles.cardTitle}>Planner & AI</Text>
+          <Text style={styles.cardTitle}>{t("onboarding.winklyWorld.plannerTitle")}</Text>
           <Text style={styles.plannerText}>
-            {isPersonal
-              ? "The AI planner helps discover relevant events, suggest next steps, and plan meetups naturally to move from online to real life."
-              : "The AI planner helps discover relevant people and events, plan meetings efficiently, and turn connections into real outcomes."}
+            {isPersonal ? t("onboarding.winklyWorld.plannerPersonal") : t("onboarding.winklyWorld.plannerBusiness")}
           </Text>
         </Card>
 
-        <PrimaryButton title="Enter Winkly" onPress={handleEnter} style={styles.cta} />
+        <PrimaryButton title={t("onboarding.winklyWorld.enter")} onPress={handleEnter} style={styles.cta} />
 
         <View style={styles.dontShowRow}>
           <Switch
@@ -97,7 +103,7 @@ export default function WinklyWorld() {
             trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
             thumbColor={theme.colors.onPrimary}
           />
-          <Text style={styles.dontShowLabel}>Don&apos;t show again</Text>
+          <Text style={styles.dontShowLabel}>{t("onboarding.winklyWorld.dontShowAgain")}</Text>
         </View>
       </ScrollView>
     </SafeScreenView>

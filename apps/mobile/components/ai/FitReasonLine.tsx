@@ -13,6 +13,7 @@
 
 import React from "react";
 import { View, Text, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import { useTranslation } from "react-i18next";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { useAppTheme } from "@/constants/design-system";
 import { resolveFitReason, FIT_REASON_FALLBACK } from "@/lib/ai/fitReason";
@@ -42,12 +43,14 @@ export function FitReasonLine({
   numberOfLines = 2,
   style,
 }: FitReasonLineProps) {
+  const { t } = useTranslation();
   const theme = useAppTheme();
-  const text = reason && reason.trim() ? reason.trim() : FIT_REASON_FALLBACK;
+  const raw = reason && reason.trim() ? reason.trim() : FIT_REASON_FALLBACK;
+  const text = raw === FIT_REASON_FALLBACK ? t("concierge.fitReasonFallback") : raw;
   return (
     <View
       style={[styles.row, { gap: theme.spacing.xs }, style]}
-      accessibilityLabel={`Why this fits you: ${text}`}
+      accessibilityLabel={t("concierge.fitReasonA11y", { reason: text })}
     >
       <View style={styles.iconWrap}>
         <SparklesIcon size={13} color={accentColor ?? theme.colors.primary} />

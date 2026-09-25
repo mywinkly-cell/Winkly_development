@@ -11,14 +11,14 @@
     "pt"
   ],
   "minCoverage": {
-    "de": 49,
-    "fr": 43,
-    "es": 43,
-    "it": 43,
-    "pl": 45,
-    "uk": 74,
-    "nl": 10,
-    "pt": 10
+    "de": 77,
+    "fr": 74,
+    "es": 75,
+    "it": 75,
+    "pl": 76,
+    "uk": 88,
+    "nl": 61,
+    "pt": 63
   },
   "allowlist": {
     "values": [
@@ -32,7 +32,40 @@
       "Apple",
       "Spotify"
     ],
-    "keys": [],
-    "locales": {}
+    "keys": [
+      "onboarding.review.fullName",
+      "onboarding.wizard.step.modeStep"
+    ],
+    "locales": {
+      "de": [
+        "onboarding.businessProfile.website",
+        "onboarding.subProfile.video",
+        "onboarding.subProfile.friends.status",
+        "onboarding.subProfile.romance.bioLabel",
+        "onboarding.subProfile.romance.religion",
+        "onboarding.review.name"
+      ],
+      "fr": [
+        "onboarding.businessProfile.subtype.venueHint",
+        "onboarding.subProfile.romance.bioLabel",
+        "onboarding.subProfile.romance.religion"
+      ],
+      "es": [
+        "onboarding.subProfile.alcohol",
+        "onboarding.review.general"
+      ],
+      "it": [
+        "onboarding.subProfile.video",
+        "onboarding.subProfile.romance.bioLabel"
+      ],
+      "pl": [
+        "onboarding.subProfile.friends.status"
+      ],
+      "nl": [
+        "onboarding.businessProfile.website",
+        "onboarding.subProfile.video",
+        "onboarding.subProfile.alcohol"
+      ]
+    }
   }
 }

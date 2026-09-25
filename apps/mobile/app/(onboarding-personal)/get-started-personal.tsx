@@ -10,6 +10,7 @@ import { View, Text, ScrollView } from "react-native";
 import { SafeScreenView } from "@/components/SafeScreenView";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { Card, ListRow, PrimaryButton, SecondaryButton } from "@/components/ds";
@@ -17,6 +18,7 @@ import { useAppTheme, type AppTheme } from "@/constants/design-system";
 
 export default function GetStartedPersonal() {
   const router = useRouter();
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const styles = createStyles(theme);
 
@@ -24,98 +26,82 @@ export default function GetStartedPersonal() {
     <SafeScreenView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.title}>Personal on Winkly</Text>
-          <Text style={styles.subtitle}>
-            Find love, friendships, and opportunities — all in one place.
-          </Text>
+          <Text style={styles.title}>{t("onboarding.getStartedPersonal.title")}</Text>
+          <Text style={styles.subtitle}>{t("onboarding.getStartedPersonal.subtitle")}</Text>
         </View>
 
         <Card style={styles.card}>
-          <Text style={styles.sectionTitle}>What you can do</Text>
+          <Text style={styles.sectionTitle}>{t("onboarding.getStarted.whatYouCanDo")}</Text>
 
           <View style={styles.point}>
             <Text style={styles.bullet}>•</Text>
-            <Text style={styles.pointText}>
-              Romance — find meaningful connections and dates
-            </Text>
+            <Text style={styles.pointText}>{t("onboarding.getStartedPersonal.can1")}</Text>
           </View>
 
           <View style={styles.point}>
             <Text style={styles.bullet}>•</Text>
-            <Text style={styles.pointText}>
-              Friends — meet people who share your passions and energy
-            </Text>
+            <Text style={styles.pointText}>{t("onboarding.getStartedPersonal.can2")}</Text>
           </View>
 
           <View style={styles.point}>
             <Text style={styles.bullet}>•</Text>
-            <Text style={styles.pointText}>
-              Business networking — grow your professional circle
-            </Text>
+            <Text style={styles.pointText}>{t("onboarding.getStartedPersonal.can3")}</Text>
           </View>
 
           <View style={styles.point}>
             <Text style={styles.bullet}>•</Text>
-            <Text style={styles.pointText}>
-              Events — discover or host experiences in your area
-            </Text>
+            <Text style={styles.pointText}>{t("onboarding.getStartedPersonal.can4")}</Text>
           </View>
         </Card>
 
         <Card style={styles.card}>
-          <Text style={styles.sectionTitle}>How it works</Text>
+          <Text style={styles.sectionTitle}>{t("onboarding.getStarted.howItWorks")}</Text>
 
-          <Text style={styles.step}>1. Create your profile and choose your modes</Text>
-          <Text style={styles.step}>2. Discover people who match your vibe</Text>
-          <Text style={styles.step}>3. Connect and plan real meetups</Text>
+          <Text style={styles.step}>{t("onboarding.getStartedPersonal.step1")}</Text>
+          <Text style={styles.step}>{t("onboarding.getStartedPersonal.step2")}</Text>
+          <Text style={styles.step}>{t("onboarding.getStartedPersonal.step3")}</Text>
         </Card>
 
         <Card style={{ ...styles.card, ...styles.highlightCard }}>
-          <Text style={{ ...styles.sectionTitle, color: theme.colors.primary }}>Why Winkly is unique</Text>
+          <Text style={{ ...styles.sectionTitle, color: theme.colors.primary }}>{t("onboarding.getStarted.whyUnique")}</Text>
 
           <View style={styles.point}>
             <View style={styles.iconSlot}>
               <SparklesIcon size={16} color={theme.colors.primary} />
             </View>
-            <Text style={{ ...styles.pointText, flex: 1 }}>
-              One app, multiple modes — switch between Romance, Friends, and Business without separate profiles
-            </Text>
+            <Text style={{ ...styles.pointText, flex: 1 }}>{t("onboarding.getStartedPersonal.unique1")}</Text>
           </View>
 
           <View style={styles.point}>
             <View style={styles.iconSlot}>
               <Ionicons name="shield-checkmark" size={16} color={theme.colors.primary} />
             </View>
-            <Text style={{ ...styles.pointText, flex: 1 }}>
-              Identity Firewall — your modes stay separate, no cross-mode leakage
-            </Text>
+            <Text style={{ ...styles.pointText, flex: 1 }}>{t("onboarding.getStartedPersonal.unique2")}</Text>
           </View>
 
           <View style={styles.point}>
             <View style={styles.iconSlot}>
               <Ionicons name="calendar" size={16} color={theme.colors.primary} />
             </View>
-            <Text style={{ ...styles.pointText, flex: 1 }}>
-              Unified Planner — dates, meetups, and events in one place
-            </Text>
+            <Text style={{ ...styles.pointText, flex: 1 }}>{t("onboarding.getStartedPersonal.unique3")}</Text>
           </View>
         </Card>
 
         <PrimaryButton
-          title="Create personal profile"
+          title={t("onboarding.getStartedPersonal.cta")}
           onPress={() => { Haptics.selectionAsync(); router.push("/(onboarding-personal)/profile-core"); }}
           style={styles.primaryBtn}
         />
 
         <ListRow
-          title="View plans & pricing"
+          title={t("onboarding.getStarted.viewPlans")}
           onPress={() => { Haptics.selectionAsync(); router.push("/account/subscription"); }}
           style={styles.subscriptionLink}
           leading={<Ionicons name="star-outline" size={18} color={theme.colors.primary} />}
         />
 
         <SecondaryButton
-          title="Return to account selection"
+          title={t("onboarding.getStarted.returnToAccountSelection")}
           onPress={() => { Haptics.selectionAsync(); router.back(); }}
           style={styles.secondaryBtn}
         />

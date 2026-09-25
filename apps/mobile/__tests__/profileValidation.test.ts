@@ -19,15 +19,15 @@ describe("validateProfileCoreSubmit", () => {
       validateProfileCoreSubmit({ ...validInput, firstName: "", corePhotoCount: MIN_CORE_PHOTOS })
     ).toEqual({
       ok: false,
-      title: "Incomplete",
-      message: "Please fill in all required fields.",
+      titleKey: "auth.incomplete",
+      messageKey: "onboarding.profile.fillRequired",
     });
   });
 
   it("requires the minimum number of core photos", () => {
     expect(validateProfileCoreSubmit({ ...validInput, corePhotoCount: 1 })).toMatchObject({
       ok: false,
-      title: "Add more photos",
+      titleKey: "onboarding.wizard.validation.photosTitle",
     });
   });
 

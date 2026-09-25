@@ -2,6 +2,7 @@ import {
   buildWizardSteps,
   validateWizardStep,
   inferWizardResumeStep,
+  wizardStepLabel,
   type WizardValidationInput,
   type WizardStep,
 } from "@/lib/profile/onboardingWizard";
@@ -54,7 +55,8 @@ describe("validateWizardStep", () => {
     const step: WizardStep = { kind: "general", id: "photos" };
     expect(validateWizardStep(step, { ...baseValidationInput, corePhotoCount: 1 })).toMatchObject({
       ok: false,
-      title: "Add more photos",
+      titleKey: "onboarding.wizard.validation.photosTitle",
+      params: { count: 2, max: 5 },
     });
     expect(validateWizardStep(step, baseValidationInput)).toEqual({ ok: true });
   });
@@ -189,5 +191,33 @@ describe("inferWizardResumeStep", () => {
     });
     const steps = buildWizardSteps([...enabledModes]);
     expect(index).toBe(steps.length - 1);
+  });
+});
+
+describe("wizardStepLabel", () => {
+  // Fake t: echoes the key and any interpolation values so the composition is visible.
+  const t = (key: string, opts?: Record<string, unknown>) =>
+    opts ? `${key}(${Object.entries(opts).map(([k, v]) => `${k}=${v}`).join(",")})` : key;
+
+  it("uses a translated label for general and review steps", () => {
+    expect(wizardStepLabel({ kind: "general", id: "photos" }, t)).toBe("onboarding.wizard.step.photos");
+    expect(wizardStepLabel({ kind: "review" }, t)).toBe("onboarding.wizard.step.review");
+  });
+
+  it("composes mode steps via interpolation, not concatenation", () => {
+    expect(wizardStepLabel({ kind: "mode", mode: "friends", id: "goals" }, t)).toBe(
+      "onboarding.wizard.step.modeStep(mode=modes.friends,step=onboarding.wizard.step.goals)"
+    );
+  });
+});
+
+describe("validateWizardStep i18n keys", () => {
+  it("returns per-mode keys for the photos+bio step", () => {
+    const noBio = { ...baseValidationInput, business: { ...baseValidationInput.business, bio: "" } };
+    expect(validateWizardStep({ kind: "mode", mode: "business", id: "photosBio" }, noBio)).toEqual({
+      ok: false,
+      titleKey: "onboarding.wizard.validation.businessProfileTitle",
+      messageKey: "onboarding.wizard.validation.businessPhotosBio",
+    });
   });
 });

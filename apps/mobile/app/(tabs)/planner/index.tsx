@@ -261,7 +261,11 @@ function getISOWeekNumber(d: Date): number {
   return 1 + Math.ceil((firstThursday - target.getTime()) / 604800000);
 }
 
-function getWeeksForYear(year: number, locale: string): { key: string; label: string }[] {
+function getWeeksForYear(
+  year: number,
+  locale: string,
+  formatLabel: (week: number, start: string, end: string) => string
+): { key: string; label: string }[] {
   const weeks: { key: string; label: string }[] = [];
   const jan1 = new Date(year, 0, 1);
   const dayOfWeek = jan1.getDay();
@@ -279,7 +283,7 @@ function getWeeksForYear(year: number, locale: string): { key: string; label: st
     const key = `${weekStart.getFullYear()}-${weekStart.getMonth()}-${weekStart.getDate()}`;
     const startStr = weekStart.toLocaleDateString(locale, { month: "short", day: "numeric" });
     const endStr = weekEnd.toLocaleDateString(locale, { month: "short", day: "numeric" });
-    const label = `cw ${cw} ${startStr} - ${endStr}`;
+    const label = formatLabel(cw, startStr, endStr);
     weeks.push({ key, label });
   }
   return weeks;
@@ -292,6 +296,7 @@ function getMonthsForYear(year: number, locale: string): { key: string; label: s
   }));
 }
 
+/** Topic values are stored on items (English ids); TOPIC_LABEL_KEYS maps them to display keys. */
 const TOPIC_OPTIONS = [
   "All topics",
   "Dancing",
@@ -305,6 +310,25 @@ const TOPIC_OPTIONS = [
   "Music",
   "Business meetings",
 ];
+
+const TOPIC_LABEL_KEYS: Record<string, string> = {
+  "All topics": "planner.topic.all",
+  Dancing: "planner.topic.dancing",
+  Networking: "planner.topic.networking",
+  "Wine tasting": "planner.topic.wineTasting",
+  Sports: "planner.topic.sports",
+  Coffee: "planner.topic.coffee",
+  Dining: "planner.topic.dining",
+  "Arts & Culture": "planner.topic.artsCulture",
+  Outdoors: "planner.topic.outdoors",
+  Music: "planner.topic.music",
+  "Business meetings": "planner.topic.businessMeetings",
+};
+
+/** Localised short weekday names, Monday first (2024-01-01 was a Monday). */
+function weekdayShortNames(locale: string): string[] {
+  return Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(locale, { weekday: "short" }));
+}
 
 const INITIAL_ITEMS: PlannerItem[] = [];
 
@@ -523,7 +547,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
           meta && typeof meta.location === "string" && meta.location ? meta.location : undefined;
         return {
           id: String(row.id),
-          title: typeof row.title === "string" ? row.title : "Plan",
+          title: typeof row.title === "string" ? row.title : t("planner.untitledPlan"),
           timeLabel,
           dateStr,
           source,
@@ -551,7 +575,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     } catch (e) {
       console.warn("Planner: load items", e);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadPlannerItems();
@@ -652,7 +676,12 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     })();
   }, []);
 
-  const weekOptions = useMemo(() => getWeeksForYear(filterYear, appLocale), [filterYear, appLocale]);
+  const weekOptions = useMemo(
+    () => getWeeksForYear(filterYear, appLocale, (week, start, end) => t("planner.weekOption", { week, start, end })),
+    [filterYear, appLocale, t]
+  );
+  const weekdayNames = useMemo(() => weekdayShortNames(appLocale), [appLocale]);
+  const topicLabel = useCallback((value: string) => (TOPIC_LABEL_KEYS[value] ? t(TOPIC_LABEL_KEYS[value]) : value), [t]);
   const monthOptions = useMemo(() => getMonthsForYear(filterYear, appLocale), [filterYear, appLocale]);
 
   const onTabPress = (key: TabKey) => {
@@ -1281,8 +1310,8 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         badges={
           <>
             <PlanCardBadge label={it.dateStr} />
-            {past ? <PlanCardBadge label="Past" /> : null}
-            <PlanCardBadge label={it.topic} variant="outlined" color={accent} />
+            {past ? <PlanCardBadge label={t("planner.past")} /> : null}
+            <PlanCardBadge label={topicLabel(it.topic)} variant="outlined" color={accent} />
           </>
         }
         meta={<PlanCardMeta icon="time-outline">{it.timeLabel}</PlanCardMeta>}
@@ -1292,16 +1321,16 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
           {!past && (
             <View style={{ flexDirection: "row", gap: theme.spacing.sm }}>
               {it.status === "archived" ? (
-                <PlanCardIconAction icon="arrow-undo" tone="primary" accessibilityLabel="Restore" onPress={() => restoreItem(it)} />
+                <PlanCardIconAction icon="arrow-undo" tone="primary" accessibilityLabel={t("planner.restore")} onPress={() => restoreItem(it)} />
               ) : (
                 <>
-                  <TouchableOpacity onPress={() => { Haptics.selectionAsync(); openDetails(it); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel="Confirm">
+                  <TouchableOpacity onPress={() => { Haptics.selectionAsync(); openDetails(it); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel={t("planner.confirm")}>
                     <Image source={require("@/assets/icons/confirm-icon.png")} style={{ width: CARD_ACTION_ICON_CONFIRM, height: CARD_ACTION_ICON_CONFIRM }} resizeMode="contain" />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => { Haptics.selectionAsync(); openDetails(it); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel="Reschedule">
+                  <TouchableOpacity onPress={() => { Haptics.selectionAsync(); openDetails(it); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel={t("planner.reschedule")}>
                     <Image source={require("@/assets/icons/reschedule-icon.png")} style={{ width: CARD_ACTION_ICON_RESCHEDULE, height: CARD_ACTION_ICON_RESCHEDULE }} resizeMode="contain" />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setSelectedItem(it); setDetailsModalVisible(false); openCancelModal(); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel="Cancel">
+                  <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setSelectedItem(it); setDetailsModalVisible(false); openCancelModal(); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel={t("planner.cancel")}>
                     <Image source={require("@/assets/icons/decline-icon.png")} style={{ width: CARD_ACTION_ICON_CANCEL, height: CARD_ACTION_ICON_CANCEL }} resizeMode="contain" />
                   </TouchableOpacity>
                 </>
@@ -1311,7 +1340,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         </View>
       </PlanCard>
     );
-  }, [openDetails, restoreItem, myPhotoBySource, openCancelModal, theme, styles, TAB_CONFIG]);
+  }, [openDetails, restoreItem, myPhotoBySource, openCancelModal, theme, styles, TAB_CONFIG, t, topicLabel]);
 
   return (
     <View style={styles.screen}>
@@ -1437,7 +1466,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
             activeOpacity={0.8}
           >
             <Ionicons name="bookmark" size={20} color={theme.colors.primary} />
-            <Text style={styles.savedIdeasRowText}>Saved ideas ({savedIdeasCount})</Text>
+            <Text style={styles.savedIdeasRowText} numberOfLines={2}>{t("planner.savedIdeasCount", { count: savedIdeasCount })}</Text>
             <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
           </TouchableOpacity>
         )}
@@ -1488,7 +1517,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                     style={[styles.weekDayCell, isToday && styles.weekDayToday, isSelected && !isToday && styles.weekDaySelected]}
                     accessibilityRole="button"
                   >
-                    <Text style={[styles.weekDayName, isToday && styles.weekDayTodayText]}>{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][d.getDay() === 0 ? 6 : d.getDay() - 1]}</Text>
+                    <Text style={[styles.weekDayName, isToday && styles.weekDayTodayText]}>{weekdayNames[d.getDay() === 0 ? 6 : d.getDay() - 1]}</Text>
                     <Text style={[styles.weekDayNum, isToday && styles.weekDayTodayText]}>{d.getDate()}</Text>
                   </TouchableOpacity>
                 );
@@ -1514,7 +1543,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                   }}
                 >
                   <Text style={styles.weekDayBlockTitle}>{d.toLocaleDateString(appLocale, { day: "numeric", month: "short" })}</Text>
-                  {dayItems.length === 0 ? <Text style={styles.weekDayEmpty}>No events</Text> : dayItems.map((it) => renderItemCard(it))}
+                  {dayItems.length === 0 ? <Text style={styles.weekDayEmpty}>{t("planner.noEventsDay")}</Text> : dayItems.map((it) => renderItemCard(it))}
                 </View>
               );
             })}
@@ -1533,8 +1562,8 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
               </TouchableOpacity>
             </View>
             <View style={styles.monthGrid}>
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((wd) => (
-                <Text key={wd} style={styles.monthWeekdayHeader}>{wd}</Text>
+              {weekdayNames.map((wd, i) => (
+                <Text key={i} style={styles.monthWeekdayHeader} numberOfLines={1}>{wd}</Text>
               ))}
               {monthGrid.map((d, i) => {
                 if (!d) return <View key={`empty-${i}`} style={styles.monthCell} />;
@@ -1600,8 +1629,8 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                         {dayItems.length === 0 ? (
                           <View style={styles.emptyState}>
                             <Ionicons name="calendar-outline" size={48} color={theme.colors.textMuted} style={{ marginBottom: 12 }} />
-                            <Text style={styles.emptyTitle}>Nothing planned yet.</Text>
-                            <Text style={styles.emptySub}>Let&apos;s turn this date into something worth remembering.</Text>
+                            <Text style={styles.emptyTitle}>{t("planner.dayEmptyTitle")}</Text>
+                            <Text style={styles.emptySub}>{t("planner.dayEmptySub")}</Text>
                           </View>
                         ) : (
                           dayItems.map((it) => renderItemCard(it))
@@ -1721,7 +1750,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
 
                 {timeRange === "specific_day" && (
                   <View style={styles.pickerSection}>
-                    <Text style={styles.pickerLabel}>Date</Text>
+                    <Text style={styles.pickerLabel}>{t("planner.filterDate")}</Text>
                     <TouchableOpacity
                       onPress={() => { Haptics.selectionAsync(); setShowDatePicker(!showDatePicker); }}
                       style={styles.dateDisplayBtn}
@@ -1748,7 +1777,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
 
                 {timeRange === "specific_week" && (
                   <View style={styles.pickerSection}>
-                    <Text style={styles.pickerLabel}>Year</Text>
+                    <Text style={styles.pickerLabel}>{t("planner.filterYear")}</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.yearRow}>
                       {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
                         <TouchableOpacity
@@ -1760,7 +1789,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
-                    <Text style={[styles.pickerLabel, { marginTop: 12 }]}>Week</Text>
+                    <Text style={[styles.pickerLabel, { marginTop: 12 }]}>{t("planner.filterWeek")}</Text>
                     <ScrollView style={styles.dropdownList} nestedScrollEnabled>
                       {weekOptions.map((w) => (
                         <TouchableOpacity
@@ -1780,7 +1809,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
 
                 {timeRange === "specific_month" && (
                   <View style={styles.pickerSection}>
-                    <Text style={styles.pickerLabel}>Year</Text>
+                    <Text style={styles.pickerLabel}>{t("planner.filterYear")}</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.yearRow}>
                       {[currentYear - 1, currentYear, currentYear + 1].map((y) => (
                         <TouchableOpacity
@@ -1792,7 +1821,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
-                    <Text style={[styles.pickerLabel, { marginTop: 12 }]}>Month</Text>
+                    <Text style={[styles.pickerLabel, { marginTop: 12 }]}>{t("planner.filterMonth")}</Text>
                     <ScrollView style={styles.dropdownList} nestedScrollEnabled>
                       {monthOptions.map((m) => (
                         <TouchableOpacity
@@ -1810,23 +1839,23 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                   </View>
                 )}
 
-                <Text style={[styles.filterSection, { marginTop: 20 }]}>Topic</Text>
+                <Text style={[styles.filterSection, { marginTop: 20 }]}>{t("planner.filterTopic")}</Text>
                 <ScrollView
                   style={styles.topicList}
                   showsVerticalScrollIndicator={false}
                   nestedScrollEnabled
                   keyboardShouldPersistTaps="handled"
                 >
-                  {TOPIC_OPTIONS.map((t) => (
+                  {TOPIC_OPTIONS.map((opt) => (
                     <TouchableOpacity
-                      key={t}
-                      onPress={() => { Haptics.selectionAsync(); setTopic(t); }}
-                      style={[styles.topicRow, topic === t && styles.topicRowActive]}
+                      key={opt}
+                      onPress={() => { Haptics.selectionAsync(); setTopic(opt); }}
+                      style={[styles.topicRow, topic === opt && styles.topicRowActive]}
                     >
-                      <Text style={[styles.topicText, topic === t && { color: theme.colors.primary, fontWeight: "600" }]}>
-                        {t}
+                      <Text style={[styles.topicText, topic === opt && { color: theme.colors.primary, fontWeight: "600" }]}>
+                        {topicLabel(opt)}
                       </Text>
-                      {topic === t && <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} />}
+                      {topic === opt && <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} />}
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -1862,18 +1891,18 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                         onPress={() => { Haptics.selectionAsync(); setReminderModalVisible(true); }}
                         style={styles.detailsHeaderIconBtn}
                         hitSlop={12}
-                        accessibilityLabel="Set reminders"
+                        accessibilityLabel={t("events.setReminders")}
                       >
                         <Ionicons name="notifications-outline" size={22} color={theme.colors.primary} />
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={closeDetails} hitSlop={12} accessibilityLabel="Close">
+                      <TouchableOpacity onPress={closeDetails} hitSlop={12} accessibilityLabel={t("common.close")}>
                         <Ionicons name="close" size={24} color={theme.colors.textPrimary} />
                       </TouchableOpacity>
                     </View>
                   </View>
                   <ScrollView style={styles.detailsScroll} showsVerticalScrollIndicator={false}>
                     <View style={{ alignSelf: "flex-start", marginBottom: 12 }}>
-                      <PlanCardBadge label={selectedItem.topic} variant="outlined" color={theme.colors.primary} />
+                      <PlanCardBadge label={topicLabel(selectedItem.topic)} variant="outlined" color={theme.colors.primary} />
                     </View>
                     <Text style={styles.detailsMeta}>{selectedItem.dateStr} · {selectedItem.timeLabel}</Text>
                     {selectedItem.location && (
@@ -1889,7 +1918,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                       selectedItem.participants &&
                       selectedItem.participants.filter((p) => p.id !== "me" && (p.firstName || p.occupation || p.city)).length > 0 && (
                       <View style={{ marginTop: 16 }}>
-                        <Text style={styles.detailsSectionTitle}>Who&apos;s joining</Text>
+                        <Text style={styles.detailsSectionTitle}>{t("planner.whosJoining")}</Text>
                         {selectedItem.participants
                           .filter((p) => p.id !== "me")
                           .map((p) => ({
@@ -1936,16 +1965,14 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                         aiRequestId={selectedItem.aiRequestId}
                         plannerItemId={selectedItem.id}
                         initialRating={selectedItem.recommendationFeedback ?? null}
-                        label="Did this meet your expectations?"
+                        label={t("planner.feedback.metExpectations")}
                         compact
                       />
                     ) : null}
                     {isItemPast(selectedItem.dateStr) ? (
-                      <Text style={styles.detailsHint}>This event has passed. It can no longer be managed.</Text>
+                      <Text style={styles.detailsHint}>{t("planner.pastHint")}</Text>
                     ) : selectedItem.status === "archived" ? (
-                      <Text style={styles.detailsHint}>
-                        Canceled plans are kept in Archive for 2 weeks. Restore to bring this back to your planner.
-                      </Text>
+                      <Text style={styles.detailsHint}>{t("planner.archivedHint")}</Text>
                     ) : !selectedItem.isOrganiser ? (
                       <Text style={styles.detailsHint}>
                         {t("planner.cancelNotifyHint", {
@@ -1965,7 +1992,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                         <TouchableOpacity
                           onPress={() => restoreItem(selectedItem)}
                           style={[styles.detailActionBtn, { flex: 1 }]}
-                          accessibilityLabel="Restore"
+                          accessibilityLabel={t("planner.restore")}
                         >
                           <Ionicons name="arrow-undo" size={DETAIL_ACTION_ICON_CANCEL} color={theme.modeAccent("events").primary} />
                           <Text style={styles.detailActionLabel}>{t("planner.restore")}</Text>
@@ -1975,7 +2002,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                           <TouchableOpacity
                             onPress={() => { Haptics.selectionAsync(); closeDetails(); }}
                             style={[styles.detailActionBtn, styles.detailActionBtnConfirm]}
-                            accessibilityLabel="Confirm"
+                            accessibilityLabel={t("planner.confirm")}
                           >
                             <Image source={require("@/assets/icons/confirm-icon.png")} style={{ width: DETAIL_ACTION_ICON_CONFIRM, height: DETAIL_ACTION_ICON_CONFIRM }} resizeMode="contain" />
                             <Text style={styles.detailActionLabel}>{t("planner.confirm")}</Text>
@@ -1983,7 +2010,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                           <TouchableOpacity
                             onPress={() => { Haptics.selectionAsync(); closeDetails(); }}
                             style={[styles.detailActionBtn, styles.detailActionBtnReschedule]}
-                            accessibilityLabel="Postpone or reschedule"
+                            accessibilityLabel={t("planner.postponeOrReschedule")}
                           >
                             <Image source={require("@/assets/icons/reschedule-icon.png")} style={{ width: DETAIL_ACTION_ICON_RESCHEDULE, height: DETAIL_ACTION_ICON_RESCHEDULE }} resizeMode="contain" />
                             <Text style={styles.detailActionLabel}>{t("planner.reschedule")}</Text>
@@ -1991,7 +2018,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                           <TouchableOpacity
                             onPress={() => { setDetailsModalVisible(false); openCancelModal(); }}
                             style={[styles.detailActionBtn, styles.detailActionBtnCancel]}
-                            accessibilityLabel="Cancel"
+                            accessibilityLabel={t("planner.cancel")}
                           >
                             <Image source={require("@/assets/icons/decline-icon.png")} style={{ width: DETAIL_ACTION_ICON_CANCEL, height: DETAIL_ACTION_ICON_CANCEL }} resizeMode="contain" />
                             <Text style={styles.detailActionLabel}>{t("planner.cancel")}</Text>

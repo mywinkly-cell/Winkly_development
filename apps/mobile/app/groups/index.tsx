@@ -10,6 +10,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useAppTheme } from "@/constants/design-system";
 import { getMyGroups, type GroupSummary } from "@/lib/groups/groupsApi";
 import { getMyPendingGroupInvitations } from "@/lib/groupInvitations";
@@ -18,6 +19,7 @@ import type { Mode } from "@/types";
 type GroupsMode = Mode | undefined;
 
 export default function GroupsIndex() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const { mode } = useLocalSearchParams<{ mode?: GroupsMode }>();
@@ -28,13 +30,17 @@ export default function GroupsIndex() {
   const [refreshing, setRefreshing] = useState(false);
 
   const title =
-    mode === "business" ? "Business Groups" : mode === "friends" ? "Friends Groups" : "Groups";
+    mode === "business"
+      ? t("groups.index.businessTitle")
+      : mode === "friends"
+        ? t("groups.index.friendsTitle")
+        : t("modes.groups");
   const subtitle =
     mode === "business"
-      ? "Masterminds, industry circles, founders, hiring & partnerships."
+      ? t("groups.index.businessSubtitle")
       : mode === "friends"
-        ? "Meetups, hobby clubs, local communities and activity circles."
-        : "Communities for every connection.";
+        ? t("groups.index.friendsSubtitle")
+        : t("groups.index.subtitle");
 
   const load = useCallback(async () => {
     try {
@@ -94,7 +100,7 @@ export default function GroupsIndex() {
             backgroundColor: theme.colors.primary,
           }}
           activeOpacity={0.9}
-          accessibilityLabel="Plan something for the group"
+          accessibilityLabel={t("groups.index.planA11y")}
         >
           <View
             style={{
@@ -109,9 +115,9 @@ export default function GroupsIndex() {
             <Ionicons name="sparkles" size={20} color={theme.colors.onPrimary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ ...theme.type.button, color: theme.colors.onPrimary }}>Plan something for us</Text>
+            <Text style={{ ...theme.type.button, color: theme.colors.onPrimary }}>{t("groups.index.planTitle")}</Text>
             <Text style={{ ...theme.type.caption, color: theme.colors.onPrimary + "D9", marginTop: 2 }}>
-              Pick a few people — Winkly drafts plan options for the group.
+              {t("groups.index.planSubtitle")}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={theme.colors.onPrimary + "D9"} />
@@ -135,7 +141,7 @@ export default function GroupsIndex() {
             activeOpacity={0.9}
           >
             <Ionicons name="add" size={18} color={theme.colors.textPrimary} />
-            <Text style={{ ...theme.type.button, color: theme.colors.textPrimary }}>Create a group</Text>
+            <Text style={{ ...theme.type.button, color: theme.colors.textPrimary, flexShrink: 1, textAlign: "center" }}>{t("groups.index.create")}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -152,10 +158,10 @@ export default function GroupsIndex() {
               borderColor: theme.colors.border,
             }}
             activeOpacity={0.9}
-            accessibilityLabel="Group invitations"
+            accessibilityLabel={t("chat.start.groupInvitations")}
           >
             <Ionicons name="mail-outline" size={18} color={theme.colors.textPrimary} />
-            <Text style={{ ...theme.type.button, color: theme.colors.textPrimary }}>Invites</Text>
+            <Text style={{ ...theme.type.button, color: theme.colors.textPrimary, flexShrink: 1 }}>{t("groups.index.invites")}</Text>
             {pendingCount > 0 ? (
               <View
                 style={{
@@ -174,7 +180,7 @@ export default function GroupsIndex() {
           </TouchableOpacity>
         </View>
 
-        <Text style={{ ...theme.type.h3, color: theme.colors.textPrimary, marginBottom: 10 }}>Your groups</Text>
+        <Text style={{ ...theme.type.h3, color: theme.colors.textPrimary, marginBottom: 10 }}>{t("groups.index.yourGroups")}</Text>
 
         {loading ? (
           <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 24 }} />
@@ -189,7 +195,7 @@ export default function GroupsIndex() {
           >
             <Ionicons name="people-outline" size={36} color={theme.colors.textMuted} />
             <Text style={{ ...theme.type.body, color: theme.colors.textSecondary, marginTop: 10, textAlign: "center" }}>
-              You haven&apos;t joined any groups yet. Create one or accept an invitation to get started.
+              {t("groups.index.empty")}
             </Text>
           </View>
         ) : (
@@ -203,6 +209,7 @@ export default function GroupsIndex() {
 }
 
 function GroupRow({ group, onPress }: { group: GroupSummary; onPress: () => void }) {
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const initial = (group.name ?? "G").trim().slice(0, 1).toUpperCase();
   return (
@@ -242,7 +249,7 @@ function GroupRow({ group, onPress }: { group: GroupSummary; onPress: () => void
         <Text style={{ ...theme.type.caption, color: theme.colors.textSecondary, marginTop: 2 }} numberOfLines={1}>
           {group.last_message_preview
             ? group.last_message_preview
-            : `${group.member_count} / ${group.max_members} members`}
+            : t("groups.memberCount", { count: group.member_count, max: group.max_members })}
         </Text>
       </View>
 

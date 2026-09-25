@@ -2,7 +2,6 @@ import React, { useMemo } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import type { TFunction } from "i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "@/constants/design-system";
 import { Card, PrimaryButton, SecondaryButton } from "@/components/ds";
@@ -22,11 +21,11 @@ export type ConciergeRateLimitCardProps = {
   variant?: "default" | "surprise";
 };
 
-function formatRetryHint(t: TFunction, seconds?: number): string | null {
+function formatRetryHint(t: (key: string, opts?: Record<string, unknown>) => string, seconds?: number): string | null {
   if (seconds == null || seconds <= 0) return null;
-  if (seconds >= 3600) return t("paywall.limit.retryHours", { count: Math.ceil(seconds / 3600) });
-  if (seconds >= 60) return t("paywall.limit.retryMinutes", { count: Math.ceil(seconds / 60) });
-  return t("paywall.limit.retrySeconds", { count: seconds });
+  if (seconds >= 3600) return t("concierge.limit.retryHours", { count: Math.ceil(seconds / 3600) });
+  if (seconds >= 60) return t("concierge.limit.retryMinutes", { count: Math.ceil(seconds / 60) });
+  return t("concierge.limit.retrySeconds", { count: seconds });
 }
 
 export function ConciergeRateLimitCard({
@@ -52,20 +51,16 @@ export function ConciergeRateLimitCard({
       return { title: t("surprise.limit.burstTitle"), body: t("surprise.limit.burstBody"), showUpgrade: false };
     }
     if (errorCode === "daily_quota") {
-      return { title: t("paywall.limit.dailyTitle"), body: t("paywall.limit.dailyBody"), showUpgrade: true };
+      return { title: t("concierge.limit.dailyTitle"), body: t("concierge.limit.dailyBody"), showUpgrade: true };
     }
     if (errorCode === "tier_required") {
       return {
-        title: upgradeTo === "premium" ? t("paywall.limit.premiumTitle") : t("paywall.limit.superTitle"),
-        body: upgradeTo === "premium" ? t("paywall.limit.premiumBody") : t("paywall.limit.superBody"),
+        title: upgradeTo === "premium" ? t("concierge.limit.premiumTitle") : t("concierge.limit.upgradeTitle"),
+        body: upgradeTo === "premium" ? t("concierge.limit.premiumBody") : t("concierge.limit.upgradeBody"),
         showUpgrade: true,
       };
     }
-    return {
-      title: t("paywall.limit.burstTitle"),
-      body: t("paywall.limit.burstBody"),
-      showUpgrade: false,
-    };
+    return { title: t("concierge.limit.burstTitle"), body: t("concierge.limit.burstBody"), showUpgrade: false };
   }, [errorCode, upgradeTo, isSurprise, t]);
 
   // The surprise copy already says when to come back.
@@ -86,8 +81,7 @@ export function ConciergeRateLimitCard({
       </View>
       {isConciergeDevLimitMockEnabled() ? (
         <Text style={[theme.type.overline, { color: theme.colors.textMuted, marginBottom: theme.spacing.sm }]}>
-          {/* eslint-disable-next-line winkly/no-literal-string -- dev-only mock banner */}
-          {"Dev preview — rate limit mock"}
+          {t("concierge.limit.devPreview")}
         </Text>
       ) : null}
       <Text style={[theme.type.h3, { color: theme.colors.textPrimary, marginBottom: theme.spacing.sm }]}>{copy.title}</Text>
@@ -101,18 +95,18 @@ export function ConciergeRateLimitCard({
       <View style={[styles.actions, { gap: theme.spacing.sm, marginTop: theme.spacing.sm }]}>
         {showSave ? (
           <SecondaryButton
-            title={saving ? t("paywall.limit.saving") : t("paywall.limit.saveForLater")}
+            title={saving ? t("planner.saving") : t("concierge.limit.saveForLater")}
             onPress={() => onSaveForLater?.()}
             disabled={saving}
             icon={<Ionicons name="bookmark-outline" size={18} color={theme.colors.primary} />}
           />
         ) : null}
         {showRetry ? (
-          <PrimaryButton title={isSurprise ? t("surprise.retry") : t("errorState.retry")} onPress={() => onRetry?.()} />
+          <PrimaryButton title={isSurprise ? t("surprise.retry") : t("concierge.limit.tryAgain")} onPress={() => onRetry?.()} />
         ) : null}
         {copy.showUpgrade ? (
           <PrimaryButton
-            title={isSurprise ? t("surprise.limit.seePlans") : t("paywall.limit.seePlans")}
+            title={isSurprise ? t("surprise.limit.seePlans") : t("concierge.limit.seePlans")}
             onPress={() => router.push("/account/subscription")}
           />
         ) : null}

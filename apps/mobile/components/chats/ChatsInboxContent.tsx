@@ -344,7 +344,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
             styles.modeContextBar,
             { backgroundColor: getChatTabAccent(sourceMode) },
           ]}
-          accessibilityLabel={`${sourceMode} chats`}
+          accessibilityLabel={t("chat.preview.modeChatA11y", { mode: t(`modes.${sourceMode}`) })}
         />
       )}
       <ChatModeTabBar tabs={tabs} activeTab={activeTab} onTabPress={setActiveTab} />
@@ -464,17 +464,17 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
               <Text style={styles.emptyText}>
                 {sourceMode === "romance"
                   ? hasRomanceMatches
-                    ? "No active chats yet.\nIt's time to spark a conversation ✨"
-                    : "No matches yet.\nDiscover people and let the spark happen"
+                    ? t("chat.inbox.empty.romanceChats")
+                    : t("chat.inbox.empty.romanceMatches")
                   : sourceMode === "friends"
                   ? hasFriendsConnections
-                    ? "No active chats yet.\nIt's time to connect! ✨"
-                    : "No matches yet.\nFind people who share your interests and vibe."
+                    ? t("chat.inbox.empty.friendsChats")
+                    : t("chat.inbox.empty.friendsMatches")
                   : sourceMode === "business"
                   ? hasBusinessConnections
-                    ? "No active conversations yet.\nReach out and explore opportunities."
-                    : "No professional connections yet.\nExpand your network and connect with the right people."
-                  : "There is no active chats yet. It's time to spark a conversation!"}
+                    ? t("chat.inbox.empty.businessChats")
+                    : t("chat.inbox.empty.businessConnections")
+                  : t("chat.emptyInbox")}
               </Text>
             }
           />

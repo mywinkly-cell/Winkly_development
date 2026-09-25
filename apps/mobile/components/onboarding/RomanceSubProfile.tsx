@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, ScrollView, Switch, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
 import { Chip, Input } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import {
@@ -132,6 +133,7 @@ export function RomanceSubProfile(props: {
   hideHeader?: boolean;
 }) {
   const theme = useAppTheme();
+  const { t } = useTranslation();
   const { enabled, toggle, photos, onPickPhoto, video, onPickVideo, bio, onBioChange, hideToggle, section, hideHeader } = props;
   const { height, onHeightChange, weight, onWeightChange } = props;
   const { lifestyle, onLifestyleChange, smoking, onSmokingChange, alcohol, onAlcoholChange, kids, onKidsChange } = props;
@@ -149,7 +151,7 @@ export function RomanceSubProfile(props: {
     return (
       <View style={{ marginBottom: theme.spacing.xxl }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: theme.spacing.sm }}>
-          <Text style={{ ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textPrimary }}>💖 Romance</Text>
+          <Text style={{ ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textPrimary }}>💖 {t("modes.romance")}</Text>
           {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: theme.colors.border, true: theme.colors.primary }} thumbColor={theme.colors.onPrimary} />}
         </View>
       </View>
@@ -160,14 +162,14 @@ export function RomanceSubProfile(props: {
     <View style={{ marginBottom: theme.spacing.xxl }}>
       {!hideHeader && (
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: theme.spacing.md }}>
-          <Text style={{ ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textPrimary }}>💖 Romance</Text>
+          <Text style={{ ...theme.type.h3, fontFamily: theme.type.h3.fontFamily, color: theme.colors.textPrimary }}>💖 {t("modes.romance")}</Text>
           {!hideToggle && <Switch value={enabled} onValueChange={toggle} trackColor={{ false: theme.colors.border, true: theme.colors.primary }} thumbColor={theme.colors.onPrimary} />}
         </View>
       )}
 
       {showPhotosBio && (
       <>
-      <Text style={label}>Photos <Text style={requiredMark}>*</Text></Text>
+      <Text style={label}>{t("profile.photos")} <Text style={requiredMark}>*</Text></Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: theme.spacing.lg }}>
         {photos.map((p, i) => {
           const isFirst = i === 0;
@@ -198,13 +200,13 @@ export function RomanceSubProfile(props: {
           style={{ width: 100, height: 100, borderRadius: theme.radii.md, backgroundColor: theme.colors.backgroundMuted, justifyContent: "center", alignItems: "center", marginRight: theme.spacing.sm, marginBottom: theme.spacing.sm }}
         >
           {video ? <Ionicons name="videocam" size={32} color={theme.colors.primary} /> : <Ionicons name="videocam-outline" size={28} color={theme.colors.textMuted} />}
-          <Text style={{ ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textMuted, marginTop: theme.spacing.xxs }}>Video</Text>
+          <Text style={{ ...theme.type.caption, fontFamily: theme.type.caption.fontFamily, color: theme.colors.textMuted, marginTop: theme.spacing.xxs }}>{t("onboarding.subProfile.video")}</Text>
         </TouchableOpacity>
       </View>
 
       <Input
-        label="Bio *"
-        placeholder="About you and what you seek..."
+        label={t("onboarding.subProfile.romance.bioLabel")}
+        placeholder={t("onboarding.subProfile.romance.bioPlaceholder")}
         value={bio}
         onChangeText={onBioChange}
         multiline
@@ -215,14 +217,18 @@ export function RomanceSubProfile(props: {
 
       {showDetails && (
       <>
-      <Input label="Height" placeholder="e.g. 175 cm" value={height} onChangeText={onHeightChange} keyboardType="numeric" />
-      <Input label="Weight" placeholder="e.g. 70 kg" value={weight} onChangeText={onWeightChange} keyboardType="numeric" />
+      <Input
+        label={t("onboarding.subProfile.romance.height")}
+        placeholder={t("onboarding.subProfile.romance.heightPlaceholder")} value={height} onChangeText={onHeightChange} keyboardType="numeric" />
+      <Input
+        label={t("onboarding.subProfile.romance.weight")}
+        placeholder={t("onboarding.subProfile.romance.weightPlaceholder")} value={weight} onChangeText={onWeightChange} keyboardType="numeric" />
 
-      <SingleSelect options={LIFESTYLE_ROMANCE} selected={lifestyle} onSelect={onLifestyleChange} label="Lifestyle (fitness / sport activity)" />
-      <SingleSelect options={SMOKING_OPTIONS} selected={smoking} onSelect={onSmokingChange} label="Smoking" />
-      <SingleSelect options={ALCOHOL_OPTIONS} selected={alcohol} onSelect={onAlcoholChange} label="Alcohol" />
-      <SingleSelect options={KIDS_OPTIONS} selected={kids} onSelect={onKidsChange} label="Kids" />
-      <Text style={label}>Pets (up to 2)</Text>
+      <SingleSelect options={LIFESTYLE_ROMANCE} selected={lifestyle} onSelect={onLifestyleChange} label={t("onboarding.subProfile.romance.lifestyle")} />
+      <SingleSelect options={SMOKING_OPTIONS} selected={smoking} onSelect={onSmokingChange} label={t("onboarding.subProfile.smoking")} />
+      <SingleSelect options={ALCOHOL_OPTIONS} selected={alcohol} onSelect={onAlcoholChange} label={t("onboarding.subProfile.alcohol")} />
+      <SingleSelect options={KIDS_OPTIONS} selected={kids} onSelect={onKidsChange} label={t("onboarding.subProfile.kids")} />
+      <Text style={label}>{t("onboarding.subProfile.pets", { count: 2 })}</Text>
       <ChipSelect
         options={PETS_OPTIONS}
         selected={pets}
@@ -230,18 +236,20 @@ export function RomanceSubProfile(props: {
         max={2}
         exclusiveOption="No pets"
       />
-      <SingleSelect options={FOOD_OPTIONS} selected={food} onSelect={onFoodChange} label="Food habits" />
+      <SingleSelect options={FOOD_OPTIONS} selected={food} onSelect={onFoodChange} label={t("onboarding.subProfile.food")} />
       </>
       )}
 
       {showGoals && (
       <>
-      <SingleSelect options={SEXUAL_VIEWS_OPTIONS} selected={sexualViews} onSelect={onSexualViewsChange} label="Sexual orientation" />
-      <Text style={label}>Relationship goals (up to 2) <Text style={requiredMark}>*</Text></Text>
+      <SingleSelect options={SEXUAL_VIEWS_OPTIONS} selected={sexualViews} onSelect={onSexualViewsChange} label={t("onboarding.subProfile.romance.orientation")} />
+      <Text style={label}>
+        {t("onboarding.subProfile.romance.relationshipGoals", { count: 2 })} <Text style={requiredMark}>*</Text>
+      </Text>
       <ChipSelect options={RELATIONSHIP_GOALS_OPTIONS} selected={relationshipGoals} onToggle={(v) => toggleMulti(relationshipGoals, v, onRelationshipGoalsChange, 2)} />
-      <SingleSelect options={RELIGION_OPTIONS} selected={religion} onSelect={onReligionChange} label="Religion" />
-      <SingleSelect options={POLITICAL_VIEWS_OPTIONS} selected={politicalViews} onSelect={onPoliticalViewsChange} label="Political views" />
-      <Text style={label}>Values (up to 5)</Text>
+      <SingleSelect options={RELIGION_OPTIONS} selected={religion} onSelect={onReligionChange} label={t("onboarding.subProfile.romance.religion")} />
+      <SingleSelect options={POLITICAL_VIEWS_OPTIONS} selected={politicalViews} onSelect={onPoliticalViewsChange} label={t("onboarding.subProfile.romance.politics")} />
+      <Text style={label}>{t("onboarding.subProfile.romance.values", { count: 5 })}</Text>
       <ChipSelect options={VALUES_OPTIONS} selected={values} onToggle={(v) => toggleMulti(values, v, onValuesChange, 5)} />
       </>
       )}

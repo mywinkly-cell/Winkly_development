@@ -15,6 +15,7 @@ import {
   StyleSheet,
 } from "react-native";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { Chip, TextButton } from "@/components/ds";
@@ -68,6 +69,7 @@ export function PlanningLocationFields({
   showTitle = true,
   cityRequired = true,
 }: PlanningLocationFieldsProps) {
+  const { t } = useTranslation();
   const theme = useAppTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
@@ -129,10 +131,10 @@ export function PlanningLocationFields({
       {showTitle ? (
         <View style={styles.headerRow}>
           <Text style={styles.title}>
-            Location{cityRequired ? <Text style={styles.required}> *</Text> : null}
+            {t("concierge.location.title")}{cityRequired ? <Text style={styles.required}> *</Text> : null}
           </Text>
           <TextButton
-            title="Use current"
+            title={t("concierge.location.useCurrent")}
             loading={gpsLoading}
             icon={<Ionicons name="locate" size={16} color={theme.colors.primary} />}
             onPress={() => {
@@ -160,7 +162,7 @@ export function PlanningLocationFields({
       <View style={styles.surface}>
         <TextInput
           style={styles.input}
-          placeholder="City, Country"
+          placeholder={t("concierge.location.placeholder")}
           placeholderTextColor={theme.colors.textMuted}
           value={location}
           onChangeText={(text) => {
@@ -185,7 +187,7 @@ export function PlanningLocationFields({
           }}
           autoCapitalize="words"
           autoCorrect={false}
-          accessibilityLabel="City and country"
+          accessibilityLabel={t("concierge.location.a11y")}
         />
 
         {suggestions.length > 0 && showDropdown ? (
@@ -211,17 +213,17 @@ export function PlanningLocationFields({
           </View>
         ) : null}
 
-        <Text style={styles.optionalLabel}>Search radius (optional)</Text>
+        <Text style={styles.optionalLabel}>{t("concierge.location.radius")}</Text>
         <View style={styles.radiusRow}>
           <Chip
-            label="Any"
+            label={t("concierge.details.setting.any")}
             selected={radiusKm == null}
             onPress={() => patch({ searchRadiusKm: null })}
           />
           {PLANNING_RADIUS_KM_OPTIONS.map((km) => (
             <Chip
               key={km}
-              label={`${km} km`}
+              label={t("weeklySpark.settingsRadiusKm", { km })}
               selected={radiusKm === km}
               onPress={() => patch({ searchRadiusKm: km })}
             />
@@ -236,18 +238,18 @@ export function PlanningLocationFields({
           }}
           activeOpacity={0.9}
           accessibilityRole="button"
-          accessibilityLabel="Set precise spot on map"
+          accessibilityLabel={t("concierge.location.setPin")}
         >
           <Ionicons name="map-outline" size={18} color={theme.colors.primary} />
           <View style={styles.mapBtnCopy}>
             <Text style={styles.mapBtnTitle}>
-              {hasPin ? "Precise spot set" : "Set precise spot on map"}
+              {hasPin ? t("concierge.location.pinSet") : t("concierge.location.setPin")}
             </Text>
             <Text style={styles.mapBtnSub} numberOfLines={2}>
               {hasPin
                 ? value.pinLabel ||
                   `${Number(value.latitude).toFixed(4)}, ${Number(value.longitude).toFixed(4)}`
-                : "Optional — open the map and drop a pin"}
+                : t("concierge.location.pinHint")}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />

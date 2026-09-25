@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, Alert, ActivityIndicator } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import {
   getGroupDetails,
@@ -17,6 +18,7 @@ import { inviteUsersToGroup } from "@/lib/groupInvitations";
 import { supabase } from "@/lib/supabase";
 
 export default function MemberList() {
+  const { t } = useTranslation();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme);
@@ -59,9 +61,9 @@ export default function MemberList() {
     inviteUsersToGroup(gid, [s.user_id])
       .then(() => {
         setSuggestions((prev) => prev.filter((x) => x.user_id !== s.user_id));
-        Alert.alert("Invitation sent", `${s.display_name} was invited to the group.`);
+        Alert.alert(t("groups.members.invitationSent"), t("groups.members.invitedBody", { name: s.display_name }));
       })
-      .catch((e) => Alert.alert("Error", (e as Error)?.message ?? "Could not invite."))
+      .catch((e) => Alert.alert(t("common.error"), (e as Error)?.message ?? t("groups.members.inviteFailed")))
       .finally(() => setBusy(false));
   };
 
@@ -72,10 +74,10 @@ export default function MemberList() {
   );
 
   const onRemove = (member: GroupMember) => {
-    Alert.alert("Remove member", `Remove ${member.display_name} from this group?`, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("groups.members.removeTitle"), t("groups.members.removeConfirm", { name: member.display_name }), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Remove",
+        text: t("groups.members.remove"),
         style: "destructive",
         onPress: async () => {
           setBusy(true);
@@ -83,7 +85,7 @@ export default function MemberList() {
             await removeGroupMember(gid, member.user_id);
             await load();
           } catch (e) {
-            Alert.alert("Error", (e as Error).message ?? "Could not remove member.");
+            Alert.alert(t("common.error"), (e as Error).message ?? t("groups.members.removeFailed"));
           } finally {
             setBusy(false);
           }
@@ -93,10 +95,10 @@ export default function MemberList() {
   };
 
   const onLeave = () => {
-    Alert.alert("Leave group", "You will no longer receive messages from this group.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("chat.info.leaveGroup"), t("groups.members.leaveBody"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Leave",
+        text: t("chat.info.leave"),
         style: "destructive",
         onPress: async () => {
           setBusy(true);
@@ -104,7 +106,7 @@ export default function MemberList() {
             await leaveGroup(gid);
             router.back();
           } catch (e) {
-            Alert.alert("Error", (e as Error).message ?? "Could not leave group.");
+            Alert.alert(t("common.error"), (e as Error).message ?? t("groups.members.leaveFailed"));
           } finally {
             setBusy(false);
           }
@@ -119,10 +121,10 @@ export default function MemberList() {
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel={t("common.back")}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Members</Text>
+          <Text style={styles.headerTitle}>{t("groups.members")}</Text>
           <View style={{ width: 70 }} />
         </View>
 
@@ -130,9 +132,9 @@ export default function MemberList() {
           <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 24 }} />
         ) : (
           <View style={styles.card}>
-            <Text style={styles.title}>{details?.name ?? "Group"}</Text>
+            <Text style={styles.title}>{details?.name ?? t("groups.details.fallbackName")}</Text>
             <Text style={styles.subtitle}>
-              {details ? `${details.member_count} / ${details.max_members} members` : ""}
+              {details ? t("groups.memberCount", { count: details.member_count, max: details.max_members }) : ""}
             </Text>
 
             <View style={{ height: 8 }} />
@@ -151,14 +153,13 @@ export default function MemberList() {
                   )}
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.name}>
-                      {m.display_name}
-                      {isMe ? " (You)" : ""}
+                      {isMe ? t("chat.info.nameYou", { name: m.display_name }) : m.display_name}
                     </Text>
-                    <Text style={styles.role}>{m.role === "admin" || m.role === "owner" ? "Host" : "Member"}</Text>
+                    <Text style={styles.role}>{m.role === "admin" || m.role === "owner" ? t("groups.members.host") : t("chat.role.member")}</Text>
                   </View>
                   {canRemove ? (
                     <TouchableOpacity onPress={() => onRemove(m)} disabled={busy} style={styles.removeBtn} activeOpacity={0.85}>
-                      <Text style={styles.removeText}>Remove</Text>
+                      <Text style={styles.removeText} numberOfLines={1} adjustsFontSizeToFit>{t("groups.members.remove")}</Text>
                     </TouchableOpacity>
                   ) : null}
                 </View>
@@ -167,7 +168,7 @@ export default function MemberList() {
 
             {isAdmin && suggestions.length > 0 ? (
               <View style={styles.suggestBox}>
-                <Text style={styles.suggestTitle}>Bring a friend</Text>
+                <Text style={styles.suggestTitle}>{t("groups.members.bringFriend")}</Text>
                 {suggestions.map((s) => (
                   <View key={s.user_id} style={styles.suggestRow}>
                     {s.avatar_url ? (
@@ -177,11 +178,11 @@ export default function MemberList() {
                         <Text style={styles.avatarText}>{s.display_name.slice(0, 1).toUpperCase()}</Text>
                       </View>
                     )}
-                    <Text style={styles.suggestText} numberOfLines={2}>
-                      Add {s.display_name}? They&apos;re into {s.shared_interest} too.
+                    <Text style={styles.suggestText} numberOfLines={3}>
+                      {t("groups.members.suggestion", { name: s.display_name, interest: s.shared_interest })}
                     </Text>
                     <TouchableOpacity onPress={() => onAddSuggested(s)} disabled={busy} style={styles.addBtn} activeOpacity={0.85}>
-                      <Text style={styles.addText}>Add</Text>
+                      <Text style={styles.addText} numberOfLines={1} adjustsFontSizeToFit>{t("common.add")}</Text>
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -190,7 +191,7 @@ export default function MemberList() {
 
             <TouchableOpacity onPress={onLeave} disabled={busy} style={styles.leaveBtn} activeOpacity={0.85}>
               <Ionicons name="exit-outline" size={18} color={theme.colors.error} />
-              <Text style={styles.leaveText}>Leave group</Text>
+              <Text style={styles.leaveText}>{t("chat.info.leaveGroup")}</Text>
             </TouchableOpacity>
           </View>
         )}
