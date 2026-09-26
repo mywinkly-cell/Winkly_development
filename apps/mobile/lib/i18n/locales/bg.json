@@ -408,7 +408,7 @@
   "chat.info.ownerAdmin": "Собственик / Администратор",
   "chat.info.participants": "Участници",
   "chat.info.readReceiptsFailed": "Настройката за потвърждения за прочитане не можа да бъде запазена.",
-  "chat.info.readReceiptsSub": "Позволи на другите да виждат кога са прочетени съобщенията им",
+  "chat.info.readReceiptsSub": "Позволи на другите да виждат, когато си прочел/а съобщенията им",
   "chat.info.readReceiptsTitle": "Потвърждения за прочитане",
   "chat.invite.activity.brunch": "Брънч",
   "chat.invite.activity.coffee": "Кафе",
