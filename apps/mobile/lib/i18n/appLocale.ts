@@ -61,22 +61,92 @@ export function useAppLocaleTag(): string {
   );
 }
 
-export function formatAppDate(
-  date: Date,
-  options: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric" }
-): string {
-  return date.toLocaleDateString(getAppLocaleTag(), options);
+/*
+ * Intl formatter cache. `Date#toLocale*String(locale, options)` and `new Intl.*Format()` build a
+ * fresh ICU formatter on every call, which is ~50-100× slower than reusing one (noticeable in
+ * lists: one call per chat bubble / planner row). Formatters are immutable, so cache them per
+ * locale + options. Keys are few (a handful of option shapes × the active language).
+ */
+const dateTimeFormatCache = new Map<string, Intl.DateTimeFormat>();
+const numberFormatCache = new Map<string, Intl.NumberFormat>();
+
+function cacheKey(locale: string, options: object | undefined): string {
+  return options ? `${locale}|${JSON.stringify(options)}` : locale;
 }
 
+/** Cached `Intl.DateTimeFormat` for `locale` (defaults to the app language). */
+export function getDateTimeFormat(
+  options?: Intl.DateTimeFormatOptions,
+  locale: string = getAppLocaleTag()
+): Intl.DateTimeFormat {
+  const key = cacheKey(locale, options);
+  let fmt = dateTimeFormatCache.get(key);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat(locale, options);
+    dateTimeFormatCache.set(key, fmt);
+  }
+  return fmt;
+}
+
+/** Cached `Intl.NumberFormat` for `locale` (defaults to the app language). */
+export function getNumberFormat(
+  options?: Intl.NumberFormatOptions,
+  locale: string = getAppLocaleTag()
+): Intl.NumberFormat {
+  const key = cacheKey(locale, options);
+  let fmt = numberFormatCache.get(key);
+  if (!fmt) {
+    fmt = new Intl.NumberFormat(locale, options);
+    numberFormatCache.set(key, fmt);
+  }
+  return fmt;
+}
+
+const DEFAULT_DATE: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric" };
+const DEFAULT_DATE_TIME: Intl.DateTimeFormatOptions = {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+};
+const DEFAULT_TIME: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
+
+/** Date in the app language ("Sat, 26 Sept"). Returns "" for an invalid date. */
+export function formatAppDate(
+  date: Date,
+  options: Intl.DateTimeFormatOptions = DEFAULT_DATE,
+  locale?: string
+): string {
+  if (Number.isNaN(date.getTime())) return "";
+  return getDateTimeFormat(options, locale).format(date);
+}
+
+/** Date + time in the app language. Returns "" for an invalid date. */
 export function formatAppDateTime(
   date: Date,
-  options: Intl.DateTimeFormatOptions = {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }
+  options: Intl.DateTimeFormatOptions = DEFAULT_DATE_TIME,
+  locale?: string
 ): string {
-  return date.toLocaleString(getAppLocaleTag(), options);
+  if (Number.isNaN(date.getTime())) return "";
+  return getDateTimeFormat(options, locale).format(date);
+}
+
+/** Clock time in the app language (24h in most of Europe, 12h in en-US). "" for an invalid date. */
+export function formatAppTime(
+  date: Date,
+  options: Intl.DateTimeFormatOptions = DEFAULT_TIME,
+  locale?: string
+): string {
+  if (Number.isNaN(date.getTime())) return "";
+  return getDateTimeFormat(options, locale).format(date);
+}
+
+/** Number in the app language ("1,234" / "1.234" / "1 234"). */
+export function formatAppNumber(
+  value: number,
+  options?: Intl.NumberFormatOptions,
+  locale?: string
+): string {
+  return getNumberFormat(options, locale).format(value);
 }

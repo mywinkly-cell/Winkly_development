@@ -16,6 +16,7 @@ import {
   type SparkDaypart,
   type WeeklySparkTimingPrefs,
 } from "@/lib/ai/weeklySparkSettings";
+import { formatAppTime } from "@/lib/i18n/appLocale";
 
 const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 
@@ -469,7 +470,7 @@ export function sparkPlanToStructured(plan: WeeklySparkPlan): PlannerThemePlanOp
   if (plan.startsAt) {
     const d = new Date(plan.startsAt);
     if (!Number.isNaN(d.getTime())) {
-      timeLabel = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+      timeLabel = formatAppTime(d);
     }
   }
   return {

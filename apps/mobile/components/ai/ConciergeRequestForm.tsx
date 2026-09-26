@@ -15,7 +15,7 @@ import {
   Pressable,
 } from "react-native";
 import { useTranslation } from "react-i18next";
-import { useAppLocaleTag } from "@/lib/i18n/appLocale";
+import { useAppLocaleTag, formatAppDate } from "@/lib/i18n/appLocale";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -703,14 +703,14 @@ export function ConciergeRequestForm({
             <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.dateBtn} activeOpacity={0.8}>
               <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
               <Text style={styles.dateBtnText} numberOfLines={1}>
-                {t("concierge.form.from", { date: date.toLocaleDateString(appLocale, { weekday: "short", month: "short", day: "numeric", year: "numeric" }) })}
+                {t("concierge.form.from", { date: formatAppDate(date, { weekday: "short", month: "short", day: "numeric", year: "numeric" }, appLocale) })}
               </Text>
             </TouchableOpacity>
             {dateRangePreset !== "single" && (
               <TouchableOpacity onPress={() => setShowDateEndPicker(true)} style={[styles.dateBtn, styles.dateBtnSecond]} activeOpacity={0.8}>
                 <Ionicons name="calendar-outline" size={20} color={theme.colors.textSecondary} />
                 <Text style={styles.dateBtnText} numberOfLines={1}>
-                  {t("concierge.details.dateTo", { date: dateEnd.toLocaleDateString(appLocale, { weekday: "short", month: "short", day: "numeric", year: "numeric" }) })}
+                  {t("concierge.details.dateTo", { date: formatAppDate(dateEnd, { weekday: "short", month: "short", day: "numeric", year: "numeric" }, appLocale) })}
                 </Text>
               </TouchableOpacity>
             )}

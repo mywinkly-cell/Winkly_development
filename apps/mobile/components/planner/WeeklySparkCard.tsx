@@ -12,6 +12,7 @@ import {
   type WeeklySparkPlan,
   type SparkSlot,
 } from "@/lib/ai/weeklySpark";
+import { formatAppDate, formatAppNumber, formatAppTime } from "@/lib/i18n/appLocale";
 
 export type WeeklySparkCardProps = {
   plan: WeeklySparkPlan;
@@ -39,8 +40,8 @@ function formatWhen(startsAt: string | null, locale: string): string | null {
   if (!startsAt) return null;
   const d = new Date(startsAt);
   if (Number.isNaN(d.getTime())) return null;
-  const day = d.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" });
-  const time = d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  const day = formatAppDate(d, { weekday: "short", day: "numeric", month: "short" }, locale);
+  const time = formatAppTime(d, undefined, locale);
   return `${day} · ${time}`;
 }
 
@@ -53,11 +54,11 @@ function formatPrice(
   if (cents === null) return null;
   if (cents === 0) return t("weeklySpark.free");
   try {
-    return new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency: currency || "EUR",
-      maximumFractionDigits: 0,
-    }).format(cents / 100);
+    return formatAppNumber(
+      cents / 100,
+      { style: "currency", currency: currency || "EUR", maximumFractionDigits: 0 },
+      locale,
+    );
   } catch {
     return `${Math.round(cents / 100)} ${currency || "EUR"}`;
   }

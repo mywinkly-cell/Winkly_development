@@ -97,7 +97,7 @@ import {
 import { recordPairBehaviorSignal } from "@/lib/matching/behaviorSignals";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
-import { formatAppDateTime, getAppLocaleTag } from "@/lib/i18n/appLocale";
+import { formatAppDateTime, formatAppTime } from "@/lib/i18n/appLocale";
 import { chatRoutes, useModeHub } from "@/lib/navigation/modeHub";
 import { openPeerProfile } from "@/lib/chats/peerProfileNavigation";
 import {
@@ -2057,7 +2057,7 @@ export default function ChatView({
 
               <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4, gap: 8 }}>
                 <Text style={{ fontSize: 11, color: theme.colors.textMuted }}>
-                  {new Date(item.created_at).toLocaleTimeString(getAppLocaleTag(), { hour: "2-digit", minute: "2-digit" })}
+                  {formatAppTime(new Date(item.created_at))}
                 </Text>
                 {mine && item.pending ? (
                   <Text style={{ fontSize: 11, fontWeight: "600", color: theme.colors.textMuted }}>

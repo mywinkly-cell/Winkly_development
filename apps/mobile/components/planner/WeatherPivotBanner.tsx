@@ -9,7 +9,7 @@ import React, { useCallback, useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { getAppLocaleTag } from "@/lib/i18n/appLocale";
+import { formatAppDate } from "@/lib/i18n/appLocale";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography } from "@/constants/tokens";
@@ -24,7 +24,7 @@ function formatPivotDate(iso: string | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString(getAppLocaleTag(), { weekday: "short", month: "short", day: "numeric" });
+  return formatAppDate(d, { weekday: "short", month: "short", day: "numeric" });
 }
 
 export function WeatherPivotBanner() {

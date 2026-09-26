@@ -28,7 +28,7 @@ import {
 } from "@/lib/plannerInvitations";
 import type { PlannerInvitationWithItem } from "@/lib/plannerInvitations";
 import { requestDateSafetyPrompt } from "@/lib/safety/dateCheckinPrompt";
-import { useAppLocaleTag } from "@/lib/i18n/appLocale";
+import { useAppLocaleTag, formatAppDateTime } from "@/lib/i18n/appLocale";
 
 const SOURCE_LABEL_KEYS: Record<string, string> = {
   romance: "planner.source.romance",
@@ -155,13 +155,13 @@ export default function PlannerInvitations() {
                 ? t(SOURCE_LABEL_KEYS[it.planner_item?.source_mode ?? ""])
                 : it.planner_item?.source_mode,
               it.planner_item?.starts_at
-                ? new Date(it.planner_item.starts_at).toLocaleString(appLocale, {
+                ? formatAppDateTime(new Date(it.planner_item.starts_at), {
                     weekday: "short",
                     month: "short",
                     day: "numeric",
                     hour: "2-digit",
                     minute: "2-digit",
-                  })
+                  }, appLocale)
                 : "",
             ]
               .filter(Boolean)

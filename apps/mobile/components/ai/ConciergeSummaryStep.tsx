@@ -14,10 +14,10 @@ import { Card, PrimaryButton, TextButton } from "@/components/ds";
 import type { ActivityDetails } from "@/lib/ai/conciergePlanningFlow";
 import { useNormalizedLocation } from "@/lib/location/useLocationDisplay";
 import { translateCatalogText } from "@/lib/ai/conciergeCatalogI18n";
-import { useAppLocaleTag } from "@/lib/i18n/appLocale";
+import { useAppLocaleTag, formatAppDate } from "@/lib/i18n/appLocale";
 
 function dayKey(d: Date, locale: string): string {
-  return d.toLocaleDateString(locale, { weekday: "short", month: "short", day: "numeric" });
+  return formatAppDate(d, { weekday: "short", month: "short", day: "numeric" }, locale);
 }
 
 function sameCalendarDay(a: Date, b: Date): boolean {

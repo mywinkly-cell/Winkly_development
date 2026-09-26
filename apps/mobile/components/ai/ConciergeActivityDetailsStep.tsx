@@ -46,7 +46,7 @@ import {
   getCurrencySymbol,
 } from "@/lib/ai/conciergePlanningFlow";
 import { translateCatalogText } from "@/lib/ai/conciergeCatalogI18n";
-import { useAppLocaleTag } from "@/lib/i18n/appLocale";
+import { useAppLocaleTag, formatAppDate } from "@/lib/i18n/appLocale";
 import type { Mode } from "@/types";
 import { supabase } from "@/lib/supabase";
 import {
@@ -837,14 +837,14 @@ export function ConciergeActivityDetailsStep({
               <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDatePicker(true)} activeOpacity={0.85}>
                 <Ionicons name="calendar-outline" size={18} color={theme.colors.textSecondary} />
                 <Text style={styles.dateBtnText}>
-                  {date.toLocaleDateString(appLocale, { weekday: "short", month: "short", day: "numeric" })}
+                  {formatAppDate(date, { weekday: "short", month: "short", day: "numeric" }, appLocale)}
                 </Text>
               </TouchableOpacity>
               {!singleDay && activityKey !== "trip" ? (
                 <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDateEndPicker(true)} activeOpacity={0.85}>
                   <Ionicons name="calendar-outline" size={18} color={theme.colors.textSecondary} />
                   <Text style={styles.dateBtnText}>
-                    {t("concierge.details.dateTo", { date: dateEnd.toLocaleDateString(appLocale, { weekday: "short", month: "short", day: "numeric" }) })}
+                    {t("concierge.details.dateTo", { date: formatAppDate(dateEnd, { weekday: "short", month: "short", day: "numeric" }, appLocale) })}
                   </Text>
                 </TouchableOpacity>
               ) : null}
@@ -877,7 +877,7 @@ export function ConciergeActivityDetailsStep({
           </View>
           {tripLengthDays > 1 ? (
             <Text style={styles.changeHint}>
-              {t("concierge.details.ends", { date: dateEnd.toLocaleDateString(appLocale, { weekday: "short", month: "short", day: "numeric" }) })}
+              {t("concierge.details.ends", { date: formatAppDate(dateEnd, { weekday: "short", month: "short", day: "numeric" }, appLocale) })}
             </Text>
           ) : null}
         </>

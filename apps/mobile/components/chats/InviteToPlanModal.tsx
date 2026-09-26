@@ -27,7 +27,7 @@ import { canUseAIFeature } from "@/lib/ai/aiFeatureGate";
 import { useDefaultLocation } from "@/lib/ai/useDefaultCity";
 import { useTranslation } from "react-i18next";
 import { formatDefaultLocationDisplay } from "@/lib/location/countryDisplay";
-import { formatAppDate, getAppLocaleTag } from "@/lib/i18n/appLocale";
+import { formatAppDate, formatAppTime } from "@/lib/i18n/appLocale";
 import { callConcierge } from "@/lib/ai/conciergeClient";
 import type { ExperienceOption } from "@/lib/ai/conciergeClient";
 
@@ -314,7 +314,7 @@ export function InviteToPlanModal({ visible, mode, onClose, onSubmit, partnerUse
               </Pressable>
               <Pressable style={styles.dateTimeBtn} onPress={() => setShowTimePicker(true)}>
                 <Text style={styles.dateTimeText}>
-                  {startsAt.toLocaleTimeString(getAppLocaleTag(), { hour: "2-digit", minute: "2-digit" })}
+                  {formatAppTime(startsAt)}
                 </Text>
               </Pressable>
             </View>
