@@ -287,7 +287,7 @@
   "auth.verify.sentTitle": "Enviado",
   "auth.verify.signUpAgain": "Criaste a conta com outro email? Regista-te novamente",
   "auth.verify.subtitle": "Enviámos um link de verificação para a tua caixa de entrada. Toca no link para verificar o teu email e continuar.\n\nSó podes usar a app depois de verificares o email.",
-  "auth.verify.title": "Confirme o seu e-mail",
+  "auth.verify.title": "Confirma o teu e-mail",
   "auth.welcomeBack": "Bem-vindo de volta",
   "auth.welcomeBack.continue": "Continuar a configuração",
   "auth.welcomeBack.subtitle": "O teu perfil está quase pronto. Completa-o para desbloquear o passo seguinte.",
