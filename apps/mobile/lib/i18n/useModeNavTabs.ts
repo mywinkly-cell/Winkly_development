@@ -16,7 +16,7 @@ export function useDefaultModeNavTabs(): ModeNavTab[] {
   );
 }
 
-/** Business account tabs (Home, BA analytics, Chats, Planner). */
+/** Business account tabs (Home, Business Analytics, Chats, Planner). */
 export function useBusinessAccountNavTabs(): ModeNavTab[] {
   const { t, i18n } = useTranslation();
   return useMemo(
