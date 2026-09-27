@@ -70,6 +70,7 @@ import { isModeAvailable } from "@/lib/modes/availability";
 import { ReviewStep } from "@/components/onboarding/wizard/ReviewStep";
 import { PhotoConfirmModal } from "@/components/media/PhotoConfirmModal";
 import { uploadLocalPhotos, uploadLocalPhotosModerated, uploadLocalVideos } from "@/lib/uploadMedia";
+import { writeOwnUserProfile } from "@/lib/profile/writeOwnUserProfile";
 import { PhotosInReview } from "@/components/profile/PhotosInReview";
 import { validatePickerAsset } from "@/lib/mediaValidation";
 import {
@@ -341,7 +342,7 @@ export default function ProfileCore() {
           // DOB column is locked down at the API layer. The owner reads their own
           // date of birth only via the get_my_birthday() RPC (keyed on auth.uid()).
           const { data: up, error: upErr } = await supabase
-            .from("user_profiles")
+            .from("my_profile")
             .select("first_name, last_name, gender, city, education, occupation, languages, instagram, core_photos, main_photo_url, night_owl, interests, show_full_name")
             .eq("id", userId)
             .maybeSingle();
@@ -1165,9 +1166,7 @@ export default function ProfileCore() {
         main_photo_url: uploadedCorePhotos[0] || null,
       };
 
-      const { error: upsertErr } = await supabase
-        .from("user_profiles")
-        .upsert(payload, { onConflict: "id" });
+      const { error: upsertErr } = await writeOwnUserProfile(authUser.id, payload);
 
       if (upsertErr) throw upsertErr;
 

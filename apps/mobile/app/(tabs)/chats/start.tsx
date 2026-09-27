@@ -62,7 +62,7 @@ async function loadWinklyContacts(userId: string, search: string): Promise<UserM
 
   let query = supabase
     .from("user_profiles")
-    .select("id,first_name,last_name,city,main_photo_url,core_photos");
+    .select("id,first_name,last_name:last_name_public,city,main_photo_url,core_photos");
 
   if (trimmed.length >= 1) {
     if (isNumberSearch && numOnly.length >= 3) {

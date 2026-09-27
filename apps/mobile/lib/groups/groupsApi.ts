@@ -156,7 +156,7 @@ export async function getGroupMembers(groupId: string): Promise<GroupMember[]> {
   const ids = [...new Set(rows.map((r: { user_id: string }) => r.user_id))];
   const { data: profiles } = await supabase
     .from("user_profiles")
-    .select("id, first_name, last_name, main_photo_url, city")
+    .select("id, first_name, last_name:last_name_public, main_photo_url, city")
     .in("id", ids);
 
   const byId: Record<string, { first_name?: string; last_name?: string; main_photo_url?: string; city?: string }> = {};

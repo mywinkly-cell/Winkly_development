@@ -44,6 +44,13 @@ BEGIN
   RAISE NOTICE 'PASS: public_profile_view exposes age, not birthday';
 END $$;
 
+-- Seeded auth users have no profile row, so the age assertions had nothing to
+-- read on a fresh database. Provision both rows (rolled back at the end).
+INSERT INTO public.user_profiles (id, first_name, last_name, birthday)
+SELECT u::uuid, 'Test', 'User', CURRENT_DATE - INTERVAL '30 years'
+FROM unnest(ARRAY[current_setting('test.me'), current_setting('test.other')]) AS u
+ON CONFLICT (id) DO UPDATE SET birthday = COALESCE(public.user_profiles.birthday, EXCLUDED.birthday);
+
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claims', json_build_object('sub', current_setting('test.me'), 'role','authenticated')::text, true);
 

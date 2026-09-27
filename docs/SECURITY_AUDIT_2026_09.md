@@ -17,6 +17,7 @@ migrations applied, then shown closed by the regression test.
 | SEC-11 | Public `business-logos` writable by anyone (the app never uploads there); strangers could inflate matching affinity | Client writes removed; behaviour signals need a shared chat | `20260927130000_…` |
 | OPS-4 | `recompute-compatibility` ran as service role for anyone holding the public anon key (DB DoS); `get-nearby-external-events` spent API quotas for anyone | Cron secret / service key required; signed-in user required | both functions |
 | — | `verify-profile-photo` accepted another user's selfie path; `video-call-session` let ex-members start calls | Path must be the caller's own; `left_at IS NULL` | both functions |
+| SEC-12 | Every user's last name was readable by any logged-in user, whatever "show my full name" said; the new-chat search matched hidden last names | Others read `last_name_public` (the last name only if the user opted in, has a Business profile, or hosts an event); the owner reads `my_profile`; the raw column becomes owner-only in **phase 2** | `20260927140000_…`, `scripts/last_name_lockdown_phase2.sql`, 20 app queries |
 
 Bugs found and fixed along the way (not security, but they block real flows):
 
@@ -29,6 +30,17 @@ Bugs found and fixed along the way (not security, but they block real flows):
   `auth.uid()` was NULL anyway — so a normal participant could never confirm.
 - `join_event` never added anyone to an **existing** event chat (it ran as the caller,
   who can't see a chat they aren't in yet).
+- **Saving a Romance / Friends / Business profile always failed** since
+  `20260922120000_media_moderation.sql` (`record "new" has no field "main_photo_url"`
+  from the photo-moderation trigger) — fixed in `20260927135000_…`.
+- **Onboarding's final save and the profile autosave were refused** on any database with
+  the birthday lockdown (`20260906120000`): a PostgREST upsert needs read access to every
+  column it writes, and `birthday` isn't readable. The app now writes its own profile with
+  update-then-insert (`lib/profile/writeOwnUserProfile.ts`).
+- **Viewing another user's profile failed** (`loadPublicCoreProfile` selected `birthday`),
+  **`friend_profiles` failed for every client** (it derived age from `birthday`), the
+  **Dates screen query failed** (`public_profile_view` had lost `show_full_name`), and the
+  Business-profile fallback used a join PostgREST can't make (no foreign key).
 
 ---
 
@@ -77,31 +89,45 @@ the snapshot.
    - Join / leave an event with a chat
    - Connect Google Calendar in Settings (needs the new app build — see below)
    - Photo verification
+   - Onboarding a brand-new account end to end; editing your profile (autosave)
+   - Open someone else's profile in Romance, Friends and Business; the Dates screen
+   - Names: first name only by default; full name after turning the option on, for
+     Business profiles, and for someone who hosts an event
 5. Then production: snapshot policies (above) → push → tests → functions → app release.
+
+**Last names roll out in two phases** (older app builds read and upsert `last_name`
+directly, so locking it first would break their chat lists and onboarding):
+
+1. Push the migrations (phase 1 is additive — old and new app builds both work; verified).
+2. Ship the app update (JS only, so an `expo-updates` OTA update can deliver it).
+3. Once most users run it, apply `supabase/scripts/last_name_lockdown_phase2.sql` to
+   production, then move it into `supabase/migrations/` with a new timestamp.
+
+Check whether the **birthday lockdown** is already live in production — if it is, new
+users on the current app can't finish onboarding today, and the app update fixes it:
+`SELECT has_column_privilege('authenticated', 'public.user_profiles', 'birthday', 'SELECT');`
+(`false` = lockdown live).
 
 **App release needed for calendar connect.** Until users update, the old app opens the
 consent screen and reports success, but the connection is never activated (it now
-waits for the app to redeem the code). Everything else is server-side and works with
-the app versions already installed. `recompute-compatibility` has no callers today;
+waits for the app to redeem the code). Apart from that and the last-name phases above,
+everything is server-side and works with the app versions already installed. `recompute-compatibility` has no callers today;
 if you schedule it, send `x-cron-secret`.
 
 ---
 
 ## Still open — decisions for you
 
-- **Last names are readable by any logged-in user** regardless of "show full name", and
-  the "new chat" search (`app/(tabs)/chats/new-chat.tsx`) lets anyone search *all*
-  users by first name, last name or city. Fixing this properly needs the birthday
-  approach (revoke the column, serve a masked name via views/RPCs) across ~15 client
-  queries plus the discover feeds, and a device QA pass — deliberately not done blind.
-  The search should also be limited to your connections.
 - **Profile videos and voice prompts are not moderated** (public `user-videos` bucket).
-  Options: async video moderation (e.g. Sightengine video, paid), hold videos private
-  until manually reviewed, or hide video bios from others until one of those exists.
+  Photos are moderated for the same reasons — see the chat reply for options.
 - **Free Premium via throwaway accounts.** Every signup gets a 3-day Premium trial and
-  the AI spend ceilings are off. Dashboard actions: email confirmation ON, CAPTCHA,
-  and set `AI_MONTHLY_GLOBAL_COST_MICROS` as a hard ceiling on the bill.
+  the AI spend ceilings are off. Dashboard actions: email confirmation ON, CAPTCHA, and
+  set `AI_MONTHLY_GLOBAL_COST_MICROS` as a hard ceiling on the bill.
 - **Push notifications show message text** on the lock screen (`notify-fanout`).
   Consider a "hide message previews" setting, common in dating apps.
-- `data_minimization_test.sql` and `birthday_lockdown_test.sql` fail their "age is
-  derivable" check on a fresh local database — before these changes too. Worth a look.
+- **Event screens** (`create-event.tsx`, `event-details.tsx`) still hold ~100 hard-coded
+  developer strings. The server already shows hosts' full names; showing "Hosted by …"
+  on the event page and a notice at creation belongs with those screens' real design
+  (the i18n rule makes any edit translate the whole file).
+- **New-chat search** lists every user by first name and city (hidden last names can no
+  longer be searched). Consider limiting it to connections.

@@ -129,6 +129,11 @@ jobs:
         # the roles (anon / authenticated / service_role) the test switches into.
         run: npx supabase start -x studio,edge-runtime,imgproxy
 
+      # SEC-12 phase 2 is a script until production adopts it (see the file header);
+      # apply it here so the tests always cover the final, locked-down state.
+      - name: Apply last-name lockdown (SEC-12 phase 2)
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/scripts/last_name_lockdown_phase2.sql
+
       - name: Security hardening regression test
         run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/security_hardening_test.sql
 
@@ -136,6 +141,17 @@ jobs:
       # strangers' calendars, chat-image swap after moderation.
       - name: Membership & plans security regression test
         run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/security_audit_2026_09_test.sql
+
+      - name: Data-minimisation, birthday and planner visibility tests
+        run: |
+          for t in data_minimization_test birthday_lockdown_test planner_invitee_visibility_test; do
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f "supabase/tests/$t.sql"
+          done
+
+      # Goes through PostgREST + Auth as real users: column aliases, my_profile, and the
+      # onboarding save path that owner-only columns affect (SEC-12).
+      - name: Name privacy API test
+        run: node supabase/tests/name_privacy_api_test.mjs
 
       - name: Stop Supabase
         if: always()

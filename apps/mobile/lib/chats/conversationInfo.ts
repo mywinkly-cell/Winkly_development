@@ -105,7 +105,7 @@ export async function loadConversationDetails(conversationId: string): Promise<C
 
   if (memberIds.length > 0) {
     const [profilesRes, modeProfilesRes] = await Promise.all([
-      supabase.from("user_profiles").select("id,first_name,last_name,main_photo_url").in("id", memberIds),
+      supabase.from("user_profiles").select("id,first_name,last_name:last_name_public,main_photo_url").in("id", memberIds),
       supabase
         .from("profiles_mode")
         .select("user_id,mode,photos")

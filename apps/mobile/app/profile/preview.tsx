@@ -83,7 +83,7 @@ export default function ProfilePreview() {
         // of birth only through the get_my_birthday() RPC, which is keyed on
         // auth.uid(). Only the derived age is ever shown on the preview card.
         const { data: up } = await supabase
-          .from("user_profiles")
+          .from("my_profile")
           .select("first_name, last_name, city, occupation, core_photos, main_photo_url")
           .eq("id", uid)
           .maybeSingle();

@@ -22,7 +22,10 @@ export type PublicCoreProfile = {
   core_photos: string[];
   show_full_name: boolean;
   night_owl: boolean | null;
+  /** Owner-only in the DB — null for other users; use `age`. */
   birthday: string | null;
+  /** Derived server-side (public._age_from_uid); what other users see. */
+  age: number | null;
 };
 
 export type PublicModeProfileRow = {
@@ -50,6 +53,7 @@ export function emptyPublicCoreProfile(): PublicCoreProfile {
     show_full_name: false,
     night_owl: null,
     birthday: null,
+    age: null,
   };
 }
 
@@ -69,21 +73,29 @@ export function parsePublicCoreProfile(row: Record<string, unknown> | null): Pub
     show_full_name: row.show_full_name === true,
     night_owl: typeof row.night_owl === "boolean" ? row.night_owl : null,
     birthday: (row.birthday as string | null) ?? null,
+    age: typeof row.age === "number" && Number.isFinite(row.age) ? row.age : null,
   };
 }
 
-/** Load canonical public core fields for any user. */
+/**
+ * Load canonical public core fields for any user. Birth date and the real last name
+ * are owner-only in the database: other users get a derived age and last_name_public
+ * (the last name only when that user shows it — see 20260927140000_last_name_privacy).
+ */
 export async function loadPublicCoreProfile(userId: string): Promise<PublicCoreProfile | null> {
-  const { data, error } = await supabase
-    .from("user_profiles")
-    .select(
-      "first_name, last_name, gender, birthday, city, education, occupation, languages, instagram, interests, core_photos, show_full_name, night_owl"
-    )
-    .eq("id", userId)
-    .maybeSingle();
+  const [{ data, error }, { data: age }] = await Promise.all([
+    supabase
+      .from("user_profiles")
+      .select(
+        "first_name, last_name:last_name_public, gender, city, education, occupation, languages, instagram, interests, core_photos, show_full_name, night_owl"
+      )
+      .eq("id", userId)
+      .maybeSingle(),
+    supabase.rpc("_age_from_uid", { p_id: userId }),
+  ]);
 
   if (error || !data) return null;
-  return parsePublicCoreProfile(data as Record<string, unknown>);
+  return parsePublicCoreProfile({ ...(data as Record<string, unknown>), age });
 }
 
 /** Normalize mode-specific DB/view rows into one shape for the shared UI. */
@@ -164,7 +176,7 @@ export function displayNameForPublicModeProfile(
 }
 
 export function ageForPublicCoreProfile(core: PublicCoreProfile): number | null {
-  return getAgeFromBirthday(core.birthday);
+  return core.age ?? getAgeFromBirthday(core.birthday);
 }
 
 export { metaStringArray, asStringArray };

@@ -146,16 +146,23 @@ export async function getProfileForMode(
       if (row) return row as Record<string, unknown>;
     }
 
-    const { data: modeRow, error: modeErr } = await supabase
-      .from("profiles_mode")
-      .select(
-        "user_id, bio, photos, interests, meta, lifestyle_tags, user_profiles!inner(first_name, last_name, city, birthday, occupation, core_photos, instagram)"
-      )
-      .eq("user_id", targetUserId)
-      .eq("mode", "business")
-      .maybeSingle();
+    // Two reads, not an embed: profiles_mode has no foreign key to user_profiles, so
+    // PostgREST can't join them (PGRST200) — the old embedded select always failed.
+    const [{ data: modeRow, error: modeErr }, { data: upRow }] = await Promise.all([
+      supabase
+        .from("profiles_mode")
+        .select("user_id, bio, photos, interests, meta, lifestyle_tags")
+        .eq("user_id", targetUserId)
+        .eq("mode", "business")
+        .maybeSingle(),
+      supabase
+        .from("user_profiles")
+        .select("first_name, last_name:last_name_public, city, occupation, core_photos, instagram")
+        .eq("id", targetUserId)
+        .maybeSingle(),
+    ]);
 
-    if (modeErr || !modeRow) {
+    if (modeErr || !modeRow || !upRow) {
       if (modeErr) console.warn("getProfileForMode business mode error", modeErr);
       return null;
     }
@@ -166,10 +173,8 @@ export async function getProfileForMode(
       photos?: string[] | null;
       interests?: string[] | null;
       meta?: Record<string, unknown> | null;
-      user_profiles?: Record<string, unknown> | Record<string, unknown>[] | null;
     };
-    const upRaw = joined.user_profiles;
-    const up = (Array.isArray(upRaw) ? upRaw[0] : upRaw) ?? {};
+    const up = upRow as Record<string, unknown>;
     const meta = (joined.meta ?? {}) as Record<string, unknown>;
     const photos = Array.isArray(joined.photos) ? joined.photos.filter(Boolean) : [];
     const corePhotos = Array.isArray(up.core_photos)

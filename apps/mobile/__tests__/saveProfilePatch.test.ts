@@ -39,6 +39,7 @@ jest.mock("@/lib/supabase", () => ({
     from: (table: string) => ({
       upsert: (payload: unknown, opts: unknown) => mockChain(table, "upsert", payload, opts),
       update: (payload: unknown) => mockChain(table, "update", payload),
+      insert: (payload: unknown) => mockChain(table, "insert", payload),
       select: () => mockChain(table, "read"),
     }),
   },
@@ -66,14 +67,23 @@ describe("saveProfilePatch", () => {
     expect(mockCalls[0].filters).toEqual([["id", "u1"]]);
   });
 
-  it("upserts when both names are in the patch (new row), and mirrors the core columns to profiles_core", async () => {
+  it("with both names, updates the existing row and mirrors the core columns to profiles_core", async () => {
     await saveProfilePatch(patch({ profile: { first_name: "Anna", last_name: "K", occupation: "Nurse", city: "Berlin" } }));
-    expect(ops()).toEqual(["user_profiles.upsert", "profiles_core.upsert"]);
-    expect(mockCalls[0].payload).toEqual({ id: "u1", first_name: "Anna", last_name: "K", occupation: "Nurse", city: "Berlin" });
-    expect(mockCalls[0].opts).toEqual({ onConflict: "id" });
+    expect(ops()).toEqual(["user_profiles.update", "profiles_core.upsert"]);
+    expect(mockCalls[0].payload).toEqual({ first_name: "Anna", last_name: "K", occupation: "Nurse", city: "Berlin" });
+    expect(mockCalls[0].filters).toEqual([["id", "u1"]]);
     // only the mirrored subset, not occupation
     expect(mockCalls[1].payload).toMatchObject({ id: "u1", first_name: "Anna", last_name: "K", city: "Berlin" });
     expect(mockCalls[1].payload).not.toHaveProperty("occupation");
+  });
+
+  it("with both names and no row yet, inserts it — never a PostgREST upsert (owner-only columns refuse one)", async () => {
+    mockState.updatedRows = [];
+    const res = await saveProfilePatch(patch({ profile: { first_name: "Anna", last_name: "K", birthday: "1990-05-15" } }));
+    expect(res.failed).toBe(false);
+    expect(ops()).toEqual(["user_profiles.update", "user_profiles.insert", "profiles_core.upsert"]);
+    expect(mockCalls[1].payload).toEqual({ id: "u1", first_name: "Anna", last_name: "K", birthday: "1990-05-15" });
+    expect(ops()).not.toContain("user_profiles.upsert");
   });
 
   it("does not touch profiles_core when no mirrored column changed", async () => {

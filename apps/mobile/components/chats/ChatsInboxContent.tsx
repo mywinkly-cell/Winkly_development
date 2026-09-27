@@ -174,7 +174,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
         return;
       }
       const [profilesRes, friendProfilesRes] = await Promise.all([
-        supabase.from("user_profiles").select("id,first_name,last_name,main_photo_url,city").in("id", mutualIds),
+        supabase.from("user_profiles").select("id,first_name,last_name:last_name_public,main_photo_url,city").in("id", mutualIds),
         supabase.from("friend_profiles").select("user_id,main_photo_url").in("user_id", mutualIds),
       ]);
       const profiles = profilesRes.data ?? [];
@@ -227,7 +227,7 @@ export function ChatsInboxContent({ sourceMode }: ChatsInboxContentProps) {
       }
       const { data: profiles } = await supabase
         .from("user_profiles")
-        .select("id,first_name,last_name,main_photo_url,city")
+        .select("id,first_name,last_name:last_name_public,main_photo_url,city")
         .in("id", mutualIds);
       const list: MatchConnectionItem[] = (profiles ?? []).map((p: Record<string, unknown>) => ({
         id: p.id as string,

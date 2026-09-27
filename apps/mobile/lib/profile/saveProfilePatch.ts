@@ -4,6 +4,7 @@
 
 import { supabase } from "@/lib/supabase";
 import { upsertOwnProfileCore, type ProfileCoreUpdate } from "@/lib/access/profiles";
+import { writeOwnUserProfile } from "./writeOwnUserProfile";
 import type { SaveResult } from "./autosaveController";
 import { AUTOSAVE_MODES, type ColumnMap, type ProfilePatch } from "./profileAutosave";
 
@@ -41,14 +42,12 @@ export async function saveProfilePatch(patch: ProfilePatch): Promise<SaveResult>
   // ─── user_profiles (+ profiles_core mirror) ───
   if (Object.keys(patch.profile).length) {
     try {
-      // first_name/last_name are NOT NULL, and Postgres checks NOT NULL on the proposed
-      // INSERT row before it notices the conflict — so a partial upsert on an existing
-      // row would fail. Existing row → UPDATE; both names present → (possibly new) row → UPSERT.
+      // first_name/last_name are NOT NULL, so only a patch carrying both may create the
+      // row. Existing row → UPDATE; both names present → update-or-insert (never a
+      // PostgREST upsert: see writeOwnUserProfile — owner-only columns refuse it).
       const createsRow = "first_name" in patch.profile && "last_name" in patch.profile;
       if (createsRow) {
-        const { error } = await supabase
-          .from("user_profiles")
-          .upsert({ id: userId, ...patch.profile }, { onConflict: "id" });
+        const { error } = await writeOwnUserProfile(userId, patch.profile);
         if (error) throw error;
       } else {
         const { data, error } = await supabase

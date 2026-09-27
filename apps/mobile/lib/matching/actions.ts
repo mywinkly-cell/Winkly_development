@@ -152,7 +152,7 @@ export async function listIncomingFriendsRequests(): Promise<IncomingFriendsRequ
   if (missing.length > 0) {
     const { data: up } = await supabase
       .from("user_profiles")
-      .select("id, first_name, last_name, main_photo_url, core_photos")
+      .select("id, first_name, last_name:last_name_public, main_photo_url, core_photos")
       .in("id", missing);
     for (const u of up ?? []) {
       const row = u as {

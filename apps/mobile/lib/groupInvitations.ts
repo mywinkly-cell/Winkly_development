@@ -144,7 +144,7 @@ export async function getMyPendingGroupInvitations(): Promise<GroupInvitationRow
 
   const [groupsRes, inviterProfilesRes] = await Promise.all([
     supabase.from("groups").select("id, name").in("id", groupIds),
-    supabase.from("user_profiles").select("id, first_name, last_name").in("id", inviterIds),
+    supabase.from("user_profiles").select("id, first_name, last_name:last_name_public").in("id", inviterIds),
   ]);
 
   const groupNames: Record<string, string> = {};

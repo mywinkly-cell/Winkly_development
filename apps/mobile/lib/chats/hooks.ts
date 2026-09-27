@@ -104,7 +104,7 @@ export function useUserMinis(userIds: string[]) {
     (async () => {
       const { data } = await supabase
         .from("user_profiles")
-        .select("id,first_name,last_name,city,main_photo_url")
+        .select("id,first_name,last_name:last_name_public,city,main_photo_url")
         .in("id", userIds);
       const map: Record<string, UserMini> = {};
       for (const u of (data ?? []) as UserMini[]) map[u.id] = u;

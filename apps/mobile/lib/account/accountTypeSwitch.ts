@@ -18,7 +18,7 @@ export async function fetchAccountProfileStatus(userId: string): Promise<Account
   // completeness does not depend on the date of birth value.
   const [{ data: personal }, { data: business }] = await Promise.all([
     supabase
-      .from("user_profiles")
+      .from("my_profile")
       .select("first_name, last_name, gender, city, core_photos")
       .eq("id", userId)
       .maybeSingle(),

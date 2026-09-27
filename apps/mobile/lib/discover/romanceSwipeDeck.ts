@@ -174,7 +174,7 @@ export async function fetchRomanceSwipeDeckProfiles(
   if (visibleIds.length) {
     const { data: nameRows } = await supabase
       .from("user_profiles")
-      .select("id, last_name, show_full_name")
+      .select("id, last_name:last_name_public, show_full_name")
       .in("id", visibleIds);
     (nameRows ?? []).forEach((n) => {
       const row = n as { id: string; last_name?: string | null; show_full_name?: boolean | null };

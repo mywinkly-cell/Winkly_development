@@ -53,7 +53,7 @@ export async function getPartnersForConcierge(mode: Mode): Promise<ConciergePart
     if (mutualIds.length === 0) return [];
     const { data: profiles } = await supabase
       .from("user_profiles")
-      .select("id, first_name, last_name, main_photo_url")
+      .select("id, first_name, last_name:last_name_public, main_photo_url")
       .in("id", mutualIds);
     return (profiles ?? []).map((p: Record<string, unknown>) => {
       const first = (p.first_name as string) ?? "";
@@ -80,7 +80,7 @@ export async function searchWinklyUsersForInvite(query: string, limit = 30): Pro
   const trimmed = query.trim();
   let dbQuery = supabase
     .from("user_profiles")
-    .select("id, first_name, last_name, main_photo_url")
+    .select("id, first_name, last_name:last_name_public, main_photo_url")
     .neq("id", me)
     .limit(limit);
 

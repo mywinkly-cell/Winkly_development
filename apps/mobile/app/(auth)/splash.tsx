@@ -151,7 +151,7 @@ export default function Splash() {
           // locked down at the API layer (readable only via get_my_birthday()).
           // Profile completeness does not depend on the date of birth value.
           const { data: up } = await supabase
-            .from("user_profiles")
+            .from("my_profile")
             .select("first_name, last_name, gender, city, core_photos")
             .eq("id", userId)
             .maybeSingle();

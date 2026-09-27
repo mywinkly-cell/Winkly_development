@@ -114,7 +114,7 @@ export default function InviteToGroup() {
       }
       const { data: profiles } = await supabase
         .from("user_profiles")
-        .select("id, first_name, last_name, main_photo_url")
+        .select("id, first_name, last_name:last_name_public, main_photo_url")
         .in("id", matchedIds);
       setCandidates((prev) => {
         const existing = new Set(prev.map((c) => c.id));

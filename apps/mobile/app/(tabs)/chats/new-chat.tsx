@@ -120,7 +120,7 @@ export default function NewChat() {
       // NOTE:
       // We query user_profiles because that's what you currently have.
       // RLS must allow reading whichever subset you intend (public info only).
-      let query = supabase.from("user_profiles").select("id,first_name,last_name,city");
+      let query = supabase.from("user_profiles").select("id,first_name,last_name:last_name_public,city");
 
       const s = search.trim();
       if (s.length >= 1) {
@@ -128,7 +128,7 @@ export default function NewChat() {
         // (Supabase supports ilike)
         // We do a simple OR across first_name / last_name / city
         query = query.or(
-          `first_name.ilike.%${s}%,last_name.ilike.%${s}%,city.ilike.%${s}%`
+          `first_name.ilike.%${s}%,last_name_public.ilike.%${s}%,city.ilike.%${s}%`
         );
       } else {
         // default “directory” slice (small)

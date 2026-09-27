@@ -1138,7 +1138,7 @@ export default function ChatView({
 
     if (ids.length > 0) {
       const [minisRes, modeProfilesRes] = await Promise.all([
-        supabase.from("user_profiles").select("id,first_name,last_name,city,main_photo_url").in("id", ids),
+        supabase.from("user_profiles").select("id,first_name,last_name:last_name_public,city,main_photo_url").in("id", ids),
         supabase
           .from("profiles_mode")
           .select("user_id,mode,photos")

@@ -2,8 +2,10 @@
 -- Regression test for the September 2026 security audit.
 --
 -- Every "attack" block below was a working exploit against the schema before
--- 20260927120000_security_audit_membership_and_plans.sql and
--- 20260927130000_security_audit_followups.sql. Each was reproduced
+-- 20260927120000_security_audit_membership_and_plans.sql,
+-- 20260927130000_security_audit_followups.sql, 20260927135000_fix_mode_profile_photo_trigger.sql
+-- and 20260927140000_last_name_privacy.sql.
+-- Each was reproduced
 -- against a local stack (all migrations applied) before the fix, and every
 -- "still works" block guards a legitimate app flow the fix must not break.
 --
@@ -19,6 +21,7 @@
 --   SEC-10 parked calendar OAuth tokens must stay service-role only
 --   SEC-11 any user could upload public files to business-logos, and record
 --          matching "affinity" signals with any stranger
+--   SEC-12 every user's last name was readable regardless of "show my full name"
 --
 -- HOW TO RUN
 --   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/security_audit_2026_09_test.sql
@@ -47,6 +50,13 @@ SELECT u::uuid, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authen
        'sec-audit-' || u || '@winkly-test.local', '{}'::jsonb, now(), now()
 FROM unnest(ARRAY[current_setting('t.a'), current_setting('t.b'),
                   current_setting('t.c'), current_setting('t.d')]) AS u;
+
+-- Profiles: nobody has opted in to showing their full name.
+INSERT INTO public.user_profiles (id, first_name, last_name, birthday, show_full_name)
+SELECT u::uuid, 'User', 'Secretname-' || right(u, 4), CURRENT_DATE - INTERVAL '30 years', false
+FROM unnest(ARRAY[current_setting('t.a'), current_setting('t.b'),
+                  current_setting('t.c'), current_setting('t.d')]) AS u
+ON CONFLICT (id) DO UPDATE SET last_name = EXCLUDED.last_name, show_full_name = false;
 
 -- A ↔ B direct conversation with one private message.
 SELECT set_config('t.dm', gen_random_uuid()::text, false);
@@ -538,6 +548,121 @@ BEGIN
   END IF;
   SET LOCAL ROLE authenticated;
   RAISE NOTICE 'PASS: people who share a chat can still record behaviour signals';
+END $$;
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- SEC-12 · last names follow "show my full name"
+--   B: default (hidden) · A: hosts an event · D: gets a Business profile
+-- ══════════════════════════════════════════════════════════════════════════
+
+RESET ROLE;
+INSERT INTO public.romance_likes (liker_id, liked_id)
+VALUES (current_setting('t.b')::uuid, current_setting('t.c')::uuid)
+ON CONFLICT DO NOTHING;
+SET LOCAL ROLE authenticated;
+
+SELECT set_config('request.jwt.claims', json_build_object('sub', current_setting('t.c'), 'role', 'authenticated')::text, true);
+
+DO $$
+DECLARE v_blocked boolean;
+BEGIN
+  BEGIN
+    PERFORM last_name FROM public.user_profiles WHERE id = current_setting('t.b')::uuid;
+    v_blocked := false;
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked := true;
+  END;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'FAIL (SEC-12): the raw last_name column is readable by other users';
+  END IF;
+  RAISE NOTICE 'PASS: the raw last_name column is owner-only';
+END $$;
+
+DO $$
+DECLARE v_col text; v_view text; v_friend text; v_rpc text;
+BEGIN
+  SELECT last_name_public INTO v_col FROM public.user_profiles WHERE id = current_setting('t.b')::uuid;
+  SELECT last_name INTO v_view FROM public.public_profile_view WHERE id = current_setting('t.b')::uuid;
+  SELECT last_name INTO v_friend FROM public.friend_profiles WHERE user_id = current_setting('t.b')::uuid LIMIT 1;
+  SELECT r.x->>'last_name' INTO v_rpc
+    FROM public.romance_likes_received(current_setting('t.c')::uuid) AS r(x)
+   WHERE r.x->>'id' = current_setting('t.b');
+  IF v_col IS NOT NULL OR v_view IS NOT NULL OR v_friend IS NOT NULL OR v_rpc IS NOT NULL THEN
+    RAISE EXCEPTION 'FAIL (SEC-12): a hidden last name leaked (column %, view %, friend_profiles %, rpc %)',
+      v_col, v_view, v_friend, v_rpc;
+  END IF;
+  RAISE NOTICE 'PASS: a hidden last name is not exposed by the table, views or romance feeds';
+END $$;
+
+DO $$
+DECLARE v_host text;
+BEGIN
+  SELECT last_name_public INTO v_host FROM public.user_profiles WHERE id = current_setting('t.a')::uuid;
+  IF v_host IS NULL THEN
+    RAISE EXCEPTION 'FAIL (SEC-12): an event host''s full name is not shown';
+  END IF;
+  RAISE NOTICE 'PASS: event hosts show their full name';
+END $$;
+
+-- D creates a Business profile — as the app does, which also guards the
+-- enforce_moderated_profile_photos fix (20260927135000): every mode-profile
+-- insert used to fail with `record "new" has no field "main_photo_url"`.
+SELECT set_config('request.jwt.claims', json_build_object('sub', current_setting('t.d'), 'role', 'authenticated')::text, true);
+
+DO $$
+BEGIN
+  INSERT INTO public.sub_profiles (user_id, mode) VALUES (current_setting('t.d')::uuid, 'business')
+  ON CONFLICT (user_id, mode) DO NOTHING;
+  INSERT INTO public.profiles_mode (user_id, mode, bio) VALUES (current_setting('t.d')::uuid, 'business', 'hi')
+  ON CONFLICT (user_id, mode) DO UPDATE SET bio = EXCLUDED.bio;
+  RAISE NOTICE 'PASS: users can create and save their mode profiles';
+EXCEPTION WHEN others THEN
+  RAISE EXCEPTION 'FAIL (regression): saving a mode profile failed: %', SQLERRM;
+END $$;
+
+DO $$
+DECLARE v_blocked boolean;
+BEGIN
+  BEGIN
+    UPDATE public.profiles_mode SET photos = ARRAY['https://evil.example/unreviewed.jpg']
+     WHERE user_id = current_setting('t.d')::uuid AND mode = 'business';
+    v_blocked := false;
+  EXCEPTION WHEN check_violation THEN
+    v_blocked := true;
+  END;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'FAIL (regression): an unmoderated photo was accepted on a mode profile';
+  END IF;
+  RAISE NOTICE 'PASS: unmoderated photos are still rejected on mode profiles';
+END $$;
+
+-- B opts in.
+SELECT set_config('request.jwt.claims', json_build_object('sub', current_setting('t.b'), 'role', 'authenticated')::text, true);
+UPDATE public.user_profiles SET show_full_name = true WHERE id = current_setting('t.b')::uuid;
+
+-- B reads their own profile.
+DO $$
+DECLARE v_own text; v_bday date; v_rows int;
+BEGIN
+  SELECT last_name, birthday INTO v_own, v_bday FROM public.my_profile;
+  SELECT count(*) INTO v_rows FROM public.my_profile;
+  IF v_own IS NULL OR v_bday IS NULL OR v_rows <> 1 THEN
+    RAISE EXCEPTION 'FAIL (SEC-12 regression): my_profile must return exactly the caller''s own row with owner-only columns';
+  END IF;
+  RAISE NOTICE 'PASS: the owner still reads their own last name and birthday (my_profile)';
+END $$;
+
+SELECT set_config('request.jwt.claims', json_build_object('sub', current_setting('t.c'), 'role', 'authenticated')::text, true);
+
+DO $$
+DECLARE v_optin text; v_business text;
+BEGIN
+  SELECT last_name_public INTO v_optin FROM public.user_profiles WHERE id = current_setting('t.b')::uuid;
+  SELECT last_name_public INTO v_business FROM public.user_profiles WHERE id = current_setting('t.d')::uuid;
+  IF v_optin IS NULL OR v_business IS NULL THEN
+    RAISE EXCEPTION 'FAIL (SEC-12 regression): opted-in (%) or Business (%) full names are hidden', v_optin, v_business;
+  END IF;
+  RAISE NOTICE 'PASS: full names show after opting in and on Business profiles';
 END $$;
 
 -- ══════════════════════════════════════════════════════════════════════════

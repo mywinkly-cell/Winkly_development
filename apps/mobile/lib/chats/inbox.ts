@@ -116,7 +116,7 @@ export async function loadChatInbox(activeTab: ChatInboxTab): Promise<ChatInboxD
   const usersById: Record<string, UserMini> = {};
   if (userIds.length > 0) {
     const [minisRes, modeProfilesRes] = await Promise.all([
-      supabase.from("user_profiles").select("id,first_name,last_name,city,main_photo_url").in("id", userIds),
+      supabase.from("user_profiles").select("id,first_name,last_name:last_name_public,city,main_photo_url").in("id", userIds),
       supabase
         .from("profiles_mode")
         .select("user_id,mode,photos")
