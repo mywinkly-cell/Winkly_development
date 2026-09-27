@@ -5,6 +5,7 @@
 // See docs/EXTERNAL_EVENTS_AND_FILTERING.md
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
 
 type ExternalEvent = {
@@ -325,6 +326,20 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Missing authorization" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
+      });
+    }
+
+    // verify_jwt also accepts the public anon key, which would let anyone spend
+    // the Ticketmaster / Meetup / Eventbrite quotas — require a signed-in user.
+    const userClient = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false },
+    });
+    const { data: userData, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !userData.user) {
+      return new Response(JSON.stringify({ error: "Invalid session" }), {
         status: 401,
         headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
       });

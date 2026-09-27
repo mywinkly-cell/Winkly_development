@@ -4004,7 +4004,10 @@ async function generateWinklyPlan(params: {
   booking_url: string | null;
   participants: string[];
 }> {
-  const { supabase, requesterUserId, input, conversationId, persistDraft = true, maps_grounding = "verify" } = params;
+  const { supabase, requesterUserId, input, persistDraft = true, maps_grounding = "verify" } = params;
+  // Cleared below unless the requester is an active member — it is stored on the
+  // pending plan, and a plan must never be attached to someone else's chat.
+  let conversationId = params.conversationId;
 
   const participantIds = [...new Set(input.participant_user_ids)].filter(Boolean);
   let ensureRequester = participantIds.includes(requesterUserId) ? participantIds : [requesterUserId, ...participantIds];
@@ -4024,6 +4027,7 @@ async function generateWinklyPlan(params: {
         // If requester isn't a member, drop conversation scoping (no chat linkage).
         // The plan will still be generated for requester-only.
         ensureRequester = [requesterUserId];
+        conversationId = null;
       } else {
         ensureRequester = ensureRequester.filter((uid) => memberIds.has(uid));
         if (ensureRequester.length === 0) ensureRequester = [requesterUserId];
@@ -4031,6 +4035,7 @@ async function generateWinklyPlan(params: {
     } catch {
       // If membership lookups fail, fall back to requester-only for safety.
       ensureRequester = [requesterUserId];
+      conversationId = null;
     }
   }
 
@@ -5514,11 +5519,23 @@ async function handleAiGatewayRequest(req: Request): Promise<Response> {
 
       let proposalId: string | null = null;
       const rawConv = typeof scrubbedSafeContext.conversation_id === "string" ? scrubbedSafeContext.conversation_id.trim() : "";
-      const convId =
+      const convCandidate =
         rawConv &&
         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawConv)
           ? rawConv
           : null;
+      // Only link the proposal to a chat the requester is actually in.
+      let convId: string | null = null;
+      if (convCandidate) {
+        const { data: member } = await supabase
+          .from("conversation_members")
+          .select("user_id")
+          .eq("conversation_id", convCandidate)
+          .eq("user_id", user.id)
+          .is("left_at", null)
+          .maybeSingle();
+        convId = member ? convCandidate : null;
+      }
       try {
         const insP = await supabase.from("ai_match_agent_proposals").insert({
           conversation_id: convId,

@@ -110,9 +110,17 @@ serve(async (req) => {
       }
     }
 
+    // The confirm RPCs identify the caller with auth.uid(), so they must run with the
+    // caller's JWT. Through the service-role client auth.uid() is NULL: the host check
+    // was skipped and a participant's own confirmation could never be recorded.
+    const userClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false } },
+    );
     const { data: confirmRows, error: confirmErr } = asHost
-      ? await supabase.rpc("confirm_pending_plan_host", { p_plan_id: pendingPlanId })
-      : await supabase.rpc("confirm_pending_plan", { p_plan_id: pendingPlanId });
+      ? await userClient.rpc("confirm_pending_plan_host", { p_plan_id: pendingPlanId })
+      : await userClient.rpc("confirm_pending_plan", { p_plan_id: pendingPlanId });
     if (confirmErr) {
       return new Response(JSON.stringify({ error: confirmErr.message }), {
         status: 400,

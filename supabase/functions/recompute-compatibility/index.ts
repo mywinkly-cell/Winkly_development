@@ -8,6 +8,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
+import { cronSecretOk, timingSafeEqual } from "../_shared/timingSafeEqual.ts";
 
 const MODES = ["romance", "friends", "business"] as const;
 
@@ -134,6 +135,20 @@ serve(async (req) => {
   const cors = corsHeaders(req);
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  // Background job, not a user endpoint. verify_jwt alone accepts the public anon
+  // key shipped in the app, and each call scans `follows` and fans out into
+  // thousands of service-role queries — so require the cron secret or the
+  // service-role key. Fails closed when neither is configured.
+  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  const isServiceRole = !!serviceKey && timingSafeEqual(bearer, serviceKey);
+  if (!isServiceRole && !cronSecretOk(req)) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) },
+    });
+  }
+
   const supabase = createClient(supabaseUrl, serviceKey);
 
   let body: { user_id?: string; mode?: string } = {};

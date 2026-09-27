@@ -132,6 +132,11 @@ jobs:
       - name: Security hardening regression test
         run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/security_hardening_test.sql
 
+      # SEC-7..9 (September 2026): self-join into chats/groups/plans, plan spam into
+      # strangers' calendars, chat-image swap after moderation.
+      - name: Membership & plans security regression test
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/security_audit_2026_09_test.sql
+
       - name: Stop Supabase
         if: always()
         run: npx supabase stop
