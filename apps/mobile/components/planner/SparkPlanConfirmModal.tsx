@@ -38,6 +38,7 @@ import {
 } from "@/lib/ai/conciergePartners";
 import { sparkVenueFullAddressLine, type WeeklySparkPlan } from "@/lib/ai/weeklySpark";
 import type { Mode } from "@/types";
+import { formatAppDate } from "@/lib/i18n/appLocale";
 
 export type SparkPlanConfirmModalProps = {
   visible: boolean;
@@ -187,7 +188,7 @@ export function SparkPlanConfirmModal({
               locationLineDisplay ||
               undefined
             }
-            planDate={dateForPlan.toLocaleDateString()}
+            planDate={formatAppDate(dateForPlan, {})}
             onSelect={onInviteSelect}
             onBack={() => setStep("confirm")}
             showInlineBack

@@ -9,16 +9,16 @@ import { Card, Header, Input, TextButton } from "@/components/ds";
 import { useAppTheme, type AppTheme } from "@/constants/design-system";
 import { supabase } from "@/lib/supabase";
 import { getGroupMeetups, type GroupMeetup } from "@/lib/access/planner";
-import { useAppLocaleTag } from "@/lib/i18n/appLocale";
+import { useAppLocaleTag, formatAppDateTime } from "@/lib/i18n/appLocale";
 
 function formatTimeLabel(iso: string, locale: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString(locale, {
+  return formatAppDateTime(d, {
     weekday: "short",
     hour: "2-digit",
     minute: "2-digit",
-  });
+  }, locale);
 }
 
 export default function FriendsMeetups() {

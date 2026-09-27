@@ -96,7 +96,7 @@ import {
   genderLabelKey,
   optionLabel,
 } from "@/lib/profile/coreOptionLabels";
-import { getAppLocaleTag } from "@/lib/i18n/appLocale";
+import { formatAppDate } from "@/lib/i18n/appLocale";
 
 const PROFILE_LANGS = PROFILE_LANGUAGE_OPTIONS.filter((l) => l !== "Any");
 
@@ -1435,7 +1435,7 @@ export default function ProfileCore() {
   const inputFocused = { borderColor: theme.colors.primary, ...theme.elevation(1) };
 
   const birthdayLabel = birthday
-    ? birthday.toLocaleDateString(getAppLocaleTag(), { day: "numeric", month: "numeric", year: "numeric" })
+    ? formatAppDate(birthday, { day: "numeric", month: "numeric", year: "numeric" })
     : "";
 
   function renderWizardStepBody(): React.ReactNode {

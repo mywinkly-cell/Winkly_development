@@ -14,7 +14,7 @@ import type { CityCountry } from "@/lib/location/citySearch";
 import { formatDefaultLocationDisplay } from "@/lib/location/countryDisplay";
 import { GENERAL_INTERESTS_MAX, interestEmoji } from "@/constants/interestCategories";
 import { MIN_CORE_PHOTOS, MAX_CORE_PHOTOS, MIN_PHOTO_DIMENSION } from "@/lib/profile/validation";
-import { useAppLocaleTag } from "@/lib/i18n/appLocale";
+import { useAppLocaleTag, formatAppDate } from "@/lib/i18n/appLocale";
 import {
   EDUCATION_OPTIONS,
   GENDER_OPTIONS,
@@ -127,7 +127,7 @@ export function NameStep(props: {
       >
         <Text style={{ ...Typography.body, color: birthday ? Colors.textPrimary : Colors.gray500 }}>
           {birthday
-            ? birthday.toLocaleDateString(localeTag, { day: "numeric", month: "numeric", year: "numeric" })
+            ? formatAppDate(birthday, { day: "numeric", month: "numeric", year: "numeric" }, localeTag)
             : t("onboarding.general.selectBirthDate")}
         </Text>
       </TouchableOpacity>

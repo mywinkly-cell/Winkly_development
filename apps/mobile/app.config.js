@@ -34,6 +34,17 @@ const androidGoogleServicesFile = fs.existsSync(path.join(__dirname, "google-ser
   ? "./google-services.json"
   : undefined;
 
+/**
+ * App languages = the locale files in lib/i18n/locales (en.json, de.json, …). Declared to iOS
+ * (CFBundleLocalizations) and Android 13+ (locales_config.xml) so each shows Winkly in the
+ * system's per-app language setting and resolves the phone language against this list.
+ */
+const APP_LOCALES = fs
+  .readdirSync(path.join(__dirname, "lib/i18n/locales"))
+  .filter((f) => f.endsWith(".json"))
+  .map((f) => f.replace(/\.json$/, ""))
+  .sort((a, b) => (a === "en" ? -1 : b === "en" ? 1 : a.localeCompare(b)));
+
 module.exports = {
   expo: {
     name: "Winkly",
@@ -47,7 +58,11 @@ module.exports = {
 
     plugins: [
       "expo-dev-client",
-      "expo-localization",
+      [
+        "expo-localization",
+        // Apply a system language change without restarting the Android activity.
+        { supportedLocales: APP_LOCALES, allowDynamicLocaleChangesAndroid: true },
+      ],
       "expo-web-browser",
       "expo-apple-authentication",
       "@react-native-community/datetimepicker",

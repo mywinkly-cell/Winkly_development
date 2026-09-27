@@ -2,13 +2,19 @@
  * Distance unit for display (km vs miles). Can be hooked to user_preferences later.
  * Default: use device locale (US/UK -> miles, else km).
  */
+import { formatAppNumber } from "@/lib/i18n/appLocale";
+
 export type DistanceUnit = "km" | "mi";
 
+let defaultDistanceUnit: DistanceUnit | null = null;
+
+/** Device region decides the unit; resolved once (called for every card in discover lists). */
 export function getDefaultDistanceUnit(): DistanceUnit {
+  if (defaultDistanceUnit) return defaultDistanceUnit;
   if (typeof Intl === "undefined") return "km";
   const locale = Intl.DateTimeFormat().resolvedOptions?.().locale ?? "";
-  if (/^en-(US|GB|LR|MM)/i.test(locale)) return "mi";
-  return "km";
+  defaultDistanceUnit = /^en-(US|GB|LR|MM)/i.test(locale) ? "mi" : "km";
+  return defaultDistanceUnit;
 }
 
 /** Format distance for display; only show if under maxKm (e.g. 15). Uses i18n when available. */
@@ -45,7 +51,7 @@ export function formatApproxDistance(
 ): string {
   const num = (n: number) => {
     try {
-      return new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(n);
+      return formatAppNumber(n, { maximumFractionDigits: 1 }, locale);
     } catch {
       return String(n);
     }

@@ -162,23 +162,41 @@ const LOCALES_FOR_COUNTRY_NAME_MATCH = [
   "ja", "ko", "zh-CN", "zh-TW",
 ];
 
+const regionNamerCache = new Map<string, Intl.DisplayNames | null>();
+
+/** Cached `Intl.DisplayNames` for regions; null when the engine rejects the locale. */
+function regionNamer(locales: string[]): Intl.DisplayNames | null {
+  const key = locales.join("|");
+  if (regionNamerCache.has(key)) return regionNamerCache.get(key) ?? null;
+  let dn: Intl.DisplayNames | null = null;
+  try {
+    dn = new Intl.DisplayNames(locales, { type: "region" });
+  } catch {
+    /* invalid locale on some engines */
+  }
+  regionNamerCache.set(key, dn);
+  return dn;
+}
+
 let reverseCountryNameToCode: Map<string, string> | null = null;
 
 function getReverseCountryNameMap(): Map<string, string> {
   if (reverseCountryNameToCode) return reverseCountryNameToCode;
   const map = new Map<string, string>();
   const codes = getRegionCodes();
+  // One DisplayNames per locale (not per code × locale — that was ~9k constructions).
+  const namers = LOCALES_FOR_COUNTRY_NAME_MATCH.map((loc) => regionNamer([loc]));
   for (const code of codes) {
-    for (const loc of LOCALES_FOR_COUNTRY_NAME_MATCH) {
+    for (const dn of namers) {
+      if (!dn) continue;
       try {
-        const dn = new Intl.DisplayNames([loc], { type: "region" });
         const display = dn.of(code);
         if (display) {
           const key = display.toLowerCase().normalize("NFC");
           if (!map.has(key)) map.set(key, code);
         }
       } catch {
-        /* invalid locale on some engines */
+        /* invalid code on some engines */
       }
     }
   }
@@ -194,66 +212,61 @@ function resolveFullCountryNameToAlpha2(country: string): string | null {
   return getReverseCountryNameMap().get(key) ?? null;
 }
 
+const FALLBACK_ENGLISH: Record<string, string> = {
+  DE: "Germany",
+  AT: "Austria",
+  CH: "Switzerland",
+  PL: "Poland",
+  NL: "Netherlands",
+  BE: "Belgium",
+  FR: "France",
+  ES: "Spain",
+  IT: "Italy",
+  PT: "Portugal",
+  IE: "Ireland",
+  DK: "Denmark",
+  SE: "Sweden",
+  NO: "Norway",
+  FI: "Finland",
+  CZ: "Czechia",
+  SK: "Slovakia",
+  HU: "Hungary",
+  RO: "Romania",
+  BG: "Bulgaria",
+  HR: "Croatia",
+  SI: "Slovenia",
+  GR: "Greece",
+  EE: "Estonia",
+  LV: "Latvia",
+  LT: "Lithuania",
+  UA: "Ukraine",
+  RU: "Russia",
+  GB: "United Kingdom",
+  US: "United States",
+  CA: "Canada",
+  AU: "Australia",
+  NZ: "New Zealand",
+  AE: "United Arab Emirates",
+  TR: "Turkey",
+  IL: "Israel",
+  MX: "Mexico",
+  BR: "Brazil",
+  AR: "Argentina",
+  IN: "India",
+  JP: "Japan",
+  KR: "South Korea",
+  CN: "China",
+};
+
 function regionDisplayName(alpha2: string, language: string): string {
-  const FALLBACK_ENGLISH: Record<string, string> = {
-    DE: "Germany",
-    AT: "Austria",
-    CH: "Switzerland",
-    PL: "Poland",
-    NL: "Netherlands",
-    BE: "Belgium",
-    FR: "France",
-    ES: "Spain",
-    IT: "Italy",
-    PT: "Portugal",
-    IE: "Ireland",
-    DK: "Denmark",
-    SE: "Sweden",
-    NO: "Norway",
-    FI: "Finland",
-    CZ: "Czechia",
-    SK: "Slovakia",
-    HU: "Hungary",
-    RO: "Romania",
-    BG: "Bulgaria",
-    HR: "Croatia",
-    SI: "Slovenia",
-    GR: "Greece",
-    EE: "Estonia",
-    LV: "Latvia",
-    LT: "Lithuania",
-    UA: "Ukraine",
-    RU: "Russia",
-    GB: "United Kingdom",
-    US: "United States",
-    CA: "Canada",
-    AU: "Australia",
-    NZ: "New Zealand",
-    AE: "United Arab Emirates",
-    TR: "Turkey",
-    IL: "Israel",
-    MX: "Mexico",
-    BR: "Brazil",
-    AR: "Argentina",
-    IN: "India",
-    JP: "Japan",
-    KR: "South Korea",
-    CN: "China",
-  };
+  const dn = regionNamer([language, "en"]) ?? regionNamer(["en"]);
   try {
-    const dn = new Intl.DisplayNames([language, "en"], { type: "region" });
-    const v = dn.of(alpha2) ?? alpha2;
+    const v = dn?.of(alpha2) ?? alpha2;
     // Some JS engines (notably some RN/Hermes builds) return the alpha-2 code unchanged.
     if (v === alpha2) return FALLBACK_ENGLISH[alpha2] ?? alpha2;
     return v;
   } catch {
-    try {
-      const v = new Intl.DisplayNames(["en"], { type: "region" }).of(alpha2) ?? alpha2;
-      if (v === alpha2) return FALLBACK_ENGLISH[alpha2] ?? alpha2;
-      return v;
-    } catch {
-      return FALLBACK_ENGLISH[alpha2] ?? alpha2;
-    }
+    return FALLBACK_ENGLISH[alpha2] ?? alpha2;
   }
 }
 

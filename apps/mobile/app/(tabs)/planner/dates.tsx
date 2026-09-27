@@ -27,7 +27,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { chatRoutes } from "@/lib/navigation/modeHub";
 import { modeDisplayName } from "@/lib/profile/otherUserCore";
-import { useAppLocaleTag } from "@/lib/i18n/appLocale";
+import { useAppLocaleTag, formatAppDateTime } from "@/lib/i18n/appLocale";
 
 const RECENT_PAST_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -292,13 +292,13 @@ export default function PlannerDates() {
   };
 
   const formatDateTime = (iso: string) =>
-    new Date(iso).toLocaleString(appLocale, {
+    formatAppDateTime(new Date(iso), {
       weekday: "short",
       month: "short",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-    });
+    }, appLocale);
 
   const showPlannedEmpty = !loading && filteredDates.length === 0 && !query.trim();
   const showSearchEmpty = !loading && query.trim() && filteredDates.length === 0 && filteredCheckins.length === 0;

@@ -1,13 +1,17 @@
 /**
  * Winkly i18n — Multi-language support
- * Uses i18next + react-i18next. Default language is English until the user picks a language
- * (onboarding globe or Settings → Language). Choice persisted in AsyncStorage.
+ * Uses i18next + react-i18next. The app follows the phone's language (first supported one in the
+ * user's preferred-language list, else English) until the user picks a language in the app
+ * (onboarding globe or Settings → Language). That choice is persisted in AsyncStorage; picking
+ * "Device default" clears it and the app follows the phone again.
  */
 
 import i18n from "i18next";
 import type { InitOptions } from "i18next";
 import { initReactI18next } from "react-i18next";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AppState } from "react-native";
+import { getLocales } from "expo-localization";
 import { fillMissingPluralForms } from "./i18n/pluralForms";
 
 const STORAGE_KEY = "winkly_app_language";
@@ -63,7 +67,7 @@ export const SUPPORTED_LANGUAGES = [
 export type SupportedLanguageCode = (typeof SUPPORTED_LANGUAGES)[number]["code"];
 export const SUPPORTED_CODES = SUPPORTED_LANGUAGES.map((l) => l.code);
 
-/** App language on first launch and when the user has not chosen a language in Settings. */
+/** Fallback when none of the phone's languages is supported. */
 export const DEFAULT_LANGUAGE: SupportedLanguageCode = "en";
 
 /** Map i18n / BCP-47 tags to a supported app language code. */
@@ -91,11 +95,29 @@ export async function setStoredLanguage(code: string): Promise<void> {
   }
 }
 
+/**
+ * First supported language in the phone's preferred-language list (iOS/Android settings, including
+ * the per-app language), e.g. ["fi-FI", "de-DE"] → "de" while Finnish isn't shipped. Else English.
+ */
+export function getDeviceLanguage(): SupportedLanguageCode {
+  try {
+    for (const locale of getLocales()) {
+      const code = locale.languageCode?.toLowerCase();
+      if (code && SUPPORTED_CODES.includes(code as SupportedLanguageCode)) {
+        return code as SupportedLanguageCode;
+      }
+    }
+  } catch {
+    // native module unavailable (tests, web without Intl) — fall through
+  }
+  return DEFAULT_LANGUAGE;
+}
+
 async function resolveInitialLanguage(): Promise<string> {
   const explicit = await hasExplicitLanguageChoice();
-  if (!explicit) return DEFAULT_LANGUAGE;
+  if (!explicit) return getDeviceLanguage();
   const stored = await getStoredLanguage();
-  return normalizeLanguageCode(stored ?? DEFAULT_LANGUAGE);
+  return normalizeLanguageCode(stored ?? getDeviceLanguage());
 }
 
 type TranslationModule = Record<string, string> | { default: Record<string, string> };
@@ -184,8 +206,33 @@ export async function initI18n(): Promise<void> {
     } as InitOptions);
 
     addLanguageBundle(lng);
+
+    // The user can change the phone (or per-app) language while Winkly is in the background.
+    AppState.addEventListener("change", (state) => {
+      if (state === "active") void syncWithDeviceLanguage();
+    });
   })();
   return initPromise;
+}
+
+/** Without an explicit in-app choice, switch to the phone's current language if it changed. */
+export async function syncWithDeviceLanguage(): Promise<void> {
+  if (await hasExplicitLanguageChoice()) return;
+  const device = getDeviceLanguage();
+  if (normalizeLanguageCode(i18n.language) === device) return;
+  addLanguageBundle(device);
+  await i18n.changeLanguage(device);
+}
+
+/** User picked "Device default" — forget the in-app choice and follow the phone again. */
+export async function followDeviceLanguage(): Promise<void> {
+  await setExplicitLanguageChoice(false);
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+  await syncWithDeviceLanguage();
 }
 
 /** User chose a language (onboarding globe or Settings) — persist and apply everywhere. */

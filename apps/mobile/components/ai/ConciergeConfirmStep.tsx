@@ -42,7 +42,7 @@ import { recordBusinessAnalyticsEvent } from "@/lib/business/analyticsStore";
 import { PlanRecommendationFeedback } from "@/components/planner/PlanRecommendationFeedback";
 import { sparkVenueFullAddressLine } from "@/lib/ai/weeklySpark";
 import { parseClockTimeFromText } from "@/lib/ai/planTimeValidation";
-import { getAppLocaleTag } from "@/lib/i18n/appLocale";
+import { formatAppDate, formatAppTime } from "@/lib/i18n/appLocale";
 
 type PlannerItemRow = { id: string; title: string; starts_at: string; ends_at: string | null };
 
@@ -148,7 +148,7 @@ function dateToHm(d: Date): string {
 }
 
 function formatDateLabel(d: Date): string {
-  return d.toLocaleDateString(getAppLocaleTag(), {
+  return formatAppDate(d, {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -157,7 +157,7 @@ function formatDateLabel(d: Date): string {
 }
 
 function formatTimeLabel(d: Date): string {
-  return d.toLocaleTimeString(getAppLocaleTag(), { hour: "2-digit", minute: "2-digit" });
+  return formatAppTime(d);
 }
 
 function parseTimeFromOption(option: ExperienceOption): { hour: number; minute: number } {
@@ -1062,7 +1062,7 @@ export function ConciergeConfirmStep({
         style={styles.sharePlanBtn}
         onPress={() => {
           Haptics.selectionAsync();
-          const dateStr = effectiveDate.toLocaleDateString(getAppLocaleTag(), { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+          const dateStr = formatAppDate(effectiveDate, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
           const placeLine =
             (allowEditDetails ? editPlace : structuredPlan?.venue?.name) ||
             (chosenOption as { place?: string } | undefined)?.place ||

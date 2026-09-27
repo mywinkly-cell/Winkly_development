@@ -5,7 +5,7 @@
 
 import i18n from "i18next";
 import { supabase } from "@/lib/supabase";
-import { getAppLocaleTag } from "@/lib/i18n/appLocale";
+import { formatAppDate } from "@/lib/i18n/appLocale";
 import type { AppMode, Conversation, ConversationMember, Message, UserMini } from "./types";
 
 export type ChatInboxTab = "all" | AppMode;
@@ -200,5 +200,5 @@ export function formatChatInboxTimestamp(ts: string | null | undefined): string 
   if (diffHours < 24) return i18n.t("chat.time.hoursShort", { count: diffHours });
   if (diffDays === 1) return i18n.t("chat.yesterday");
   if (diffDays < 7) return i18n.t("chat.time.daysShort", { count: diffDays });
-  return d.toLocaleDateString(getAppLocaleTag(), { month: "short", day: "numeric" });
+  return formatAppDate(d, { month: "short", day: "numeric" });
 }

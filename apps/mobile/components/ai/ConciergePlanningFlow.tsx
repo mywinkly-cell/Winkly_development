@@ -109,6 +109,7 @@ import {
 import { PlanCard, PlanCardBadge, PlanCardMeta, PlanCardMapLink, PlanCardIconAction } from "@/components/plans/PlanCard";
 import type { Mode } from "@/types";
 import { isModeAvailable } from "@/lib/modes/availability";
+import { formatAppDate, formatAppTime } from "@/lib/i18n/appLocale";
 
 const INVITE_MODE_OPTIONS = (["romance", "friends", "business"] as const).filter((m) => isModeAvailable(m));
 
@@ -1017,9 +1018,9 @@ export function ConciergePlanningFlow({
       if (a.field === "when") {
         const w = parseWhenValue(a.value);
         if (w) {
-          const day = w.date.toLocaleDateString(appLanguage, { weekday: "short", day: "numeric", month: "short" });
+          const day = formatAppDate(w.date, { weekday: "short", day: "numeric", month: "short" }, appLanguage);
           return w.hasTime
-            ? `${day} ${w.date.toLocaleTimeString(appLanguage, { hour: "2-digit", minute: "2-digit" })}`
+            ? `${day} ${formatAppTime(w.date, undefined, appLanguage)}`
             : day;
         }
       } else if (a.field === "budget") {
@@ -1616,7 +1617,7 @@ export function ConciergePlanningFlow({
                 const whereLine = [p.venue?.name, p.venue?.address].filter(Boolean).join(" • ");
                 const firstTime = typeof p.itinerary?.[0]?.time === "string" ? p.itinerary[0].time.trim() : "";
                 const dayLabel = !p.trip_days?.length && details.date
-                  ? details.date.toLocaleDateString(appLanguage, { weekday: "short", day: "numeric", month: "short" })
+                  ? formatAppDate(details.date, { weekday: "short", day: "numeric", month: "short" }, appLanguage)
                   : "";
                 const whenLine = dayLabel && firstTime
                   ? t("planReveal.whenDayTime", { day: dayLabel, time: firstTime })
@@ -1783,7 +1784,7 @@ export function ConciergePlanningFlow({
                           icon="share-outline"
                           accessibilityLabel={t("concierge.share.button")}
                           onPress={() => {
-                            const dateStr = details.date ? details.date.toLocaleDateString(appLanguage) : "";
+                            const dateStr = details.date ? formatAppDate(details.date, {}, appLanguage) : "";
                             Share.share({
                               message: [opt.option_name ?? opt.narrative, locationLineDisplay, dateStr].filter(Boolean).join("\n"),
                               title: String(opt.option_name ?? t("planner.untitledPlan")),
@@ -1836,7 +1837,7 @@ export function ConciergePlanningFlow({
           mode={effectiveMode}
           planTitle={chosenOption ? String(chosenOption.option_name ?? chosenOption.narrative) : undefined}
           planLocation={locationLineDisplay || undefined}
-          planDate={details.date ? details.date.toLocaleDateString() : undefined}
+          planDate={details.date ? formatAppDate(details.date, {}) : undefined}
           onSelect={(choice) => {
             if (choice === "skip" || choice === "share_external") {
               setFlowStep("add_to_planner");

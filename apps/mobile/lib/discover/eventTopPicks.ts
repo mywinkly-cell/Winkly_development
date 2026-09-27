@@ -14,6 +14,7 @@
 import { callConcierge } from "@/lib/ai/conciergeClient";
 import { resolveFitReason } from "@/lib/ai/fitReason";
 import { TOP_PICKS_LIMIT } from "./topPicks";
+import { formatAppDate } from "@/lib/i18n/appLocale";
 
 /** Minimal event shape the picker needs (subset of the events table row). */
 export type EventPickInput = {
@@ -46,7 +47,7 @@ function whenCityLine(ev: EventPickInput): string {
   const d = new Date(ev.starts_at);
   const when = Number.isNaN(d.getTime())
     ? ""
-    : d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    : formatAppDate(d, { weekday: "short", month: "short", day: "numeric" });
   const where = [ev.venue_name, ev.city].filter(Boolean).join(" · ");
   return [when, where].filter(Boolean).join(" · ");
 }
