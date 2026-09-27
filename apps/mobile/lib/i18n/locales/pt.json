@@ -210,7 +210,7 @@
   "auth.createPersonalInstead": "Preferes uma conta pessoal? Criar conta pessoal",
   "auth.createYourAccount": "Cria a tua conta",
   "auth.email": "Email",
-  "auth.emailPlaceholder": "nome@exemplo.pt",
+  "auth.emailPlaceholder": "nome@example.com",
   "auth.emailVerified.subtitle": "A configurar o teu perfil…",
   "auth.emailVerified.title": "O teu email foi verificado!",
   "auth.enterEmailPassword": "Introduz o email e a palavra-passe.",

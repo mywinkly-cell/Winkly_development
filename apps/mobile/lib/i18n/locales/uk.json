@@ -211,7 +211,7 @@
   "auth.createPersonalInstead": "Потрібен особистий акаунт? Створити особистий акаунт",
   "auth.createYourAccount": "Створи обліковий запис",
   "auth.email": "Електронна пошта",
-  "auth.emailPlaceholder": "імʼя@приклад.ua",
+  "auth.emailPlaceholder": "name@example.com",
   "auth.emailVerified.subtitle": "Налаштовуємо твій профіль…",
   "auth.emailVerified.title": "Твій email підтверджено!",
   "auth.enterEmailPassword": "Будь ласка, введи email і пароль.",

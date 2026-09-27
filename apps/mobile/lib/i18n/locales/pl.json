@@ -211,7 +211,7 @@
   "auth.createPersonalInstead": "Wolisz konto osobiste? Utwórz konto osobiste",
   "auth.createYourAccount": "Utwórz swoje konto",
   "auth.email": "E-mail",
-  "auth.emailPlaceholder": "imię@przykład.pl",
+  "auth.emailPlaceholder": "name@example.com",
   "auth.emailVerified.subtitle": "Konfigurujemy twój profil…",
   "auth.emailVerified.title": "Twój e-mail został zweryfikowany!",
   "auth.enterEmailPassword": "Wprowadź email i hasło.",

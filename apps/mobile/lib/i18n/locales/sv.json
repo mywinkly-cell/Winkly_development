@@ -209,7 +209,7 @@
   "auth.createPersonalInstead": "Föredrar du ett personligt konto? Skapa personligt konto",
   "auth.createYourAccount": "Skapa ditt konto",
   "auth.email": "E-post",
-  "auth.emailPlaceholder": "namn@exempel.se",
+  "auth.emailPlaceholder": "namn@example.com",
   "auth.emailVerified.subtitle": "Förbereder din profil…",
   "auth.emailVerified.title": "Din e-post är verifierad!",
   "auth.enterEmailPassword": "Ange både e-post och lösenord.",

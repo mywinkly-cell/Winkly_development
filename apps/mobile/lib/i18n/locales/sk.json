@@ -211,7 +211,7 @@
   "auth.createPersonalInstead": "Preferuješ osobný účet? Vytvoriť osobný účet",
   "auth.createYourAccount": "Vytvor si účet",
   "auth.email": "E-mail",
-  "auth.emailPlaceholder": "meno@priklad.sk",
+  "auth.emailPlaceholder": "meno@example.com",
   "auth.emailVerified.subtitle": "Nastavujem tvoj profil…",
   "auth.emailVerified.title": "Tvoj e-mail bol overený!",
   "auth.enterEmailPassword": "Zadaj e-mail aj heslo.",

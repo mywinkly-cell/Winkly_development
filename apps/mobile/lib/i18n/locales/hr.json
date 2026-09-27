@@ -210,7 +210,7 @@
   "auth.createPersonalInstead": "Više voliš osobni račun? Stvori osobni račun",
   "auth.createYourAccount": "Stvori svoj račun",
   "auth.email": "E-pošta",
-  "auth.emailPlaceholder": "ime@primjer.com",
+  "auth.emailPlaceholder": "ime@example.com",
   "auth.emailVerified.subtitle": "Postavljamo tvoj profil…",
   "auth.emailVerified.title": "Tvoja e-pošta je potvrđena!",
   "auth.enterEmailPassword": "Unesi e-poštu i lozinku.",

@@ -209,7 +209,7 @@
   "auth.createPersonalInstead": "Haluatko henkilökohtaisen tilin? Luo henkilökohtainen tili",
   "auth.createYourAccount": "Luo tilisi",
   "auth.email": "Sähköposti",
-  "auth.emailPlaceholder": "nimi@esimerkki.fi",
+  "auth.emailPlaceholder": "nimi@example.com",
   "auth.emailVerified.subtitle": "Profiiliasi valmistellaan…",
   "auth.emailVerified.title": "Sähköpostisi on vahvistettu!",
   "auth.enterEmailPassword": "Anna sekä sähköposti että salasana.",

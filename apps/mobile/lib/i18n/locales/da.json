@@ -209,7 +209,7 @@
   "auth.createPersonalInstead": "Foretrækker du en personlig konto? Opret personlig konto",
   "auth.createYourAccount": "Opret din konto",
   "auth.email": "E-mail",
-  "auth.emailPlaceholder": "navn@eksempel.dk",
+  "auth.emailPlaceholder": "navn@example.com",
   "auth.emailVerified.subtitle": "Opsætter din profil…",
   "auth.emailVerified.title": "Din e-mail er bekræftet!",
   "auth.enterEmailPassword": "Indtast både e-mail og adgangskode.",

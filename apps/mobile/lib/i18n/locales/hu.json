@@ -209,7 +209,7 @@
   "auth.createPersonalInstead": "Inkább személyes fiókot szeretnél? Személyes fiók létrehozása",
   "auth.createYourAccount": "Hozd létre a fiókod",
   "auth.email": "E-mail",
-  "auth.emailPlaceholder": "nev@pelda.hu",
+  "auth.emailPlaceholder": "nev@example.com",
   "auth.emailVerified.subtitle": "Profilod beállítása…",
   "auth.emailVerified.title": "Az e-mail-címed megerősítve!",
   "auth.enterEmailPassword": "Add meg az e-mail-címet és a jelszót is.",

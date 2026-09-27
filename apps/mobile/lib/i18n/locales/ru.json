@@ -211,7 +211,7 @@
   "auth.createPersonalInstead": "Нужен личный аккаунт? Создать личный аккаунт",
   "auth.createYourAccount": "Создай аккаунт",
   "auth.email": "Email",
-  "auth.emailPlaceholder": "имя@пример.ru",
+  "auth.emailPlaceholder": "name@example.com",
   "auth.emailVerified.subtitle": "Настраиваем твой профиль…",
   "auth.emailVerified.title": "Твой email подтверждён!",
   "auth.enterEmailPassword": "Введи email и пароль.",

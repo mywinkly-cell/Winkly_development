@@ -211,7 +211,7 @@
   "auth.createPersonalInstead": "Raje osebni račun? Ustvari osebni račun",
   "auth.createYourAccount": "Ustvari svoj račun",
   "auth.email": "E-pošta",
-  "auth.emailPlaceholder": "ime@primer.si",
+  "auth.emailPlaceholder": "ime@example.com",
   "auth.emailVerified.subtitle": "Nastavljamo tvoj profil …",
   "auth.emailVerified.title": "Tvoj e-poštni naslov je potrjen!",
   "auth.enterEmailPassword": "Vnesi e-poštni naslov in geslo.",

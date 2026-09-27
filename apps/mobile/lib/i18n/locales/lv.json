@@ -210,7 +210,7 @@
   "auth.createPersonalInstead": "Vēlies personīgo kontu? Izveidot personīgo kontu",
   "auth.createYourAccount": "Izveido savu kontu",
   "auth.email": "E-pasts",
-  "auth.emailPlaceholder": "vards@piemers.lv",
+  "auth.emailPlaceholder": "vards@example.com",
   "auth.emailVerified.subtitle": "Iestata tavu profilu…",
   "auth.emailVerified.title": "Tavs e-pasts ir apstiprināts!",
   "auth.enterEmailPassword": "Lūdzu, ievadi gan e-pastu, gan paroli.",

@@ -209,7 +209,7 @@
   "auth.createPersonalInstead": "Eelistad isiklikku kontot? Loo isiklik konto",
   "auth.createYourAccount": "Loo oma konto",
   "auth.email": "E-post",
-  "auth.emailPlaceholder": "nimi@naide.ee",
+  "auth.emailPlaceholder": "nimi@example.com",
   "auth.emailVerified.subtitle": "Seadistame sinu profiili…",
   "auth.emailVerified.title": "Sinu e-post on kinnitatud!",
   "auth.enterEmailPassword": "Sisesta nii e-post kui ka parool.",

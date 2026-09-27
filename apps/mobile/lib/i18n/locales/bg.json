@@ -209,7 +209,7 @@
   "auth.createPersonalInstead": "Предпочиташ личен акаунт? Създай личен акаунт",
   "auth.createYourAccount": "Създай своя акаунт",
   "auth.email": "Имейл",
-  "auth.emailPlaceholder": "ime@primer.com",
+  "auth.emailPlaceholder": "ime@example.com",
   "auth.emailVerified.subtitle": "Настройване на профила ти…",
   "auth.emailVerified.title": "Имейлът ти е потвърден!",
   "auth.enterEmailPassword": "Въведи имейл и парола.",

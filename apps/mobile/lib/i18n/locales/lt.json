@@ -211,7 +211,7 @@
   "auth.createPersonalInstead": "Nori asmeninės paskyros? Sukurti asmeninę paskyrą",
   "auth.createYourAccount": "Sukurk savo paskyrą",
   "auth.email": "El. paštas",
-  "auth.emailPlaceholder": "vardas@pavyzdys.lt",
+  "auth.emailPlaceholder": "vardas@example.com",
   "auth.emailVerified.subtitle": "Kuriamas tavo profilis…",
   "auth.emailVerified.title": "Tavo el. paštas patvirtintas!",
   "auth.enterEmailPassword": "Įvesk el. paštą ir slaptažodį.",

@@ -135,6 +135,7 @@
     "account.legal.cookies": {"status": "needs_translation", "en_hash": "524cf50b5d"},
     "alerts.safety.reportReason.spam": {"status": "needs_translation", "en_hash": "d8628a5259"},
     "auth.accountTypeBusiness": {"status": "needs_translation", "en_hash": "d6663dda5f"},
+    "auth.emailPlaceholder": {"status": "needs_translation", "en_hash": "9703026304"},
     "concierge.catalog.bowling": {"status": "needs_translation", "en_hash": "527e7050bb"},
     "concierge.catalog.golf": {"status": "needs_translation", "en_hash": "eacd52d229"},
     "concierge.catalog.sport": {"status": "needs_translation", "en_hash": "1855c2e357"},
@@ -658,6 +659,7 @@
   },
   "pl": {
     "alerts.safety.reportReason.spam": {"status": "needs_translation", "en_hash": "d8628a5259"},
+    "auth.emailPlaceholder": {"status": "needs_translation", "en_hash": "9703026304"},
     "concierge.catalog.escape_room": {"status": "needs_translation", "en_hash": "78a5a72a93"},
     "concierge.catalog.golf": {"status": "needs_translation", "en_hash": "eacd52d229"},
     "concierge.catalog.sport": {"status": "needs_translation", "en_hash": "1855c2e357"},
@@ -774,6 +776,7 @@
   "ru": {
     "account.identity.email": {"status": "needs_translation", "en_hash": "84add5b295"},
     "auth.email": {"status": "needs_translation", "en_hash": "84add5b295"},
+    "auth.emailPlaceholder": {"status": "needs_translation", "en_hash": "9703026304"},
     "concierge.weather.temp": {"status": "needs_translation", "en_hash": "9b5c211856"},
     "planner.email": {"status": "needs_translation", "en_hash": "84add5b295"}
   },
@@ -909,5 +912,7 @@
     "weeklySpark.settingsRadiusKm": {"status": "needs_translation", "en_hash": "23051669f5"},
     "weeklySpark.slotSolo": {"status": "needs_translation", "en_hash": "9fc93acaa4"}
   },
-  "uk": {}
+  "uk": {
+    "auth.emailPlaceholder": {"status": "needs_translation", "en_hash": "9703026304"}
+  }
 }

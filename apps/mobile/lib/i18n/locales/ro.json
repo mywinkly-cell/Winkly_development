@@ -210,7 +210,7 @@
   "auth.createPersonalInstead": "Preferi un cont personal? Creează cont personal",
   "auth.createYourAccount": "Creează-ți contul",
   "auth.email": "E-mail",
-  "auth.emailPlaceholder": "nume@exemplu.com",
+  "auth.emailPlaceholder": "nume@example.com",
   "auth.emailVerified.subtitle": "Îți configurăm profilul…",
   "auth.emailVerified.title": "E-mailul tău a fost verificat!",
   "auth.enterEmailPassword": "Introdu e-mailul și parola.",

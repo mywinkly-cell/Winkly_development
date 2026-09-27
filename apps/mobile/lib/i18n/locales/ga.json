@@ -212,7 +212,7 @@
   "auth.createPersonalInstead": "An fearr leat cuntas pearsanta? Cruthaigh cuntas pearsanta",
   "auth.createYourAccount": "Cruthaigh do chuntas",
   "auth.email": "Ríomhphost",
-  "auth.emailPlaceholder": "ainm@sampla.com",
+  "auth.emailPlaceholder": "ainm@example.com",
   "auth.emailVerified.subtitle": "Do phróifíl á socrú…",
   "auth.emailVerified.title": "Fíoraíodh do ríomhphost!",
   "auth.enterEmailPassword": "Cuir isteach an ríomhphost agus an pasfhocal araon.",

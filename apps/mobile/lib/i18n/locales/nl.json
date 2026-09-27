@@ -209,7 +209,7 @@
   "auth.createPersonalInstead": "Liever een persoonlijk account? Persoonlijk account aanmaken",
   "auth.createYourAccount": "Maak je account aan",
   "auth.email": "E-mail",
-  "auth.emailPlaceholder": "naam@voorbeeld.nl",
+  "auth.emailPlaceholder": "naam@example.com",
   "auth.emailVerified.subtitle": "Je profiel wordt ingesteld…",
   "auth.emailVerified.title": "Je e-mailadres is geverifieerd!",
   "auth.enterEmailPassword": "Vul zowel je e-mailadres als je wachtwoord in.",
