@@ -66,6 +66,16 @@ serve(async (req) => {
       headers: { ...Object.fromEntries(cors), "Content-Type": "application/json" },
     });
   }
+  // The selfie is read with the service role, so it must be the caller's own upload
+  // (`<uid>/<file>`) — otherwise another user's selfie could earn this profile a
+  // "Verified" badge. One level only, no traversal.
+  const selfieParts = selfiePath.split("/");
+  if (selfieParts.length !== 2 || selfieParts[0] !== uid || !/^[A-Za-z0-9._-]{1,128}$/.test(selfieParts[1]) || selfieParts[1].startsWith(".")) {
+    return new Response(JSON.stringify({ error: "Invalid selfie_path" }), {
+      status: 400,
+      headers: { ...Object.fromEntries(cors), "Content-Type": "application/json" },
+    });
+  }
 
   const { data: core } = await admin.from("profiles_core").select("core_photos").eq("id", uid).single();
   const photos = (core?.core_photos as string[] | null) ?? [];

@@ -4,10 +4,16 @@
  * app fetch — no Bearer JWT). verify_jwt = false in config.toml.
  *
  * Verifies the signed `state` (minted by calendar-oauth-start), exchanges the code for
- * tokens server-to-server, encrypts them, upserts calendar_connections, then serves an HTML
- * page that redirects to winkly://calendar-callback — WebBrowser.openAuthSessionAsync
- * resolves as soon as that scheme is hit, same mechanism the existing Google/Apple sign-in
- * flow relies on (apps/mobile/lib/auth/oauth.ts).
+ * tokens server-to-server, encrypts them and PARKS them in calendar_oauth_pending under a
+ * one-time completion code, then serves an HTML page that redirects to
+ * winkly://calendar-callback?code=… — WebBrowser.openAuthSessionAsync resolves as soon as
+ * that scheme is hit, same mechanism the existing Google/Apple sign-in flow relies on
+ * (apps/mobile/lib/auth/oauth.ts).
+ *
+ * Nothing is connected until the app sends that code back with the SAME user's session
+ * (calendar-oauth-start?action=complete). `state` only says who STARTED the flow, so without
+ * this step anyone could send a victim their own consent link and, once the victim approved,
+ * have the victim's calendar attached to their account (SEC-10, Sept 2026 audit).
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -15,7 +21,7 @@ import { verifyCalendarOAuthState, type CalendarOAuthProvider } from "../_shared
 import { encryptCalendarTokens } from "../_shared/calendarTokenCrypto.ts";
 import { exchangeGoogleCode } from "../_shared/googleCalendar.ts";
 import { exchangeMicrosoftCode } from "../_shared/microsoftGraph.ts";
-import { syncConfirmedEventToCloud } from "../_shared/calendarSync.ts";
+import { mintCompletionCode } from "../_shared/calendarOAuthCompletion.ts";
 
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
@@ -32,8 +38,15 @@ function callbackRedirectUri(): string {
   return `${base}/functions/v1/calendar-oauth-callback`;
 }
 
-function buildResultHtml(ok: boolean, provider: CalendarOAuthProvider | null, message: string): string {
-  const deepLink = `winkly://calendar-callback?status=${ok ? "success" : "error"}${provider ? `&provider=${provider}` : ""}`;
+function buildResultHtml(
+  ok: boolean,
+  provider: CalendarOAuthProvider | null,
+  message: string,
+  completionCode?: string,
+): string {
+  const deepLink = `winkly://calendar-callback?status=${ok ? "success" : "error"}${provider ? `&provider=${provider}` : ""}${
+    completionCode ? `&code=${encodeURIComponent(completionCode)}` : ""
+  }`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -119,53 +132,25 @@ Deno.serve(async (req) => {
     );
 
     const expiresAt = new Date(Date.now() + tokenResult.expires_in * 1000).toISOString();
-    const { error: upsertErr } = await supabase.from("calendar_connections").upsert(
-      {
-        user_id: verified.uid,
-        provider: verified.provider,
-        token_encrypted: encrypted,
-        token_expires_at: expiresAt,
-        scopes: verified.provider === "google" ? "calendar.events" : "Calendars.ReadWrite offline_access",
-        last_sync_at: null,
-      },
-      { onConflict: "user_id,provider" },
-    );
+    const { code: completionCode, hash: codeHash } = await mintCompletionCode();
+    const { error: parkErr } = await supabase.from("calendar_oauth_pending").insert({
+      user_id: verified.uid,
+      provider: verified.provider,
+      code_hash: codeHash,
+      token_encrypted: encrypted,
+      token_expires_at: expiresAt,
+      scopes: verified.provider === "google" ? "calendar.events" : "Calendars.ReadWrite offline_access",
+    });
 
-    if (upsertErr) {
-      console.error("calendar-oauth-callback upsert:", upsertErr);
+    if (parkErr) {
+      console.error("calendar-oauth-callback park:", parkErr);
       return new Response(buildResultHtml(false, verified.provider, "could not save the connection. Please try again."), {
         status: 200,
         headers: htmlHeaders,
       });
     }
 
-    // Backfill: sync this user's already-confirmed upcoming plans to the calendar they just
-    // connected, so connecting later doesn't mean missing everything already on the Planner
-    // (mirrors the device-calendar backfill-on-toggle in apps/mobile/lib/integrations/calendarSync.ts).
-    try {
-      const { data: parts } = await supabase
-        .from("planner_participants")
-        .select("planner_item_id")
-        .eq("user_id", verified.uid)
-        .in("role", ["owner", "attendee"]);
-      const plannerItemIds = Array.from(new Set((parts ?? []).map((p: { planner_item_id: string }) => p.planner_item_id)));
-
-      if (plannerItemIds.length > 0) {
-        const { data: events } = await supabase
-          .from("confirmed_events")
-          .select("id")
-          .in("planner_item_id", plannerItemIds)
-          .gte("starts_at", new Date().toISOString())
-          .limit(20);
-        for (const ev of events ?? []) {
-          await syncConfirmedEventToCloud(supabase, (ev as { id: string }).id);
-        }
-      }
-    } catch (backfillErr) {
-      console.warn("calendar-oauth-callback backfill:", backfillErr);
-    }
-
-    return new Response(buildResultHtml(true, verified.provider, ""), { status: 200, headers: htmlHeaders });
+    return new Response(buildResultHtml(true, verified.provider, "", completionCode), { status: 200, headers: htmlHeaders });
   } catch (e) {
     console.error("calendar-oauth-callback:", e);
     return new Response(buildResultHtml(false, verified.provider, "something went wrong. Please try again."), {

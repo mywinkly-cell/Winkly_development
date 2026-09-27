@@ -67,6 +67,7 @@ serve(async (req) => {
     .select("conversation_id")
     .eq("conversation_id", convId)
     .eq("user_id", uid)
+    .is("left_at", null)
     .maybeSingle();
 
   if (mErr || !mem) {

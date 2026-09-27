@@ -6,6 +6,9 @@
  * mirroring how apps/mobile/lib/auth/oauth.ts already does Google sign-in
  * (supabase.auth.signInWithOAuth({ skipBrowserRedirect: true }) → open the returned url).
  * This function never redirects itself; it only returns { url }.
+ *
+ * POST ?action=complete { code } — second step: activates the tokens calendar-oauth-callback
+ * parked under that one-time code, but only for the same user who started the flow (SEC-10).
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -14,6 +17,7 @@ import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
 import { mintCalendarOAuthState, type CalendarOAuthProvider } from "../_shared/calendarOAuthState.ts";
 import { getGoogleAuthorizeUrl, isGoogleCalendarConfigured } from "../_shared/googleCalendar.ts";
 import { getMicrosoftAuthorizeUrl, isMicrosoftGraphConfigured } from "../_shared/microsoftGraph.ts";
+import { completeCalendarConnection } from "../_shared/calendarOAuthCompletion.ts";
 
 function isProvider(v: unknown): v is CalendarOAuthProvider {
   return v === "google" || v === "microsoft";
@@ -49,6 +53,18 @@ serve(async (req) => {
     }
 
     const url = new URL(req.url);
+
+    if (url.searchParams.get("action") === "complete") {
+      if (req.method !== "POST") {
+        return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: jsonHeaders });
+      }
+      const body = await req.json().catch(() => ({})) as { code?: unknown };
+      const result = await completeCalendarConnection(supabase, user.id, body.code);
+      return result.ok
+        ? new Response(JSON.stringify({ ok: true, provider: result.provider }), { headers: jsonHeaders })
+        : new Response(JSON.stringify({ error: result.error }), { status: result.status, headers: jsonHeaders });
+    }
+
     const provider = url.searchParams.get("provider");
     if (!isProvider(provider)) {
       return new Response(JSON.stringify({ error: "provider must be 'google' or 'microsoft'" }), {

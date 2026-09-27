@@ -60,9 +60,31 @@ export async function connectCloudCalendar(provider: CloudCalendarProvider): Pro
     return { ok: false, reason: "failed", message: "Connection did not complete." };
   }
 
-  // calendar-oauth-callback already stored the tokens server-side before this redirect fired —
-  // result.url carries only a status flag, never a secret, so there's nothing left to parse.
+  // calendar-oauth-callback parked the (encrypted) tokens server-side and handed back a
+  // one-time code; nothing is connected until this same signed-in user redeems it. That
+  // binding is what stops someone else's consent link from attaching a calendar to their
+  // account (SEC-10). The provider tokens themselves never reach the device.
+  const params = parseCallbackParams(result.url);
+  if (params.get("status") !== "success") {
+    return { ok: false, reason: "failed", message: "Connection did not complete." };
+  }
+  const code = params.get("code");
+  if (!code) return { ok: false, reason: "failed", message: "Connection did not complete." };
+
+  const done = await callEdgeFunction("calendar-oauth-start?action=complete", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+  if (!done?.ok) return { ok: false, reason: "failed", message: "Could not finish connecting your calendar." };
   return { ok: true };
+}
+
+/** Query params of the winkly://calendar-callback?… redirect (URL() is unreliable for custom schemes on RN). */
+export function parseCallbackParams(callbackUrl: string): URLSearchParams {
+  const q = callbackUrl.indexOf("?");
+  if (q === -1) return new URLSearchParams();
+  const hash = callbackUrl.indexOf("#", q);
+  return new URLSearchParams(callbackUrl.slice(q + 1, hash === -1 ? undefined : hash));
 }
 
 /** Best-effort revoke at the provider + always removes the stored connection. */

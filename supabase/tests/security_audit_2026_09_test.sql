@@ -2,7 +2,8 @@
 -- Regression test for the September 2026 security audit.
 --
 -- Every "attack" block below was a working exploit against the schema before
--- 20260927120000_security_audit_membership_and_plans.sql. Each was reproduced
+-- 20260927120000_security_audit_membership_and_plans.sql and
+-- 20260927130000_security_audit_followups.sql. Each was reproduced
 -- against a local stack (all migrations applied) before the fix, and every
 -- "still works" block guards a legitimate app flow the fix must not break.
 --
@@ -15,6 +16,9 @@
 --          RPC ran without a user identity (auth.uid() IS NULL)
 --   SEC-9  a chat image could be overwritten after it passed moderation (the
 --          verdict is keyed by path), so recipients saw it unblurred
+--   SEC-10 parked calendar OAuth tokens must stay service-role only
+--   SEC-11 any user could upload public files to business-logos, and record
+--          matching "affinity" signals with any stranger
 --
 -- HOW TO RUN
 --   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/security_audit_2026_09_test.sql
@@ -53,6 +57,14 @@ VALUES (current_setting('t.dm')::uuid, current_setting('t.a')::uuid),
        (current_setting('t.dm')::uuid, current_setting('t.b')::uuid);
 INSERT INTO public.messages (conversation_id, sender_id, content)
 VALUES (current_setting('t.dm')::uuid, current_setting('t.a')::uuid, 'private: meet me at 8');
+
+-- A ↔ D share a second chat (for the behaviour-signal check).
+SELECT set_config('t.dm2', gen_random_uuid()::text, false);
+INSERT INTO public.conversations (id, type, mode, created_by)
+VALUES (current_setting('t.dm2')::uuid, 'dm', 'friends', current_setting('t.a')::uuid);
+INSERT INTO public.conversation_members (conversation_id, user_id)
+VALUES (current_setting('t.dm2')::uuid, current_setting('t.a')::uuid),
+       (current_setting('t.dm2')::uuid, current_setting('t.d')::uuid);
 
 -- A's group with a pending invitation for D.
 SELECT set_config('t.grp', gen_random_uuid()::text, false);
@@ -451,6 +463,81 @@ BEGIN
     RAISE EXCEPTION 'FAIL (SEC-9): a sender could delete (and so re-upload) a moderated chat image';
   END IF;
   RAISE NOTICE 'PASS: a sent chat image cannot be deleted and re-uploaded';
+END $$;
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- SEC-10 · parked calendar OAuth tokens are service-role only
+-- ══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE v_blocked_read boolean; v_blocked_write boolean;
+BEGIN
+  BEGIN
+    PERFORM 1 FROM public.calendar_oauth_pending LIMIT 1;
+    v_blocked_read := false;
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked_read := true;
+  END;
+  BEGIN
+    INSERT INTO public.calendar_oauth_pending (user_id, provider, code_hash, token_encrypted)
+    VALUES (current_setting('t.b')::uuid, 'google', 'x', 'x');
+    v_blocked_write := false;
+  EXCEPTION WHEN insufficient_privilege OR others THEN
+    v_blocked_write := true;
+  END;
+  IF NOT (v_blocked_read AND v_blocked_write) THEN
+    RAISE EXCEPTION 'FAIL (SEC-10): clients can reach calendar_oauth_pending';
+  END IF;
+  RAISE NOTICE 'PASS: parked calendar tokens are not reachable by clients';
+END $$;
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- SEC-11 · smaller hardening
+-- ══════════════════════════════════════════════════════════════════════════
+
+DO $$
+DECLARE v_blocked boolean;
+BEGIN
+  BEGIN
+    INSERT INTO storage.objects (bucket_id, name, owner, metadata)
+    VALUES ('business-logos', current_setting('t.b') || '/logo.jpg', current_setting('t.b')::uuid, '{"mimetype":"image/jpeg"}');
+    v_blocked := false;
+  EXCEPTION WHEN insufficient_privilege OR others THEN
+    v_blocked := true;
+  END;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'FAIL (SEC-11): clients can still upload public, unmoderated files to business-logos';
+  END IF;
+  RAISE NOTICE 'PASS: clients cannot upload to business-logos';
+END $$;
+
+SELECT set_config('request.jwt.claims', json_build_object('sub', current_setting('t.c'), 'role', 'authenticated')::text, true);
+
+DO $$
+BEGIN
+  PERFORM public.record_pair_behavior_signal(current_setting('t.a')::uuid, 'friends', 'plan_reviewed', '{"rating":5}'::jsonb);
+  RESET ROLE;
+  IF EXISTS (SELECT 1 FROM public.behavior_pair_signals
+              WHERE current_setting('t.c')::uuid IN (user_a_id, user_b_id)) THEN
+    RAISE EXCEPTION 'FAIL (SEC-11): a stranger recorded a behaviour signal with someone they never talked to';
+  END IF;
+  SET LOCAL ROLE authenticated;
+  RAISE NOTICE 'PASS: strangers cannot inflate their affinity with anyone';
+END $$;
+
+SELECT set_config('request.jwt.claims', json_build_object('sub', current_setting('t.d'), 'role', 'authenticated')::text, true);
+
+DO $$
+BEGIN
+  PERFORM public.record_pair_behavior_signal(current_setting('t.a')::uuid, 'friends', 'plan_reviewed', '{"rating":5}'::jsonb);
+  RESET ROLE;
+  IF NOT EXISTS (SELECT 1 FROM public.behavior_pair_signals
+                  WHERE current_setting('t.d')::uuid IN (user_a_id, user_b_id)
+                    AND current_setting('t.a')::uuid IN (user_a_id, user_b_id)) THEN
+    RAISE EXCEPTION 'FAIL (SEC-11 regression): people who share a chat can no longer record signals';
+  END IF;
+  SET LOCAL ROLE authenticated;
+  RAISE NOTICE 'PASS: people who share a chat can still record behaviour signals';
 END $$;
 
 -- ══════════════════════════════════════════════════════════════════════════
