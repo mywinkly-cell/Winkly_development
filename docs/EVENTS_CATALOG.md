@@ -86,20 +86,50 @@ Every way a plan starts or ends goes through `lib/plannerInvitations.ts` / `lib/
 | AI group plan confirmed by everyone | ✅ | ✅ on each phone the next time the Planner opens (catch-up) | ✅ |
 | **Join / Interested** on a Winkly event | ✅ (own entry, `related_event_id`) | ✅ | ✅ |
 | Not going / Leave event | → Archive | removed | removed |
-| Cancel a plan | → Archive (stays there after reload) | removed | removed (organiser cancelling removes everyone's copies) |
+| Cancel a plan (organiser) | → Archive for everyone | removed on every phone (next Planner open) | removed for everyone |
+| "Can't make it" (participant) | → Archive for me; plan goes on for the others | removed for me | removed for me |
+| Move a plan (organiser) | new time for everyone | re-written on every phone (next Planner open) | moved in place |
 | Restore a cancelled plan | back | re-added | re-added |
 
 - The phone calendar is **opt-in** (privacy). The first time a plan is created or accepted, Winkly asks once ("Add plans to your calendar?"); it can be changed in Planner settings, where Google / Outlook are connected too.
 - Removal: `calendar-sync-confirmed-event` with `action: "remove"` deletes the Google/Microsoft events Winkly created. The sync and the retry sweep never re-add a cancelled plan.
-- Not covered yet: when a plan's **time changes** (weather pivot, reschedule), existing calendar events are not moved.
+- Moves: `planner_items.revision` is bumped on every reschedule; each phone compares it with its own `planner_participants.device_calendar_revision` and re-writes the event (`reconcileDeviceCalendar`). Cloud copies are patched in place (`updateConfirmedEventInCloud`).
 
 ## 7. Wishlist: sharing with specific people
 
 Besides "share with all my dates / friends / business contacts" (per mode), each place, or the whole list, can be shared with **chosen connections** (people you have a 1:1 chat with): "Choose people" on a place or under "Share my whole wishlist" (`SharePeopleSheet`). Stored in `wishlist_item_viewers`; written only via `set_wishlist_viewers()`, which silently drops anyone who isn't a connection. A **Shared with me** tab lists everything others shared with you (`get_wishlist_shared_with_me()`); tap one to plan a visit. Personally shared places are also used by Winkly AI when you plan with that person. Blocking hides everything. Tests: `supabase/tests/wishlist_sharing_test.sql`.
 
-## 8. Not built yet
+## 8. Cancel, move, can't make it — and who gets told
+
+All plan changes go through the **`plan-update`** Edge Function (`POST { planner_item_id, action, reason?, starts_at?, ends_at? }`):
+
+| Action | Who | What happens |
+|---|---|---|
+| `cancel` | organiser | Plan off for everyone (`meta.cancelled_at`, `cancel_reason`), removed from everyone's cloud calendars |
+| `cancel` | participant | "Can't make it": only they drop out (`planner_participants.cancelled_at`); plan goes on for the others |
+| `reschedule` | organiser | New start (length kept unless an end is given), revision bumped, cloud calendars moved, old alerts cleared |
+| `restore` | organiser | Cancelled plan is back on; calendars re-added |
+| `notify` | anyone in the plan | A heads-up (text required, max 10 per plan per day) |
+
+Participants who aren't the organiser can't move a plan — the sheet turns into **Suggest another time**, which sends a heads-up ("Could we move it to Sat 19:30? …").
+
+- **Reason**: optional, with quick replies (Running late, Something came up, Bad weather, Traffic, Not feeling well) or free text (≤500 chars).
+- **Who is told**: only the *other* people in a date / meet-up / meeting — a push in **their** language and time zone (`user_push_tokens.locale` / `timezone`, texts in `_shared/planNotify/messages.ts`, 26 languages) plus a **card in your shared chat** (`cta` message, `type: "plan_change"`, rendered by `PlanChangeCard`; `notify-fanout` skips its generic push so nobody gets two). **Public events are never announced**: a joined event is each user's own copy (`related_event_id`), so hosts and other attendees are not pinged.
+- **History**: every change is stored in `plan_changes` (readable by the plan's participants) and shown under **Changes** in plan details.
+
+### Weather and traffic alerts
+
+**`plan-watch-cron`** runs every 15 min (pg_cron → `private.invoke_plan_watch_cron()`; needs `private.webhook_config` + `CRON_SECRET`):
+
+- **Weather** (plans in the next 48 h): Open-Meteo hourly forecast at the plan's place (verified place → venue lookup → city). Storms, heavy rain and snow for any plan; light rain, heat ≥33 °C and cold ≤−10 °C only for plans that are clearly outdoors (`_shared/planWatch/rules.ts`).
+- **Traffic** (30–150 min before the start): Google Distance Matrix from each participant's saved coarse location (`plan_watch_user_coords`, service role only) — alert when ≥15 min **and** ≥30 % slower than usual, with "leave by". Needs the **Distance Matrix API** enabled on `GOOGLE_MAPS_API_KEY` / `GOOGLE_PLACES_API_KEY`; skipped under 3 km.
+- Each condition is announced **once** per user and plan (`plan_alerts` unique key) with a push; the Planner shows it on top (`PlanAlertsBanner`) with **Change time** (organiser) / **Suggest a time** (others), **Tell the others** (ready-made, editable message) and **Dismiss**. Moving a plan clears its alerts.
+
+Tests: `apps/mobile/__tests__/planWatchRules.test.ts`, `supabase/tests/plan_changes_test.sql`.
+
+## 9. Not built yet
 
 - Native **Share to Winkly** extension (iOS share sheet / Android intent). Needs a native build; the create screen already accepts the shared URL.
 - **Business dashboard**: publish/promote events, sell tickets, analytics.
 - Business accounts & dashboard: on hold until after the launch for private users.
-- Moving calendar events when a plan's time changes.
+- Public transport delays (the traffic check is by car).

@@ -8,7 +8,7 @@ import type { Mode } from "@/types";
 import { getPlannerThemePlans, type PlannerThemePlanOption } from "@/lib/ai/strategicHost";
 import type { WeeklyWeekendIdea, WeeklyWeekendSuggestion } from "@/lib/ai/proactiveSuggestion";
 import type { SparkSlot, WeeklySparkPlan } from "@/lib/ai/weeklySpark";
-import { getPlannerItems } from "@/lib/access/planner";
+import { getPlannerItems, isPlanOff } from "@/lib/access/planner";
 import { supabase } from "@/lib/supabase";
 import {
   SMART_WEEKLY_SPARK_TIMING,
@@ -246,8 +246,8 @@ async function loadMyBusyWindows(): Promise<BusyWindow[]> {
     const now = Date.now();
     const horizon = now + 14 * 24 * 60 * 60 * 1000;
     const items = await getPlannerItems(uid, undefined, 80);
-    return (items as Array<{ starts_at?: string; ends_at?: string | null }>)
-      .filter((it) => typeof it.starts_at === "string")
+    return (items as { starts_at?: string; ends_at?: string | null; meta?: unknown; my_cancelled_at?: unknown }[])
+      .filter((it) => typeof it.starts_at === "string" && !isPlanOff(it))
       .map((it) => ({ starts_at: it.starts_at!, ends_at: it.ends_at ?? null }))
       .filter((it) => {
         const t = new Date(it.starts_at).getTime();

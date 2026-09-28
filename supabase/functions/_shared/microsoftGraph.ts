@@ -184,3 +184,21 @@ export async function deleteMicrosoftCalendarEvent(accessToken: string, eventId:
   });
   return res.ok || res.status === 404;
 }
+
+/** Move an event Winkly created (reschedule). False when the event is gone or the call fails. */
+export async function updateMicrosoftCalendarEvent(
+  accessToken: string,
+  eventId: string,
+  input: { startIso: string; endIso: string; title?: string },
+): Promise<boolean> {
+  const res = await fetch(`${GRAPH_API}/me/events/${encodeURIComponent(eventId)}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...(input.title ? { subject: input.title } : {}),
+      start: { dateTime: toGraphDateTime(input.startIso), timeZone: "UTC" },
+      end: { dateTime: toGraphDateTime(input.endIso), timeZone: "UTC" },
+    }),
+  });
+  return res.ok;
+}

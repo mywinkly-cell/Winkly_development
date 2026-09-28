@@ -168,3 +168,25 @@ export async function deleteGoogleCalendarEvent(
   );
   return res.ok || res.status === 404 || res.status === 410;
 }
+
+/** Move an event Winkly created (reschedule). False when the event is gone or the call fails. */
+export async function updateGoogleCalendarEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  input: { startIso: string; endIso: string; title?: string },
+): Promise<boolean> {
+  const res = await fetch(
+    `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId || "primary")}/events/${encodeURIComponent(eventId)}`,
+    {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...(input.title ? { summary: input.title } : {}),
+        start: { dateTime: input.startIso },
+        end: { dateTime: input.endIso },
+      }),
+    },
+  );
+  return res.ok;
+}

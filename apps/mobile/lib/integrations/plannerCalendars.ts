@@ -17,6 +17,7 @@ import { deleteEvent, requestCalendarPermissions } from "@/lib/integrations/cale
 import {
   backfillPlannerItemsToDeviceCalendar,
   getCalendarSyncPreference,
+  reconcileDeviceCalendar,
   setCalendarSyncPreference,
   syncPlannerItemToDeviceCalendar,
 } from "@/lib/integrations/calendarSync";
@@ -108,10 +109,15 @@ export async function removePlanFromMyCalendars(plannerItemId: string, userId: s
 /**
  * Catch-up for plans that reached the Planner from somewhere else (a group plan the others
  * confirmed, an invite accepted on another phone…): writes any upcoming plan the user is in
- * but that isn't on this phone's calendar yet. Cheap no-op when sync is off.
+ * but that isn't on this phone's calendar yet, and re-writes / removes plans that were moved
+ * or cancelled since (by anyone). Cheap no-op when sync is off.
  */
 export function syncMissingPlansToThisPhone(userId: string): void {
-  void backfillPlannerItemsToDeviceCalendar(userId);
+  void (async () => {
+    // First follow moves / cancellations made by others, then add what's missing.
+    await reconcileDeviceCalendar(userId);
+    await backfillPlannerItemsToDeviceCalendar(userId);
+  })();
 }
 
 const ASKED_KEY = "winkly_calendar_sync_offer_asked";

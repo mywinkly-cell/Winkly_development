@@ -96,6 +96,7 @@ import {
 } from "@/lib/ai/matchAgentClient";
 import { recordPairBehaviorSignal } from "@/lib/matching/behaviorSignals";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
+import { PlanChangeCard, type PlanChangeCardPayload } from "@/components/chat/PlanChangeCard";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 import { formatAppDateTime, formatAppTime } from "@/lib/i18n/appLocale";
 import { chatRoutes, useModeHub } from "@/lib/navigation/modeHub";
@@ -1634,6 +1635,9 @@ export default function ChatView({
                         </Pressable>
                       </View>
                     );
+                  }
+                  if (p.type === "plan_change") {
+                    return <PlanChangeCard payload={p as PlanChangeCardPayload} mine={!!mine} />;
                   }
                   if (p.type === "romance_invite_declined") {
                     return (

@@ -249,7 +249,8 @@
       ],
       "da": [
         "newPlan.forDate",
-        "eventDetails.title"
+        "eventDetails.title",
+        "planChanges.send"
       ],
       "lv": [
         "catalog.type.sports"
