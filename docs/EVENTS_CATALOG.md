@@ -122,7 +122,7 @@ Participants who aren't the organiser can't move a plan — the sheet turns into
 **`plan-watch-cron`** runs every 15 min (pg_cron → `private.invoke_plan_watch_cron()`; needs `private.webhook_config` + `CRON_SECRET`):
 
 - **Weather** (plans in the next 48 h): Open-Meteo hourly forecast at the plan's place (verified place → venue lookup → city). Storms, heavy rain and snow for any plan; light rain, heat ≥33 °C and cold ≤−10 °C only for plans that are clearly outdoors (`_shared/planWatch/rules.ts`).
-- **Traffic** (30–150 min before the start): Google Distance Matrix from each participant's saved coarse location (`plan_watch_user_coords`, service role only) — alert when ≥15 min **and** ≥30 % slower than usual, with "leave by". Needs the **Distance Matrix API** enabled on `GOOGLE_MAPS_API_KEY` / `GOOGLE_PLACES_API_KEY`; skipped under 3 km.
+- **Traffic** (30–150 min before the start): driving time from each participant's saved coarse location (`plan_watch_user_coords`, service role only) — alert when ≥15 min **and** ≥30 % slower than usual, with "leave by". Uses Google **Distance Matrix API** if it's enabled on `GOOGLE_MAPS_API_KEY` / `GOOGLE_PLACES_API_KEY`, otherwise the newer **Routes API** (`computeRouteMatrix`) — enable either one; new Google projects only offer Routes API. Skipped under 3 km.
 - Each condition is announced **once** per user and plan (`plan_alerts` unique key) with a push; the Planner shows it on top (`PlanAlertsBanner`) with **Change time** (organiser) / **Suggest a time** (others), **Tell the others** (ready-made, editable message) and **Dismiss**. Moving a plan clears its alerts.
 
 Tests: `apps/mobile/__tests__/planWatchRules.test.ts`, `supabase/tests/plan_changes_test.sql`.

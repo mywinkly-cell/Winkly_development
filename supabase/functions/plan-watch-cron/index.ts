@@ -5,8 +5,8 @@
 //     plus light rain / heat / freezing cold when the plan is clearly outdoors.
 //     Source: Open-Meteo hourly forecast (free, no key).
 //   • Traffic (30–150 min before the start): 15+ min and 30 %+ slower than usual from the
-//     participant's saved (coarse) location. Source: Google Distance Matrix (needs
-//     GOOGLE_MAPS_API_KEY / GOOGLE_PLACES_API_KEY with the Distance Matrix API enabled).
+//     participant's saved (coarse) location. Source: Google Distance Matrix or the newer
+//     Routes API — whichever is enabled for GOOGLE_MAPS_API_KEY / GOOGLE_PLACES_API_KEY.
 //
 // Each alert is a plan_alerts row (once per user / plan / condition, so a change is
 // announced once) + a push in the user's language. The app shows it on the plan with
@@ -77,11 +77,14 @@ async function geocodeName(name: string): Promise<{ lat: number; lng: number } |
   return r ? { lat: r.latitude, lng: r.longitude } : null;
 }
 
-async function travelSeconds(
-  key: string,
-  from: { lat: number; lng: number },
-  to: { lat: number; lng: number },
-): Promise<{ normal: number; traffic: number; meters: number } | null> {
+type Trip = { normal: number; traffic: number; meters: number };
+type LatLng = { lat: number; lng: number };
+
+/** Which Google API answered in this run: "legacy" Distance Matrix or the newer Routes API. */
+let trafficApi: "legacy" | "routes" | null = null;
+
+/** Distance Matrix (legacy). "denied" when the API isn't enabled for the key. */
+async function legacyTrip(key: string, from: LatLng, to: LatLng): Promise<Trip | null | "denied"> {
   const url = new URL("https://maps.googleapis.com/maps/api/distancematrix/json");
   url.searchParams.set("origins", `${from.lat},${from.lng}`);
   url.searchParams.set("destinations", `${to.lat},${to.lng}`);
@@ -91,11 +94,59 @@ async function travelSeconds(
   const res = await fetch(url.toString());
   if (!res.ok) return null;
   const d = (await res.json()) as {
-    rows?: Array<{ elements?: Array<{ status?: string; duration?: { value: number }; duration_in_traffic?: { value: number }; distance?: { value: number } }> }>;
+    status?: string;
+    rows?: { elements?: { status?: string; duration?: { value: number }; duration_in_traffic?: { value: number }; distance?: { value: number } }[] }[];
   };
+  if (d.status === "REQUEST_DENIED") return "denied";
   const el = d.rows?.[0]?.elements?.[0];
   if (!el || el.status !== "OK" || !el.duration || !el.duration_in_traffic) return null;
   return { normal: el.duration.value, traffic: el.duration_in_traffic.value, meters: el.distance?.value ?? 0 };
+}
+
+/** Routes API computeRouteMatrix (Google's replacement for Distance Matrix). */
+async function routesTrip(key: string, from: LatLng, to: LatLng): Promise<Trip | null | "denied"> {
+  const point = (p: LatLng) => ({ waypoint: { location: { latLng: { latitude: p.lat, longitude: p.lng } } } });
+  const res = await fetch("https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": key,
+      "X-Goog-FieldMask": "duration,staticDuration,distanceMeters,condition",
+    },
+    body: JSON.stringify({
+      origins: [point(from)],
+      destinations: [point(to)],
+      travelMode: "DRIVE",
+      routingPreference: "TRAFFIC_AWARE",
+    }),
+  });
+  if (res.status === 403) return "denied";
+  if (!res.ok) return null;
+  const rows = (await res.json()) as { duration?: string; staticDuration?: string; distanceMeters?: number; condition?: string }[];
+  const el = Array.isArray(rows) ? rows[0] : null;
+  const secs = (v?: string) => (v && /^\d+(\.\d+)?s$/.test(v) ? Number.parseFloat(v) : NaN);
+  const traffic = secs(el?.duration);
+  const normal = secs(el?.staticDuration);
+  if (!el || el.condition !== "ROUTE_EXISTS" || !Number.isFinite(traffic) || !Number.isFinite(normal)) return null;
+  return { normal, traffic, meters: el.distanceMeters ?? 0 };
+}
+
+/**
+ * Driving time now vs. usual. Uses whichever Google API the key allows: Distance Matrix
+ * first (existing projects), else the Routes API (new projects, where Distance Matrix is
+ * "Legacy" and can't be enabled). Remembers the answer for the rest of the run.
+ */
+async function travelSeconds(key: string, from: LatLng, to: LatLng): Promise<Trip | null> {
+  if (trafficApi !== "routes") {
+    const r = await legacyTrip(key, from, to);
+    if (r !== "denied") {
+      trafficApi = "legacy";
+      return r;
+    }
+    trafficApi = "routes";
+  }
+  const r = await routesTrip(key, from, to);
+  return r === "denied" ? null : r;
 }
 
 /** Where the plan happens: verified place → free-text venue (cached lookup) → city name. */
@@ -137,6 +188,7 @@ serve(async (req) => {
     const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "");
     const placesKey = Deno.env.get("GOOGLE_PLACES_API_KEY") ?? Deno.env.get("GOOGLE_MAPS_API_KEY") ?? null;
     const now = Date.now();
+    trafficApi = null; // re-detect each run (the key's enabled APIs may have changed)
 
     const { data: rows } = await supabase
       .from("planner_items")
