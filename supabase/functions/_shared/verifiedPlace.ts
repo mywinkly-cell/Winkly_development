@@ -11,6 +11,7 @@
 // read name/address/hours/price/booking_url straight from the verified row.
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { plainAttribution } from "./placeAttribution.ts";
 
 /** Google Places opening_hours, augmented with utc_offset_minutes so isOpenAt can
  *  compute the venue's local wall-clock without a separate timezone lookup. */
@@ -51,13 +52,6 @@ export type PlacePhotoRef = {
 };
 
 const MAX_PHOTOS = 5;
-
-/** Strip the <a> wrapper Google puts around html_attributions, keep the author name. */
-function plainAttribution(html: unknown): string | null {
-  if (!Array.isArray(html) || typeof html[0] !== "string") return null;
-  const text = html[0].replace(/<[^>]*>/g, "").trim();
-  return text ? text.slice(0, 120) : null;
-}
 
 /** Google Place Details `photos` → our compact refs (max 5). */
 export function toPhotoRefs(raw: unknown): PlacePhotoRef[] {
