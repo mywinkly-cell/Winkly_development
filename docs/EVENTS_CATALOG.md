@@ -75,9 +75,31 @@ When you plan with Winkly AI (`winkly_plan`, `planner_theme_plans`), ai-gateway 
 
 Only names/areas go to the model (no user ids or links). The `planner_theme_plans` cache key now includes the requester, so private wishlist places never leak through the shared cache.
 
-## 6. Not built yet
+## 6. Plans → Planner → calendars (audit 2026-09-28)
+
+Every way a plan starts or ends goes through `lib/plannerInvitations.ts` / `lib/integrations/plannerCalendars.ts`:
+
+| How | Planner | Phone calendar (iCloud / Google / Outlook / Samsung… accounts on the phone) | Connected Google / Outlook (server) |
+|---|---|---|---|
+| "+ New plan", AI plan, Weekly Spark, "+ Plan" from Events | ✅ | ✅ | ✅ |
+| Chat invite: sender / invitee accepts | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ |
+| AI group plan confirmed by everyone | ✅ | ✅ on each phone the next time the Planner opens (catch-up) | ✅ |
+| **Join / Interested** on a Winkly event | ✅ (own entry, `related_event_id`) | ✅ | ✅ |
+| Not going / Leave event | → Archive | removed | removed |
+| Cancel a plan | → Archive (stays there after reload) | removed | removed (organiser cancelling removes everyone's copies) |
+| Restore a cancelled plan | back | re-added | re-added |
+
+- The phone calendar is **opt-in** (privacy). The first time a plan is created or accepted, Winkly asks once ("Add plans to your calendar?"); it can be changed in Planner settings, where Google / Outlook are connected too.
+- Removal: `calendar-sync-confirmed-event` with `action: "remove"` deletes the Google/Microsoft events Winkly created. The sync and the retry sweep never re-add a cancelled plan.
+- Not covered yet: when a plan's **time changes** (weather pivot, reschedule), existing calendar events are not moved.
+
+## 7. Wishlist: sharing with specific people
+
+Besides "share with all my dates / friends / business contacts" (per mode), each place, or the whole list, can be shared with **chosen connections** (people you have a 1:1 chat with): "Choose people" on a place or under "Share my whole wishlist" (`SharePeopleSheet`). Stored in `wishlist_item_viewers`; written only via `set_wishlist_viewers()`, which silently drops anyone who isn't a connection. A **Shared with me** tab lists everything others shared with you (`get_wishlist_shared_with_me()`); tap one to plan a visit. Personally shared places are also used by Winkly AI when you plan with that person. Blocking hides everything. Tests: `supabase/tests/wishlist_sharing_test.sql`.
+
+## 8. Not built yet
 
 - Native **Share to Winkly** extension (iOS share sheet / Android intent). Needs a native build; the create screen already accepts the shared URL.
 - **Business dashboard**: publish/promote events, sell tickets, analytics.
-- Showing places others shared with you directly in the wishlist (today the AI uses them).
-- Joining a Winkly event (event details) should add it to the Planner automatically.
+- Business accounts & dashboard: on hold until after the launch for private users.
+- Moving calendar events when a plan's time changes.
