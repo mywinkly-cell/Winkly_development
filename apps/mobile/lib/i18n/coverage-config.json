@@ -120,7 +120,13 @@
         "groups.consensus.optionWithLabel",
         "groups.consensus.planFallback",
         "groups.create.details",
-        "groups.vibe.mood.foodie"
+        "groups.vibe.mood.foodie",
+        "catalog.book",
+        "catalog.detailsTitle",
+        "newPlan.forBusiness",
+        "newPlan.forDate",
+        "wishlist.linkLabel",
+        "eventDetails.title"
       ],
       "fr": [
         "onboarding.businessProfile.subtype.venueHint",
@@ -146,7 +152,8 @@
         "groups.consensus.optionWithLabel",
         "groups.consensus.planFallback",
         "groups.create.type",
-        "groups.invite.contactFallback"
+        "groups.invite.contactFallback",
+        "eventDetails.public"
       ],
       "es": [
         "onboarding.subProfile.alcohol",
@@ -225,7 +232,11 @@
         "groups.create.details",
         "groups.create.type",
         "groups.invite.contactFallback",
-        "groups.vibe.mood.foodie"
+        "groups.vibe.mood.foodie",
+        "catalog.book",
+        "catalog.detailsTitle",
+        "catalog.week",
+        "newPlan.forDate"
       ],
       "pt": [
         "modes.romance",
@@ -235,6 +246,21 @@
         "chat.matches.fallbackName",
         "chat.preview.online",
         "chat.report.reason.spam"
+      ],
+      "da": [
+        "newPlan.forDate",
+        "eventDetails.title",
+        "planChanges.send"
+      ],
+      "lv": [
+        "catalog.type.sports"
+      ],
+      "mt": [
+        "newPlan.forDate"
+      ],
+      "ro": [
+        "newPlan.forBusiness",
+        "eventDetails.public"
       ]
     }
   }

@@ -33,6 +33,23 @@ const AI_GATEWAY_TASKS = [
 ] as const;
 export type ConciergeTask = (typeof AI_GATEWAY_TASKS)[number];
 
+/** A wish-list place an AI option was built around ("you", "partner" = the other person, or "both"). */
+export type WishlistPlanPick = {
+  title: string;
+  owner: "you" | "partner" | "both";
+  place_id: string | null;
+  image_url: string | null;
+};
+
+/** Saved places (yours, or shared with you) that fit the plan — "from your wish lists". */
+export type WishlistSuggestion = WishlistPlanPick & {
+  ref: string;
+  address: string | null;
+  city: string | null;
+  url: string | null;
+  note: string | null;
+};
+
 export type WinklyPlanOption = {
   /** "C" only for the one-line Plan-it entry (three options). */
   option_id: "A" | "B" | "C";
@@ -50,9 +67,13 @@ export type WinklyPlanOption = {
     google_maps_link: string;
     estimated_cost: string;
     booking_url?: string;
+    /** Google place id when verified — the card loads the venue's photos. */
+    place_id?: string;
   };
   weather_note: string;
   duration_minutes: number;
+  /** Set when the option is built around a place from someone's wish list. */
+  from_wishlist?: WishlistPlanPick;
 };
 
 export type WinklyPlanResponse = {
@@ -63,6 +84,8 @@ export type WinklyPlanResponse = {
   /** Inferred when/budget/setting/area (raw — validate with parsePlanAssumptions). Present when user_prompt was sent. */
   assumptions?: unknown;
   request_id?: string | null;
+  /** Saved places from your (and a partner's shared) wish lists that fit this plan. */
+  wishlist_suggestions?: WishlistSuggestion[];
 };
 
 /** Plan-it extras for winkly_plan (see lib/ai/planAssumptions.ts `PinnedPlanContext`). */

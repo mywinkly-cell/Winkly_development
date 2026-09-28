@@ -134,6 +134,12 @@ serve(async (req) => {
         return json({ error: "conversation_id and sender_id required" }, 400);
       }
 
+      // Plan change cards come with their own localized push from plan-update — don't send a
+      // second, generic "New message" push for them.
+      if (rec.message_type === "cta" && /"type"\s*:\s*"plan_change"/.test(rec.content ?? "")) {
+        return json({ ok: true, skipped: "plan_change" });
+      }
+
       const recipients = await resolveMessageRecipients(supabase, conversationId, senderId);
       const preview = pushPreviewForMessage(rec.content ?? "", rec.message_type ?? "text");
       const sent = await pushToUsers(supabase, recipients, "New message", preview, {

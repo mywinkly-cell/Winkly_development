@@ -20,6 +20,8 @@ import { EventReminderModal } from "@/components/planner/EventReminderModal";
 import { PlanHintBanner } from "@/components/ai/PlanHintBanner";
 import { buildPlanHintRoute, planDateForEvent, selectPlanHintCopy } from "@/lib/ai/planHint";
 import { useTranslation } from "react-i18next";
+import { addWinklyEventToPlanner, removeWinklyEventFromPlanner } from "@/lib/access/events";
+import { formatAppDateTime, formatAppNumber } from "@/lib/i18n/appLocale";
 
 type EventRow = {
   id: string;
@@ -42,9 +44,7 @@ type EventRow = {
 type ParticipantStatus = "going" | "interested" | "not_going" | null;
 
 function formatDateTime(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
+  return formatAppDateTime(new Date(iso));
 }
 
 function isUuid(v: string) {
@@ -73,7 +73,6 @@ export default function EventDetails() {
   const [status, setStatus] = useState<ParticipantStatus>(null);
   const [statusLoading, setStatusLoading] = useState(false);
 
-  const [savingPlanner, setSavingPlanner] = useState(false);
   const [participants, setParticipants] = useState<ParticipantInfo[]>([]);
   const [reminderModalVisible, setReminderModalVisible] = useState(false);
 
@@ -220,18 +219,12 @@ export default function EventDetails() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
-  const refresh = async () => {
-    const uid = await loadAuth();
-    await loadEvent();
-    await loadMyStatus(uid, event);
-  };
-
   const joinViaRpc = async (next: Exclude<ParticipantStatus, null>) => {
     if (!event) return;
 
     const uid = await loadAuth();
     if (!uid) {
-      Alert.alert("Join event", "Please sign in to join events.");
+      Alert.alert(t("eventDetails.joinTitle"), t("eventDetails.signInToJoin"));
       return;
     }
 
@@ -244,19 +237,23 @@ export default function EventDetails() {
       });
 
       if (error) {
-        Alert.alert("Event", error.message);
+        Alert.alert(t("eventDetails.errorTitle"), t("eventDetails.errorBody"));
         return;
       }
 
       setStatus(next);
 
-      // If user marked not_going, we keep status but access will be removed by triggers/RPC
-      if (next === "going") {
-        Alert.alert("You’re going!", "Chat access granted and your status was saved.");
-      } else if (next === "interested") {
-        Alert.alert("Saved", "Marked as interested. Chat access granted (if enabled).");
+      // Going / interested → the event is in the Planner and on the user's calendars
+      // (phone + connected Google/Outlook); not going → it leaves them.
+      if (next === "going" || next === "interested") {
+        await addWinklyEventToPlanner(event.id, next).catch(() => null);
+        Alert.alert(
+          next === "going" ? t("eventDetails.goingTitle") : t("eventDetails.interestedTitle"),
+          t("eventDetails.addedToPlanner")
+        );
       } else {
-        Alert.alert("Updated", "Marked as not going. You may lose chat access.");
+        await removeWinklyEventFromPlanner(event.id).catch(() => undefined);
+        Alert.alert(t("eventDetails.notGoingTitle"), t("eventDetails.removedFromPlanner"));
       }
 
       // Optionally: planner auto-save when going/interested
@@ -275,7 +272,7 @@ export default function EventDetails() {
 
     const uid = await loadAuth();
     if (!uid) {
-      Alert.alert("Leave event", "Please sign in.");
+      Alert.alert(t("eventDetails.leaveTitle"), t("eventDetails.signInToJoin"));
       return;
     }
 
@@ -284,12 +281,13 @@ export default function EventDetails() {
 
       const { error } = await supabase.rpc("leave_event", { p_event_id: event.id });
       if (error) {
-        Alert.alert("Leave event", error.message);
+        Alert.alert(t("eventDetails.errorTitle"), t("eventDetails.errorBody"));
         return;
       }
 
       setStatus(null);
-      Alert.alert("Left event", "Removed your participation and chat access.");
+      await removeWinklyEventFromPlanner(event.id).catch(() => undefined);
+      Alert.alert(t("eventDetails.leftTitle"), t("eventDetails.leftBody"));
     } finally {
       setStatusLoading(false);
     }
@@ -301,52 +299,28 @@ export default function EventDetails() {
       Haptics.selectionAsync();
       const url = `https://mywinkly.de/events/${event.id}`;
       const cityPart = event.city ? fmtLoc(event.city) : "";
-      const message = `${event.title}\n${cityPart} ${event.venue_name ?? ""}\n${formatDateTime(event.starts_at)}\n\nJoin on Winkly: ${url}`;
+      const message = t("eventDetails.shareMessage", {
+        title: event.title,
+        place: `${cityPart} ${event.venue_name ?? ""}`.trim(),
+        when: formatDateTime(event.starts_at),
+        url,
+      });
       await Share.share({
         message,
         title: event.title,
         url: Platform.OS === "ios" ? url : undefined,
       });
     } catch (err: unknown) {
-      Alert.alert("Share", (err as Error)?.message ?? "Could not share.");
-    }
-  };
-
-  const saveToPlanner = async () => {
-    if (!event) return;
-
-    const uid = await loadAuth();
-    if (!uid) {
-      Alert.alert("Planner", "Please sign in.");
-      return;
-    }
-
-    try {
-      setSavingPlanner(true);
-
-      // Requires table events_planner_items + RLS
-      const { error } = await supabase.from("events_planner_items").upsert(
-        { user_id: uid, event_id: event.id },
-        { onConflict: "user_id,event_id" }
-      );
-
-      if (error) {
-        Alert.alert("Planner", "Couldn’t save yet. Add events_planner_items table + RLS.");
-        return;
-      }
-
-      Alert.alert("Saved", "Added to your events planner.");
-      router.push("/(modes)/events/planner");
-    } finally {
-      setSavingPlanner(false);
+      void err;
+      Alert.alert(t("eventDetails.shareFailedTitle"), t("eventDetails.shareFailed"));
     }
   };
 
   const hostHint = useMemo(() => {
     if (!event) return "";
-    if (isHost) return "You are the host of this event.";
+    if (isHost) return t("eventDetails.youAreHost");
     return "";
-  }, [event, isHost]);
+  }, [event, isHost, t]);
 
   /** "Plan your evening around this event" — only for signed-in users and events that haven't passed. */
   const planHint = useMemo(() => {
@@ -368,11 +342,13 @@ export default function EventDetails() {
           onPress={() => router.back()}
           style={styles.backBtn}
           activeOpacity={0.9}
+          accessibilityRole="button"
+          accessibilityLabel={t("common.goBackA11y")}
         >
           <Text style={{ color: theme.colors.textPrimary, fontWeight: "900" }}>‹</Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>Event</Text>
+        <Text style={styles.title}>{t("eventDetails.title")}</Text>
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           {event && (
@@ -380,7 +356,7 @@ export default function EventDetails() {
               onPress={() => { Haptics.selectionAsync(); setReminderModalVisible(true); }}
               style={styles.headerIconBtn}
               activeOpacity={0.9}
-              accessibilityLabel="Set reminders"
+              accessibilityLabel={t("events.setReminders")}
             >
               <Ionicons name="notifications-outline" size={22} color={theme.colors.primary} />
             </TouchableOpacity>
@@ -390,7 +366,7 @@ export default function EventDetails() {
             style={styles.pill}
             activeOpacity={0.9}
           >
-            <Text style={{ color: theme.colors.textPrimary, fontWeight: "800" }}>Discover</Text>
+            <Text style={{ color: theme.colors.textPrimary, fontWeight: "800" }}>{t("eventDetails.discover")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -399,13 +375,13 @@ export default function EventDetails() {
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color={theme.modeAccent("events").primary} />
-            <Text style={{ marginTop: 10, color: theme.colors.textSecondary }}>Loading event…</Text>
+            <Text style={{ marginTop: 10, color: theme.colors.textSecondary }}>{t("eventDetails.loading")}</Text>
           </View>
         ) : !event ? (
           <View style={styles.empty}>
-            <Text style={{ color: theme.colors.textPrimary, fontWeight: "900" }}>Event not found</Text>
+            <Text style={{ color: theme.colors.textPrimary, fontWeight: "900" }}>{t("eventDetails.notFoundTitle")}</Text>
             <Text style={{ color: theme.colors.textSecondary, marginTop: 6, lineHeight: 18 }}>
-              This usually means the `events` table isn’t ready yet or the event id is invalid.
+              {t("eventDetails.notFoundBody")}
             </Text>
 
             <TouchableOpacity
@@ -413,7 +389,7 @@ export default function EventDetails() {
               style={styles.cta}
               activeOpacity={0.9}
             >
-              <Text style={{ color: theme.colors.onPrimary, fontWeight: "900" }}>Back to Events</Text>
+              <Text style={{ color: theme.colors.onPrimary, fontWeight: "900" }}>{t("eventDetails.backToEvents")}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -427,7 +403,7 @@ export default function EventDetails() {
                     {event.ends_at ? ` – ${formatDateTime(event.ends_at)}` : ""}
                   </Text>
                   <Text style={{ color: theme.colors.textSecondary, marginTop: 6 }}>
-                    {event.city ? fmtLoc(event.city) : "City"}
+                    {event.city ? fmtLoc(event.city) : ""}
                     {event.venue_name ? ` · ${event.venue_name}` : ""}
                   </Text>
 
@@ -437,17 +413,19 @@ export default function EventDetails() {
                 <View style={{ alignItems: "flex-end" }}>
                   <View style={styles.badge}>
                     <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
-                      {event.visibility ?? "public"}
+                      {event.visibility === "private" ? t("eventDetails.private") : t("eventDetails.public")}
                     </Text>
                   </View>
                   <View style={[styles.badge, { marginTop: 8 }]}>
                     <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
-                      {event.price_eur != null ? `€${event.price_eur}` : "Free"}
+                      {event.price_eur != null
+                        ? formatAppNumber(event.price_eur, { style: "currency", currency: "EUR", maximumFractionDigits: 2 })
+                        : t("catalog.free")}
                     </Text>
                   </View>
                   {!!event.capacity && (
                     <View style={[styles.badge, { marginTop: 8 }]}>
-                      <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>{event.capacity} spots</Text>
+                      <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>{t("eventDetails.spots", { count: event.capacity })}</Text>
                     </View>
                   )}
                 </View>
@@ -456,7 +434,7 @@ export default function EventDetails() {
               <View style={{ flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
                 <View style={styles.badge}>
                   <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>
-                    {event.category ?? "Event"}
+                    {event.category ?? t("eventDetails.title")}
                   </Text>
                 </View>
 
@@ -494,7 +472,7 @@ export default function EventDetails() {
               {participants.length > 0 && (
                 <View style={{ marginTop: 20 }}>
                   <Text style={{ color: theme.colors.textPrimary, fontWeight: "900", marginBottom: 12 }}>
-                    Who&apos;s joining
+                    {t("planner.whosJoining")}
                   </Text>
                   {participants.map((p) => (
                     <EventParticipantCard
@@ -509,9 +487,17 @@ export default function EventDetails() {
               {/* Status + Actions */}
               <View style={{ marginTop: 16 }}>
                 <Text style={{ color: theme.colors.textSecondary, fontWeight: "700" }}>
-                  Your status:{" "}
+                  {t("eventDetails.yourStatus")}{" "}
                   <Text style={{ color: theme.colors.textPrimary, fontWeight: "900" }}>
-                    {userId ? (status ?? "not joined") : "sign in required"}
+                    {!userId
+                      ? t("eventDetails.statusSignIn")
+                      : status === "going"
+                        ? t("eventDetails.statusGoing")
+                        : status === "interested"
+                          ? t("eventDetails.statusInterested")
+                          : status === "not_going"
+                            ? t("eventDetails.statusNotGoing")
+                            : t("eventDetails.statusNone")}
                   </Text>
                 </Text>
 
@@ -529,7 +515,7 @@ export default function EventDetails() {
                       <ActivityIndicator size="large" color={theme.modeAccent("events").primary} />
                     ) : (
                       <Text style={{ color: theme.colors.onPrimary, fontWeight: "900" }}>
-                        {status === "going" ? "Going ✓" : "Join"}
+                        {status === "going" ? t("eventDetails.goingDone") : t("events.join")}
                       </Text>
                     )}
                   </TouchableOpacity>
@@ -547,7 +533,7 @@ export default function EventDetails() {
                       <ActivityIndicator size="large" color={theme.modeAccent("events").primary} />
                     ) : (
                       <Text style={{ color: theme.colors.textPrimary, fontWeight: "900" }}>
-                        {status === "interested" ? "Following ✓" : "Follow"}
+                        {status === "interested" ? t("eventDetails.interestedDone") : t("eventDetails.interested")}
                       </Text>
                     )}
                   </TouchableOpacity>
@@ -561,7 +547,7 @@ export default function EventDetails() {
                     activeOpacity={0.9}
                   >
                     <Ionicons name="share-outline" size={18} color={theme.colors.textPrimary} />
-                    <Text style={{ color: theme.colors.textPrimary, fontWeight: "900" }}>Share</Text>
+                    <Text style={{ color: theme.colors.textPrimary, fontWeight: "900" }}>{t("events.share")}</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -576,7 +562,7 @@ export default function EventDetails() {
                     activeOpacity={0.9}
                   >
                     <Text style={{ color: theme.colors.textSecondary, fontWeight: "900" }}>
-                      {status === "not_going" ? "Not going ✓" : "Not going"}
+                      {status === "not_going" ? t("eventDetails.notGoingDone") : t("eventDetails.notGoing")}
                     </Text>
                   </TouchableOpacity>
 
@@ -592,50 +578,15 @@ export default function EventDetails() {
                     {statusLoading && status === null ? (
                       <ActivityIndicator size="large" color={theme.modeAccent("events").primary} />
                     ) : (
-                      <Text style={{ color: theme.colors.textSecondary, fontWeight: "900" }}>Leave</Text>
+                      <Text style={{ color: theme.colors.textSecondary, fontWeight: "900" }}>{t("eventDetails.leave")}</Text>
                     )}
                   </TouchableOpacity>
                 </View>
 
-                <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
-                  <TouchableOpacity
-                    onPress={saveToPlanner}
-                    disabled={savingPlanner || !userId}
-                    style={[
-                      styles.secondaryBtn,
-                      { opacity: savingPlanner || !userId ? 0.6 : 1 },
-                    ]}
-                    activeOpacity={0.9}
-                  >
-                    {savingPlanner ? (
-                      <ActivityIndicator size="large" color={theme.modeAccent("events").primary} />
-                    ) : (
-                      <Text style={{ color: theme.colors.textPrimary, fontWeight: "900" }}>Save to Planner</Text>
-                    )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={refresh}
-                    style={styles.secondaryBtn}
-                    activeOpacity={0.9}
-                  >
-                    <Text style={{ color: theme.colors.textPrimary, fontWeight: "900" }}>Refresh</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <Text style={{ color: theme.colors.textSecondary, marginTop: 10, lineHeight: 18 }}>
-                  Group chat: only for public events when the host turned it on. You get access when you join or mark interested.
+                <Text style={{ color: theme.colors.textSecondary, marginTop: 12, lineHeight: 18 }}>
+                  {t("eventDetails.joinHint")}
                 </Text>
               </View>
-            </View>
-
-            <View style={styles.block}>
-              <Text style={{ color: theme.colors.textPrimary, fontWeight: "900" }}>Notes</Text>
-              <Text style={{ color: theme.colors.textSecondary, marginTop: 6, lineHeight: 18 }}>
-                • Event group chats exist only for public events (Events mode) when the host enabled &quot;Allow a group chat&quot;.{"\n"}
-                • Dates/meetings/meetups from Romance/Friends/Business chat use the original chat; no duplicate event chat.{"\n"}
-                • Join/Interested uses RPC `join_event()`; chat membership is synced via triggers.
-              </Text>
             </View>
 
             {event && (

@@ -18,11 +18,14 @@ export async function getPlannerItems(
 ) {
   const { data: parts, error: partsError } = await supabase
     .from("planner_participants")
-    .select("planner_item_id")
+    .select("planner_item_id, cancelled_at")
     .eq("user_id", userId)
     .in("role", ["owner", "attendee"]);
   if (partsError) return [];
-  const ids = Array.from(new Set((parts ?? []).map((p: { planner_item_id: string }) => p.planner_item_id)));
+  const myRows = (parts ?? []) as { planner_item_id: string; cancelled_at: string | null }[];
+  // When I dropped out ("can't make it") the plan goes on for the others but is off for me.
+  const myCancelledAt = new Map(myRows.map((p) => [p.planner_item_id, p.cancelled_at]));
+  const ids = Array.from(new Set(myRows.map((p) => p.planner_item_id)));
   if (ids.length === 0) return [];
 
   let query = supabase
@@ -38,7 +41,19 @@ export async function getPlannerItems(
 
   const { data, error } = await query;
   if (error) return [];
-  return data ?? [];
+  return ((data ?? []) as Record<string, unknown>[]).map((row): Record<string, unknown> => ({
+    ...row,
+    my_cancelled_at: myCancelledAt.get(String(row.id)) ?? null,
+  }));
+}
+
+/**
+ * A plan that no longer takes the user's time: cancelled by the organiser, or the user said
+ * "can't make it". Rows come from getPlannerItems (which adds my_cancelled_at).
+ */
+export function isPlanOff(row: { meta?: unknown; my_cancelled_at?: unknown }): boolean {
+  const meta = row.meta && typeof row.meta === "object" ? (row.meta as Record<string, unknown>) : null;
+  return !!meta?.cancelled_at || !!row.my_cancelled_at;
 }
 
 export type GroupMeetup = {

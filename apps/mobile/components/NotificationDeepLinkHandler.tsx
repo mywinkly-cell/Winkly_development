@@ -22,6 +22,11 @@ function routeForNotification(data: Record<string, unknown>): string | null {
   if (kind === "planner_invitation" || kind === "planner_response" || kind === "plan_confirmed") {
     return Routes.plannerInvitations;
   }
+  // A plan was cancelled / moved, or weather / traffic affects it: open it in the Planner.
+  if (kind === "plan_change" || kind === "plan_alert") {
+    const itemId = str(data.planner_item_id);
+    return itemId ? `${Routes.planner}?focus_planner_item_id=${encodeURIComponent(itemId)}` : Routes.planner;
+  }
   // Fallback: any payload that names a conversation opens that thread.
   if (conversationId) return Routes.chatById(conversationId);
   if (chatId) return Routes.chatById(chatId);

@@ -28,6 +28,8 @@ export type PlanCardAction = {
 };
 
 type PlanCardProps = {
+  /** Photo of the venue/event shown on top of the card (e.g. `<VenuePhoto />`) — see what it looks like at a glance. */
+  media?: React.ReactNode;
   /** Tap target covering the title + metadata region — opens plan details. Omit for a non-tappable card. */
   onPress?: () => void;
   /** Left accent stripe. Defaults to the theme primary. */
@@ -51,6 +53,7 @@ type PlanCardProps = {
 };
 
 export function PlanCard({
+  media,
   onPress,
   accentColor,
   badges,
@@ -68,6 +71,20 @@ export function PlanCard({
 
   const header = (
     <>
+      {media ? (
+        <View
+          style={{
+            height: 150,
+            marginTop: -theme.spacing.lg,
+            marginHorizontal: -theme.spacing.lg,
+            marginBottom: theme.spacing.md,
+            overflow: "hidden",
+            borderTopRightRadius: theme.radii.lg,
+          }}
+        >
+          {media}
+        </View>
+      ) : null}
       {badges ? (
         <View
           style={{

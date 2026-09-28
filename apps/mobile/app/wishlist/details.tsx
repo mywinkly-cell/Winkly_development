@@ -1,216 +1,261 @@
 // apps/mobile/app/wishlist/details.tsx
-// Winkly – Wishlist: Details (MVP-safe)
-// Route expects params: id
+// A saved place: photo, where it is, where you found it, who it's shared with — and
+// "Plan a visit", which opens the new-plan form (just me / date / meetup…).
 
-import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Linking, ActivityIndicator } from "react-native";
+import { SharePeopleSheet } from "@/components/wishlist/SharePeopleSheet";
+import { View, Text, Pressable, Alert, Linking, ActivityIndicator, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useAppTheme, type AppTheme } from "@/constants/design-system";
-import { deleteWishlistItem, getWishlistItem, WishlistItem } from "@/lib/wishlistStore";
+import { useTranslation } from "react-i18next";
+import { Header, Screen, PrimaryButton, SecondaryButton, TextButton, Chip, Card } from "@/components/ds";
+import { useAppTheme } from "@/constants/design-system";
+import { VenuePhoto } from "@/components/ui/VenuePhoto";
+import { SHARE_MODE_LABEL_KEYS } from "@/components/wishlist/WishlistForm";
+import { useModeContext } from "@/providers/ModeContextProvider";
+import { newPlanHref } from "@/lib/planner/newPlan";
+import { formatAppDate, useAppLocaleTag } from "@/lib/i18n/appLocale";
+import {
+  deleteWishlistItem,
+  getWishlistItem,
+  getWishlistViewers,
+  markWishlistItemVisited,
+  updateWishlistItem,
+  SHAREABLE_MODES,
+  type ShareableMode,
+  type WishlistItem,
+} from "@/lib/wishlistStore";
 
 export default function WishlistDetails() {
   const router = useRouter();
   const theme = useAppTheme();
-  const styles = createStyles(theme);
+  const { t } = useTranslation();
+  const locale = useAppLocaleTag();
+  const { context } = useModeContext();
   const { id } = useLocalSearchParams<{ id: string }>();
-
   const [item, setItem] = useState<WishlistItem | null>(null);
-
   const [loading, setLoading] = useState(true);
-
-  const refresh = useCallback(async () => {
-    try {
-      setLoading(true);
-      const found = await getWishlistItem(String(id));
-      setItem(found);
-    } catch {
-      setItem(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
+  const [viewerCount, setViewerCount] = useState(0);
+  const [peopleOpen, setPeopleOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      void refresh();
-    }, [refresh])
+      let cancelled = false;
+      void getWishlistItem(String(id))
+        .then((found) => {
+          if (!cancelled) setItem(found);
+        })
+        .then(() => getWishlistViewers(String(id)))
+        .then((ids) => {
+          if (!cancelled) setViewerCount(ids.length);
+        })
+        .catch(() => {
+          if (!cancelled) setItem(null);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [id])
   );
-
-  const onDelete = () => {
-    Alert.alert("Delete item?", "This cannot be undone.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => {
-          void (async () => {
-            try {
-              await deleteWishlistItem(String(id));
-              router.replace("/wishlist");
-            } catch (err: unknown) {
-              const message = err instanceof Error ? err.message : "Could not delete item.";
-              Alert.alert("Error", message);
-            }
-          })();
-        },
-      },
-    ]);
-  };
-
-  const openLink = async () => {
-    const url = item?.url?.trim();
-    if (!url) return;
-
-    const safe = url.startsWith("http://") || url.startsWith("https://") ? url : `https://${url}`;
-    const can = await Linking.canOpenURL(safe);
-    if (!can) {
-      Alert.alert("Invalid link", "This link cannot be opened.");
-      return;
-    }
-    Linking.openURL(safe);
-  };
 
   if (loading) {
     return (
-      <View style={[styles.screen, { alignItems: "center", justifyContent: "center" }]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        <Header onBack title={t("wishlist.title")} />
+        <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginTop: theme.spacing.xxl }} />
       </View>
     );
   }
 
   if (!item) {
     return (
-      <View style={styles.screen}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <View style={styles.headerRow}>
-            <TouchableOpacity onPress={() => router.replace("/wishlist")} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
-              <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Details</Text>
-            <View style={{ width: 70 }} />
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.title}>Item not found</Text>
-            <Text style={styles.subtitle}>It may have been deleted.</Text>
-            <TouchableOpacity onPress={() => router.replace("/wishlist")} style={styles.primaryBtn} activeOpacity={0.9}>
-              <Text style={styles.primaryText}>Go to wishlist</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        <Header onBack title={t("wishlist.title")} />
+        <Text style={[theme.type.body, { color: theme.colors.textSecondary, padding: theme.spacing.xl }]}>
+          {t("wishlist.notFound")}
+        </Text>
       </View>
     );
   }
 
+  const where = [item.address, item.city].filter(Boolean).join(", ");
+  const link = item.sourceUrl ?? item.url;
+  const shareable = SHAREABLE_MODES.filter((m) => context.permissions.includes(m));
+
+  const toggleShare = async (m: ShareableMode) => {
+    const next = item.sharedModes.includes(m) ? item.sharedModes.filter((x) => x !== m) : [...item.sharedModes, m];
+    setItem({ ...item, sharedModes: next });
+    try {
+      await updateWishlistItem(item.id, { sharedModes: next });
+    } catch {
+      setItem(item);
+      Alert.alert(t("catalog.saveFailedTitle"), t("catalog.saveFailed"));
+    }
+  };
+
+  const toggleVisited = async () => {
+    try {
+      const updated = await markWishlistItemVisited(item.id, !item.visitedAt);
+      if (updated) setItem(updated);
+    } catch {
+      Alert.alert(t("catalog.saveFailedTitle"), t("catalog.saveFailed"));
+    }
+  };
+
+  const confirmDelete = () => {
+    Alert.alert(t("wishlist.deleteTitle"), t("wishlist.deleteBody", { place: item.title }), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("common.delete"),
+        style: "destructive",
+        onPress: () => {
+          void deleteWishlistItem(item.id)
+            .then(() => router.back())
+            .catch(() => Alert.alert(t("catalog.saveFailedTitle"), t("catalog.saveFailed")));
+        },
+      },
+    ]);
+  };
+
+  const planVisit = () =>
+    router.push(
+      newPlanHref({
+        title: item.title,
+        location: where || item.title,
+        imageUrl: item.imageUrl ?? null,
+        placeId: item.placeId ?? null,
+        wishlistId: item.id,
+        source: "wishlist",
+      })
+    );
+
   return (
-    <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.9} accessibilityLabel="Back">
-            <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Details</Text>
-          <TouchableOpacity
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <Header
+        onBack
+        title={t("wishlist.title")}
+        trailing={
+          <Pressable
             onPress={() => router.push({ pathname: "/wishlist/edit", params: { id: item.id } })}
-            style={styles.addBtn}
-            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel={t("wishlist.edit")}
+            hitSlop={8}
           >
-            <Text style={styles.addText}>Edit</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.title}>{item.title}</Text>
-
-          {!!item.price && <Text style={styles.price}>{item.price}</Text>}
-
-          {!!item.description && (
-            <>
-              <Text style={styles.sectionTitle}>Notes</Text>
-              <Text style={styles.body}>{item.description}</Text>
-            </>
-          )}
-
-          {!!item.url && (
-            <>
-              <Text style={styles.sectionTitle}>Link</Text>
-              <TouchableOpacity onPress={openLink} activeOpacity={0.85}>
-                <Text style={styles.link}>{item.url}</Text>
-              </TouchableOpacity>
-            </>
-          )}
-
-          <View style={styles.hr} />
-
-          <Text style={styles.meta}>
-            Created {new Date(item.createdAt).toLocaleDateString()} • Updated{" "}
-            {new Date(item.updatedAt).toLocaleDateString()}
+            <Ionicons name="create-outline" size={22} color={theme.colors.textPrimary} />
+          </Pressable>
+        }
+      />
+      <Screen>
+        <VenuePhoto
+          source={{
+            imageUrl: item.imageUrl,
+            placeId: item.placeId,
+            name: item.title,
+            city: item.city,
+            latitude: item.latitude,
+            longitude: item.longitude,
+          }}
+          style={[styles.photo, { borderRadius: theme.radii.lg }]}
+          icon="bookmark-outline"
+          showAttribution
+        />
+        <Text style={[theme.type.h2, { color: theme.colors.textPrimary, fontFamily: theme.type.h2.fontFamily, marginTop: theme.spacing.lg }]}>
+          {item.title}
+        </Text>
+        {item.visitedAt ? (
+          <Text style={[theme.type.caption, { color: theme.colors.success, marginTop: theme.spacing.xs }]}>
+            {t("wishlist.visitedOn", { date: formatAppDate(new Date(item.visitedAt), undefined, locale) })}
           </Text>
+        ) : null}
 
-          <TouchableOpacity onPress={onDelete} style={styles.dangerBtn} activeOpacity={0.9}>
-            <Text style={styles.dangerText}>Delete item</Text>
-          </TouchableOpacity>
+        {where ? (
+          <Pressable
+            style={styles.row}
+            onPress={() =>
+              void Linking.openURL(
+                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([item.title, where].join(", "))}`
+              )
+            }
+            accessibilityRole="link"
+            accessibilityLabel={t("catalog.openMapsA11y", { place: where })}
+          >
+            <Ionicons name="location-outline" size={18} color={theme.colors.primary} />
+            <Text style={[theme.type.body, { color: theme.colors.primary, flex: 1 }]}>{where}</Text>
+          </Pressable>
+        ) : null}
+        {item.price ? (
+          <View style={styles.row}>
+            <Ionicons name="cash-outline" size={18} color={theme.colors.textSecondary} />
+            <Text style={[theme.type.body, { color: theme.colors.textSecondary }]}>{item.price}</Text>
+          </View>
+        ) : null}
+        {link ? (
+          <Pressable style={styles.row} onPress={() => void Linking.openURL(link)} accessibilityRole="link">
+            <Ionicons name="link-outline" size={18} color={theme.colors.primary} />
+            <Text style={[theme.type.body, { color: theme.colors.primary, flex: 1 }]} numberOfLines={1}>
+              {t("wishlist.openSource")}
+            </Text>
+          </Pressable>
+        ) : null}
+        {item.description ? (
+          <Text style={[theme.type.body, { color: theme.colors.textPrimary, marginTop: theme.spacing.md, lineHeight: 22 }]}>
+            {item.description}
+          </Text>
+        ) : null}
+
+        {shareable.length > 0 ? (
+          <Card padding="md" style={{ marginTop: theme.spacing.xl }}>
+            <Text style={[theme.type.bodyMedium, { color: theme.colors.textPrimary, marginBottom: theme.spacing.sm }]}>
+              {t("wishlist.shareLabel")}
+            </Text>
+            <View style={styles.chips}>
+              {shareable.map((m) => (
+                <Chip
+                  key={m}
+                  label={t(SHARE_MODE_LABEL_KEYS[m])}
+                  selected={item.sharedModes.includes(m)}
+                  onPress={() => void toggleShare(m)}
+                />
+              ))}
+            </View>
+            <Text style={[theme.type.caption, { color: theme.colors.textMuted, marginTop: theme.spacing.sm }]}>
+              {item.sharedModes.length || viewerCount ? t("wishlist.shareHintOn") : t("wishlist.shareHintOff")}
+            </Text>
+            <View style={[styles.row, { justifyContent: "space-between" }]}>
+              <Text style={[theme.type.body, { color: theme.colors.textPrimary, flex: 1 }]}>
+                {viewerCount ? t("wishlist.peopleCount", { count: viewerCount }) : t("wishlist.peopleNone")}
+              </Text>
+              <TextButton title={t("wishlist.peopleChoose")} onPress={() => setPeopleOpen(true)} />
+            </View>
+          </Card>
+        ) : null}
+        <SharePeopleSheet
+          visible={peopleOpen}
+          itemId={item.id}
+          onClose={(n) => {
+            setPeopleOpen(false);
+            if (typeof n === "number") setViewerCount(n);
+          }}
+        />
+
+        <View style={{ gap: theme.spacing.sm, marginTop: theme.spacing.xl }}>
+          <PrimaryButton title={t("wishlist.planVisit")} onPress={planVisit} />
+          <SecondaryButton
+            title={item.visitedAt ? t("wishlist.markNotVisited") : t("wishlist.markVisited")}
+            onPress={() => void toggleVisited()}
+          />
+          <SecondaryButton title={t("common.delete")} onPress={confirmDelete} />
         </View>
-
-      </ScrollView>
+      </Screen>
     </View>
   );
 }
 
-function createStyles(theme: AppTheme) {
-  return StyleSheet.create({
-    screen: { flex: 1, backgroundColor: theme.colors.background },
-    scroll: { padding: 20, paddingBottom: 40 },
-
-    headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-    backBtn: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: theme.colors.backgroundMuted,
-      alignItems: "center",
-      justifyContent: "center",
-      ...theme.elevation(1),
-    },
-    headerTitle: { ...theme.type.h2, color: theme.colors.textPrimary },
-    addBtn: { width: 70, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.colors.primary, alignItems: "center" },
-    addText: { ...theme.type.caption, color: theme.colors.onPrimary },
-
-    card: { backgroundColor: theme.colors.surface, borderRadius: theme.radii.lg, borderWidth: 1, borderColor: theme.colors.border, padding: 16 },
-    title: { ...theme.type.h2, color: theme.colors.textPrimary, marginBottom: 8 },
-    price: { ...theme.type.h3, color: theme.colors.primary, marginBottom: 12 },
-
-    sectionTitle: { ...theme.type.h3, color: theme.colors.textPrimary, marginBottom: 8, marginTop: 6 },
-    body: { ...theme.type.body, color: theme.colors.textSecondary },
-
-    link: { ...theme.type.body, color: theme.colors.primary, textDecorationLine: "underline" },
-
-    hr: { height: 1, backgroundColor: theme.colors.border, marginVertical: 14 },
-    meta: { ...theme.type.caption, color: theme.colors.textSecondary },
-
-    dangerBtn: {
-      marginTop: 14,
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.radii.md,
-      paddingVertical: 12,
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: theme.colors.errorBorder,
-    },
-    dangerText: { ...theme.type.button, color: theme.colors.error },
-
-    primaryBtn: {
-      marginTop: 14,
-      backgroundColor: theme.colors.primary,
-      borderRadius: theme.radii.md,
-      paddingVertical: 12,
-      alignItems: "center",
-    },
-    primaryText: { ...theme.type.button, color: theme.colors.onPrimary },
-
-    subtitle: { ...theme.type.body, color: theme.colors.textSecondary, marginTop: 6 },
-
-    note: { ...theme.type.caption, color: theme.colors.textSecondary, textAlign: "center", marginTop: 12 },
-  });
-}
+const styles = StyleSheet.create({
+  photo: { width: "100%", height: 220, marginTop: 16 },
+  row: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+});

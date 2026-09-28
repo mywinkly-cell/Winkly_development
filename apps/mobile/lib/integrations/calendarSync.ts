@@ -5,7 +5,12 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
-import { createEvent, getCalendarPermissionStatus, getWritableDefaultCalendarId } from "@/lib/integrations/calendar";
+import {
+  createEvent,
+  deleteEvent,
+  getCalendarPermissionStatus,
+  getWritableDefaultCalendarId,
+} from "@/lib/integrations/calendar";
 
 export const CALENDAR_SYNC_STORAGE_KEY = "winkly_planner_calendar_sync_enabled";
 
@@ -83,13 +88,91 @@ export async function syncPlannerItemToDeviceCalendar(input: PlannerCalendarEven
       location: input.location ?? undefined,
     });
 
+    // Remember which version of the plan the phone has, so a later reschedule is noticed.
+    const { data: rev } = await supabase
+      .from("planner_items")
+      .select("revision")
+      .eq("id", input.plannerItemId)
+      .maybeSingle();
     await supabase
       .from("planner_participants")
-      .update({ device_calendar_event_id: eventId })
+      .update({
+        device_calendar_event_id: eventId,
+        device_calendar_revision: (rev as { revision?: number } | null)?.revision ?? 0,
+      })
       .eq("planner_item_id", input.plannerItemId)
       .eq("user_id", input.userId);
   } catch {
     // Best-effort — a calendar write failure must never block the planner flow.
+  }
+}
+
+function planLocation(meta: Record<string, unknown> | null): string | null {
+  return (
+    (typeof meta?.location === "string" && meta.location) ||
+    (typeof meta?.place === "string" && meta.place) ||
+    (typeof meta?.venue_name === "string" && meta.venue_name) ||
+    null
+  );
+}
+
+/**
+ * Keep the phone's calendar in step with changes other people made (or made on another
+ * phone): a plan that was moved is re-written at its new time; a plan that was cancelled —
+ * or that the user dropped out of — is taken off. Runs on Planner load. Only touches events
+ * Winkly wrote itself (device_calendar_event_id).
+ */
+export async function reconcileDeviceCalendar(userId: string): Promise<void> {
+  try {
+    if ((await getCalendarPermissionStatus()) !== "granted") return;
+    const { data: parts } = await supabase
+      .from("planner_participants")
+      .select("planner_item_id, device_calendar_event_id, device_calendar_revision, cancelled_at")
+      .eq("user_id", userId)
+      .not("device_calendar_event_id", "is", null);
+    const rows = (parts ?? []) as {
+      planner_item_id: string;
+      device_calendar_event_id: string;
+      device_calendar_revision: number | null;
+      cancelled_at: string | null;
+    }[];
+    if (!rows.length) return;
+    const { data: items } = await supabase
+      .from("planner_items")
+      .select("id, title, description, starts_at, ends_at, meta, revision")
+      .in("id", rows.map((r) => r.planner_item_id));
+    const byId = new Map(
+      ((items ?? []) as {
+        id: string; title: string; description: string | null; starts_at: string; ends_at: string | null;
+        meta: Record<string, unknown> | null; revision: number | null;
+      }[]).map((i) => [i.id, i])
+    );
+
+    for (const r of rows) {
+      const item = byId.get(r.planner_item_id);
+      const off = !item || !!r.cancelled_at || !!item.meta?.cancelled_at;
+      const moved = !!item && (item.revision ?? 0) > (r.device_calendar_revision ?? 0);
+      if (!off && !moved) continue;
+      await deleteEvent(r.device_calendar_event_id).catch(() => undefined);
+      await supabase
+        .from("planner_participants")
+        .update({ device_calendar_event_id: null })
+        .eq("planner_item_id", r.planner_item_id)
+        .eq("user_id", userId);
+      if (off || !item || Date.parse(item.starts_at) < Date.now()) continue;
+      // Moved: write it again at the new time (a fresh event also brings fresh reminders).
+      await syncPlannerItemToDeviceCalendar({
+        plannerItemId: item.id,
+        userId,
+        title: item.title,
+        description: item.description,
+        location: planLocation(item.meta),
+        startsAt: item.starts_at,
+        endsAt: item.ends_at,
+      });
+    }
+  } catch {
+    // best-effort
   }
 }
 
@@ -107,6 +190,7 @@ export async function backfillPlannerItemsToDeviceCalendar(userId: string): Prom
       .select("planner_item_id")
       .eq("user_id", userId)
       .in("role", ["owner", "attendee"])
+      .is("cancelled_at", null)
       .is("device_calendar_event_id", null);
     const ids = Array.from(new Set((parts ?? []).map((p) => p.planner_item_id)));
     if (ids.length === 0) return;
@@ -120,11 +204,8 @@ export async function backfillPlannerItemsToDeviceCalendar(userId: string): Prom
 
     for (const item of items) {
       const meta = (item.meta ?? null) as Record<string, unknown> | null;
-      const location =
-        (typeof meta?.location === "string" && meta.location) ||
-        (typeof meta?.place === "string" && meta.place) ||
-        (typeof meta?.venue_name === "string" && meta.venue_name) ||
-        null;
+      if (meta?.cancelled_at) continue; // cancelled plans stay off the calendar
+      const location = planLocation(meta);
 
       await syncPlannerItemToDeviceCalendar({
         plannerItemId: item.id,

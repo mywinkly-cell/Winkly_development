@@ -17,6 +17,8 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Image,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "@/lib/useSafeAreaInsets";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -76,6 +78,10 @@ import {
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
 import { SurpriseMeButton, useOpenSurprise } from "@/components/ai/SurpriseMeButton";
 import { WeatherPivotBanner } from "@/components/planner/WeatherPivotBanner";
+import { ReschedulePlanSheet, type ReschedulePlan } from "@/components/planner/ReschedulePlanSheet";
+import { PlanAlertsBanner } from "@/components/planner/PlanAlertsBanner";
+import { PlanChangeHistory } from "@/components/planner/PlanChangeHistory";
+import { updatePlan } from "@/lib/planner/planChanges";
 import { PlanRatingSection } from "@/components/planner/PlanRatingSection";
 import { EventParticipantCard } from "@/components/ui/EventParticipantCard";
 import { PlannerHeader } from "@/components/layout/PlannerHeader";
@@ -89,6 +95,13 @@ import { PlanItBar, type PlanItBarHandle } from "@/components/ai/PlanItBar";
 import { PLAN_IT_ENTRY_ENABLED } from "@/config/flags";
 import { useModeContext } from "@/providers/ModeContextProvider";
 import { isModeAvailable } from "@/lib/modes/availability";
+import { VenuePhoto } from "@/components/ui/VenuePhoto";
+import { hasPlacePhotoSource, type PlacePhotoSource } from "@/lib/places/placePhoto";
+import { newPlanHref } from "@/lib/planner/newPlan";
+import {
+  addPlanToMyCalendars,
+  syncMissingPlansToThisPhone,
+} from "@/lib/integrations/plannerCalendars";
 
 type TabKey = "all" | "dates" | "meetups" | "business" | "events" | "archive";
 type TimeRange =
@@ -134,7 +147,29 @@ type PlannerItem = {
   fromConcierge?: boolean;
   aiRequestId?: string;
   recommendationFeedback?: PlanRecommendationRating | null;
+  /** Where the venue photo comes from (saved image, Google place id, or venue name). */
+  photo?: PlacePhotoSource;
+  startsAtIso?: string;
+  endsAtIso?: string | null;
+  /** Someone else is in this plan (a date / meetup) — changes are announced to them. */
+  hasOthers?: boolean;
+  /** I said "can't make it"; the plan goes on for the others. */
+  droppedOut?: boolean;
+  /** Why it was cancelled (by me or the organiser). */
+  cancelReason?: string;
 };
+
+/** Photo source for a planner item from its meta (event poster, place id, venue/location text). */
+function plannerItemPhoto(meta: Record<string, unknown> | null, location?: string): PlacePhotoSource | undefined {
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const venue = meta && typeof meta.venue === "object" && meta.venue ? (meta.venue as Record<string, unknown>) : null;
+  const src: PlacePhotoSource = {
+    imageUrl: str(meta?.image_url),
+    placeId: str(meta?.place_id) ?? str(venue?.place_id),
+    name: str(meta?.venue_name) ?? str(venue?.name) ?? str(meta?.place) ?? location ?? null,
+  };
+  return hasPlacePhotoSource(src) ? src : undefined;
+}
 
 const AVATAR_SIZE = 40;
 /** Icon display sizes on list cards (44px button). Cancel = baseline; Confirm/Reschedule larger if assets have more padding. */
@@ -436,7 +471,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   const sparkParams = useLocalSearchParams<{ spark?: string; focus_planner_item_id?: string }>();
   const focusSpark = sparkParams[WEEKLY_SPARK_FOCUS_PARAM] === WEEKLY_SPARK_FOCUS_VALUE;
   const focusPlannerItemId = sparkParams.focus_planner_item_id;
-  const focusPlannerItemHandledRef = useRef(false);
+  const focusPlannerItemHandledRef = useRef<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   /** Bumped when Sparks are force-shown so a stale focus-effect can't re-hide them. */
   const sparkRevealGenRef = useRef(0);
@@ -463,6 +498,11 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [cancelCustomMessage, setCancelCustomMessage] = useState("");
   const [selectedCancelResponse, setSelectedCancelResponse] = useState<string | null>(null);
+  const [cancelSaving, setCancelSaving] = useState(false);
+  const [reschedulePlan, setReschedulePlan] = useState<ReschedulePlan | null>(null);
+  const [rescheduleReason, setRescheduleReason] = useState<string | null>(null);
+  /** Bumped per opening so the sheet starts fresh each time. */
+  const [rescheduleKey, setRescheduleKey] = useState(0);
   const [myPhotoBySource, setMyPhotoBySource] = useState<Partial<Record<TabKey, string | null>>>({});
   const [overviewMode, setOverviewMode] = useState<OverviewMode>("list");
   const [listSortOrder, setListSortOrder] = useState<"earliest" | "latest">("earliest");
@@ -525,6 +565,23 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
       const uid = auth.user?.id;
       if (!uid) return;
       const data = await getPlannerItems(uid, undefined, 200);
+      // Who else is in each plan (so changes can be announced to them). RLS shows the
+      // organiser every participant; others at least know the organiser isn't them.
+      const planIds = (data as { id: unknown }[]).map((r) => String(r.id));
+      const withOthers = new Set<string>();
+      if (planIds.length) {
+        const { data: others } = await supabase
+          .from("planner_participants")
+          .select("planner_item_id")
+          .in("planner_item_id", planIds)
+          .neq("user_id", uid)
+          .in("role", ["owner", "attendee", "invitee"])
+          .is("cancelled_at", null);
+        for (const o of (others ?? []) as { planner_item_id: string }[]) withOthers.add(o.planner_item_id);
+      }
+      // Plans that reached the Planner from elsewhere (group plan confirmed by others, invite
+      // accepted on another phone, joined event) also land on this phone's calendar.
+      syncMissingPlansToThisPhone(uid);
 
       const mapped: PlannerItem[] = (data as Record<string, unknown>[]).map((row) => {
         const d = new Date(String(row.starts_at));
@@ -556,22 +613,29 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
           description: typeof row.description === "string" && row.description ? row.description : undefined,
           location,
           isOrganiser: row.created_by === uid,
-          status: "active" as const,
+          // Cancelled plans stay in the Archive tab after a reload (meta.cancelled_at is
+          // authoritative) — as do plans I dropped out of (my participant cancelled_at).
+          status: meta?.cancelled_at || row.my_cancelled_at ? ("archived" as const) : ("active" as const),
+          ...(typeof meta?.cancelled_at === "string"
+            ? { archivedAt: meta.cancelled_at }
+            : typeof row.my_cancelled_at === "string"
+              ? { archivedAt: row.my_cancelled_at }
+              : {}),
+          droppedOut: !meta?.cancelled_at && !!row.my_cancelled_at,
+          cancelReason: typeof meta?.cancel_reason === "string" ? meta.cancel_reason : undefined,
+          startsAtIso: valid ? d.toISOString() : undefined,
+          endsAtIso: typeof row.ends_at === "string" ? row.ends_at : null,
+          hasOthers:
+            !row.related_event_id && (row.created_by !== uid || withOthers.has(String(row.id))),
           fromConcierge: meta?.from_concierge === true,
+          photo: plannerItemPhoto(meta, location),
           aiRequestId:
             meta && typeof meta.ai_request_id === "string" ? meta.ai_request_id : undefined,
         };
       });
 
-      // Keep any purely-local "archived" flag (there's no DB column for it yet) across refetches
-      // within the session, instead of letting a fresh pull silently un-archive it.
-      setItemsState((prev) => {
-        const prevById = new Map(prev.map((it) => [it.id, it]));
-        return mapped.map((it) => {
-          const old = prevById.get(it.id);
-          return old?.status === "archived" ? { ...it, status: "archived" as const, archivedAt: old.archivedAt } : it;
-        });
-      });
+      // Cancellations are stored server-side (plan-update), so the fresh pull is authoritative.
+      setItemsState(mapped);
     } catch (e) {
       console.warn("Planner: load items", e);
     }
@@ -976,10 +1040,10 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
 
   /** Land the user on the entry they just added via concierge, once it shows up in the list. */
   useEffect(() => {
-    if (!focusPlannerItemId || focusPlannerItemHandledRef.current) return;
+    if (!focusPlannerItemId || focusPlannerItemHandledRef.current === focusPlannerItemId) return;
     const match = itemsState.find((it) => it.id === focusPlannerItemId);
     if (!match) return;
-    focusPlannerItemHandledRef.current = true;
+    focusPlannerItemHandledRef.current = focusPlannerItemId;
     openDetails(match);
   }, [focusPlannerItemId, itemsState, openDetails]);
 
@@ -1031,65 +1095,130 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     setCancelModalVisible(false);
   }, []);
 
-  const archiveItem = useCallback((item: PlannerItem, _message: string) => {
+  /**
+   * Cancel (organiser: off for everyone) or "can't make it" (others: only I drop out), with the
+   * reason — via plan-update, which also updates Google / Outlook calendars and tells the
+   * others (push + a card in your chat). This phone's calendar follows right after.
+   */
+  const archiveItem = useCallback(async (item: PlannerItem, reason: string | null) => {
+    setCancelSaving(true);
+    const res = await updatePlan({ plannerItemId: item.id, action: "cancel", reason });
+    setCancelSaving(false);
+    if (!res.ok) {
+      Alert.alert(t("planChanges.failedTitle"), t("planChanges.failedBody"));
+      return;
+    }
     setItemsState((prev) =>
       prev.map((it) =>
         it.id === item.id
-          ? { ...it, status: "archived" as const, archivedAt: new Date().toISOString() }
+          ? {
+              ...it,
+              status: "archived" as const,
+              archivedAt: new Date().toISOString(),
+              droppedOut: res.kind === "cant_make_it",
+              cancelReason: reason ?? undefined,
+            }
           : it
       )
     );
-    // Persist cancellation on planner_items.meta so it's authoritative server-side — this is
-    // what keeps a cancelled plan from ever surfacing a post-plan review prompt.
-    void (async () => {
-      const { data: row } = await supabase
-        .from("planner_items")
-        .select("meta")
-        .eq("id", item.id)
-        .maybeSingle();
-      const prevMeta =
-        row?.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
-          ? (row.meta as Record<string, unknown>)
-          : {};
-      await supabase
-        .from("planner_items")
-        .update({ meta: { ...prevMeta, cancelled_at: new Date().toISOString() } })
-        .eq("id", item.id);
-    })();
     closeDetails();
     closeCancelModal();
-  }, [closeDetails, closeCancelModal]);
+    if (res.notified > 0) {
+      Alert.alert(t("planChanges.cancelledTitle"), t("planChanges.cancelledNotified", { count: res.notified }));
+    }
+  }, [closeDetails, closeCancelModal, t]);
 
   const restoreItem = useCallback((item: PlannerItem) => {
     Haptics.selectionAsync();
     setItemsState((prev) =>
       prev.map((it) =>
-        it.id === item.id ? { ...it, status: "active" as const, archivedAt: undefined } : it
+        it.id === item.id ? { ...it, status: "active" as const, archivedAt: undefined, droppedOut: false } : it
       )
     );
+    closeDetails();
     void (async () => {
-      const { data: row } = await supabase
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (!uid) return;
+      if (item.isOrganiser) {
+        // Back on for everyone: calendars + the others are told.
+        const res = await updatePlan({ plannerItemId: item.id, action: "restore" });
+        if (!res.ok) {
+          Alert.alert(t("planChanges.failedTitle"), t("planChanges.failedBody"));
+          void loadPlannerItems();
+        }
+        return;
+      }
+      // I can make it after all: rejoin and put it back on my calendars.
+      await supabase
+        .from("planner_participants")
+        .update({ cancelled_at: null, cancel_reason: null })
+        .eq("planner_item_id", item.id)
+        .eq("user_id", uid);
+      const { data: full } = await supabase
         .from("planner_items")
-        .select("meta")
+        .select("created_by, title, description, starts_at, ends_at, meta")
         .eq("id", item.id)
         .maybeSingle();
-      const prevMeta =
-        row?.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
-          ? (row.meta as Record<string, unknown>)
-          : {};
-      if (prevMeta.cancelled_at == null) return;
-      const { cancelled_at: _cancelledAt, ...rest } = prevMeta;
-      await supabase.from("planner_items").update({ meta: rest }).eq("id", item.id);
+      const f = full as {
+        created_by: string; title: string; description: string | null; starts_at: string; ends_at: string | null;
+        meta: Record<string, unknown> | null;
+      } | null;
+      if (f) {
+        addPlanToMyCalendars({
+          plannerItemId: item.id,
+          creatorId: f.created_by,
+          userId: uid,
+          title: f.title,
+          description: f.description,
+          location: typeof f.meta?.location === "string" ? f.meta.location : null,
+          startsAt: f.starts_at,
+          endsAt: f.ends_at,
+        });
+      }
     })();
-    closeDetails();
-  }, [closeDetails]);
+  }, [closeDetails, loadPlannerItems, t]);
+
+  const toReschedulePlan = useCallback((item: PlannerItem): ReschedulePlan | null => {
+    if (!item.startsAtIso) return null;
+    return {
+      id: item.id,
+      title: item.title,
+      startsAt: item.startsAtIso,
+      endsAt: item.endsAtIso ?? null,
+      isOrganiser: !!item.isOrganiser,
+      hasOthers: !!item.hasOthers,
+    };
+  }, []);
+
+  const openReschedule = useCallback((item: PlannerItem, reason?: string | null) => {
+    const plan = toReschedulePlan(item);
+    if (!plan) return;
+    Haptics.selectionAsync();
+    setDetailsModalVisible(false);
+    setRescheduleReason(reason ?? null);
+    setRescheduleKey((k) => k + 1);
+    setReschedulePlan(plan);
+  }, [toReschedulePlan]);
+
+  /** Active upcoming plans for the alert banner (alerts for other plans stay hidden). */
+  const alertPlans = useMemo(() => {
+    const m = new Map<string, ReschedulePlan>();
+    for (const it of itemsState) {
+      if (it.status !== "active") continue;
+      const p = toReschedulePlan(it);
+      if (p) m.set(it.id, p);
+    }
+    return m;
+  }, [itemsState, toReschedulePlan]);
 
   const confirmCancel = useCallback(() => {
     if (!selectedItem) return;
-    const msg = cancelCustomMessage.trim() || selectedCancelResponse || t("planner.cantMakeItDefault");
+    // The reason is optional; it only goes to the others when there are others.
+    const msg = selectedItem.hasOthers ? cancelCustomMessage.trim() || selectedCancelResponse || null : null;
     Haptics.selectionAsync();
-    archiveItem(selectedItem, msg);
-  }, [selectedItem, cancelCustomMessage, selectedCancelResponse, archiveItem, t]);
+    void archiveItem(selectedItem, msg);
+  }, [selectedItem, cancelCustomMessage, selectedCancelResponse, archiveItem]);
 
   const todayStart = useMemo(() => {
     const t = new Date();
@@ -1303,6 +1432,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     return (
       <PlanCard
         key={it.id}
+        media={it.photo ? <VenuePhoto source={it.photo} style={{ flex: 1 }} width={700} /> : undefined}
         accentColor={accent}
         dimmed={past}
         onPress={() => openDetails(it)}
@@ -1327,7 +1457,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                   <TouchableOpacity onPress={() => { Haptics.selectionAsync(); openDetails(it); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel={t("planner.confirm")}>
                     <Image source={require("@/assets/icons/confirm-icon.png")} style={{ width: CARD_ACTION_ICON_CONFIRM, height: CARD_ACTION_ICON_CONFIRM }} resizeMode="contain" />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => { Haptics.selectionAsync(); openDetails(it); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel={t("planner.reschedule")}>
+                  <TouchableOpacity onPress={() => openReschedule(it)} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel={t("planner.reschedule")}>
                     <Image source={require("@/assets/icons/reschedule-icon.png")} style={{ width: CARD_ACTION_ICON_RESCHEDULE, height: CARD_ACTION_ICON_RESCHEDULE }} resizeMode="contain" />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setSelectedItem(it); setDetailsModalVisible(false); openCancelModal(); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel={t("planner.cancel")}>
@@ -1340,7 +1470,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         </View>
       </PlanCard>
     );
-  }, [openDetails, restoreItem, myPhotoBySource, openCancelModal, theme, styles, TAB_CONFIG, t, topicLabel]);
+  }, [openDetails, openReschedule, restoreItem, myPhotoBySource, openCancelModal, theme, styles, TAB_CONFIG, t, topicLabel]);
 
   return (
     <View style={styles.screen}>
@@ -1413,6 +1543,15 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
             style={styles.planItBar}
           />
         ) : null}
+        {activeTab !== "archive" && (
+          <PlanAlertsBanner
+            plans={alertPlans}
+            onChangeTime={(plan, reason) => {
+              const item = itemsState.find((it) => it.id === plan.id);
+              if (item) openReschedule(item, reason);
+            }}
+          />
+        )}
         {activeTab !== "archive" && <WeatherPivotBanner />}
         {activeTab !== "archive" && <PlanRatingSection />}
         {showWeekendIdeas && (
@@ -1969,10 +2108,13 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                         compact
                       />
                     ) : null}
+                    <PlanChangeHistory plannerItemId={selectedItem.id} />
                     {isItemPast(selectedItem.dateStr) ? (
                       <Text style={styles.detailsHint}>{t("planner.pastHint")}</Text>
                     ) : selectedItem.status === "archived" ? (
-                      <Text style={styles.detailsHint}>{t("planner.archivedHint")}</Text>
+                      <Text style={styles.detailsHint}>
+                        {selectedItem.droppedOut ? t("planChanges.droppedOutHint") : t("planner.archivedHint")}
+                      </Text>
                     ) : !selectedItem.isOrganiser ? (
                       <Text style={styles.detailsHint}>
                         {t("planner.cancelNotifyHint", {
@@ -2008,7 +2150,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                             <Text style={styles.detailActionLabel}>{t("planner.confirm")}</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
-                            onPress={() => { Haptics.selectionAsync(); closeDetails(); }}
+                            onPress={() => openReschedule(selectedItem)}
                             style={[styles.detailActionBtn, styles.detailActionBtnReschedule]}
                             accessibilityLabel={t("planner.postponeOrReschedule")}
                           >
@@ -2040,8 +2182,18 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalOverlay}>
           <Pressable style={styles.modalOverlay} onPress={closeCancelModal}>
           <Pressable style={styles.cancelModalContent} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.cancelModalTitle}>{t("planner.cancelModalTitle")}</Text>
-              <Text style={styles.cancelModalSub}>{t("planner.cancelModalSub")}</Text>
+            <Text style={styles.cancelModalTitle}>
+              {selectedItem && !selectedItem.isOrganiser ? t("planChanges.cantMakeItTitle") : t("planner.cancelModalTitle")}
+            </Text>
+              <Text style={styles.cancelModalSub}>
+                {!selectedItem?.hasOthers
+                  ? t("planChanges.cancelSoloSub")
+                  : selectedItem.isOrganiser
+                    ? t("planChanges.cancelForEveryoneSub")
+                    : t("planChanges.cantMakeItSub")}
+              </Text>
+              {selectedItem?.hasOthers ? (
+              <>
               <Text style={styles.cancelLabel}>{t("planner.quickReply")}</Text>
               {CANCEL_RESPONSE_KEYS.map((key) => {
                 const label = t(key);
@@ -2066,6 +2218,8 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                 multiline
                 maxLength={200}
               />
+              </>
+              ) : null}
               <View style={styles.cancelModalActions}>
                 <TouchableOpacity
                   onPress={() => { closeCancelModal(); setDetailsModalVisible(true); }}
@@ -2074,14 +2228,56 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                 >
                   <Text style={styles.cancelSecondaryText}>{t("planner.keepPlan")}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={confirmCancel} style={styles.cancelPrimaryBtn} activeOpacity={0.9}>
-                  <Text style={styles.cancelPrimaryText}>{t("planner.cancelPlan")}</Text>
+                <TouchableOpacity onPress={confirmCancel} style={styles.cancelPrimaryBtn} activeOpacity={0.9} disabled={cancelSaving}>
+                  {cancelSaving ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.cancelPrimaryText}>
+                      {selectedItem && !selectedItem.isOrganiser ? t("planChanges.cantMakeItCta") : t("planner.cancelPlan")}
+                    </Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ReschedulePlanSheet
+        key={rescheduleKey}
+        visible={!!reschedulePlan}
+        plan={reschedulePlan}
+        initialReason={rescheduleReason}
+        onClose={() => setReschedulePlan(null)}
+        onDone={({ moved }) => {
+          setReschedulePlan(null);
+          if (moved) void loadPlannerItems();
+          Alert.alert(
+            moved ? t("planChanges.movedTitle") : t("planChanges.suggestedTitle"),
+            moved
+              ? reschedulePlan?.hasOthers
+                ? t("planChanges.movedBodyOthers")
+                : t("planChanges.movedBodySolo")
+              : t("planChanges.suggestedBody")
+          );
+        }}
+      />
+
+      {/* "+ New plan" — add something yourself, like in any calendar (AI stays optional). */}
+      {activeTab !== "archive" ? (
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.selectionAsync();
+            router.push(newPlanHref({ audience: newPlanAudienceForTab(activeTab) }));
+          }}
+          style={styles.newPlanFab}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={t("newPlan.fabA11y")}
+        >
+          <Ionicons name="add" size={30} color={theme.colors.onPrimary} />
+        </TouchableOpacity>
+      ) : null}
 
       {selectedItem && (
         <EventReminderModal
@@ -2096,9 +2292,26 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   );
 });
 
+/** The Planner tab you're on pre-selects who a new plan is for. */
+function newPlanAudienceForTab(tab: TabKey): "self" | "romance" | "friends" | "business" {
+  return tab === "dates" ? "romance" : tab === "meetups" ? "friends" : tab === "business" ? "business" : "self";
+}
+
 function createStyles(theme: AppTheme) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: theme.colors.background },
+    newPlanFab: {
+      position: "absolute",
+      right: theme.spacing.xl,
+      bottom: theme.spacing.xl,
+      width: 58,
+      height: 58,
+      borderRadius: 29,
+      backgroundColor: theme.colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      ...theme.elevation(3),
+    },
     contentWrapper: { flex: 1 },
     filterSheetWrapper: {
       position: "absolute",

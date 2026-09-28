@@ -36,7 +36,7 @@ import type { Mode } from "@/types";
 import { createPlannerItemForSelf, createPlannerInvite } from "@/lib/plannerInvitations";
 import { requestDateSafetyPrompt } from "@/lib/safety/dateCheckinPrompt";
 import { createDirectChat, sendMessage } from "@/lib/chats";
-import { getPlannerItems } from "@/lib/access/planner";
+import { getPlannerItems, isPlanOff } from "@/lib/access/planner";
 import { supabase } from "@/lib/supabase";
 import { recordBusinessAnalyticsEvent } from "@/lib/business/analyticsStore";
 import { PlanRecommendationFeedback } from "@/components/planner/PlanRecommendationFeedback";
@@ -391,7 +391,9 @@ export function ConciergeConfirmStep({
 
       const allItems = await getPlannerItems(meId, undefined, 100);
       if (cancelled) return;
-      const items = (allItems as PlannerItemRow[]).filter((it) => isRelevantForConflicts(it));
+      const items = (allItems as PlannerItemRow[]).filter(
+        (it) => isRelevantForConflicts(it) && !isPlanOff(it as Record<string, unknown>)
+      );
       const overlapping: PlannerItemRow[] = [];
       for (const r of ranges) {
         for (const it of items) {
@@ -574,6 +576,10 @@ export function ConciergeConfirmStep({
         activity,
         location,
         place,
+        // Lets the Planner card show the venue's photo.
+        ...(structuredPlan?.venue?.place_id ? { place_id: structuredPlan.venue.place_id } : {}),
+        ...(structuredPlan?.from_wishlist?.image_url ? { image_url: structuredPlan.from_wishlist.image_url } : {}),
+        ...(structuredPlan?.from_wishlist ? { from_wishlist: structuredPlan.from_wishlist.owner } : {}),
       };
       // Kept on the planner item even though the UI no longer renders a "why it fits" line.
       const description =

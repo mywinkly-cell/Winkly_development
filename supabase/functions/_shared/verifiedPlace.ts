@@ -11,6 +11,7 @@
 // read name/address/hours/price/booking_url straight from the verified row.
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { plainAttribution } from "./placeAttribution.ts";
 
 /** Google Places opening_hours, augmented with utc_offset_minutes so isOpenAt can
  *  compute the venue's local wall-clock without a separate timezone lookup. */
@@ -36,16 +37,60 @@ export type VerifiedPlace = {
   website: string | null;
   google_maps_url: string | null;
   price_level: number | null;
+  /** Google photo references (not image bytes); render via the place-photo function. */
+  photos: PlacePhotoRef[];
   last_verified_at: string;
   source: string;
 };
+
+export type PlacePhotoRef = {
+  ref: string;
+  width: number | null;
+  height: number | null;
+  /** Plain-text author attribution Google requires to be shown with the photo. */
+  attribution: string | null;
+};
+
+const MAX_PHOTOS = 5;
+
+/** Google Place Details `photos` → our compact refs (max 5). */
+export function toPhotoRefs(raw: unknown): PlacePhotoRef[] {
+  if (!Array.isArray(raw)) return [];
+  const out: PlacePhotoRef[] = [];
+  for (const p of raw) {
+    const r = p as Record<string, unknown>;
+    if (typeof r?.photo_reference !== "string" || !r.photo_reference) continue;
+    out.push({
+      ref: r.photo_reference,
+      width: typeof r.width === "number" ? r.width : null,
+      height: typeof r.height === "number" ? r.height : null,
+      attribution: plainAttribution(r.html_attributions),
+    });
+    if (out.length >= MAX_PHOTOS) break;
+  }
+  return out;
+}
+
+/** Read the stored photos column defensively (older rows have NULL). */
+function storedPhotoRefs(raw: unknown): PlacePhotoRef[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((p): p is Record<string, unknown> => !!p && typeof (p as { ref?: unknown }).ref === "string")
+    .map((p) => ({
+      ref: String(p.ref),
+      width: typeof p.width === "number" ? p.width : null,
+      height: typeof p.height === "number" ? p.height : null,
+      attribution: typeof p.attribution === "string" ? p.attribution : null,
+    }))
+    .slice(0, MAX_PHOTOS);
+}
 
 const PLACES_TEXTSEARCH = "https://maps.googleapis.com/maps/api/place/textsearch/json";
 const PLACES_DETAILS = "https://maps.googleapis.com/maps/api/place/details/json";
 // Legacy Place Details fields. NOTE: the legacy endpoint uses `utc_offset` (minutes), NOT the
 // Places-API-New name `utc_offset_minutes` — requesting the latter here returns INVALID_REQUEST.
 const DETAILS_FIELDS =
-  "place_id,name,formatted_address,geometry,business_status,opening_hours,website,url,price_level,utc_offset";
+  "place_id,name,formatted_address,geometry,business_status,opening_hours,website,url,price_level,utc_offset,photos";
 const DEFAULT_TTL_DAYS = 7;
 
 type CacheRow = Record<string, unknown>;
@@ -62,6 +107,7 @@ function rowToVerifiedPlace(row: CacheRow): VerifiedPlace {
     website: (row.website as string | null) ?? null,
     google_maps_url: (row.google_maps_url as string | null) ?? null,
     price_level: typeof row.price_level === "number" ? row.price_level : null,
+    photos: storedPhotoRefs(row.photos),
     last_verified_at: String(row.last_verified_at ?? ""),
     source: typeof row.source === "string" ? row.source : "google_places",
   };
@@ -184,6 +230,7 @@ async function fetchAndCacheDetails(
       website,
       google_maps_url: mapsUrl ?? `https://www.google.com/maps/place/?q=place_id:${placeId}`,
       price_level: typeof r.price_level === "number" ? r.price_level : null,
+      photos: toPhotoRefs(r.photos),
       last_verified_at: new Date().toISOString(),
       source: "google_places",
     };
@@ -200,6 +247,7 @@ async function fetchAndCacheDetails(
         website: verified.website,
         google_maps_url: verified.google_maps_url,
         price_level: verified.price_level,
+        photos: verified.photos,
         last_verified_at: verified.last_verified_at,
         source: verified.source,
       },
@@ -329,4 +377,74 @@ export function priceLevelToCents(priceLevel: number | null | undefined, _curren
   const bands = [0, 800, 2000, 4500, 9000];
   const idx = Math.max(0, Math.min(4, Math.round(priceLevel)));
   return bands[idx];
+}
+
+/** Stable cache key for a free-text venue lookup ("Café Luitpold", "München" → "cafe luitpold|munchen"). */
+export function placeLookupKey(name: string, city?: string | null): string {
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  return `${norm(name)}|${norm(city ?? "")}`.slice(0, 240);
+}
+
+/**
+ * Free-text venue → place_id, via `place_lookup_cache` so the same venue text is only
+ * paid for once (a miss is cached as NULL too). Returns null when unknown.
+ */
+export async function lookupPlaceIdCached(
+  supabase: SupabaseClient,
+  opts: {
+    name: string;
+    city?: string | null;
+    placesKey?: string | null;
+    lat?: number | null;
+    lng?: number | null;
+  },
+): Promise<string | null> {
+  const name = opts.name.trim();
+  if (!name) return null;
+  const key = placeLookupKey(name, opts.city);
+  const { data: hit } = await supabase
+    .from("place_lookup_cache")
+    .select("place_id")
+    .eq("query_key", key)
+    .maybeSingle();
+  if (hit) return (hit as { place_id: string | null }).place_id ?? null;
+  if (!opts.placesKey) return null;
+
+  const ids = await searchPlaceIds({
+    query: [name, opts.city].filter(Boolean).join(", "),
+    placesKey: opts.placesKey,
+    limit: 1,
+    lat: opts.lat,
+    lng: opts.lng,
+    radiusMeters: 30_000,
+  });
+  const placeId = ids[0] ?? null;
+  const { error } = await supabase
+    .from("place_lookup_cache")
+    .upsert({ query_key: key, place_id: placeId }, { onConflict: "query_key" });
+  if (error) console.warn("[verifiedPlace] lookup cache upsert failed:", error.message);
+  return placeId;
+}
+
+/**
+ * Like resolveVerifiedPlace, but when the cached row predates photo capture (no photos
+ * and verified more than a day ago), re-fetch details so the card can show a picture.
+ */
+export async function resolveVerifiedPlaceWithPhotos(
+  supabase: SupabaseClient,
+  placeId: string,
+  placesKey?: string | null,
+): Promise<VerifiedPlace | null> {
+  const place = await resolveVerifiedPlace(supabase, { placeId, placesKey });
+  if (!place || place.photos.length > 0 || !placesKey) return place;
+  // A place with genuinely no photos would otherwise be re-fetched on every request.
+  if (isFresh(place.last_verified_at, 1)) return place;
+  return (await fetchAndCacheDetails(supabase, placeId, placesKey)) ?? place;
 }

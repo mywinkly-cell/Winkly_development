@@ -7,8 +7,8 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decryptCalendarTokens, encryptCalendarTokens } from "./calendarTokenCrypto.ts";
-import { createGoogleCalendarEvent, refreshGoogleAccessToken } from "./googleCalendar.ts";
-import { createMicrosoftCalendarEvent, refreshMicrosoftAccessToken } from "./microsoftGraph.ts";
+import { createGoogleCalendarEvent, deleteGoogleCalendarEvent, refreshGoogleAccessToken, updateGoogleCalendarEvent } from "./googleCalendar.ts";
+import { createMicrosoftCalendarEvent, deleteMicrosoftCalendarEvent, refreshMicrosoftAccessToken, updateMicrosoftCalendarEvent } from "./microsoftGraph.ts";
 
 type CalendarConnectionRow = {
   user_id: string;
@@ -80,6 +80,11 @@ export async function syncConfirmedEventToCloud(
     ? await supabase.from("planner_items").select("description, meta").eq("id", ce.planner_item_id).maybeSingle()
     : { data: null };
 
+  // A cancelled plan must never be (re-)written to anyone's calendar — the sweep retries
+  // pending/failed rows, and without this it would resurrect events the user just removed.
+  const itemMeta = (plannerItem as { meta?: Record<string, unknown> | null } | null)?.meta ?? null;
+  if (itemMeta && itemMeta.cancelled_at) return result;
+
   const description = (plannerItem as { description?: string | null } | null)?.description ?? undefined;
   const location = deriveLocationText((plannerItem as { meta?: Record<string, unknown> | null } | null)?.meta ?? null);
 
@@ -89,6 +94,7 @@ export async function syncConfirmedEventToCloud(
       .select("user_id")
       .eq("planner_item_id", ce.planner_item_id)
       .in("role", ["owner", "attendee"])
+      .is("cancelled_at", null) // "can't make it" → stays off their calendars
     : { data: null };
   const userIds = Array.from(new Set((participants ?? []).map((p: { user_id: string }) => p.user_id)));
   if (userIds.length === 0) return result;
@@ -162,4 +168,146 @@ export async function syncConfirmedEventToCloud(
   );
 
   return result;
+}
+
+export type RemoveConfirmedEventResult = { removed: number; failed: number };
+
+/**
+ * Remove a plan from the given users' cloud calendars (cancelled plan, left event, …):
+ * deletes each synced Google/Microsoft event Winkly created and drops the tracking row.
+ * Best-effort per user/provider; a row whose delete failed is kept as 'failed' so the
+ * caller can retry.
+ */
+export async function removeConfirmedEventFromCloud(
+  supabase: SupabaseClient,
+  confirmedEventId: string,
+  userIds: string[],
+): Promise<RemoveConfirmedEventResult> {
+  const result: RemoveConfirmedEventResult = { removed: 0, failed: 0 };
+  if (userIds.length === 0) return result;
+
+  const { data: rows } = await supabase
+    .from("confirmed_event_participants")
+    .select("user_id, provider, external_event_id, calendar_id")
+    .eq("confirmed_event_id", confirmedEventId)
+    .in("user_id", userIds);
+
+  const { data: connections } = await supabase
+    .from("calendar_connections")
+    .select("user_id, provider, token_encrypted, token_expires_at")
+    .in("user_id", userIds)
+    .in("provider", ["google", "microsoft"]);
+  const connByKey = new Map(
+    ((connections ?? []) as CalendarConnectionRow[]).map((c) => [`${c.user_id}:${c.provider}`, c]),
+  );
+
+  for (const row of (rows ?? []) as Array<{
+    user_id: string;
+    provider: string;
+    external_event_id: string | null;
+    calendar_id: string | null;
+  }>) {
+    let ok = true;
+    const conn = connByKey.get(`${row.user_id}:${row.provider}`);
+    if (row.external_event_id && conn) {
+      try {
+        const token = await getValidAccessToken(supabase, conn);
+        ok = !!token && (conn.provider === "google"
+          ? await deleteGoogleCalendarEvent(token, row.calendar_id ?? "primary", row.external_event_id)
+          : await deleteMicrosoftCalendarEvent(token, row.external_event_id));
+      } catch {
+        ok = false;
+      }
+    }
+    if (ok) {
+      await supabase
+        .from("confirmed_event_participants")
+        .delete()
+        .eq("confirmed_event_id", confirmedEventId)
+        .eq("user_id", row.user_id)
+        .eq("provider", row.provider);
+      result.removed++;
+    } else {
+      await supabase
+        .from("confirmed_event_participants")
+        .update({ sync_status: "failed", sync_error: "remove failed" })
+        .eq("confirmed_event_id", confirmedEventId)
+        .eq("user_id", row.user_id)
+        .eq("provider", row.provider);
+      result.failed++;
+    }
+  }
+  return result;
+}
+
+/**
+ * A plan was rescheduled: move every synced Google/Microsoft copy to the new time. A copy
+ * that can't be moved (deleted by the user, token revoked…) is dropped and re-created by a
+ * normal sync, so everyone ends up with the right time either way.
+ */
+export async function updateConfirmedEventInCloud(
+  supabase: SupabaseClient,
+  confirmedEventId: string,
+): Promise<{ moved: number; recreated: number }> {
+  const out = { moved: 0, recreated: 0 };
+  const { data: ce } = await supabase
+    .from("confirmed_events")
+    .select("id, title, starts_at, ends_at")
+    .eq("id", confirmedEventId)
+    .maybeSingle();
+  if (!ce) return out;
+  const ev = ce as { title: string; starts_at: string; ends_at: string | null };
+  const endIso = ev.ends_at ?? new Date(Date.parse(ev.starts_at) + 60 * 60 * 1000).toISOString();
+
+  const { data: rows } = await supabase
+    .from("confirmed_event_participants")
+    .select("user_id, provider, external_event_id, calendar_id")
+    .eq("confirmed_event_id", confirmedEventId)
+    .in("provider", ["google", "microsoft"])
+    .eq("sync_status", "synced");
+  const synced = (rows ?? []) as Array<{ user_id: string; provider: string; external_event_id: string | null; calendar_id: string | null }>;
+  if (!synced.length) return out;
+
+  const { data: connections } = await supabase
+    .from("calendar_connections")
+    .select("user_id, provider, token_encrypted, token_expires_at")
+    .in("user_id", synced.map((r) => r.user_id))
+    .in("provider", ["google", "microsoft"]);
+  const connByKey = new Map(
+    ((connections ?? []) as CalendarConnectionRow[]).map((c) => [`${c.user_id}:${c.provider}`, c]),
+  );
+
+  let needResync = false;
+  for (const row of synced) {
+    const conn = connByKey.get(`${row.user_id}:${row.provider}`);
+    let ok = false;
+    if (conn && row.external_event_id) {
+      try {
+        const token = await getValidAccessToken(supabase, conn);
+        if (token) {
+          ok = conn.provider === "google"
+            ? await updateGoogleCalendarEvent(token, row.calendar_id ?? "primary", row.external_event_id, { startIso: ev.starts_at, endIso, title: ev.title })
+            : await updateMicrosoftCalendarEvent(token, row.external_event_id, { startIso: ev.starts_at, endIso, title: ev.title });
+        }
+      } catch {
+        ok = false;
+      }
+    }
+    if (ok) {
+      out.moved++;
+    } else {
+      await supabase
+        .from("confirmed_event_participants")
+        .delete()
+        .eq("confirmed_event_id", confirmedEventId)
+        .eq("user_id", row.user_id)
+        .eq("provider", row.provider);
+      needResync = true;
+    }
+  }
+  if (needResync) {
+    const r = await syncConfirmedEventToCloud(supabase, confirmedEventId);
+    out.recreated = r.synced;
+  }
+  return out;
 }

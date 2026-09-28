@@ -96,6 +96,7 @@ import {
 } from "@/lib/ai/matchAgentClient";
 import { recordPairBehaviorSignal } from "@/lib/matching/behaviorSignals";
 import { SparklesIcon } from "@/components/ui/WinklyAISpark";
+import { PlanChangeCard, type PlanChangeCardPayload } from "@/components/chat/PlanChangeCard";
 import { useFormatLocationDisplay } from "@/lib/location/useLocationDisplay";
 import { formatAppDateTime, formatAppTime } from "@/lib/i18n/appLocale";
 import { chatRoutes, useModeHub } from "@/lib/navigation/modeHub";
@@ -105,7 +106,6 @@ import {
   dismissStaleConciergeNudge,
 } from "@/lib/chats/conciergeNudge";
 import { getSharedInterestHintForPair } from "@/lib/ai/preferenceEngine";
-import { openPlanTogetherCreateEvent } from "@/lib/social/planTogether";
 import {
   getChatStrategicHostTopics,
   getPlannerThemePlans,
@@ -722,22 +722,12 @@ export default function ChatView({
     });
   }, [otherUser, conversationMode, router]);
 
+  // "Plan together": set up a plan with this person right here (the chat's own invite form),
+  // instead of creating a public event — private plans live in the Planner, not Events.
   const openPlanTogether = useCallback(() => {
     if (!otherUser || !isDm) return;
-    const mode =
-      conversationMode === "romance" ||
-      conversationMode === "friends" ||
-      conversationMode === "business" ||
-      conversationMode === "events"
-        ? conversationMode
-        : "friends";
-    openPlanTogetherCreateEvent(router, {
-      partnerUserId: otherUser.id,
-      partnerDisplayName: formatName(otherUser),
-      sourceMode: mode,
-      conversationId: convId,
-    });
-  }, [otherUser, isDm, conversationMode, convId, router]);
+    setShowInviteModal(true);
+  }, [otherUser, isDm]);
 
   // TB-2.5: weather + location aggregation for groups — use the majority city
   // among members (fallback: requester's city). When members are spread across
@@ -1645,6 +1635,9 @@ export default function ChatView({
                         </Pressable>
                       </View>
                     );
+                  }
+                  if (p.type === "plan_change") {
+                    return <PlanChangeCard payload={p as PlanChangeCardPayload} mine={!!mine} />;
                   }
                   if (p.type === "romance_invite_declined") {
                     return (

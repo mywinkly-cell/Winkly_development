@@ -9,6 +9,9 @@ import {
   RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
+import { useAuth } from "@/providers/AuthProvider";
+import { formatAppDateTime, formatAppNumber } from "@/lib/i18n/appLocale";
 import { supabase } from "@/lib/supabase";
 import { ModeHeader } from "@/components/layout/ModeHeader";
 import { EventsBottomNav } from "@/components/layout/EventsBottomNav";
@@ -38,9 +41,7 @@ type EventRow = {
 const PAGE_SIZE = 20;
 
 function formatDateTime(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
+  return formatAppDateTime(new Date(iso));
 }
 
 export default function EventsDiscover() {
@@ -48,6 +49,9 @@ export default function EventsDiscover() {
   const theme = useAppTheme();
   const styles = createStyles(theme);
   const fmtLoc = useFormatLocationDisplay();
+  const { t } = useTranslation();
+  // Private users plan in the Planner; publishing events is for business accounts.
+  const canCreateEvents = useAuth().accountType === "business";
 
   const [query, setQuery] = useState("");
   const [activeCity, setActiveCity] = useState<string | "all">("all");
@@ -168,14 +172,16 @@ export default function EventsDiscover() {
       <View style={{ flex: 1 }}>
       <ModeHeader currentMode="events" rightSlot="filterSettings" />
       <View style={styles.header}>
-        <Text style={styles.title}>Events</Text>
+        <Text style={styles.title}>{t("discoverEvents.title")}</Text>
         <View style={{ flexDirection: "row", gap: theme.spacing.sm }}>
-          <TextButton title="Planner" onPress={() => router.push("/(modes)/events/planner")} style={styles.pillGhost} />
-          <PrimaryButton
-            title="Create"
-            onPress={() => router.push("/(modes)/events/create-event")}
-            style={{ ...styles.pill, backgroundColor: theme.modeAccent("events").primary }}
-          />
+          <TextButton title={t("planner.title")} onPress={() => router.push("/(modes)/events/planner")} style={styles.pillGhost} />
+          {canCreateEvents ? (
+            <PrimaryButton
+              title={t("wishlist.create")}
+              onPress={() => router.push("/(modes)/events/create-event")}
+              style={{ ...styles.pill, backgroundColor: theme.modeAccent("events").primary }}
+            />
+          ) : null}
         </View>
       </View>
 
@@ -183,7 +189,7 @@ export default function EventsDiscover() {
         value={viewMode}
         onChange={setViewMode}
         primaryColor={theme.modeAccent("events").primary}
-        allLabel="All events"
+        allLabel={t("discoverEvents.allEvents")}
         allCount={filtered.length}
       />
 
@@ -197,12 +203,12 @@ export default function EventsDiscover() {
             picks={topPicks}
             loading={loading || topLoading}
             primaryColor={theme.modeAccent("events").primary}
-            subheading="A few events worth your time — picked so you don't have to scroll."
-            emptyText="No events to pick from yet. Tap See all events to browse or create one."
+            subheading={t("discoverEvents.topSubheading")}
+            emptyText={t("discoverEvents.topEmpty")}
             placeholderEmoji="🎟️"
             onPressPick={openDetails}
             onSeeAll={() => setViewMode("all")}
-            seeAllLabel="See all events"
+            seeAllLabel={t("discoverEvents.seeAll")}
           />
         </ScrollView>
       ) : (
@@ -214,7 +220,7 @@ export default function EventsDiscover() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search events, city, category…"
+            placeholder={t("discoverEvents.searchPlaceholder")}
             placeholderTextColor={theme.colors.textMuted}
             style={styles.searchInput}
             autoCapitalize="none"
@@ -222,7 +228,7 @@ export default function EventsDiscover() {
             returnKeyType="search"
           />
           {!!query && (
-            <Pressable onPress={() => setQuery("")} style={styles.clearBtn}>
+            <Pressable onPress={() => setQuery("")} style={styles.clearBtn} accessibilityRole="button" accessibilityLabel={t("discoverEvents.clearSearchA11y")}>
               <Text style={{ color: theme.colors.textMuted }}>✕</Text>
             </Pressable>
           )}
@@ -234,7 +240,7 @@ export default function EventsDiscover() {
         {(["all", "Munich", "Berlin", "Hamburg"] as const).map((c) => (
           <Chip
             key={c}
-            label={c === "all" ? "All Cities" : c}
+            label={c === "all" ? t("discoverEvents.allCities") : c}
             mode="events"
             selected={activeCity === c}
             onPress={() => setActiveCity(c)}
@@ -245,7 +251,7 @@ export default function EventsDiscover() {
         {(["all", "Social", "Business", "Fitness", "Culture"] as const).map((cat) => (
           <Chip
             key={cat}
-            label={cat === "all" ? "All Types" : cat}
+            label={cat === "all" ? t("discoverEvents.allTypes") : cat}
             mode="events"
             selected={activeCategory === cat}
             onPress={() => setActiveCategory(cat)}
@@ -268,20 +274,26 @@ export default function EventsDiscover() {
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color={theme.modeAccent("events").primary} />
-            <Text style={{ marginTop: theme.spacing.sm, color: theme.colors.textMuted }}>Loading events…</Text>
+            <Text style={{ marginTop: theme.spacing.sm, color: theme.colors.textMuted }}>{t("discoverEvents.loading")}</Text>
           </View>
         ) : filtered.length === 0 ? (
           <Card style={styles.empty}>
-            <Text style={styles.emptyTitle}>No events yet</Text>
-            <Text style={styles.emptyText}>
-              Create your first event or connect the `events` table + RLS to see results here.
-            </Text>
+            <Text style={styles.emptyTitle}>{t("discoverEvents.emptyTitle")}</Text>
+            <Text style={styles.emptyText}>{t("discoverEvents.emptyBody")}</Text>
 
-            <PrimaryButton
-              title="Create Event"
-              onPress={() => router.push("/(modes)/events/create-event")}
-              style={{ backgroundColor: theme.modeAccent("events").primary }}
-            />
+            {canCreateEvents ? (
+              <PrimaryButton
+                title={t("events.createEvent")}
+                onPress={() => router.push("/(modes)/events/create-event")}
+                style={{ backgroundColor: theme.modeAccent("events").primary }}
+              />
+            ) : (
+              <PrimaryButton
+                title={t("discoverEvents.browseCatalog")}
+                onPress={() => router.replace("/(modes)/events")}
+                style={{ backgroundColor: theme.modeAccent("events").primary }}
+              />
+            )}
           </Card>
         ) : (
           <View style={{ gap: theme.spacing.md }}>
@@ -302,14 +314,16 @@ export default function EventsDiscover() {
 
                     <Text style={{ color: theme.colors.textPrimary, marginTop: theme.spacing.sm }} numberOfLines={2}>
                       {(e.category ? `${e.category} · ` : "") +
-                        ((e.tags ?? []).slice(0, 3).join(" · ") || "Winkly event")}
+                        ((e.tags ?? []).slice(0, 3).join(" · ") || t("discoverEvents.winklyEvent"))}
                     </Text>
                   </View>
 
                   <View style={{ alignItems: "flex-end" }}>
                     <View style={styles.badge}>
                       <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>
-                        {e.price_eur != null ? `€${e.price_eur}` : "Free"}
+                        {e.price_eur != null
+                          ? formatAppNumber(e.price_eur, { style: "currency", currency: "EUR", maximumFractionDigits: 2 })
+                          : t("catalog.free")}
                       </Text>
                     </View>
                     <Text style={{ color: theme.colors.textMuted, marginTop: theme.spacing.sm }}>›</Text>

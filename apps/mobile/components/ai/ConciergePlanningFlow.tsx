@@ -7,6 +7,9 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { WishlistSuggestionsBanner } from "@/components/ai/WishlistSuggestionsBanner";
+import { VenuePhoto } from "@/components/ui/VenuePhoto";
+import type { WishlistSuggestion } from "@/lib/ai/conciergeClient";
 import {
   View,
   Text,
@@ -254,6 +257,8 @@ export function ConciergePlanningFlow({
   const [partners, setPartners] = useState<ConciergePartner[]>([]);
   const [suggestions, setSuggestions] = useState<ExperienceOption[] | null>(null);
   const [structuredPlans, setStructuredPlans] = useState<PlannerThemePlanOption[] | null>(null);
+  /** Saved places (yours / shared by the person you plan with) that fit — shown above the options. */
+  const [wishlistSuggestions, setWishlistSuggestions] = useState<WishlistSuggestion[]>([]);
   const [chosenIndex, setChosenIndex] = useState<number | null>(null);
   const [chosenStructuredIndex, setChosenStructuredIndex] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -649,6 +654,7 @@ export function ConciergePlanningFlow({
     setMessage("");
     setSuggestions(null);
     setStructuredPlans(null);
+    setWishlistSuggestions([]);
     setChosenIndex(null);
     setChosenStructuredIndex(null);
     setLoadingProgress(IDLE_PLAN_LOADING_PROGRESS);
@@ -709,7 +715,7 @@ export function ConciergePlanningFlow({
       if (genId !== genAttemptRef.current) return;
       setLoadingCity(city ?? null);
       setLoadingProgress((p) => ({ ...p, gatewayInFlight: true }));
-      const { plans, requestId, limitError: gatewayLimit } = await getPlannerThemePlans({
+      const { plans, requestId, limitError: gatewayLimit, wishlistSuggestions: wishFromGateway } = await getPlannerThemePlans({
         mode: effectiveMode,
         theme,
         partnerUserId: partnerId ?? undefined,
@@ -786,6 +792,7 @@ export function ConciergePlanningFlow({
       setLoading(false);
       setPlanRevealKey(genId);
       setStructuredPlans(futurePlans.slice(0, 2));
+      setWishlistSuggestions(wishFromGateway ?? []);
       if (!futurePlans.length) {
         setMessage(
           activityKey === "quick"
@@ -833,6 +840,7 @@ export function ConciergePlanningFlow({
     setMessage("");
     setSuggestions(null);
     setStructuredPlans(null);
+    setWishlistSuggestions([]);
     setChosenIndex(null);
     setChosenStructuredIndex(null);
     setLoadingProgress(IDLE_PLAN_LOADING_PROGRESS);
@@ -939,6 +947,7 @@ export function ConciergePlanningFlow({
         setLoading(false);
         setPlanRevealKey(genId);
         setStructuredPlans(kept.slice(0, 3));
+        setWishlistSuggestions(res.wishlist_suggestions ?? []);
         setMessage(kept.length ? null : t("planIt.results.empty"));
         return;
       }
@@ -1574,6 +1583,20 @@ export function ConciergePlanningFlow({
                   </Text>
                 </TouchableOpacity>
               </View>
+              {/* Places the user (or the person they plan with) saved: offer them first. Hidden when an
+                  option is already built around one of them — its badge says so. */}
+              {wishlistSuggestions.length > 0 && !structuredPlans.some((sp) => sp.from_wishlist) ? (
+                <WishlistSuggestionsBanner
+                  suggestions={wishlistSuggestions}
+                  partnerName={partnerId ? partnerDisplayName : null}
+                  onPlanAround={(w) => {
+                    // Model-facing brief (not UI copy): re-plan around the saved place.
+                    const brief = `Build option A around "${w.title}"${w.address ? ` (${w.address})` : ""} from the wish list (WISHLIST_PLACES ${w.ref}).`;
+                    if (planItActive) void runPlanIt({ refinement: brief });
+                    else void handleGenerate({ refinementFeedback: brief });
+                  }}
+                />
+              ) : null}
               <RevealCards
                 revealKey={planRevealKey}
                 animate={revealedPlanKey !== planRevealKey}
@@ -1626,6 +1649,20 @@ export function ConciergePlanningFlow({
                 const fitReason = String(p.fit_reason || p.why_this_fits || "").trim();
                 return (
                   <PlanCard
+                    media={
+                      p.venue?.name ? (
+                        <VenuePhoto
+                          source={{
+                            imageUrl: p.from_wishlist?.image_url ?? null,
+                            placeId: p.venue?.place_id ?? p.from_wishlist?.place_id ?? null,
+                            name: p.venue.name,
+                            city: details.city ?? null,
+                          }}
+                          style={{ flex: 1 }}
+                          width={700}
+                        />
+                      ) : undefined
+                    }
                     accentColor={modeAccent}
                     onPress={() => { setChosenStructuredIndex(idx); }}
                     title={p.title}
@@ -1633,6 +1670,19 @@ export function ConciergePlanningFlow({
                       <>
                         <PlanCardBadge label={t("concierge.optionLabel", { letter: optionLetter })} variant={isOptionA ? "solid" : "outlined"} color={modeAccent} />
                         <PlanCardBadge label={characterLabel} />
+                        {p.from_wishlist ? (
+                          <PlanCardBadge
+                            icon="bookmark"
+                            tone="primary"
+                            label={
+                              p.from_wishlist.owner === "you"
+                                ? t("planWishlist.badgeYours")
+                                : p.from_wishlist.owner === "both"
+                                  ? t("planWishlist.badgeBoth")
+                                  : t("planWishlist.badgeTheirs")
+                            }
+                          />
+                        ) : null}
                       </>
                     }
                     meta={

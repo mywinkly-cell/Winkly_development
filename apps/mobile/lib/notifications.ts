@@ -135,6 +135,35 @@ export async function ensureAndroidNotificationChannelAsync(): Promise<void> {
   });
 }
 
+function pushLocale(): string | null {
+  const lang = (i18n.language ?? "").slice(0, 2).toLowerCase();
+  return /^[a-z]{2}$/.test(lang) ? lang : null;
+}
+
+function pushTimeZone(): string | null {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return tz && tz.length <= 64 ? tz : null;
+  } catch {
+    return null;
+  }
+}
+
+let languageListener: ((lng: string) => void) | null = null;
+
+/** Keep this device's push language in step when the user switches the app language. */
+function followLanguageChanges(uid: string, token: string): void {
+  if (languageListener) i18n.off("languageChanged", languageListener);
+  languageListener = () => {
+    void supabase
+      .from("user_push_tokens")
+      .update({ locale: pushLocale(), timezone: pushTimeZone() })
+      .eq("user_id", uid)
+      .eq("expo_push_token", token);
+  };
+  i18n.on("languageChanged", languageListener);
+}
+
 /**
  * Registers Expo push token (physical device) and upserts into `user_push_tokens`.
  * Does nothing on simulator / web / missing native module.
@@ -186,11 +215,16 @@ export async function registerForPushNotificationsAndSync(): Promise<string | nu
           user_id: uid,
           expo_push_token: token,
           platform,
+          // Server pushes (plan changes, weather / traffic alerts) are written in this
+          // language, with times in this time zone.
+          locale: pushLocale(),
+          timezone: pushTimeZone(),
           updated_at: new Date().toISOString(),
         },
         { onConflict: "user_id,expo_push_token" },
       );
       if (error) console.warn("user_push_tokens upsert:", error.message);
+      followLanguageChanges(uid, token);
     }
 
     return token ?? null;
