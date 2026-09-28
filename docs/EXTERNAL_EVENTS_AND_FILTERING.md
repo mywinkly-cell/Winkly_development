@@ -2,6 +2,8 @@
 
 **Last updated:** 2026-06-23
 
+> **Update 2026-09-28:** the catalogue now merges duplicates across platforms, ranks items per user, filters by city and venue type, adds GetYourGuide and sponsored venue offers. See **docs/EVENTS_CATALOG.md** for the current design.
+
 This doc covers: (1) showing events from external platforms (Ticketmaster — primary; Meetup, Eventbrite — optional) on the Events home when Winkly has few native events; (2) Events filtering (day/week/month, category).
 
 ---

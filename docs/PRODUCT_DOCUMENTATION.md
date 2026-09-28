@@ -3,7 +3,15 @@
 **Single source of truth** for technical and design decisions.  
 Maintained as CTO/Product Owner reference. **Update this document whenever the app or backend changes.**
 
-## 0. Latest changes (2026-07-31)
+## 0. Latest changes (2026-09-28)
+
+- **Events mode is now a personal catalogue; plans live in the Planner.** "Event" (something happening that anyone can attend) is separated from "plan" (your date / meetup / appointment). The Events home is one catalogue of Ticketmaster, Meetup, Eventbrite and GetYourGuide (+ events published on Winkly), ranked for the user's interests and location with the reason on each card, filterable by city, time and **type of place**. The same event on several platforms is **merged into one item with a list of booking options and prices**. "+ Plan" turns any item into a plan; "Save place" adds the venue to the wishlist. Private users no longer see "Create event" (business accounts only); "Plan together" in chats opens the chat's own invite form.
+- **Planner:** a `+` button for **manual plans** (`app/plan/new.tsx`, AI optional), **venue photos** on Planner cards, AI plan options and Weekly Spark (`VenuePhoto` + new `place-photo` Edge Function, key stays server-side), and a **wishlist** icon in the header.
+- **Wishlist:** rebuilt screens with photos, paste-a-link, visited / to-visit, city filter, and **per-mode sharing** (each place or the whole list; visible only to people you have an active chat with in that mode). **Winkly AI uses your wishlist and the partner's shared places** when planning ("Hey, there are places you saved — how about visiting X?") and can build an option around one.
+- **Sponsored venue offers** (`sponsored_venue_offers`, managed by the Winkly team, no business account needed), always labelled, with impression/tap/save/plan tracking.
+- Migrations `20260927120000_wishlist_sharing`, `20260927121000_events_catalog_sponsored_offers_and_place_photos`; DB test `supabase/tests/wishlist_sharing_test.sql` (CI). Full description: **docs/EVENTS_CATALOG.md**.
+
+## 0. Previous changes (2026-07-31)
 
 - **Planner empty states + Sparks vs Winkly AI made distinguishable:** The concierge banner is no longer list-only — it shows in **List, Week and Month** whenever the current view has **no plans** (and the view is not in the past), so an empty week/month is never a dead end. Copy is now first-person assistant: **“Hi, I’m Winkly — your personal planner”** with a **Plan something with me** CTA (`planner.conciergePromo.*`). The header no longer swaps the AI button in and out per view; both right-hand controls are always present and use **different icons**: Weekly Sparks = new **`WeeklySparksIcon`** (calendar with a spark, also used on the `WeekendIdeasBlock` badge), Winkly AI concierge = the standard **`SparklesIcon`**. `WeekendIdeasBlock` gained a subtitle framing Sparks as **ready-made weekly picks** vs. the made-to-order concierge. See §8.3, §9.
 
