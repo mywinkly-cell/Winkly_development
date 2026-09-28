@@ -1,5 +1,6 @@
 // PlannerHeader — Used on every Planner screen only
-// Left: Filter | Center: Winkly | Right: Weekly Sparks (calendar spark, toggle) + Winkly AI (sparkles, opens concierge).
+// Left: Wishlist (saved places) + Filter | Center: Winkly | Right: Weekly Sparks (calendar spark, toggle) + Winkly AI (sparkles, opens concierge).
+// The wishlist sits first so "where did I want to go?" is always one tap away while planning.
 // The two right buttons use different icons on purpose: Sparks = ready-made weekly ideas, AI = plan on request.
 // Settings live only at Mode Selection (General settings) to avoid overwhelming users.
 
@@ -46,14 +47,28 @@ export function PlannerHeader({
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        onPress={handleFilterPress}
-        style={styles.iconBtn}
-        activeOpacity={0.8}
-        accessibilityLabel={t("common.plannerFilters")}
-      >
-        <Ionicons name="filter" size={HEADER.iconSize} color={Colors.primaryViolet} />
-      </TouchableOpacity>
+      <View style={styles.leftRow}>
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.selectionAsync();
+            router.push("/wishlist");
+          }}
+          style={styles.iconBtn}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={t("wishlist.openA11y")}
+        >
+          <Ionicons name="bookmark-outline" size={HEADER.iconSize} color={Colors.primaryViolet} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={handleFilterPress}
+          style={styles.iconBtn}
+          activeOpacity={0.8}
+          accessibilityLabel={t("common.plannerFilters")}
+        >
+          <Ionicons name="filter" size={HEADER.iconSize} color={Colors.primaryViolet} />
+        </TouchableOpacity>
+      </View>
       <View style={styles.centerTitleWrap}>
         <Text style={styles.centerTitle}>Winkly</Text>
       </View>
@@ -106,6 +121,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.gray200,
     ...Shadow.card,
+  },
+  leftRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   rightRow: {
     flexDirection: "row",

@@ -13,6 +13,7 @@ import {
   type SparkSlot,
 } from "@/lib/ai/weeklySpark";
 import { formatAppDate, formatAppNumber, formatAppTime } from "@/lib/i18n/appLocale";
+import { VenuePhoto } from "@/components/ui/VenuePhoto";
 
 export type WeeklySparkCardProps = {
   plan: WeeklySparkPlan;
@@ -96,6 +97,11 @@ export function WeeklySparkCard({
 
   return (
     <PlanCard
+      media={
+        plan.placeId || plan.placeName ? (
+          <VenuePhoto source={{ placeId: plan.placeId, name: plan.placeName }} style={{ flex: 1 }} width={700} />
+        ) : undefined
+      }
       accentColor={accent}
       dimmed={planned}
       onPress={open}

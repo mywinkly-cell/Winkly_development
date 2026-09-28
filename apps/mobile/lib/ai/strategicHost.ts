@@ -1,4 +1,4 @@
-import { callConcierge, type ConciergeContext, type ConciergeErrorCode, type ConciergeLimitType } from "@/lib/ai/conciergeClient";
+import { callConcierge, type ConciergeContext, type ConciergeErrorCode, type ConciergeLimitType, type WishlistPlanPick, type WishlistSuggestion } from "@/lib/ai/conciergeClient";
 import type { Mode } from "@/types";
 
 export type StrategicHostTopic = {
@@ -61,9 +61,13 @@ export type PlannerThemePlanOption = {
     google_maps_link: string;
     estimated_cost: string;
     booking_url?: string;
+    /** Google place id when verified — the card loads the venue's photos. */
+    place_id?: string;
   };
   weather_note: string;
   duration_minutes: number;
+  /** Set when the option is built around a place from someone's wish list. */
+  from_wishlist?: WishlistPlanPick;
   /** Populated for multi-day concierge trips (`num_days` > 1). */
   trip_days?: PlannerTripDay[];
 };
@@ -89,6 +93,8 @@ export async function getPlannerThemePlans(params: {
 }): Promise<{
   plans: PlannerThemePlanOption[];
   requestId?: string;
+  /** Saved places (yours / shared by the other person) that fit — "from your wish lists". */
+  wishlistSuggestions?: WishlistSuggestion[];
   limitError?: {
     error_code: ConciergeErrorCode;
     limit_type?: ConciergeLimitType;
@@ -146,10 +152,14 @@ export async function getPlannerThemePlans(params: {
     }
     return { plans: [] };
   }
-  const raw = (res as unknown as { plan_options?: PlannerThemePlanOption[] }).plan_options;
+  const body = res as unknown as { plan_options?: PlannerThemePlanOption[]; wishlist_suggestions?: WishlistSuggestion[] };
+  const raw = body.plan_options;
   return {
     plans: Array.isArray(raw) ? raw : [],
     requestId: res.request_id,
+    ...(Array.isArray(body.wishlist_suggestions) && body.wishlist_suggestions.length
+      ? { wishlistSuggestions: body.wishlist_suggestions }
+      : {}),
   };
 }
 

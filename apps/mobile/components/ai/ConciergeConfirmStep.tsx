@@ -574,6 +574,10 @@ export function ConciergeConfirmStep({
         activity,
         location,
         place,
+        // Lets the Planner card show the venue's photo.
+        ...(structuredPlan?.venue?.place_id ? { place_id: structuredPlan.venue.place_id } : {}),
+        ...(structuredPlan?.from_wishlist?.image_url ? { image_url: structuredPlan.from_wishlist.image_url } : {}),
+        ...(structuredPlan?.from_wishlist ? { from_wishlist: structuredPlan.from_wishlist.owner } : {}),
       };
       // Kept on the planner item even though the UI no longer renders a "why it fits" line.
       const description =

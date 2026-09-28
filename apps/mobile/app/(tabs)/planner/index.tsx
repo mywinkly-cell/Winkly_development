@@ -89,6 +89,9 @@ import { PlanItBar, type PlanItBarHandle } from "@/components/ai/PlanItBar";
 import { PLAN_IT_ENTRY_ENABLED } from "@/config/flags";
 import { useModeContext } from "@/providers/ModeContextProvider";
 import { isModeAvailable } from "@/lib/modes/availability";
+import { VenuePhoto } from "@/components/ui/VenuePhoto";
+import { hasPlacePhotoSource, type PlacePhotoSource } from "@/lib/places/placePhoto";
+import { newPlanHref } from "@/lib/planner/newPlan";
 
 type TabKey = "all" | "dates" | "meetups" | "business" | "events" | "archive";
 type TimeRange =
@@ -134,7 +137,21 @@ type PlannerItem = {
   fromConcierge?: boolean;
   aiRequestId?: string;
   recommendationFeedback?: PlanRecommendationRating | null;
+  /** Where the venue photo comes from (saved image, Google place id, or venue name). */
+  photo?: PlacePhotoSource;
 };
+
+/** Photo source for a planner item from its meta (event poster, place id, venue/location text). */
+function plannerItemPhoto(meta: Record<string, unknown> | null, location?: string): PlacePhotoSource | undefined {
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const venue = meta && typeof meta.venue === "object" && meta.venue ? (meta.venue as Record<string, unknown>) : null;
+  const src: PlacePhotoSource = {
+    imageUrl: str(meta?.image_url),
+    placeId: str(meta?.place_id) ?? str(venue?.place_id),
+    name: str(meta?.venue_name) ?? str(venue?.name) ?? str(meta?.place) ?? location ?? null,
+  };
+  return hasPlacePhotoSource(src) ? src : undefined;
+}
 
 const AVATAR_SIZE = 40;
 /** Icon display sizes on list cards (44px button). Cancel = baseline; Confirm/Reschedule larger if assets have more padding. */
@@ -558,6 +575,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
           isOrganiser: row.created_by === uid,
           status: "active" as const,
           fromConcierge: meta?.from_concierge === true,
+          photo: plannerItemPhoto(meta, location),
           aiRequestId:
             meta && typeof meta.ai_request_id === "string" ? meta.ai_request_id : undefined,
         };
@@ -1303,6 +1321,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     return (
       <PlanCard
         key={it.id}
+        media={it.photo ? <VenuePhoto source={it.photo} style={{ flex: 1 }} width={700} /> : undefined}
         accentColor={accent}
         dimmed={past}
         onPress={() => openDetails(it)}
@@ -2083,6 +2102,22 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* "+ New plan" — add something yourself, like in any calendar (AI stays optional). */}
+      {activeTab !== "archive" ? (
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.selectionAsync();
+            router.push(newPlanHref({ audience: newPlanAudienceForTab(activeTab) }));
+          }}
+          style={styles.newPlanFab}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={t("newPlan.fabA11y")}
+        >
+          <Ionicons name="add" size={30} color={theme.colors.onPrimary} />
+        </TouchableOpacity>
+      ) : null}
+
       {selectedItem && (
         <EventReminderModal
           visible={reminderModalVisible}
@@ -2096,9 +2131,26 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
   );
 });
 
+/** The Planner tab you're on pre-selects who a new plan is for. */
+function newPlanAudienceForTab(tab: TabKey): "self" | "romance" | "friends" | "business" {
+  return tab === "dates" ? "romance" : tab === "meetups" ? "friends" : tab === "business" ? "business" : "self";
+}
+
 function createStyles(theme: AppTheme) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: theme.colors.background },
+    newPlanFab: {
+      position: "absolute",
+      right: theme.spacing.xl,
+      bottom: theme.spacing.xl,
+      width: 58,
+      height: 58,
+      borderRadius: 29,
+      backgroundColor: theme.colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      ...theme.elevation(3),
+    },
     contentWrapper: { flex: 1 },
     filterSheetWrapper: {
       position: "absolute",

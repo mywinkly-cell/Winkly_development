@@ -105,7 +105,6 @@ import {
   dismissStaleConciergeNudge,
 } from "@/lib/chats/conciergeNudge";
 import { getSharedInterestHintForPair } from "@/lib/ai/preferenceEngine";
-import { openPlanTogetherCreateEvent } from "@/lib/social/planTogether";
 import {
   getChatStrategicHostTopics,
   getPlannerThemePlans,
@@ -722,22 +721,12 @@ export default function ChatView({
     });
   }, [otherUser, conversationMode, router]);
 
+  // "Plan together": set up a plan with this person right here (the chat's own invite form),
+  // instead of creating a public event — private plans live in the Planner, not Events.
   const openPlanTogether = useCallback(() => {
     if (!otherUser || !isDm) return;
-    const mode =
-      conversationMode === "romance" ||
-      conversationMode === "friends" ||
-      conversationMode === "business" ||
-      conversationMode === "events"
-        ? conversationMode
-        : "friends";
-    openPlanTogetherCreateEvent(router, {
-      partnerUserId: otherUser.id,
-      partnerDisplayName: formatName(otherUser),
-      sourceMode: mode,
-      conversationId: convId,
-    });
-  }, [otherUser, isDm, conversationMode, convId, router]);
+    setShowInviteModal(true);
+  }, [otherUser, isDm]);
 
   // TB-2.5: weather + location aggregation for groups — use the majority city
   // among members (fallback: requester's city). When members are spread across

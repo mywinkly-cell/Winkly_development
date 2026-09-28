@@ -13,6 +13,14 @@
 import { supabase } from "@/lib/supabase";
 import type { AppMode } from "@/types/database";
 
+/** Modes a saved place can be shared in (Identity Firewall: sharing is per mode). */
+export type ShareableMode = "romance" | "friends" | "business";
+export const SHAREABLE_MODES: readonly ShareableMode[] = ["romance", "friends", "business"] as const;
+
+function toShareableModes(v: unknown): ShareableMode[] {
+  return Array.isArray(v) ? (v.filter((m) => SHAREABLE_MODES.includes(m as ShareableMode)) as ShareableMode[]) : [];
+}
+
 /** Where a wishlist entry was captured from. Mirrors the DB CHECK constraint. */
 export type WishlistSource =
   | "manual"
@@ -40,6 +48,8 @@ export type WishlistItem = {
   sourceUrl?: string;
   imageUrl?: string;
   savedFrom: WishlistSource;
+  /** Modes this place is shared in (visible to people you chat with in that mode). Empty = private. */
+  sharedModes: ShareableMode[];
   /** Set when the user marks the wish as fulfilled. */
   visitedAt?: string;
   archivedAt?: string;
@@ -49,7 +59,7 @@ export type WishlistItem = {
 
 const SELECT_COLUMNS =
   "id, title, description, url, price, mode, place_id, address, city, country, " +
-  "latitude, longitude, source_url, image_url, saved_from, visited_at, archived_at, " +
+  "latitude, longitude, source_url, image_url, saved_from, shared_modes, visited_at, archived_at, " +
   "created_at, updated_at";
 
 const LEGACY_META_SUFFIX = "\n<!--winkly-wishlist-meta:";
@@ -95,6 +105,7 @@ type WishlistRow = {
   source_url: string | null;
   image_url: string | null;
   saved_from: WishlistSource | null;
+  shared_modes: string[] | null;
   visited_at: string | null;
   archived_at: string | null;
   created_at: string;
@@ -119,6 +130,7 @@ function mapRow(row: WishlistRow): WishlistItem {
     sourceUrl: row.source_url ?? undefined,
     imageUrl: row.image_url ?? undefined,
     savedFrom: row.saved_from ?? "manual",
+    sharedModes: toShareableModes(row.shared_modes),
     visitedAt: row.visited_at ?? undefined,
     archivedAt: row.archived_at ?? undefined,
     createdAt: row.created_at,
@@ -193,6 +205,7 @@ export type CreateWishlistInput = {
   sourceUrl?: string;
   imageUrl?: string;
   savedFrom?: WishlistSource;
+  sharedModes?: ShareableMode[];
 };
 
 export async function createWishlistItem(input: CreateWishlistInput): Promise<WishlistItem> {
@@ -215,6 +228,7 @@ export async function createWishlistItem(input: CreateWishlistInput): Promise<Wi
       source_url: input.sourceUrl?.trim() || null,
       image_url: input.imageUrl?.trim() || null,
       saved_from: input.savedFrom ?? "manual",
+      shared_modes: input.sharedModes ?? [],
     })
     .select(SELECT_COLUMNS)
     .single();
@@ -238,6 +252,7 @@ export type UpdateWishlistPatch = Partial<
     | "longitude"
     | "sourceUrl"
     | "imageUrl"
+    | "sharedModes"
   >
 >;
 
@@ -260,6 +275,7 @@ export async function updateWishlistItem(
   if (patch.longitude !== undefined) row.longitude = patch.longitude ?? null;
   if (patch.sourceUrl !== undefined) row.source_url = patch.sourceUrl?.trim() || null;
   if (patch.imageUrl !== undefined) row.image_url = patch.imageUrl?.trim() || null;
+  if (patch.sharedModes !== undefined) row.shared_modes = patch.sharedModes;
 
   const { data, error } = await supabase
     .from("wishlist_items")
@@ -362,4 +378,66 @@ export async function saveVenueToWishlist(input: {
     savedFrom: input.savedFrom ?? "venue_card",
   });
   return { item, alreadySaved: false };
+}
+
+// ── Sharing the whole list ───────────────────────────────────────────────────
+
+/** Modes in which the WHOLE wishlist (current and future places) is shared. */
+export async function getWishlistShareAllModes(): Promise<ShareableMode[]> {
+  const uid = await requireUserId();
+  const { data, error } = await supabase
+    .from("wishlist_sharing_settings")
+    .select("share_all_modes")
+    .eq("user_id", uid)
+    .maybeSingle();
+  if (error) throw error;
+  return toShareableModes((data as { share_all_modes?: unknown } | null)?.share_all_modes);
+}
+
+export async function setWishlistShareAllModes(modes: ShareableMode[]): Promise<void> {
+  const uid = await requireUserId();
+  const { error } = await supabase
+    .from("wishlist_sharing_settings")
+    .upsert({ user_id: uid, share_all_modes: modes, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+  if (error) throw error;
+}
+
+export type SharedWishlistItem = {
+  ownerId: string;
+  id: string;
+  title: string;
+  description?: string;
+  address?: string;
+  city?: string;
+  placeId?: string;
+  latitude?: number;
+  longitude?: number;
+  imageUrl?: string;
+  url?: string;
+  price?: string;
+};
+
+/**
+ * Places other people shared with you in `mode` (only people you have an active chat with
+ * in that mode — enforced by the get_shared_wishlist_items RPC).
+ */
+export async function listSharedWishlistItems(ownerIds: string[], mode: ShareableMode): Promise<SharedWishlistItem[]> {
+  const ids = Array.from(new Set(ownerIds.filter(Boolean))).slice(0, 8);
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase.rpc("get_shared_wishlist_items", { p_owner_ids: ids, p_mode: mode });
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    ownerId: String(r.owner_id),
+    id: String(r.item_id),
+    title: String(r.title ?? ""),
+    description: (r.description as string | null) ?? undefined,
+    address: (r.address as string | null) ?? undefined,
+    city: (r.city as string | null) ?? undefined,
+    placeId: (r.place_id as string | null) ?? undefined,
+    latitude: typeof r.latitude === "number" ? r.latitude : undefined,
+    longitude: typeof r.longitude === "number" ? r.longitude : undefined,
+    imageUrl: (r.image_url as string | null) ?? undefined,
+    url: (r.url as string | null) ?? undefined,
+    price: (r.price as string | null) ?? undefined,
+  }));
 }

@@ -32,6 +32,7 @@ export async function addExternalEventToPlanner(item: EventCardItem): Promise<vo
         external_platform: item.externalPlatform ?? null,
         external_id: item.id,
         image_url: item.imageUrl ?? null,
+        offers: item.offers ?? [],
         host_name: item.hostName ?? null,
         location,
         venue_name: item.venueName ?? null,
@@ -71,12 +72,21 @@ export async function addExternalEventToPlanner(item: EventCardItem): Promise<vo
 }
 
 export type ExternalEventsOpts = {
-  latitude: number;
-  longitude: number;
+  /** Device location; may be null when browsing by `city`. */
+  latitude: number | null;
+  longitude: number | null;
+  /** Browse a city by name (geocoded server-side) instead of coordinates. */
+  city?: string | null;
   radiusKm?: number;
   category?: string | null;
   from?: string; // ISO date
   to?: string;   // ISO date
+  /** Coarse venue type filter (music, nightlife, museum…). */
+  venueType?: string | null;
+  /** The user's interest tags — the server ranks items and explains matches. */
+  interests?: string[];
+  /** App language for provider content where supported. */
+  language?: string;
 };
 
 /**
@@ -138,10 +148,14 @@ export async function fetchNearbyExternalEvents(opts: ExternalEventsOpts): Promi
     body: JSON.stringify({
       latitude: opts.latitude,
       longitude: opts.longitude,
+      city: opts.city ?? null,
       radius_km: opts.radiusKm ?? 30,
       category: opts.category ?? null,
       from: opts.from ?? null,
       to: opts.to ?? null,
+      venue_type: opts.venueType ?? null,
+      interests: opts.interests ?? [],
+      language: opts.language ?? null,
     }),
   };
 
