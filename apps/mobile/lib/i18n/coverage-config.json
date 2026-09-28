@@ -125,7 +125,8 @@
         "catalog.detailsTitle",
         "newPlan.forBusiness",
         "newPlan.forDate",
-        "wishlist.linkLabel"
+        "wishlist.linkLabel",
+        "eventDetails.title"
       ],
       "fr": [
         "onboarding.businessProfile.subtype.venueHint",
@@ -151,7 +152,8 @@
         "groups.consensus.optionWithLabel",
         "groups.consensus.planFallback",
         "groups.create.type",
-        "groups.invite.contactFallback"
+        "groups.invite.contactFallback",
+        "eventDetails.public"
       ],
       "es": [
         "onboarding.subProfile.alcohol",
@@ -246,7 +248,8 @@
         "chat.report.reason.spam"
       ],
       "da": [
-        "newPlan.forDate"
+        "newPlan.forDate",
+        "eventDetails.title"
       ],
       "lv": [
         "catalog.type.sports"
@@ -255,7 +258,8 @@
         "newPlan.forDate"
       ],
       "ro": [
-        "newPlan.forBusiness"
+        "newPlan.forBusiness",
+        "eventDetails.public"
       ]
     }
   }
