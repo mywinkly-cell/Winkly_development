@@ -12,6 +12,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
 import { resolveVerifiedPlace } from "../_shared/verifiedPlace.ts";
 import {
+  pickWishlistForPlan,
+  resolveWishlistRef,
+  WISHLIST_PROMPT_RULE,
+  wishlistPromptBlock,
+  type WishlistCandidate,
+  type WishlistRow,
+} from "../_shared/wishlist/planning.ts";
+import {
   buildLocationContextInjection,
   formatSystemContextBlock,
   mergeLocationHints,
@@ -793,9 +801,15 @@ type WinklyPlanOptionOut = {
     google_maps_link: string;
     estimated_cost: string;
     booking_url?: string;
+    /** Google place id when the venue is Places-verified (the app loads its photos). */
+    place_id?: string;
   };
   weather_note: string;
   duration_minutes: number;
+  /** Raw model reference to a WISHLIST_PLACES id — resolved into from_wishlist, then dropped. */
+  wishlist_ref?: string;
+  /** Set when this option is built around a place from someone's wish list. */
+  from_wishlist?: { title: string; owner: "you" | "partner" | "both"; place_id: string | null; image_url: string | null };
 };
 
 type WinklyPlanOutput = {
@@ -839,6 +853,7 @@ type PlannerThemePlansOutput = {
     duration_minutes: number;
     trip_days?: PlannerTripDayOut[];
   }>;
+  wishlist_suggestions?: WishlistCandidate[];
 };
 
 function allowlistContext(ctx: Record<string, unknown>): Record<string, unknown> {
@@ -3389,6 +3404,9 @@ function parseWinklyPlanOptionObject(
     },
     weather_note: weather_note.slice(0, 220),
     duration_minutes: Math.min(24 * 60, Math.max(30, duration_minutes)),
+    ...(typeof x.wishlist_ref === "string" && x.wishlist_ref.trim()
+      ? { wishlist_ref: x.wishlist_ref.trim().slice(0, 8) }
+      : {}),
   };
 }
 
@@ -3571,10 +3589,11 @@ function cityMapsSearchPlan(
 /** When Places verification succeeded, force both options onto the grounded venue (booking URL optional). */
 function applyVerifiedVenueToOptions(
   plan: WinklyPlanOutput,
-  vv: { name: string; address: string; google_maps_link: string },
+  vv: { name: string; address: string; google_maps_link: string; place_id?: string | null },
   bookingUrl: string | null,
 ): WinklyPlanOutput {
-  const mergeOpt = (opt: WinklyPlanOptionOut): WinklyPlanOptionOut => ({
+  // An option built around a saved wish-list place keeps that place — the user asked for it.
+  const mergeOpt = (opt: WinklyPlanOptionOut): WinklyPlanOptionOut => opt.from_wishlist ? opt : ({
     ...opt,
     venue: {
       name: vv.name,
@@ -3582,6 +3601,7 @@ function applyVerifiedVenueToOptions(
       google_maps_link: vv.google_maps_link,
       estimated_cost: opt.venue.estimated_cost,
       ...(bookingUrl ? { booking_url: bookingUrl } : {}),
+      ...(vv.place_id ? { place_id: vv.place_id } : {}),
     },
   });
   const [a, b, ...rest] = plan.options;
@@ -3594,12 +3614,125 @@ function applyVerifiedVenueToOptions(
 /** Plan-it: ground only option A on the verified venue; B/C keep their own (distinct) venues. */
 function applyVerifiedVenueToFirstOption(
   plan: WinklyPlanOutput,
-  vv: { name: string; address: string; google_maps_link: string },
+  vv: { name: string; address: string; google_maps_link: string; place_id?: string | null },
   bookingUrl: string | null,
 ): WinklyPlanOutput {
   const [a, b, ...rest] = plan.options;
+  // A wish-list pick in A stays; the verified venue then grounds B instead.
+  if (a.from_wishlist) {
+    const groundedB = applyVerifiedVenueToOptions({ options: [b, b] }, vv, bookingUrl).options[0];
+    return { ...plan, options: [a, groundedB, ...rest] };
+  }
   const grounded = applyVerifiedVenueToOptions({ options: [a, a] }, vv, bookingUrl).options[0];
   return { ...plan, options: [grounded, b, ...rest] };
+}
+
+/** Resolve each option's wishlist_ref into from_wishlist (drop invented refs). */
+function applyWishlistRefs(plan: WinklyPlanOutput, cands: WishlistCandidate[]): WinklyPlanOutput {
+  let used = false;
+  const map = (opt: WinklyPlanOptionOut): WinklyPlanOptionOut => {
+    const { wishlist_ref, ...rest } = opt;
+    const hit = used ? null : resolveWishlistRef(wishlist_ref, cands);
+    if (!hit) return rest;
+    used = true; // one wish-list option per plan keeps A/B/C genuinely different
+    return {
+      ...rest,
+      venue: { ...rest.venue, ...(hit.place_id ? { place_id: hit.place_id } : {}) },
+      from_wishlist: { title: hit.title, owner: hit.owner, place_id: hit.place_id, image_url: hit.image_url },
+    };
+  };
+  const [a, b, ...more] = plan.options;
+  return { ...plan, options: [map(a), map(b), ...more.map(map)] };
+}
+
+/**
+ * Open wish-list places for a plan: all of the requester's, plus each partner's items shared
+ * in THIS mode — and only when requester and partner share an active conversation in this
+ * mode and neither blocked the other (same rule as get_shared_wishlist_items). Best-effort.
+ */
+async function loadWishlistRowsForPlan(
+  supabase: ReturnType<typeof createClient>,
+  requesterId: string,
+  partnerIds: string[],
+  mode: string,
+): Promise<WishlistRow[]> {
+  const cols = "user_id, title, description, address, city, place_id, image_url, url, shared_modes";
+  type Row = WishlistRow & { user_id: string; shared_modes?: string[] | null };
+  const toRow = (r: Row): WishlistRow => ({
+    owner_id: r.user_id,
+    title: r.title,
+    description: r.description,
+    address: r.address,
+    city: r.city,
+    place_id: r.place_id,
+    image_url: r.image_url,
+    url: r.url,
+  });
+  try {
+    const own = await supabase
+      .from("wishlist_items")
+      .select(cols)
+      .eq("user_id", requesterId)
+      .is("archived_at", null)
+      .is("visited_at", null)
+      .order("updated_at", { ascending: false })
+      .limit(25);
+    const rows: WishlistRow[] = ((own.data ?? []) as Row[]).map(toRow);
+
+    const partners = partnerIds.filter((id) => id && id !== requesterId).slice(0, 7);
+    if (partners.length === 0 || !["romance", "friends", "business", "events"].includes(mode)) return rows;
+
+    // Relationship gate: shared active conversation in this mode, no block either way.
+    const { data: mine } = await supabase
+      .from("conversation_members")
+      .select("conversation_id, conversations!inner(mode)")
+      .eq("user_id", requesterId)
+      .is("left_at", null)
+      .eq("conversations.mode", mode)
+      .limit(1000);
+    const convIds = ((mine ?? []) as Array<{ conversation_id: string }>).map((r) => r.conversation_id);
+    if (convIds.length === 0) return rows;
+    const { data: theirs } = await supabase
+      .from("conversation_members")
+      .select("user_id")
+      .in("conversation_id", convIds)
+      .in("user_id", partners)
+      .is("left_at", null);
+    const related = new Set(((theirs ?? []) as Array<{ user_id: string }>).map((r) => r.user_id));
+    const { data: blocks } = await supabase
+      .from("user_blocks")
+      .select("blocker_id, blocked_id")
+      .or(`blocker_id.eq.${requesterId},blocked_id.eq.${requesterId}`);
+    for (const b of (blocks ?? []) as Array<{ blocker_id: string; blocked_id: string }>) {
+      related.delete(b.blocker_id === requesterId ? b.blocked_id : b.blocker_id);
+    }
+    const allowed = partners.filter((id) => related.has(id));
+    if (allowed.length === 0) return rows;
+
+    const [{ data: settings }, { data: theirItems }] = await Promise.all([
+      supabase.from("wishlist_sharing_settings").select("user_id, share_all_modes").in("user_id", allowed),
+      supabase
+        .from("wishlist_items")
+        .select(cols)
+        .in("user_id", allowed)
+        .is("archived_at", null)
+        .is("visited_at", null)
+        .order("updated_at", { ascending: false })
+        .limit(60),
+    ]);
+    const shareAll = new Set(
+      ((settings ?? []) as Array<{ user_id: string; share_all_modes: string[] | null }>)
+        .filter((s) => (s.share_all_modes ?? []).includes(mode))
+        .map((s) => s.user_id),
+    );
+    for (const r of (theirItems ?? []) as Row[]) {
+      if (shareAll.has(r.user_id) || (r.shared_modes ?? []).includes(mode)) rows.push(toRow(r));
+    }
+    return rows;
+  } catch (e) {
+    console.warn("[ai-gateway] wishlist load failed (non-fatal):", e);
+    return [];
+  }
 }
 
 /** The user's pinned values always win over whatever the model echoed back. */
@@ -4003,6 +4136,8 @@ async function generateWinklyPlan(params: {
   location_id: string | null;
   booking_url: string | null;
   participants: string[];
+  /** Saved places (yours / shared by the other person) that fit this plan — shown as "from your wish lists". */
+  wishlist_suggestions?: WishlistCandidate[];
 }> {
   const { supabase, requesterUserId, input, conversationId, persistDraft = true, maps_grounding = "verify" } = params;
 
@@ -4093,6 +4228,12 @@ async function generateWinklyPlan(params: {
   const weather = input.planning_form.weather ?? null;
 
   const planSeedTitle = (params.displaySeedTitle ?? userIdea ?? "Plan").trim().slice(0, 120) || "Plan";
+
+  // Wish lists: the requester's saved places + places partners shared in this mode.
+  const wishlistCands = pickWishlistForPlan(
+    await loadWishlistRowsForPlan(supabase, requesterUserId, ensureRequester, input.mode),
+    { requesterId: requesterUserId, planCity: city, max: 6 },
+  );
 
   const geminiKey = getGeminiKey();
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -4189,7 +4330,7 @@ async function generateWinklyPlan(params: {
       ? Math.min(50_000, Math.max(1000, Math.round(params.searchRadiusMeters)))
       : 40_000;
 
-  let verifiedVenue: { name: string; address: string; google_maps_link: string } | null = null;
+  let verifiedVenue: { name: string; address: string; google_maps_link: string; place_id?: string | null } | null = null;
   let verifiedPlaceId: string | null = null;
   // Hallucination guardrail: booking_url is only a Places-verified link, and only in verify mode.
   let verifiedBookingUrl: string | null = null;
@@ -4207,6 +4348,7 @@ async function generateWinklyPlan(params: {
         name: place.name,
         address: ensureAddressIncludesCity(place.formatted_address ?? "", city),
         google_maps_link: place.google_maps_url ?? `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
+        place_id: place.place_id,
       };
       if (maps_grounding === "verify") {
         const pick = (place.website && /^https?:\/\//i.test(place.website))
@@ -4268,7 +4410,7 @@ ${verifiedVenueRule}
 - When VERIFIED_VENUE is null, propose ${optionCountWord} distinct real venues. For google_maps_link use a Maps search URL: https://www.google.com/maps/search/?api=1&query=ENCODED_VENUE_NAME_AND_CITY (encode spaces as +).
 - Put human-readable weather in weather_note — never paste raw JSON.
 - booking_url inside venue must be omitted unless BOOKING_URL is provided (non-null).
-- Output MUST be valid JSON and follow the required schema exactly.${assumptionsRules}
+${wishlistCands.length ? `${WISHLIST_PROMPT_RULE}\n` : ""}- Output MUST be valid JSON and follow the required schema exactly.${assumptionsRules}
 
 Required JSON schema:
 {
@@ -4289,7 +4431,8 @@ Required JSON schema:
         "booking_url"?: string
       },
       "weather_note": string,
-      "duration_minutes": number
+      "duration_minutes": number${wishlistCands.length ? `,
+      "wishlist_ref"?: string` : ""}
     },
     { ... }
   ]${assumptionsSchema}
@@ -4310,8 +4453,11 @@ Required JSON schema:
     ...(ensureRequester.length > 2 ? { group_size: ensureRequester.length } : {}),
     ...(groupVibeText ? { GROUP_VIBE_TODAY: groupVibeText } : {}),
     ...(participantsPlannerItems ? { PARTICIPANTS_PLANNER_ITEMS: participantsPlannerItems } : {}),
-    ...(verifiedVenue ? { VERIFIED_VENUE: verifiedVenue } : {}),
+    ...(verifiedVenue
+      ? { VERIFIED_VENUE: { name: verifiedVenue.name, address: verifiedVenue.address, google_maps_link: verifiedVenue.google_maps_link } }
+      : {}),
     ...(verifiedBookingUrl ? { BOOKING_URL: verifiedBookingUrl } : {}),
+    ...(wishlistCands.length ? { WISHLIST_PLACES: wishlistPromptBlock(wishlistCands) } : {}),
     ...(planIt
       ? {
           NOW_LOCAL: planIt.nowLocal,
@@ -4472,6 +4618,8 @@ Required JSON schema:
     });
   }
 
+  if (wishlistCands.length) finalPlan = applyWishlistRefs(finalPlan, wishlistCands);
+
   if (verifiedVenue) {
     // Plan-it shows three options — grounding all three on one venue would make them the same
     // plan, so only option A takes the verified venue (B/C stay distinct model venues).
@@ -4518,6 +4666,7 @@ Required JSON schema:
     location_id: verifiedPlaceId,
     booking_url: verifiedBookingUrl,
     participants: ensureRequester,
+    ...(wishlistCands.length ? { wishlist_suggestions: wishlistCands } : {}),
   };
 }
 
@@ -5320,6 +5469,7 @@ async function handleAiGatewayRequest(req: Request): Promise<Response> {
         pending_plan_id: out.pending_plan_id,
         provider: out.provider,
         request_id: requestIdWp,
+        ...(out.wishlist_suggestions?.length ? { wishlist_suggestions: out.wishlist_suggestions } : {}),
       }), { headers: { "Content-Type": "application/json", ...Object.fromEntries(cors) } });
     }
 
@@ -5383,7 +5533,9 @@ async function handleAiGatewayRequest(req: Request): Promise<Response> {
       const groupVibeForKey = typeof scrubbedSafeContext.group_vibe === "string" ? scrubbedSafeContext.group_vibe : "";
       const semKey =
         // v5: do not serve Places-stub fallbacks from cache (v4 cached those for 24h)
-        `sc:planner_theme_plans:v5:${mode}:${normalizeTag(city)}:${normalizeTag(theme)}:${dateTime.slice(0, 10)}:${tripNumDays}:${hashKeyMaterial(participantIds.slice().sort().join(",") + "|" + groupVibeForKey)}`;
+        // v6: keyed by requester too — responses now carry the requester's own (private) wish-list
+        //     places, so two people planning together must never share one cached answer.
+        `sc:planner_theme_plans:v6:${mode}:${normalizeTag(city)}:${normalizeTag(theme)}:${dateTime.slice(0, 10)}:${tripNumDays}:${hashKeyMaterial(user.id + "|" + participantIds.slice().sort().join(",") + "|" + groupVibeForKey)}`;
       const cached = await redisGetJson<PlannerThemePlansOutput>(semKey);
       const cachedOptions = cached?.plan_options ?? [];
       if (
@@ -5457,6 +5609,7 @@ async function handleAiGatewayRequest(req: Request): Promise<Response> {
           ...opt,
           ...(out.trip_days?.length ? { trip_days: out.trip_days } : {}),
         })),
+        ...(out.wishlist_suggestions?.length ? { wishlist_suggestions: out.wishlist_suggestions } : {}),
       };
 
       // Only cache real model output — Places/synthetic "fallback" stubs must not poison the 24h cache.

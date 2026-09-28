@@ -132,6 +132,9 @@ jobs:
       - name: Security hardening regression test
         run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/security_hardening_test.sql
 
+      - name: Wishlist sharing + events catalogue regression test
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/wishlist_sharing_test.sql
+
       - name: Stop Supabase
         if: always()
         run: npx supabase stop
