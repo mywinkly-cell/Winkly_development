@@ -8,21 +8,26 @@ import { View, Text, Pressable, TextInput, ActivityIndicator, Alert, StyleSheet 
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { Header, Screen, Chip, Card, PrimaryButton } from "@/components/ds";
+import { Header, Screen, Chip, Card, PrimaryButton, TextButton } from "@/components/ds";
 import { useAppTheme } from "@/constants/design-system";
 import { VenuePhoto } from "@/components/ui/VenuePhoto";
 import { SHARE_MODE_LABEL_KEYS } from "@/components/wishlist/WishlistForm";
+import { SharePeopleSheet } from "@/components/wishlist/SharePeopleSheet";
+import { newPlanHref } from "@/lib/planner/newPlan";
 import { useModeContext } from "@/providers/ModeContextProvider";
 import {
   getWishlistShareAllModes,
+  getWishlistViewers,
   listWishlistItems,
+  listWishlistSharedWithMe,
+  type SharedWithMeItem,
   setWishlistShareAllModes,
   SHAREABLE_MODES,
   type ShareableMode,
   type WishlistItem,
 } from "@/lib/wishlistStore";
 
-type Show = "open" | "visited";
+type Show = "open" | "visited" | "shared";
 
 export default function WishlistIndex() {
   const router = useRouter();
@@ -35,15 +40,25 @@ export default function WishlistIndex() {
   const [query, setQuery] = useState("");
   const [show, setShow] = useState<Show>("open");
   const [city, setCity] = useState<string | null>(null);
+  const [sharedWithMe, setSharedWithMe] = useState<SharedWithMeItem[]>([]);
+  const [listViewerCount, setListViewerCount] = useState(0);
+  const [peopleOpen, setPeopleOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      void Promise.all([listWishlistItems({ includeVisited: true }), getWishlistShareAllModes().catch(() => [])])
-        .then(([rows, modes]) => {
+      void Promise.all([
+        listWishlistItems({ includeVisited: true }),
+        getWishlistShareAllModes().catch(() => []),
+        listWishlistSharedWithMe().catch(() => []),
+        getWishlistViewers(null).catch(() => []),
+      ])
+        .then(([rows, modes, shared, viewers]) => {
           if (cancelled) return;
           setItems(rows);
           setShareAll(modes);
+          setSharedWithMe(shared);
+          setListViewerCount(viewers.length);
         })
         .catch(() => {
           if (!cancelled) Alert.alert(t("wishlist.loadFailedTitle"), t("wishlist.loadFailed"));
@@ -127,6 +142,13 @@ export default function WishlistIndex() {
         <View style={styles.chips}>
           <Chip label={t("wishlist.toVisit", { count: openCount })} selected={show === "open"} onPress={() => setShow("open")} />
           <Chip label={t("wishlist.visited", { count: visitedCount })} selected={show === "visited"} onPress={() => setShow("visited")} />
+          {sharedWithMe.length ? (
+            <Chip
+              label={t("wishlist.sharedWithMe", { count: sharedWithMe.length })}
+              selected={show === "shared"}
+              onPress={() => setShow("shared")}
+            />
+          ) : null}
         </View>
         {cities.length > 1 ? (
           <View style={styles.chips}>
@@ -137,7 +159,47 @@ export default function WishlistIndex() {
           </View>
         ) : null}
 
-        {loading ? (
+        {show === "shared" ? (
+          <View style={styles.grid}>
+            {sharedWithMe.map((it) => (
+              <Pressable
+                key={it.id}
+                onPress={() =>
+                  router.push(
+                    newPlanHref({
+                      title: it.title,
+                      location: [it.address, it.city].filter(Boolean).join(", ") || it.title,
+                      imageUrl: it.imageUrl ?? null,
+                      placeId: it.placeId ?? null,
+                      source: "wishlist",
+                    })
+                  )
+                }
+                style={({ pressed }) => [
+                  styles.tile,
+                  { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderRadius: theme.radii.lg, opacity: pressed ? 0.85 : 1 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={t("wishlist.planSharedA11y", { place: it.title })}
+              >
+                <VenuePhoto
+                  source={{ imageUrl: it.imageUrl, placeId: it.placeId, name: it.title, city: it.city, latitude: it.latitude, longitude: it.longitude }}
+                  style={styles.tilePhoto}
+                  width={400}
+                  icon="bookmark-outline"
+                />
+                <View style={{ padding: theme.spacing.sm }}>
+                  <Text style={[theme.type.bodyMedium, { color: theme.colors.textPrimary }]} numberOfLines={2}>
+                    {it.title}
+                  </Text>
+                  <Text style={[theme.type.caption, { color: theme.colors.textSecondary, marginTop: 4 }]} numberOfLines={1}>
+                    {t("wishlist.sharedBy", { name: it.ownerFirstName ?? t("wishlist.peopleUnnamed") })}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        ) : loading ? (
           <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginVertical: theme.spacing.xxl }} />
         ) : items.length === 0 ? (
           <Card padding="lg" style={{ alignItems: "center", marginTop: theme.spacing.md }}>
@@ -185,7 +247,7 @@ export default function WishlistIndex() {
                     ) : (
                       <View style={{ flex: 1 }} />
                     )}
-                    {it.sharedModes.length || shareAll.length ? (
+                    {it.sharedModes.length || shareAll.length || listViewerCount ? (
                       <Ionicons name="people-outline" size={14} color={theme.colors.textMuted} accessibilityLabel={t("wishlist.sharedA11y")} />
                     ) : null}
                   </View>
@@ -211,8 +273,22 @@ export default function WishlistIndex() {
                 />
               ))}
             </View>
+            <View style={styles.peopleRow}>
+              <Text style={[theme.type.body, { color: theme.colors.textPrimary, flex: 1 }]}>
+                {listViewerCount ? t("wishlist.peopleCount", { count: listViewerCount }) : t("wishlist.peopleNone")}
+              </Text>
+              <TextButton title={t("wishlist.peopleChoose")} onPress={() => setPeopleOpen(true)} />
+            </View>
           </Card>
         ) : null}
+        <SharePeopleSheet
+          visible={peopleOpen}
+          itemId={null}
+          onClose={(n) => {
+            setPeopleOpen(false);
+            if (typeof n === "number") setListViewerCount(n);
+          }}
+        />
       </Screen>
     </View>
   );
@@ -224,5 +300,6 @@ const styles = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 12 },
   tile: { width: "48.5%", borderWidth: 1, overflow: "hidden" },
   tilePhoto: { width: "100%", height: 110 },
+  peopleRow: { flexDirection: "row", alignItems: "center", marginTop: 8 },
   tileMeta: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
 });

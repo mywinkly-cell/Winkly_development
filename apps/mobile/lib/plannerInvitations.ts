@@ -8,6 +8,7 @@ import { requestPeerPushNotification } from "@/lib/push/winklyPush";
 import { recordPairBehaviorSignal } from "@/lib/matching/behaviorSignals";
 import { syncPlannerItemToDeviceCalendar } from "@/lib/integrations/calendarSync";
 import { ensureConfirmedEventForPlannerItem, triggerCloudCalendarSync } from "@/lib/integrations/confirmedEvents";
+import { offerCalendarSyncOnce } from "@/lib/integrations/plannerCalendars";
 import type { Mode } from "@/types";
 
 /** Fire-and-forget: register the confirmed-plan bookkeeping row, then ask the cloud sync
@@ -131,6 +132,7 @@ export async function createPlannerItemForSelf(
     startsAt: payload.starts_at,
     endsAt: payload.ends_at ?? null,
   });
+  void offerCalendarSyncOnce(userId);
 
   return item.id;
 }
@@ -193,6 +195,7 @@ export async function createPlannerInvite(
     startsAt: payload.starts_at,
     endsAt: payload.ends_at ?? null,
   });
+  void offerCalendarSyncOnce(inviterId);
 
   const { data: inv, error: invError } = await supabase
     .from("planner_invitations")
@@ -307,6 +310,7 @@ export async function acceptPlannerInvite(invitationId: string): Promise<AcceptP
       startsAt: typedItemRow.starts_at,
       endsAt: typedItemRow.ends_at ?? null,
     });
+    void offerCalendarSyncOnce(uid);
   }
 
   const itemTitle = (itemRow as { title?: string } | null)?.title ?? "your plan";

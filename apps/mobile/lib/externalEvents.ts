@@ -1,75 +1,11 @@
 /**
- * External events (Ticketmaster, Meetup, Eventbrite) — add to planner, fetch nearby (with retry + graceful fallback).
+ * External events (Ticketmaster, Meetup, Eventbrite, GetYourGuide) — fetch nearby (with retry + graceful fallback).
+ * Turning one into a plan goes through the new-plan form (lib/planner/newPlan.ts).
  * See docs/EXTERNAL_EVENTS_AND_FILTERING.md
  */
 
 import { supabase } from "@/lib/supabase";
-import { syncPlannerItemToDeviceCalendar } from "@/lib/integrations/calendarSync";
-import { ensureConfirmedEventForPlannerItem, triggerCloudCalendarSync } from "@/lib/integrations/confirmedEvents";
 import type { EventCardItem } from "@/components/ui/EventCard";
-
-/** Add an external event to the user's planner. Creates planner_item with source_mode events and meta. */
-export async function addExternalEventToPlanner(item: EventCardItem): Promise<void> {
-  const { data: auth } = await supabase.auth.getUser();
-  const uid = auth.user?.id;
-  if (!uid) throw new Error("Not signed in");
-
-  const location = item.location ?? item.venueName ?? null;
-
-  const { data: row, error } = await supabase
-    .from("planner_items")
-    .insert({
-      created_by: uid,
-      source_mode: "events",
-      title: item.title,
-      description: item.description ?? null,
-      starts_at: item.startAt,
-      ends_at: item.endAt ?? null,
-      related_event_id: null,
-      related_user_id: null,
-      meta: {
-        external_url: item.externalUrl ?? null,
-        external_platform: item.externalPlatform ?? null,
-        external_id: item.id,
-        image_url: item.imageUrl ?? null,
-        offers: item.offers ?? [],
-        host_name: item.hostName ?? null,
-        location,
-        venue_name: item.venueName ?? null,
-      },
-    })
-    .select("id")
-    .single();
-
-  if (error || !row) throw new Error(error?.message ?? "Failed to add event to planner");
-
-  const { error: partError } = await supabase
-    .from("planner_participants")
-    .insert({ planner_item_id: row.id, user_id: uid, role: "owner" });
-  if (partError) throw new Error(partError.message);
-
-  void syncPlannerItemToDeviceCalendar({
-    plannerItemId: row.id,
-    userId: uid,
-    title: item.title,
-    description: item.description ?? null,
-    location,
-    startsAt: item.startAt,
-    endsAt: item.endAt ?? null,
-  });
-
-  void (async () => {
-    const confirmedEventId = await ensureConfirmedEventForPlannerItem({
-      plannerItemId: row.id,
-      creatorId: uid,
-      participantUserId: uid,
-      title: item.title,
-      startsAt: item.startAt,
-      endsAt: item.endAt ?? null,
-    });
-    if (confirmedEventId) await triggerCloudCalendarSync(confirmedEventId);
-  })();
-}
 
 export type ExternalEventsOpts = {
   /** Device location; may be null when browsing by `city`. */

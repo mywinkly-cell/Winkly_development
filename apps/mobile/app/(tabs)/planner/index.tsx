@@ -92,6 +92,11 @@ import { isModeAvailable } from "@/lib/modes/availability";
 import { VenuePhoto } from "@/components/ui/VenuePhoto";
 import { hasPlacePhotoSource, type PlacePhotoSource } from "@/lib/places/placePhoto";
 import { newPlanHref } from "@/lib/planner/newPlan";
+import {
+  addPlanToMyCalendars,
+  removePlanFromMyCalendars,
+  syncMissingPlansToThisPhone,
+} from "@/lib/integrations/plannerCalendars";
 
 type TabKey = "all" | "dates" | "meetups" | "business" | "events" | "archive";
 type TimeRange =
@@ -542,6 +547,9 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
       const uid = auth.user?.id;
       if (!uid) return;
       const data = await getPlannerItems(uid, undefined, 200);
+      // Plans that reached the Planner from elsewhere (group plan confirmed by others, invite
+      // accepted on another phone, joined event) also land on this phone's calendar.
+      syncMissingPlansToThisPhone(uid);
 
       const mapped: PlannerItem[] = (data as Record<string, unknown>[]).map((row) => {
         const d = new Date(String(row.starts_at));
@@ -573,7 +581,9 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
           description: typeof row.description === "string" && row.description ? row.description : undefined,
           location,
           isOrganiser: row.created_by === uid,
-          status: "active" as const,
+          // Cancelled plans stay in the Archive tab after a reload (meta.cancelled_at is authoritative).
+          status: meta?.cancelled_at ? ("archived" as const) : ("active" as const),
+          ...(typeof meta?.cancelled_at === "string" ? { archivedAt: meta.cancelled_at } : {}),
           fromConcierge: meta?.from_concierge === true,
           photo: plannerItemPhoto(meta, location),
           aiRequestId:
@@ -1073,6 +1083,10 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         .from("planner_items")
         .update({ meta: { ...prevMeta, cancelled_at: new Date().toISOString() } })
         .eq("id", item.id);
+      // A cancelled plan leaves the calendars too (phone + Google/Outlook; for the organiser,
+      // everyone's copies).
+      const { data: auth } = await supabase.auth.getUser();
+      if (auth.user?.id) await removePlanFromMyCalendars(item.id, auth.user.id);
     })();
     closeDetails();
     closeCancelModal();
@@ -1098,6 +1112,26 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
       if (prevMeta.cancelled_at == null) return;
       const { cancelled_at: _cancelledAt, ...rest } = prevMeta;
       await supabase.from("planner_items").update({ meta: rest }).eq("id", item.id);
+      // Back on: re-add to the calendars it was removed from.
+      const { data: auth } = await supabase.auth.getUser();
+      const { data: full } = await supabase
+        .from("planner_items")
+        .select("created_by, title, description, starts_at, ends_at")
+        .eq("id", item.id)
+        .maybeSingle();
+      const f = full as { created_by: string; title: string; description: string | null; starts_at: string; ends_at: string | null } | null;
+      if (auth.user?.id && f) {
+        addPlanToMyCalendars({
+          plannerItemId: item.id,
+          creatorId: f.created_by,
+          userId: auth.user.id,
+          title: f.title,
+          description: f.description,
+          location: typeof rest.location === "string" ? rest.location : null,
+          startsAt: f.starts_at,
+          endsAt: f.ends_at,
+        });
+      }
     })();
     closeDetails();
   }, [closeDetails]);

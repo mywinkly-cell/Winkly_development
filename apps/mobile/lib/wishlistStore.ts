@@ -441,3 +441,71 @@ export async function listSharedWishlistItems(ownerIds: string[], mode: Shareabl
     price: (r.price as string | null) ?? undefined,
   }));
 }
+
+// ── Sharing with specific people ─────────────────────────────────────────────
+
+/** Someone the user can share places with: a person they have a 1:1 chat with. */
+export type ShareCandidate = {
+  userId: string;
+  firstName: string | null;
+  photoUrl: string | null;
+  modes: ShareableMode[];
+};
+
+export async function listShareCandidates(): Promise<ShareCandidate[]> {
+  const { data, error } = await supabase.rpc("list_wishlist_share_candidates");
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    userId: String(r.user_id),
+    firstName: (r.first_name as string | null) ?? null,
+    photoUrl: (r.photo_url as string | null) ?? null,
+    modes: toShareableModes(r.modes),
+  }));
+}
+
+/** Who sees one place personally (itemId) or the whole list (null). */
+export async function getWishlistViewers(itemId: string | null): Promise<string[]> {
+  const uid = await requireUserId();
+  let q = supabase.from("wishlist_item_viewers").select("viewer_id").eq("owner_id", uid);
+  q = itemId ? q.eq("item_id", itemId) : q.is("item_id", null);
+  const { data, error } = await q;
+  if (error) throw error;
+  return ((data ?? []) as { viewer_id: string }[]).map((r) => r.viewer_id);
+}
+
+/** Replace who sees one place (itemId) or the whole list (null). Only real connections are kept. */
+export async function setWishlistViewers(itemId: string | null, viewerIds: string[]): Promise<number> {
+  const { data, error } = await supabase.rpc("set_wishlist_viewers", {
+    p_item_id: itemId,
+    p_viewer_ids: Array.from(new Set(viewerIds)),
+  });
+  if (error) throw error;
+  return typeof data === "number" ? data : 0;
+}
+
+export type SharedWithMeItem = SharedWishlistItem & {
+  ownerFirstName: string | null;
+  ownerPhotoUrl: string | null;
+};
+
+/** Places other people shared with me (by mode or personally). */
+export async function listWishlistSharedWithMe(): Promise<SharedWithMeItem[]> {
+  const { data, error } = await supabase.rpc("get_wishlist_shared_with_me");
+  if (error) throw error;
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    ownerId: String(r.owner_id),
+    ownerFirstName: (r.owner_first_name as string | null) ?? null,
+    ownerPhotoUrl: (r.owner_photo_url as string | null) ?? null,
+    id: String(r.item_id),
+    title: String(r.title ?? ""),
+    description: (r.description as string | null) ?? undefined,
+    address: (r.address as string | null) ?? undefined,
+    city: (r.city as string | null) ?? undefined,
+    placeId: (r.place_id as string | null) ?? undefined,
+    latitude: typeof r.latitude === "number" ? r.latitude : undefined,
+    longitude: typeof r.longitude === "number" ? r.longitude : undefined,
+    imageUrl: (r.image_url as string | null) ?? undefined,
+    url: (r.url as string | null) ?? undefined,
+    price: (r.price as string | null) ?? undefined,
+  }));
+}

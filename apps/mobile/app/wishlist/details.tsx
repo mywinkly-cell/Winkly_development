@@ -3,11 +3,12 @@
 // "Plan a visit", which opens the new-plan form (just me / date / meetup…).
 
 import React, { useCallback, useState } from "react";
+import { SharePeopleSheet } from "@/components/wishlist/SharePeopleSheet";
 import { View, Text, Pressable, Alert, Linking, ActivityIndicator, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { Header, Screen, PrimaryButton, SecondaryButton, Chip, Card } from "@/components/ds";
+import { Header, Screen, PrimaryButton, SecondaryButton, TextButton, Chip, Card } from "@/components/ds";
 import { useAppTheme } from "@/constants/design-system";
 import { VenuePhoto } from "@/components/ui/VenuePhoto";
 import { SHARE_MODE_LABEL_KEYS } from "@/components/wishlist/WishlistForm";
@@ -17,6 +18,7 @@ import { formatAppDate, useAppLocaleTag } from "@/lib/i18n/appLocale";
 import {
   deleteWishlistItem,
   getWishlistItem,
+  getWishlistViewers,
   markWishlistItemVisited,
   updateWishlistItem,
   SHAREABLE_MODES,
@@ -33,6 +35,8 @@ export default function WishlistDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [item, setItem] = useState<WishlistItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [viewerCount, setViewerCount] = useState(0);
+  const [peopleOpen, setPeopleOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -40,6 +44,10 @@ export default function WishlistDetails() {
       void getWishlistItem(String(id))
         .then((found) => {
           if (!cancelled) setItem(found);
+        })
+        .then(() => getWishlistViewers(String(id)))
+        .then((ids) => {
+          if (!cancelled) setViewerCount(ids.length);
         })
         .catch(() => {
           if (!cancelled) setItem(null);
@@ -214,10 +222,24 @@ export default function WishlistDetails() {
               ))}
             </View>
             <Text style={[theme.type.caption, { color: theme.colors.textMuted, marginTop: theme.spacing.sm }]}>
-              {item.sharedModes.length ? t("wishlist.shareHintOn") : t("wishlist.shareHintOff")}
+              {item.sharedModes.length || viewerCount ? t("wishlist.shareHintOn") : t("wishlist.shareHintOff")}
             </Text>
+            <View style={[styles.row, { justifyContent: "space-between" }]}>
+              <Text style={[theme.type.body, { color: theme.colors.textPrimary, flex: 1 }]}>
+                {viewerCount ? t("wishlist.peopleCount", { count: viewerCount }) : t("wishlist.peopleNone")}
+              </Text>
+              <TextButton title={t("wishlist.peopleChoose")} onPress={() => setPeopleOpen(true)} />
+            </View>
           </Card>
         ) : null}
+        <SharePeopleSheet
+          visible={peopleOpen}
+          itemId={item.id}
+          onClose={(n) => {
+            setPeopleOpen(false);
+            if (typeof n === "number") setViewerCount(n);
+          }}
+        />
 
         <View style={{ gap: theme.spacing.sm, marginTop: theme.spacing.xl }}>
           <PrimaryButton title={t("wishlist.planVisit")} onPress={planVisit} />

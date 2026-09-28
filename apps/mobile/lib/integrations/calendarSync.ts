@@ -120,6 +120,7 @@ export async function backfillPlannerItemsToDeviceCalendar(userId: string): Prom
 
     for (const item of items) {
       const meta = (item.meta ?? null) as Record<string, unknown> | null;
+      if (meta?.cancelled_at) continue; // cancelled plans stay off the calendar
       const location =
         (typeof meta?.location === "string" && meta.location) ||
         (typeof meta?.place === "string" && meta.place) ||
