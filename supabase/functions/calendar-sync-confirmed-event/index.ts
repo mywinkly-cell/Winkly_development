@@ -4,6 +4,10 @@
  * after a plan is confirmed (any of the planner-item creation paths) and, as a durability
  * net, retried by the calendar-sync-sweep cron for anything left pending/failed.
  *
+ * `action: "remove"` takes the plan OFF calendars instead: the caller's own copies (left an
+ * event, declined, cancelled their attendance), or — when the caller created the plan and it
+ * is cancelled — every participant's copies.
+ *
  * The confirmed event UID is stored in DB (confirmed_events.event_uid) so all participants
  * can share one identifier; provider-specific event IDs live per participant in
  * confirmed_event_participants.
@@ -12,7 +16,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, withCorsEmpty } from "../_shared/cors.ts";
-import { syncConfirmedEventToCloud } from "../_shared/calendarSync.ts";
+import { removeConfirmedEventFromCloud, syncConfirmedEventToCloud } from "../_shared/calendarSync.ts";
 import { isGoogleCalendarConfigured } from "../_shared/googleCalendar.ts";
 import { isMicrosoftGraphConfigured } from "../_shared/microsoftGraph.ts";
 
@@ -44,7 +48,8 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Invalid session" }), { status: 401, headers: jsonHeaders });
     }
 
-    const body = await req.json().catch(() => ({})) as { confirmed_event_id?: unknown };
+    const body = await req.json().catch(() => ({})) as { confirmed_event_id?: unknown; action?: unknown };
+    const action = body?.action === "remove" ? "remove" : "sync";
     const confirmedEventId = body?.confirmed_event_id;
     if (!isUuid(confirmedEventId)) {
       return new Response(JSON.stringify({ error: "confirmed_event_id required" }), { status: 400, headers: jsonHeaders });
@@ -54,7 +59,7 @@ serve(async (req) => {
     // uses the service-role client so we check explicitly).
     const { data: ce } = await supabase
       .from("confirmed_events")
-      .select("id, event_uid, planner_item_id")
+      .select("id, event_uid, planner_item_id, created_by")
       .eq("id", confirmedEventId)
       .maybeSingle();
     if (!ce) {
@@ -68,6 +73,36 @@ serve(async (req) => {
         .eq("user_id", user.id)
         .maybeSingle()
       : { data: null };
+    if (action === "remove") {
+      // A user who just left may no longer have a participant row — their own calendar rows
+      // are enough to prove the relationship.
+      const { data: ownRows } = await supabase
+        .from("confirmed_event_participants")
+        .select("user_id")
+        .eq("confirmed_event_id", confirmedEventId)
+        .eq("user_id", user.id)
+        .limit(1);
+      if (!membership && !(ownRows ?? []).length && ce.created_by !== user.id) {
+        return new Response(JSON.stringify({ error: "Not a participant of this plan" }), { status: 403, headers: jsonHeaders });
+      }
+      let userIds = [user.id];
+      if (ce.created_by === user.id && ce.planner_item_id) {
+        const { data: item } = await supabase.from("planner_items").select("meta").eq("id", ce.planner_item_id).maybeSingle();
+        const meta = (item as { meta?: Record<string, unknown> | null } | null)?.meta ?? null;
+        if (meta?.cancelled_at) {
+          const { data: all } = await supabase
+            .from("confirmed_event_participants")
+            .select("user_id")
+            .eq("confirmed_event_id", confirmedEventId);
+          userIds = Array.from(new Set(((all ?? []) as Array<{ user_id: string }>).map((r) => r.user_id)));
+        }
+      }
+      const removed = await removeConfirmedEventFromCloud(supabase, confirmedEventId, userIds);
+      return new Response(JSON.stringify({ status: "ok", action, confirmed_event_id: confirmedEventId, ...removed }), {
+        headers: jsonHeaders,
+      });
+    }
+
     if (!membership) {
       return new Response(JSON.stringify({ error: "Not a participant of this plan" }), { status: 403, headers: jsonHeaders });
     }

@@ -3680,7 +3680,51 @@ async function loadWishlistRowsForPlan(
     const rows: WishlistRow[] = ((own.data ?? []) as Row[]).map(toRow);
 
     const partners = partnerIds.filter((id) => id && id !== requesterId).slice(0, 7);
-    if (partners.length === 0 || !["romance", "friends", "business", "events"].includes(mode)) return rows;
+    if (partners.length === 0) return rows;
+
+    // Blocks either way exclude a partner from every sharing route.
+    const { data: blockRows } = await supabase
+      .from("user_blocks")
+      .select("blocker_id, blocked_id")
+      .or(`blocker_id.eq.${requesterId},blocked_id.eq.${requesterId}`);
+    const blocked = new Set(
+      ((blockRows ?? []) as Array<{ blocker_id: string; blocked_id: string }>).map((b) =>
+        b.blocker_id === requesterId ? b.blocked_id : b.blocker_id
+      ),
+    );
+    const unblocked = partners.filter((id) => !blocked.has(id));
+    const seen = new Set<string>();
+
+    // Places a partner shared with the requester PERSONALLY (one place or the whole list).
+    // Partners here already share a conversation with the requester (the planning context).
+    const { data: personal } = await supabase
+      .from("wishlist_item_viewers")
+      .select("owner_id, item_id")
+      .in("owner_id", unblocked.length ? unblocked : ["00000000-0000-0000-0000-000000000000"])
+      .eq("viewer_id", requesterId);
+    const personalRows = (personal ?? []) as Array<{ owner_id: string; item_id: string | null }>;
+    const wholeListOwners = personalRows.filter((r) => !r.item_id).map((r) => r.owner_id);
+    const itemIds = personalRows.filter((r) => r.item_id).map((r) => r.item_id as string);
+    if (wholeListOwners.length || itemIds.length) {
+      const filters = [
+        ...(wholeListOwners.length ? [`user_id.in.(${wholeListOwners.join(",")})`] : []),
+        ...(itemIds.length ? [`id.in.(${itemIds.join(",")})`] : []),
+      ];
+      const { data: sharedToMe } = await supabase
+        .from("wishlist_items")
+        .select(`id, ${cols}`)
+        .or(filters.join(","))
+        .is("archived_at", null)
+        .is("visited_at", null)
+        .limit(60);
+      for (const r of (sharedToMe ?? []) as Array<Row & { id: string }>) {
+        if (!unblocked.includes(r.user_id) || seen.has(r.id)) continue;
+        seen.add(r.id);
+        rows.push(toRow(r));
+      }
+    }
+
+    if (!["romance", "friends", "business", "events"].includes(mode)) return rows;
 
     // Relationship gate: shared active conversation in this mode, no block either way.
     const { data: mine } = await supabase
@@ -3699,21 +3743,14 @@ async function loadWishlistRowsForPlan(
       .in("user_id", partners)
       .is("left_at", null);
     const related = new Set(((theirs ?? []) as Array<{ user_id: string }>).map((r) => r.user_id));
-    const { data: blocks } = await supabase
-      .from("user_blocks")
-      .select("blocker_id, blocked_id")
-      .or(`blocker_id.eq.${requesterId},blocked_id.eq.${requesterId}`);
-    for (const b of (blocks ?? []) as Array<{ blocker_id: string; blocked_id: string }>) {
-      related.delete(b.blocker_id === requesterId ? b.blocked_id : b.blocker_id);
-    }
-    const allowed = partners.filter((id) => related.has(id));
+    const allowed = unblocked.filter((id) => related.has(id));
     if (allowed.length === 0) return rows;
 
     const [{ data: settings }, { data: theirItems }] = await Promise.all([
       supabase.from("wishlist_sharing_settings").select("user_id, share_all_modes").in("user_id", allowed),
       supabase
         .from("wishlist_items")
-        .select(cols)
+        .select(`id, ${cols}`)
         .in("user_id", allowed)
         .is("archived_at", null)
         .is("visited_at", null)
@@ -3725,8 +3762,12 @@ async function loadWishlistRowsForPlan(
         .filter((s) => (s.share_all_modes ?? []).includes(mode))
         .map((s) => s.user_id),
     );
-    for (const r of (theirItems ?? []) as Row[]) {
-      if (shareAll.has(r.user_id) || (r.shared_modes ?? []).includes(mode)) rows.push(toRow(r));
+    for (const r of (theirItems ?? []) as Array<Row & { id: string }>) {
+      if (seen.has(r.id)) continue;
+      if (shareAll.has(r.user_id) || (r.shared_modes ?? []).includes(mode)) {
+        seen.add(r.id);
+        rows.push(toRow(r));
+      }
     }
     return rows;
   } catch (e) {

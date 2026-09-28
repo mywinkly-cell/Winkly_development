@@ -126,6 +126,96 @@ BEGIN
   END;
 END $$;
 
+-- ── Sharing with specific people (20260928120000) ───────────────────────────
+RESET ROLE;
+DELETE FROM public.user_blocks WHERE blocker_id = current_setting('test.a')::uuid;
+DELETE FROM public.wishlist_sharing_settings WHERE user_id = current_setting('test.a')::uuid;
+INSERT INTO public.wishlist_items (id, user_id, title, mode)
+VALUES ('00000000-0000-4000-8000-00000000b003', current_setting('test.a')::uuid, 'Only for C', 'events');
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims',
+  json_build_object('sub', current_setting('test.a'), 'role', 'authenticated')::text, true);
+
+DO $$
+DECLARE n int;
+BEGIN
+  SELECT count(*) INTO n FROM public.list_wishlist_share_candidates();
+  IF n <> 2 THEN RAISE EXCEPTION 'FAIL: A should have 2 connections to share with, saw %', n; END IF;
+  RAISE NOTICE 'PASS: share candidates are the people A chats with';
+
+  -- A shares one place with C only, and tries to sneak in a non-connection (itself).
+  SELECT public.set_wishlist_viewers('00000000-0000-4000-8000-00000000b003',
+    ARRAY[current_setting('test.c')::uuid, current_setting('test.a')::uuid]) INTO n;
+  IF n <> 1 THEN RAISE EXCEPTION 'FAIL: only the real connection should be added, got %', n; END IF;
+  RAISE NOTICE 'PASS: set_wishlist_viewers only accepts connections';
+
+  BEGIN
+    PERFORM public.set_wishlist_viewers('00000000-0000-4000-8000-00000000b003', ARRAY[]::uuid[]);
+    PERFORM public.set_wishlist_viewers('00000000-0000-4000-8000-00000000b003', ARRAY[current_setting('test.c')::uuid]);
+  END;
+END $$;
+
+-- B (not chosen) must not see it; C must.
+SELECT set_config('request.jwt.claims',
+  json_build_object('sub', current_setting('test.b'), 'role', 'authenticated')::text, true);
+DO $$
+DECLARE n int;
+BEGIN
+  SELECT count(*) INTO n FROM public.get_wishlist_shared_with_me() WHERE item_id = '00000000-0000-4000-8000-00000000b003';
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL: a connection who was not chosen sees the personally shared place'; END IF;
+  SELECT count(*) INTO n FROM public.get_wishlist_shared_with_me();
+  IF n <> 1 THEN RAISE EXCEPTION 'FAIL: B should see only the romance-shared place, saw %', n; END IF;
+  RAISE NOTICE 'PASS: only chosen people see a personally shared place';
+
+  BEGIN
+    PERFORM public.set_wishlist_viewers('00000000-0000-4000-8000-00000000b003', ARRAY[current_setting('test.b')::uuid]);
+    RAISE EXCEPTION 'FAIL: B changed who sees A''s place';
+  EXCEPTION WHEN insufficient_privilege THEN
+    RAISE NOTICE 'PASS: nobody can change who sees someone else''s place';
+  END;
+END $$;
+
+SELECT set_config('request.jwt.claims',
+  json_build_object('sub', current_setting('test.c'), 'role', 'authenticated')::text, true);
+DO $$
+DECLARE n int;
+BEGIN
+  SELECT count(*) INTO n FROM public.get_wishlist_shared_with_me() WHERE item_id = '00000000-0000-4000-8000-00000000b003';
+  IF n <> 1 THEN RAISE EXCEPTION 'FAIL: C should see the place shared with them'; END IF;
+  SELECT count(*) INTO n FROM public.get_shared_wishlist_items(ARRAY[current_setting('test.a')::uuid], 'romance');
+  IF n <> 1 THEN RAISE EXCEPTION 'FAIL: AI planning with A should include the place shared with C (any mode), saw %', n; END IF;
+  SELECT count(*) INTO n FROM public.wishlist_item_viewers;
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL: viewers can read the sharing table'; END IF;
+  RAISE NOTICE 'PASS: the chosen person sees it (list + AI planning) without reading the sharing table';
+END $$;
+
+-- Whole list shared with C personally → C sees every open place.
+SELECT set_config('request.jwt.claims',
+  json_build_object('sub', current_setting('test.a'), 'role', 'authenticated')::text, true);
+DO $$ BEGIN PERFORM public.set_wishlist_viewers(NULL, ARRAY[current_setting('test.c')::uuid]); END $$;
+SELECT set_config('request.jwt.claims',
+  json_build_object('sub', current_setting('test.c'), 'role', 'authenticated')::text, true);
+DO $$
+DECLARE n int;
+BEGIN
+  SELECT count(*) INTO n FROM public.get_wishlist_shared_with_me();
+  IF n <> 3 THEN RAISE EXCEPTION 'FAIL: whole list shared with C should show 3 places, saw %', n; END IF;
+  RAISE NOTICE 'PASS: sharing the whole list with one person shows all places';
+END $$;
+
+-- Blocking removes personal shares too.
+RESET ROLE;
+INSERT INTO public.user_blocks (blocker_id, blocked_id)
+VALUES (current_setting('test.c')::uuid, current_setting('test.a')::uuid);
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE n int;
+BEGIN
+  SELECT count(*) INTO n FROM public.get_wishlist_shared_with_me();
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL: blocked pair still sees % personally shared places', n; END IF;
+  RAISE NOTICE 'PASS: blocking hides personally shared places';
+END $$;
+
 -- ── Sponsored offers: only live rows are visible; users cannot write them ────
 RESET ROLE;
 INSERT INTO public.sponsored_venue_offers (id, venue_name, title, city, active, starts_at, ends_at)

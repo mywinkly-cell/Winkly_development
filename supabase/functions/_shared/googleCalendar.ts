@@ -155,3 +155,16 @@ export async function getGoogleFreeBusy(
     .filter((b: unknown) => b && typeof (b as { start?: unknown }).start === "string" && typeof (b as { end?: unknown }).end === "string")
     .map((b: { start: string; end: string }) => ({ start: b.start, end: b.end }));
 }
+
+/** Delete an event Winkly created. A 404/410 (already gone) counts as success. */
+export async function deleteGoogleCalendarEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+): Promise<boolean> {
+  const res = await fetch(
+    `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId || "primary")}/events/${encodeURIComponent(eventId)}`,
+    { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  return res.ok || res.status === 404 || res.status === 410;
+}
