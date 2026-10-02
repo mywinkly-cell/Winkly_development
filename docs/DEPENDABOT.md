@@ -1,6 +1,7 @@
 # Dependabot merge status
 
 **Last updated:** 2026-06-10  
+**Since 2026-10-02:** Expo SDK / React Native jumps are ignored in `.github/dependabot.yml` and done as a planned upgrade (docs/MAINTENANCE.md).  
 **Integration branch:** `chore/merge-dependabot-updates` (merge into `develop` or `main` via PR)
 
 ## Merged (SDK 54–compatible)
