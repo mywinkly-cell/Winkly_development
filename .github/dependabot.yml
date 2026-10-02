@@ -1,5 +1,9 @@
 # Dependency update PRs — enables Dependabot for this repo once merged.
 # Review changelogs before merging; run mobile lint/tests after upgrades.
+#
+# Only safe, in-SDK updates arrive automatically. Expo SDK jumps (and the React Native / React /
+# native-library versions each SDK pins) are ignored here and done as a planned upgrade with
+# `npx expo install expo@^<next> --fix` — see docs/MAINTENANCE.md.
 version: 2
 updates:
   - package-ecosystem: "npm"
@@ -14,3 +18,40 @@ updates:
           - "@expo/*"
           - "react-native*"
           - "@react-native-*"
+    ignore:
+      # A new Expo SDK is a semver-major bump of expo and every expo-* package.
+      - dependency-name: "expo"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "expo-*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@expo/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "babel-preset-expo"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "jest-expo"
+        update-types: ["version-update:semver-major"]
+      # React Native, React and native libraries are pinned per SDK (0.x minors are breaking);
+      # `expo install --check` decides their versions, not Dependabot.
+      - dependency-name: "react-native"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "react-native-*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "@react-native-*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "@react-native-community/*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "@sentry/react-native"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # jest-expo pins the Jest major (root package.json overrides jest 29.7.0).
+      - dependency-name: "jest"
+        update-types: ["version-update:semver-major"]
+
+  # Keep CI actions (checkout, setup-node, …) current so workflows don't break on deprecations.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"

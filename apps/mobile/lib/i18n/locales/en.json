@@ -2956,5 +2956,9 @@
   "planChanges.tellWeatherMessage_rain": "Heads-up: rain is forecast for our plan. Bring an umbrella — or shall we move it?",
   "planChanges.tellWeatherMessage_snow": "Heads-up: snow is forecast for our plan. Allow extra time — or shall we move it?",
   "planChanges.tellWeatherMessage_heat": "Heads-up: it'll be very hot. Shall we find some shade or move it to later?",
-  "planChanges.tellWeatherMessage_cold": "Heads-up: it'll be freezing. Dress warmly — or shall we go somewhere indoors?"
+  "planChanges.tellWeatherMessage_cold": "Heads-up: it'll be freezing. Dress warmly — or shall we go somewhere indoors?",
+  "forceUpdate.title": "Update required",
+  "forceUpdate.body": "This version of Winkly is no longer supported. Please install the latest version to keep using the app.",
+  "forceUpdate.cta": "Update now",
+  "forceUpdate.storeHint": "Open the App Store and update Winkly."
 }

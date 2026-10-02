@@ -27,6 +27,7 @@ import { hasAuthenticatedUser } from "@/lib/auth/session";
 import { PrivacyConsentGate } from "@/components/consent/PrivacyConsentGate";
 import { LastActivitySync } from "@/components/LastActivitySync";
 import { RouteGuard } from "@/components/RouteGuard";
+import { ForceUpdateGate } from "@/components/ForceUpdateGate";
 import { NotificationDeepLinkHandler } from "@/components/NotificationDeepLinkHandler";
 import { ScreenTopSpacer } from "@/components/ScreenTopSpacer";
 import { PostHogIdentitySync, PostHogScreenTracker } from "@/components/PostHogAnalytics";
@@ -193,7 +194,7 @@ function RootLayout() {
             {/* Always mounted (even when disabled) so usePostHog() has a client to read
                 anywhere in the tree — an absent provider makes the SDK log a "no client" error. */}
             <PostHogProvider apiKey={POSTHOG_API_KEY} options={posthogOptions}>
-              {content}
+              <ForceUpdateGate>{content}</ForceUpdateGate>
             </PostHogProvider>
           </View>
         </SafeAreaProvider>
