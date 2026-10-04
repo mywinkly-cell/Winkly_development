@@ -1,0 +1,152 @@
+{
+  "de": {
+    "forceUpdate.title": "Update erforderlich",
+    "forceUpdate.body": "Diese Version von Winkly wird nicht mehr unterstützt. Bitte installiere die neueste Version, um die App weiter zu nutzen.",
+    "forceUpdate.cta": "Jetzt aktualisieren",
+    "forceUpdate.storeHint": "Öffne den App Store und aktualisiere Winkly."
+  },
+  "uk": {
+    "forceUpdate.title": "Потрібне оновлення",
+    "forceUpdate.body": "Ця версія Winkly більше не підтримується. Встанови найновішу версію, щоб і далі користуватися застосунком.",
+    "forceUpdate.cta": "Оновити зараз",
+    "forceUpdate.storeHint": "Відкрий App Store і онови Winkly."
+  },
+  "ru": {
+    "forceUpdate.title": "Требуется обновление",
+    "forceUpdate.body": "Эта версия Winkly больше не поддерживается. Установи последнюю версию, чтобы продолжить пользоваться приложением.",
+    "forceUpdate.cta": "Обновить сейчас",
+    "forceUpdate.storeHint": "Открой App Store и обнови Winkly."
+  },
+  "pl": {
+    "forceUpdate.title": "Wymagana aktualizacja",
+    "forceUpdate.body": "Ta wersja Winkly nie jest już obsługiwana. Zainstaluj najnowszą wersję, aby dalej korzystać z aplikacji.",
+    "forceUpdate.cta": "Zaktualizuj teraz",
+    "forceUpdate.storeHint": "Otwórz App Store i zaktualizuj Winkly."
+  },
+  "fr": {
+    "forceUpdate.title": "Mise à jour requise",
+    "forceUpdate.body": "Cette version de Winkly n’est plus prise en charge. Installe la dernière version pour continuer à utiliser l’app.",
+    "forceUpdate.cta": "Mettre à jour",
+    "forceUpdate.storeHint": "Ouvre l’App Store et mets à jour Winkly."
+  },
+  "es": {
+    "forceUpdate.title": "Actualización necesaria",
+    "forceUpdate.body": "Esta versión de Winkly ya no es compatible. Instala la última versión para seguir usando la app.",
+    "forceUpdate.cta": "Actualizar ahora",
+    "forceUpdate.storeHint": "Abre la App Store y actualiza Winkly."
+  },
+  "it": {
+    "forceUpdate.title": "Aggiornamento necessario",
+    "forceUpdate.body": "Questa versione di Winkly non è più supportata. Installa l’ultima versione per continuare a usare l’app.",
+    "forceUpdate.cta": "Aggiorna ora",
+    "forceUpdate.storeHint": "Apri l’App Store e aggiorna Winkly."
+  },
+  "nl": {
+    "forceUpdate.title": "Update vereist",
+    "forceUpdate.body": "Deze versie van Winkly wordt niet meer ondersteund. Installeer de nieuwste versie om de app te blijven gebruiken.",
+    "forceUpdate.cta": "Nu bijwerken",
+    "forceUpdate.storeHint": "Open de App Store en werk Winkly bij."
+  },
+  "pt": {
+    "forceUpdate.title": "Atualização necessária",
+    "forceUpdate.body": "Esta versão do Winkly já não é suportada. Instala a versão mais recente para continuares a usar a app.",
+    "forceUpdate.cta": "Atualizar agora",
+    "forceUpdate.storeHint": "Abre a App Store e atualiza o Winkly."
+  },
+  "el": {
+    "forceUpdate.title": "Απαιτείται ενημέρωση",
+    "forceUpdate.body": "Αυτή η έκδοση του Winkly δεν υποστηρίζεται πλέον. Εγκατάστησε την πιο πρόσφατη έκδοση για να συνεχίσεις να χρησιμοποιείς την εφαρμογή.",
+    "forceUpdate.cta": "Ενημέρωση τώρα",
+    "forceUpdate.storeHint": "Άνοιξε το App Store και ενημέρωσε το Winkly."
+  },
+  "ro": {
+    "forceUpdate.title": "Actualizare necesară",
+    "forceUpdate.body": "Această versiune Winkly nu mai este acceptată. Instalează cea mai nouă versiune pentru a folosi în continuare aplicația.",
+    "forceUpdate.cta": "Actualizează acum",
+    "forceUpdate.storeHint": "Deschide App Store și actualizează Winkly."
+  },
+  "hu": {
+    "forceUpdate.title": "Frissítés szükséges",
+    "forceUpdate.body": "A Winkly ezen verziója már nem támogatott. Telepítsd a legújabb verziót az alkalmazás további használatához.",
+    "forceUpdate.cta": "Frissítés most",
+    "forceUpdate.storeHint": "Nyisd meg az App Store-t, és frissítsd a Winklyt."
+  },
+  "cs": {
+    "forceUpdate.title": "Vyžadována aktualizace",
+    "forceUpdate.body": "Tato verze Winkly již není podporována. Nainstaluj nejnovější verzi, abys mohl/a aplikaci dál používat.",
+    "forceUpdate.cta": "Aktualizovat",
+    "forceUpdate.storeHint": "Otevři App Store a aktualizuj Winkly."
+  },
+  "sv": {
+    "forceUpdate.title": "Uppdatering krävs",
+    "forceUpdate.body": "Den här versionen av Winkly stöds inte längre. Installera den senaste versionen för att fortsätta använda appen.",
+    "forceUpdate.cta": "Uppdatera nu",
+    "forceUpdate.storeHint": "Öppna App Store och uppdatera Winkly."
+  },
+  "da": {
+    "forceUpdate.title": "Opdatering påkrævet",
+    "forceUpdate.body": "Denne version af Winkly understøttes ikke længere. Installer den nyeste version for at fortsætte med at bruge appen.",
+    "forceUpdate.cta": "Opdater nu",
+    "forceUpdate.storeHint": "Åbn App Store, og opdater Winkly."
+  },
+  "fi": {
+    "forceUpdate.title": "Päivitys vaaditaan",
+    "forceUpdate.body": "Tätä Winkly-versiota ei enää tueta. Asenna uusin versio jatkaaksesi sovelluksen käyttöä.",
+    "forceUpdate.cta": "Päivitä nyt",
+    "forceUpdate.storeHint": "Avaa App Store ja päivitä Winkly."
+  },
+  "sk": {
+    "forceUpdate.title": "Vyžaduje sa aktualizácia",
+    "forceUpdate.body": "Táto verzia Winkly už nie je podporovaná. Nainštaluj najnovšiu verziu, aby si mohol/mohla aplikáciu ďalej používať.",
+    "forceUpdate.cta": "Aktualizovať",
+    "forceUpdate.storeHint": "Otvor App Store a aktualizuj Winkly."
+  },
+  "bg": {
+    "forceUpdate.title": "Необходима е актуализация",
+    "forceUpdate.body": "Тази версия на Winkly вече не се поддържа. Инсталирай най-новата версия, за да продължиш да използваш приложението.",
+    "forceUpdate.cta": "Актуализирай сега",
+    "forceUpdate.storeHint": "Отвори App Store и актуализирай Winkly."
+  },
+  "hr": {
+    "forceUpdate.title": "Potrebno ažuriranje",
+    "forceUpdate.body": "Ova verzija Winklyja više nije podržana. Instaliraj najnoviju verziju kako bi nastavio/la koristiti aplikaciju.",
+    "forceUpdate.cta": "Ažuriraj sada",
+    "forceUpdate.storeHint": "Otvori App Store i ažuriraj Winkly."
+  },
+  "sl": {
+    "forceUpdate.title": "Potrebna je posodobitev",
+    "forceUpdate.body": "Ta različica Winkly ni več podprta. Namesti najnovejšo različico, da boš lahko še naprej uporabljal/a aplikacijo.",
+    "forceUpdate.cta": "Posodobi zdaj",
+    "forceUpdate.storeHint": "Odpri App Store in posodobi Winkly."
+  },
+  "et": {
+    "forceUpdate.title": "Uuendus on vajalik",
+    "forceUpdate.body": "Seda Winkly versiooni enam ei toetata. Rakenduse kasutamise jätkamiseks paigalda uusim versioon.",
+    "forceUpdate.cta": "Uuenda kohe",
+    "forceUpdate.storeHint": "Ava App Store ja uuenda Winklyt."
+  },
+  "lv": {
+    "forceUpdate.title": "Nepieciešams atjauninājums",
+    "forceUpdate.body": "Šī Winkly versija vairs netiek atbalstīta. Lai turpinātu lietot lietotni, instalē jaunāko versiju.",
+    "forceUpdate.cta": "Atjaunināt tagad",
+    "forceUpdate.storeHint": "Atver App Store un atjaunini Winkly."
+  },
+  "lt": {
+    "forceUpdate.title": "Būtinas atnaujinimas",
+    "forceUpdate.body": "Ši Winkly versija nebepalaikoma. Įdiek naujausią versiją, kad galėtum toliau naudotis programėle.",
+    "forceUpdate.cta": "Atnaujinti dabar",
+    "forceUpdate.storeHint": "Atidaryk App Store ir atnaujink Winkly."
+  },
+  "mt": {
+    "forceUpdate.title": "Meħtieġ aġġornament",
+    "forceUpdate.body": "Din il-verżjoni ta’ Winkly m’għadhiex appoġġjata. Installa l-aħħar verżjoni biex tkompli tuża l-app.",
+    "forceUpdate.cta": "Aġġorna issa",
+    "forceUpdate.storeHint": "Iftaħ l-App Store u aġġorna Winkly."
+  },
+  "ga": {
+    "forceUpdate.title": "Nuashonrú riachtanach",
+    "forceUpdate.body": "Ní thacaítear leis an leagan seo de Winkly a thuilleadh. Suiteáil an leagan is déanaí chun leanúint ar aghaidh ag úsáid na haipe.",
+    "forceUpdate.cta": "Nuashonraigh anois",
+    "forceUpdate.storeHint": "Oscail an App Store agus nuashonraigh Winkly."
+  }
+}

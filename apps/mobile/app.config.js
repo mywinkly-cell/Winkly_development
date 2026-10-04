@@ -212,8 +212,11 @@ module.exports = {
 
     // Dev client (APP_ENV=development): OTA disabled — app loads JS from Metro via `expo start --dev-client`.
     // Preview/production: embedded bundle launches first; failed OTA fetch must not block startup.
+    // Fingerprint = hash of the native side (SDK, native deps, config plugins). An OTA update only
+    // reaches binaries with identical native code, so a JS bundle built for one Expo SDK can never be
+    // delivered to — and crash — a build from another (SDK57 report, H1). No manual version bumps.
     runtimeVersion: {
-      policy: "appVersion",
+      policy: "fingerprint",
     },
     ...(easProjectId
       ? {
