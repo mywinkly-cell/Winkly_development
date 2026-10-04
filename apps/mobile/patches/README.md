@@ -31,6 +31,22 @@ compatible types (track upstream), **or** the slider is replaced by
 
 ---
 
+## `decode-uri-component+0.2.2.patch`
+
+**Reason — security (GHSA-vcc3-ghjq-m6fr).** The fallback decoder in 0.2.2 is
+exponential on malformed percent-encoded input; `expo-router` runs it (via
+`query-string@7`) on every incoming deep link. The fixed release 0.5.0 is
+ESM-only and can't be `require`d by `query-string@7`, so the patch backports the
+linear-time `decode()` from 0.5.0 into the CommonJS file.
+
+**Scope:** fallback path only (inputs that `decodeURIComponent` rejects). Output
+is unchanged for valid and malformed input; 0.2.2's `+` → space behaviour is kept.
+`npm audit` still lists the package because it matches versions only.
+
+**Remove when:** Expo SDK 58 (expo-router 58 no longer depends on `query-string`).
+
+---
+
 ## Maintenance checklist (per dependency upgrade)
 
 1. After bumping a patched package, delete its patch and run `npm run mobile:typecheck`.

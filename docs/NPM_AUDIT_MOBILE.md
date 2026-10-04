@@ -1,23 +1,38 @@
 # npm audit – Mobile app (apps/mobile)
 
-**Last run:** 2026-02-21 · **Vulnerabilities:** 45 high (all minimatch) — **Expo SDK 54 upgrade completed**
+**Last run:** 2026-10-04 · **Stack:** Expo ~57, React Native 0.86.3 · **Result:** 52 findings (3 moderate, 49 high), **2 root advisories with no upstream fix** — both reviewed and allowlisted.
 
-## Current state (post–SDK 54 upgrade)
+## Never run `npm audit fix --force`
 
-- **Stack:** Expo ~54.0.33, React Native 0.81.5, babel-preset-expo ~54.0.10, Jest ~29.7.0.
-- **Audit:** 45 high severity, all from **minimatch** (ReDoS). Used by @expo/cli, @expo/metro-config, eslint, @typescript-eslint, jest, react-native (glob → minimatch).
-- **Do not run `npm audit fix --force`** — it would install react-native@0.84.0 (breaking change). The remaining issues have no safe fix in the current tree.
+On an Expo app it picks whatever major "fixes" one advisory and ignores the SDK. In one run it moved
+`expo` 57 → **44** (2021) and `react-native` → 0.72, then a second run moved it back to 57 and RN 0.86 —
+with a broken mix of native modules in between. If you already ran it, restore the lockfile and reinstall:
 
-## Why the 45 remaining can’t be fixed safely
+```bash
+git checkout -- package.json package-lock.json apps/mobile/package.json
+npm ci
+```
 
-`npm audit fix` does nothing (no non‑breaking fix). `npm audit fix --force` would upgrade React Native to 0.84 and can break the app. The **minimatch** vulnerability will only be resolved when upstream (@expo/cli, eslint, typescript-eslint, jest) depend on minimatch ≥10.2.1. Until then, these are dev/build-time only (not in the shipped app runtime).
+Upgrade Expo only with `npx expo install expo@^<sdk> --fix` (see docs/MAINTENANCE.md).
 
-## If you use native `ios` / `android` folders
+## How to check
 
-After the SDK 54 upgrade, either delete `ios` and `android` and let prebuild regenerate them, or run `npx pod-install` in `ios` and apply any [Native upgrade helper](https://docs.expo.dev/bare/upgrade) changes. Then run the app and tests.
+```bash
+npm run audit          # full tree; fails only on unreviewed high/critical advisories
+npm audit              # raw npm report (counts every dependent package, so the number looks huge)
+```
 
-## Quick reference
+CI (`.github/workflows/security.yml`) runs `node scripts/audit-check.mjs --omit=dev`.
 
-- **Audit:** `cd apps/mobile` then `npm audit`
-- **Safe fix:** `npm audit fix` (currently fixes 0; leaves 45 minimatch).
-- **Do not use:** `npm audit fix --force`
+The big number is misleading: npm lists every package that *depends on* a vulnerable one. The 52
+findings come from just **4 root advisories**:
+
+| Advisory | Package | Status |
+|----------|---------|--------|
+| [GHSA-w5hq-g745-h8pq](https://github.com/advisories/GHSA-w5hq-g745-h8pq) (moderate) | `uuid` <11.1.1 under `xcode` | **Fixed** — `overrides.xcode.uuid = 11.1.1` (root + apps/mobile). Remove once `xcode` depends on uuid ≥11.1.1. |
+| [GHSA-vcc3-ghjq-m6fr](https://github.com/advisories/GHSA-vcc3-ghjq-m6fr) (moderate) | `decode-uri-component` 0.2.2 under `expo-router` → `query-string@7` | **Fixed by patch** — `apps/mobile/patches/decode-uri-component+0.2.2.patch` backports the linear-time decoder from 0.5.0 (0.5.0 itself is ESM-only and can't be required by query-string 7). npm still reports it because it checks versions only. Goes away with Expo SDK 58 (expo-router 58 drops query-string). |
+| [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) (high) | `braces` ≤3.0.3 | **Accepted** — no patched release exists. Build tooling only (metro, @expo/cli, jest, patch-package) expanding our own glob patterns; not in the app bundle. |
+| [GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv) (high) | `node-forge` ≤1.4.0 | **Accepted** — no patched release exists. Pulled in by `@expo/code-signing-certificates` (expo-updates); the app does not configure `updates.codeSigningCertificate`, so the vulnerable signature-verify path is never used. |
+
+Accepted advisories live in `scripts/audit-check.mjs` (`ACCEPTED`). Each entry needs a reason and a
+removal condition. Re-check them on every Expo SDK upgrade and when upstream ships a fix.

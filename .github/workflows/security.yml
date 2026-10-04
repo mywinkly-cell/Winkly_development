@@ -112,8 +112,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Audit production dependencies
-        # Advisory, not a gate: the React Native tree reliably carries
-        # low-severity transitive advisories with no upgrade path, and a red X
-        # everyone learns to ignore is worse than no check. High and critical
-        # findings fail the job; everything else is printed for triage.
-        run: npm audit --omit=dev --audit-level=high
+        # High and critical findings fail the job, except the reviewed
+        # no-upstream-fix advisories allowlisted in scripts/audit-check.mjs
+        # (reasons in docs/NPM_AUDIT_MOBILE.md). Moderate/low are printed only.
+        run: node scripts/audit-check.mjs --omit=dev
