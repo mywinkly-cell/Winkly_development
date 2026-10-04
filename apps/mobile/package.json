@@ -88,7 +88,7 @@
     "uuid": "^14.0.0"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.128.0",
+    "@anthropic-ai/sdk": "^0.131.0",
     "@babel/core": "^7.28.0",
     "@react-native/jest-preset": "0.86.3",
     "@types/jest": "29.5.14",
