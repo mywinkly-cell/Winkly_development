@@ -14,6 +14,7 @@ Static site generated from `docs/*.md` for Play Store, GDPR, and DDG (Impressum)
 | `/community` | `docs/COMMUNITY_GUIDELINES.md` |
 | `/imprint` | `docs/IMPRINT.md` |
 | `/auth` | Email-verification / magic-link bridge → `winkly://callback` (generated in `scripts/build.mjs`) |
+| `/p/<token>` | Shared plan "I'm in" page — Vercel function `api/plan.mjs` (+ `/p/<token>/og.png` preview image, `/app/p/<token>` fallback). Needs `WINKLY_SUPABASE_URL` + `WINKLY_SUPABASE_ANON_KEY`; see [docs/PLAN_SHARING.md](../docs/PLAN_SHARING.md) |
 
 ### `/auth` redirect bridge
 

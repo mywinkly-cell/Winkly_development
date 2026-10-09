@@ -37,6 +37,8 @@ export type WeekendIdeasBlockProps = {
   plannedPlanIds?: Set<string>;
   /** Opens the existing Planner entry for a plan already in plannedPlanIds. */
   onReviewPlan?: (plan: WeeklySparkPlan) => void;
+  /** "Share plan" on a card (invite link). */
+  onSharePlan?: (plan: WeeklySparkPlan) => void;
   highlighted?: boolean;
   showDismiss?: boolean;
   sparkLocationPrefs?: WeeklySparkLocationPrefs | null;
@@ -75,6 +77,7 @@ export function WeekendIdeasBlock({
   onViewPlan,
   plannedPlanIds,
   onReviewPlan,
+  onSharePlan,
   highlighted = false,
   showDismiss = true,
   sparkLocationPrefs = null,
@@ -195,6 +198,7 @@ export function WeekendIdeasBlock({
                   planned={plannedPlanIds?.has(plan.id) ?? false}
                   onViewPlan={onViewPlan}
                   onReviewPlan={onReviewPlan}
+                  onShare={onSharePlan}
                 />
               );
             })

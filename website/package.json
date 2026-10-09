@@ -4,12 +4,14 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "verify": "node scripts/build.mjs && node scripts/verify-dist.mjs",
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "verify": "node --test \"test/**/*.test.mjs\" && node scripts/build.mjs && node scripts/verify-dist.mjs",
     "verify:dist": "node scripts/verify-dist.mjs",
     "verify:live": "node scripts/verify-links.mjs",
     "verify:local": "node scripts/verify-links.mjs --base http://localhost:4173"
   },
   "dependencies": {
+    "@vercel/og": "0.9.0",
     "marked": "^15.0.6"
   }
 }

@@ -29,6 +29,7 @@ import { LastActivitySync } from "@/components/LastActivitySync";
 import { RouteGuard } from "@/components/RouteGuard";
 import { ForceUpdateGate } from "@/components/ForceUpdateGate";
 import { NotificationDeepLinkHandler } from "@/components/NotificationDeepLinkHandler";
+import { PlanShareSync } from "@/components/PlanShareSync";
 import { ScreenTopSpacer } from "@/components/ScreenTopSpacer";
 import { PostHogIdentitySync, PostHogScreenTracker } from "@/components/PostHogAnalytics";
 import { useAppTheme } from "@/constants/design-system";
@@ -147,6 +148,7 @@ function RootLayout() {
               <PrivacyConsentGateIfAuthed>
                 {posthogEnabled ? <PostHogScreenTracker /> : null}
                 <NotificationDeepLinkHandler />
+                <PlanShareSync />
                 <PostPlanReviewHost />
                 <StatusBar style="dark" />
                 {isSplash ? null : <ScreenTopSpacer />}

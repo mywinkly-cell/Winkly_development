@@ -7,12 +7,24 @@
 //
 // To add more shareable links, extend the segment mapping below (e.g. profiles, groups, invites).
 
+import { useEffect } from "react";
 import { Redirect, useLocalSearchParams } from "expo-router";
+import { planShareTokenFromSegments, setPendingPlanShareToken } from "@/lib/planShare";
+import { trackShareLinkOpened } from "@/lib/analytics/events";
 
 export default function AppDeepLinkCatchAll() {
   const { rest } = useLocalSearchParams<{ rest?: string | string[] }>();
   // Expo Router may hand back the catch-all as an array or a slash-joined string; normalize both.
   const segments = (Array.isArray(rest) ? rest : rest ? rest.split("/") : []).filter(Boolean);
+  const shareToken = planShareTokenFromSegments(segments);
+
+  // /app/p/:token → shared plan invitation. Parked until there's a session; PlanShareSync joins
+  // the plan and opens it in the Planner (docs/PLAN_SHARING.md).
+  useEffect(() => {
+    if (!shareToken) return;
+    trackShareLinkOpened({ surface: "app" });
+    void setPendingPlanShareToken(shareToken);
+  }, [shareToken]);
 
   // /app/event/:id → event details
   if (segments[0] === "event" && segments[1]) {
@@ -21,6 +33,6 @@ export default function AppDeepLinkCatchAll() {
     );
   }
 
-  // Unknown /app/* link → app entry; RouteGuard then routes the user appropriately.
+  // Unknown /app/* link (and /app/p/:token) → app entry; RouteGuard then routes the user appropriately.
   return <Redirect href="/" />;
 }

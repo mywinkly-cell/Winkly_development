@@ -6,7 +6,7 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { useAppTheme } from "@/constants/design-system";
-import { PlanCard, PlanCardBadge, PlanCardMeta } from "@/components/plans/PlanCard";
+import { PlanCard, PlanCardBadge, PlanCardIconAction, PlanCardMeta } from "@/components/plans/PlanCard";
 import {
   sparkVenueDisplayLine,
   type WeeklySparkPlan,
@@ -29,6 +29,8 @@ export type WeeklySparkCardProps = {
   onViewPlan: (plan: WeeklySparkPlan) => void;
   /** When planned, opens the existing Planner entry for review instead of the add flow. */
   onReviewPlan?: (plan: WeeklySparkPlan) => void;
+  /** "Share plan" (invite link) — omit to hide the share button. */
+  onShare?: (plan: WeeklySparkPlan) => void;
 };
 
 const SLOT_KEY: Record<SparkSlot, string> = {
@@ -73,6 +75,7 @@ export function WeeklySparkCard({
   planned = false,
   onViewPlan,
   onReviewPlan,
+  onShare,
 }: WeeklySparkCardProps) {
   const { t } = useTranslation();
   const theme = useAppTheme();
@@ -136,6 +139,15 @@ export function WeeklySparkCard({
         icon: planned ? "checkmark-circle" : "eye-outline",
         tone: planned ? theme.colors.success : accent,
       }}
+      secondaryActions={
+        onShare ? (
+          <PlanCardIconAction
+            icon="share-social-outline"
+            accessibilityLabel={t("planShare.sharePlan")}
+            onPress={() => onShare(plan)}
+          />
+        ) : undefined
+      }
     />
   );
 }

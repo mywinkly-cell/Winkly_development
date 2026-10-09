@@ -81,6 +81,8 @@ import { WeatherPivotBanner } from "@/components/planner/WeatherPivotBanner";
 import { ReschedulePlanSheet, type ReschedulePlan } from "@/components/planner/ReschedulePlanSheet";
 import { PlanAlertsBanner } from "@/components/planner/PlanAlertsBanner";
 import { PlanChangeHistory } from "@/components/planner/PlanChangeHistory";
+import { PlanShareSection } from "@/components/planner/PlanShareSection";
+import { sharePlan, type PlanShareSource } from "@/lib/planShare";
 import { updatePlan } from "@/lib/planner/planChanges";
 import { PlanRatingSection } from "@/components/planner/PlanRatingSection";
 import { EventParticipantCard } from "@/components/ui/EventParticipantCard";
@@ -1424,6 +1426,34 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
     <SurpriseMeButton onPress={openSurprise} style={styles.surpriseMeButton} />
   ) : null;
 
+  /** "Share plan" → invite link + native share sheet (docs/PLAN_SHARING.md). */
+  const shareItem = useCallback(
+    async (p: { id: string; title: string; startsAtIso?: string }, source: PlanShareSource) => {
+      try {
+        await sharePlan({ plannerItemId: p.id, title: p.title, startsAt: p.startsAtIso, source, t });
+      } catch {
+        Alert.alert(t("common.error"), t("planShare.shareError"));
+      }
+    },
+    [t],
+  );
+
+  /** A Spark card can be shared once it's in the Planner; otherwise offer to add it first. */
+  const shareSparkPlan = useCallback(
+    (plan: WeeklySparkPlan) => {
+      const info = plannedSparkPlans.get(plan.id);
+      if (info) {
+        void shareItem({ id: info.plannerItemId, title: plan.title, startsAtIso: info.startsAt }, "weekly_spark");
+        return;
+      }
+      Alert.alert(t("planShare.addFirstTitle"), t("planShare.addFirstBody"), [
+        { text: t("common.cancel"), style: "cancel" },
+        { text: t("planShare.addToPlanner"), onPress: () => openSparkPlanConfirm(plan) },
+      ]);
+    },
+    [plannedSparkPlans, shareItem, openSparkPlanConfirm, t],
+  );
+
   const renderItemCard = useCallback((it: PlannerItem) => {
     const past = isItemPast(it.dateStr);
     // Color by item's mode (source) so the All tab shows dates/meetups/business/events each with their own accent.
@@ -1454,6 +1484,14 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                 <PlanCardIconAction icon="arrow-undo" tone="primary" accessibilityLabel={t("planner.restore")} onPress={() => restoreItem(it)} />
               ) : (
                 <>
+                  {it.isOrganiser ? (
+                    <PlanCardIconAction
+                      icon="share-social-outline"
+                      tone="primary"
+                      accessibilityLabel={t("planShare.sharePlan")}
+                      onPress={() => void shareItem(it, "planner_card")}
+                    />
+                  ) : null}
                   <TouchableOpacity onPress={() => { Haptics.selectionAsync(); openDetails(it); }} style={styles.cardActionBtn} hitSlop={12} accessibilityLabel={t("planner.confirm")}>
                     <Image source={require("@/assets/icons/confirm-icon.png")} style={{ width: CARD_ACTION_ICON_CONFIRM, height: CARD_ACTION_ICON_CONFIRM }} resizeMode="contain" />
                   </TouchableOpacity>
@@ -1470,7 +1508,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
         </View>
       </PlanCard>
     );
-  }, [openDetails, openReschedule, restoreItem, myPhotoBySource, openCancelModal, theme, styles, TAB_CONFIG, t, topicLabel]);
+  }, [openDetails, openReschedule, restoreItem, myPhotoBySource, openCancelModal, theme, styles, TAB_CONFIG, t, topicLabel, shareItem]);
 
   return (
     <View style={styles.screen}>
@@ -1567,6 +1605,7 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
             onViewPlan={openSparkPlanConfirm}
             plannedPlanIds={new Set(plannedSparkPlans.keys())}
             onReviewPlan={openReviewSparkPlan}
+            onSharePlan={shareSparkPlan}
             showDismiss={showWeeklyCard}
             sparkLocationPrefs={sparkLocationPrefs}
             sparkTimingPrefs={sparkTimingPrefs}
@@ -2109,6 +2148,14 @@ const PlannerIndex = forwardRef<PlannerIndexHandle, PlannerIndexProps>(function 
                       />
                     ) : null}
                     <PlanChangeHistory plannerItemId={selectedItem.id} />
+                    {selectedItem.isOrganiser ? (
+                      <PlanShareSection
+                        plannerItemId={selectedItem.id}
+                        title={selectedItem.title}
+                        startsAtIso={selectedItem.startsAtIso}
+                        canShare={!isItemPast(selectedItem.dateStr) && selectedItem.status === "active"}
+                      />
+                    ) : null}
                     {isItemPast(selectedItem.dateStr) ? (
                       <Text style={styles.detailsHint}>{t("planner.pastHint")}</Text>
                     ) : selectedItem.status === "archived" ? (

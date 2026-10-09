@@ -78,7 +78,9 @@ the address bar; some browsers bypass app links from the bar).
   If `none`/`legacy_failure`, re-check `assetlinks.json` reachability + the SHA-256 matches the installed build.
 
 > A handler route exists at `apps/mobile/app/app/[...rest].tsx`: `https://mywinkly.de/app/event/:id`
-> opens the event-details screen, and any other `/app/*` link falls back to the app entry (`/`, which
+> opens the event-details screen, `https://mywinkly.de/app/p/:token` joins a shared plan (see
+> [PLAN_SHARING.md](PLAN_SHARING.md); without the app installed, Vercel rewrites it to the web
+> "I'm in" page), and any other `/app/*` link falls back to the app entry (`/`, which
 > RouteGuard then resolves). Extend the segment mapping in that file as you add shareable links
 > (profiles, groups, invites, …). It's a normal expo-router screen, so it does not affect the
 > `winkly://` auth callback.

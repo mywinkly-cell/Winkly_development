@@ -30,6 +30,13 @@ export const AnalyticsEvents = {
   DiscoverProfileBlock: "discover_profile_block",
   DiscoverProfileReport: "discover_profile_report",
   MatchCreatedFromDiscover: "match_created_from_discover",
+  // Shareable plan links (docs/PLAN_SHARING.md). share_link_opened (surface "web") and
+  // web_rsvp_submitted are also sent, anonymously, by the website (website/src/planShare/analytics.mjs).
+  PlanShared: "plan_shared",
+  ShareLinkOpened: "share_link_opened",
+  WebRsvpSubmitted: "web_rsvp_submitted",
+  SignupFromShare: "signup_from_share",
+  ShareRsvpConverted: "share_rsvp_converted",
 } as const;
 
 export type AnalyticsEventName = (typeof AnalyticsEvents)[keyof typeof AnalyticsEvents];
@@ -121,4 +128,21 @@ export function trackDiscoverProfileReport(mode: DiscoverMode, targetId: string)
 
 export function trackMatchCreatedFromDiscover(mode: DiscoverMode, targetId: string): void {
   track(AnalyticsEvents.MatchCreatedFromDiscover, { mode, target_id: targetId });
+}
+
+export function trackPlanShared(p: { source: "planner_card" | "planner_details" | "weekly_spark" }): void {
+  track(AnalyticsEvents.PlanShared, { ...p });
+}
+
+export function trackShareLinkOpened(p: { surface: "app" | "web" }): void {
+  track(AnalyticsEvents.ShareLinkOpened, { ...p });
+}
+
+export function trackSignupFromShare(p: { via: "email" | "app_link" }): void {
+  track(AnalyticsEvents.SignupFromShare, { ...p });
+}
+
+/** A web RSVP became a real participant — via sign-up with that email, or by opening the link in the app. */
+export function trackShareRsvpConverted(p: { via: "signup" | "app_link"; count: number }): void {
+  track(AnalyticsEvents.ShareRsvpConverted, { ...p });
 }

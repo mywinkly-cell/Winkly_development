@@ -138,6 +138,9 @@ jobs:
       - name: Plan changes + alerts regression test
         run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/plan_changes_test.sql
 
+      - name: Shareable plan links + web RSVP regression test
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/plan_shares_test.sql
+
       - name: Stop Supabase
         if: always()
         run: npx supabase stop

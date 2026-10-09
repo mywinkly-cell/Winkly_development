@@ -1,6 +1,6 @@
 # Winkly — Privacy Policy
 
-**Last updated:** 12 September 2026
+**Last updated:** 9 October 2026
 
 {{company.legalName}} (“**we**”, “**us**”, “**Winkly**”) respects your privacy. This Privacy Policy explains what personal data we collect, how we use it, and your rights. It applies to the Winkly mobile application and related services (“**Service**”).
 
@@ -65,6 +65,12 @@ You choose what to add; we store what you provide to show your profile to other 
 
 You may, entirely voluntarily, add **religion** to your profile. This is a special category of personal data under GDPR Art. 9. We process and display it **only on the basis of your explicit consent** (Art. 9(2)(a)), which we capture through the data-use notice before you enter any personal data (see section 3). You can remove it at any time, which withdraws that consent for the future. If you do not add it, we do not process it. (The former “allergies” field has been removed entirely.)
 
+### 2.7 Shared plan links (“I'm in” without the app)
+
+A Winkly user can share a plan as a link (mywinkly.de/p/…). Anyone with the link sees only the plan's title, day and time, the neighbourhood (never the exact address), the host's **first name and main profile photo**, and a short “why it fits” line — never the host's last name, age or address.
+
+If you tap **“I'm in”** on that page, we collect your **first name** and **email address**. We use them only to (a) show the host that you are in (the host sees your first name, **not your email**) and (b) add the plan to your Winkly planner if you later create an account with the same, verified email. Legal basis: your request (Art. 6(1)(b) GDPR) and our legitimate interest in preventing abuse (Art. 6(1)(f)). To prevent abuse we rate-limit answers using a **one-way hash** of your IP address, kept for at most one day. The page sets no cookies; it stores a small “already answered” note in your browser's local storage and sends anonymous counts (page opened / answer sent, with no identifiers) to our analytics provider.
+
 We do **not** sell your personal data.
 
 ---
@@ -125,6 +131,7 @@ Some processors are based outside the EEA/UK (e.g. the United States). Where dat
 - **Active account** — We keep your data while your account is active and as long as needed to provide the Service and comply with the law.
 - **After deletion** — When you delete your account, we delete or anonymise your personal data within a reasonable period (e.g. 30 days), except where we must keep limited data for legal, safety, or dispute-resolution reasons.
 - **Messages and content** — Generally removed or anonymised with the account; limited data may be kept longer where required (e.g. abuse reports).
+- **“I'm in” answers from a shared plan link** — Kept with the plan and deleted when the plan is deleted; you can ask us to delete yours at any time (section 14). Hashed IP addresses used for rate limiting are deleted after one day.
 
 ---
 
